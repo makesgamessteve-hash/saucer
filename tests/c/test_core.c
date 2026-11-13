@@ -43,7 +43,7 @@ static unsigned long long bits(double d) {
 }
 
 TEST(math_known_answers) {
-  static char buf[256 * 1024];
+  static char buf[512 * 1024];
   size_t o = 0;
   int i;
   for (i = 0; i < 4096; i++) {

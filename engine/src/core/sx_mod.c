@@ -188,13 +188,22 @@ int sx_modset_scan(sx_modset *s, const char *base_dir, const char *mods_dir, con
   return 1;
 }
 
-static void fail(sx_mod *m, const char *fmt, const char *a, int x, int y) {
-  char buf[256];
-  if (a) snprintf(buf, sizeof buf, fmt, a);
-  else snprintf(buf, sizeof buf, fmt, x, y);
+static void fail_msg(sx_mod *m, const char *buf) {
   copy_str(m->status, sizeof m->status, buf);
   m->ok = 0;
   SX_WARN("mod '%s' not loaded: %s", m->id, buf);
+}
+
+static void fail(sx_mod *m, const char *fmt, const char *a) {
+  char buf[256];
+  snprintf(buf, sizeof buf, fmt, a);
+  fail_msg(m, buf);
+}
+
+static void fail_api(sx_mod *m, int api, int engine_api) {
+  char buf[256];
+  snprintf(buf, sizeof buf, "incompatible API %d (engine %d)", api, engine_api);
+  fail_msg(m, buf);
 }
 
 int sx_modset_resolve(sx_modset *s, int engine_api) {
@@ -204,7 +213,7 @@ int sx_modset_resolve(sx_modset *s, int engine_api) {
     sx_mod *m = &s->mods[i];
     m->ok = 1;
     copy_str(m->status, sizeof m->status, "ok");
-    if (m->api != engine_api) fail(m, "incompatible API %d (engine %d)", NULL, m->api, engine_api);
+    if (m->api != engine_api) fail_api(m, m->api, engine_api);
   }
   /* Missing/unsatisfied dependencies propagate until stable. */
   do {
@@ -215,17 +224,17 @@ int sx_modset_resolve(sx_modset *s, int engine_api) {
       for (j = 0; j < m->depends.count; j++) {
         int d = sx_modset_find(s, m->depends.items[j]);
         if (d < 0) {
-          fail(m, "missing dependency %s", m->depends.items[j], 0, 0);
+          fail(m, "missing dependency %s", m->depends.items[j]);
           changed = 1;
           break;
         }
         if (!sx_version_satisfies(s->mods[d].version, m->depends_req.items[j])) {
-          fail(m, "dependency %s version not satisfied", m->depends.items[j], 0, 0);
+          fail(m, "dependency %s version not satisfied", m->depends.items[j]);
           changed = 1;
           break;
         }
         if (!s->mods[d].ok && strncmp(s->mods[d].status, "dependency cycle", 16) != 0) {
-          fail(m, "dependency %s failed to load", m->depends.items[j], 0, 0);
+          fail(m, "dependency %s failed to load", m->depends.items[j]);
           changed = 1;
           break;
         }
@@ -267,7 +276,7 @@ int sx_modset_resolve(sx_modset *s, int engine_api) {
       }
     }
     for (i = 0; i < s->count; i++)
-      if (s->mods[i].ok && !placed[i]) fail(&s->mods[i], "dependency cycle: %s", cyc, 0, 0);
+      if (s->mods[i].ok && !placed[i]) fail(&s->mods[i], "dependency cycle: %s", cyc);
   }
   return s->order_count;
 }
