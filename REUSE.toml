@@ -36,3 +36,9 @@ path = ["third_party/stb/**"]
 precedence = "override"
 SPDX-FileCopyrightText = "Sean Barrett and stb contributors"
 SPDX-License-Identifier = "MIT OR Unlicense"
+
+[[annotations]]
+path = ["docs/shots/**"]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Steve Makesgames and contributors; contains images Created with Grok"
+SPDX-License-Identifier = "CC-BY-4.0 AND LicenseRef-xAI-Output"
