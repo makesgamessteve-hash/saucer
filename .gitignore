@@ -1,0 +1,13 @@
+/build/
+/build-*/
+/out/
+.saucer-user/
+*.gcda
+*.gcno
+*.gcov
+luacov.stats.out
+luacov.report.out
+coverage/
+/node_modules/
+*.swp
+.DS_Store
