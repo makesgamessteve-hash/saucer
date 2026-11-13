@@ -457,7 +457,10 @@ static int ro_next(lua_State *L) {
   lua_rawget(L, -2); /* target */
   lua_pushvalue(L, 2);
   if (!lua_next(L, -2)) return 0;
-  if (lua_istable(L, -1)) sx_script_push_readonly(L, lua_gettop(L));
+  if (lua_istable(L, -1)) {
+    sx_script_push_readonly(L, lua_gettop(L));
+    lua_replace(L, -2);
+  }
   return 2;
 }
 

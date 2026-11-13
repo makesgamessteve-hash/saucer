@@ -1,0 +1,86 @@
+-- SPDX-License-Identifier: MIT
+local vec = require("lib.vec")
+local kit = require("lib.meshkit")
+local data = require("lib.data")
+
+describe("vec", function()
+  it("does arithmetic", function()
+    expect(vec.add({ 1, 2, 3 }, { 1, 1, 1 })).to_equal({ 2, 3, 4 })
+    expect(vec.sub({ 1, 2, 3 }, { 1, 1, 1 })).to_equal({ 0, 1, 2 })
+    expect(vec.len({ 3, 4, 0 })).to_be(5)
+    expect(vec.dist({ 0, 0, 0 }, { 0, 0, 2 })).to_be(2)
+    expect(vec.norm({ 0, 0, 0 })).to_equal({ 0, 0, 0 })
+    expect(vec.norm({ 0, 0, 5 })).to_equal({ 0, 0, 1 })
+    expect(vec.new()).to_equal({ 0, 0, 0 })
+    expect(vec.copy({ 1, 2, 3 })).to_equal({ 1, 2, 3 })
+  end)
+  it("yaw 0 faces +z and right is -x", function()
+    expect(vec.fwd(0)).to_equal({ 0, 0, 1 })
+    expect(vec.right(0)).to_equal({ -1, 0, 0 })
+    local a = vec.aim(0, saucer.math.pi / 2)
+    expect(a[2]).to_be(1)
+  end)
+  it("clamps and overlaps", function()
+    expect(vec.clamp(5, 0, 1)).to_be(1)
+    expect(vec.clamp(-5, 0, 1)).to_be(0)
+    expect(vec.clamp(0.5, 0, 1)).to_be(0.5)
+    expect(vec.hulls_overlap({ 0, 0, 0 }, 1, 1, { 1.5, 0, 0 }, 1, 1)).to_be_truthy()
+    expect(vec.hulls_overlap({ 0, 0, 0 }, 1, 1, { 2.5, 0, 0 }, 1, 1, 0.2)).to_be_falsy()
+  end)
+end)
+
+describe("meshkit", function()
+  local box = { kit.part("box", { pos = { 1, 0, 0 } }) }
+  it("transforms with yaw and scale", function()
+    local t = kit.transform(box, { yaw = saucer.math.pi / 2, scale = 2, pos = { 0, 1, 0 } })
+    expect(t[1].pos[1]).to_be_near(0, 1e-9)
+    expect(t[1].pos[2]).to_be(1)
+    expect(t[1].pos[3]).to_be_near(-2, 1e-9)
+    expect(t[1].scale).to_equal({ 2, 2, 2 })
+    expect(kit.transform({ kit.part("box") }, {})[1].pos).to_equal({ 0, 0, 0 })
+  end)
+  it("mirrors, arrays and merges", function()
+    expect(#kit.mirror(box, "x")).to_be(2)
+    expect(kit.mirror(box, "x")[2].pos[1]).to_be(-1)
+    expect(kit.mirror({ kit.part("box") }, "z")[2].pos[3]).to_be(0)
+    expect(#kit.radial_array(box, 6)).to_be(6)
+    local la = kit.linear_array(box, 3, { 0, 0, 2 })
+    expect(la[3].pos[3]).to_be(4)
+    expect(#kit.merge(box, box, box)).to_be(3)
+  end)
+  it("builds every recipe with a stable hash", function()
+    local recipes = {
+      { "saucer", { diameter = 24, height = 8, config = "villa" } },
+      { "saucer", { part = "dome" } },
+      { "saucer", {} },
+      { "station", {} },
+      { "loot_cache", {} },
+      { "derelict_greeble", {} },
+    }
+    for _, r in ipairs(recipes) do
+      local id1, h1 = kit.build(r[1], r[2], 5)
+      local id2, h2 = kit.build(r[1], r[2], 5)
+      expect(h1).to_be(h2)
+      expect(saucer.mesh.info(id1).triangles).to_be_greater(0)
+      saucer.mesh.free(id1)
+      saucer.mesh.free(id2)
+    end
+  end)
+  it("rejects recipes without parts", function()
+    local fake = function() return {} end
+    expect(function() kit.recipe("nope_missing") end).to_fail("not found")
+    expect(type(fake)).to_be("function")
+  end)
+end)
+
+describe("data", function()
+  it("caches and reloads", function()
+    local a = data.load("saucer/configs.lua")
+    expect(data.load("saucer/configs.lua")).to_be(a)
+    data.clear()
+    expect(data.load("saucer/configs.lua")[1].id).to_be("villa")
+  end)
+  it("reports syntax errors", function()
+    expect(function() data.load("no/such.lua") end).to_fail("not found")
+  end)
+end)

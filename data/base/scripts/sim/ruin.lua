@@ -8,6 +8,7 @@ local M = {}
 
 M.GRID = { 48, 4, 48 }
 M.MAX_TRIES = 8
+M.FALLBACK_GRID = { 48, 4, 48 }
 local DIRS = {
   { name = "+z", axis = 3, sign = 1 },
   { name = "+x", axis = 1, sign = 1 },
@@ -69,13 +70,14 @@ local function fit(grid, parent, child, dir, kit)
   return cell, lo, hi
 end
 
-function M.embed(rng, rooms, kit)
-  local grid = saucer.procgen.grid_new(M.GRID[1], M.GRID[2], M.GRID[3])
+function M.embed(rng, rooms, kit, dims)
+  dims = dims or M.GRID
+  local grid = saucer.procgen.grid_new(dims[1], dims[2], dims[3])
   local e = rooms[1]
-  e.cell = { (M.GRID[1] - e.size[1]) // 2, 0, 2 }
+  e.cell = { (dims[1] - e.size[1]) // 2, 0, 2 }
   if not grid:place(e.cell[1], e.cell[2], e.cell[3], e.size[1], e.size[2], e.size[3], 1) then return nil end
   -- keep the approach to the hangar door clear of other rooms
-  grid:place(e.cell[1], 0, 0, e.size[1], M.GRID[2], e.cell[3], 9999)
+  grid:place(e.cell[1], 0, 0, e.size[1], dims[2], e.cell[3], 9999)
   local doors = { { a = 0, b = 1, class = e.class, axis = 3, sign = 1, lo = e.cell[1], hi = e.cell[1] + e.size[1] } }
   e.faces["-z"] = true
   for i = 2, #rooms do
@@ -262,7 +264,7 @@ end
 function M.fallback(seed, kit, origin)
   local rooms = { new_room(1, 3, kit, "entrance", 0), new_room(2, 2, kit, "vault", 1) }
   local rng = saucer.rng.new(seed)
-  local doors = M.embed(rng, rooms, kit)
+  local doors = M.embed(rng, rooms, kit, M.FALLBACK_GRID)
   local slots = M.slots(rng, rooms, kit, origin, seed)
   local ok, reach = M.validate(rooms, doors, slots)
   return { seed = seed, kit = kit.id, rooms = rooms, doors = doors, slots = slots,

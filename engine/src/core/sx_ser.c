@@ -74,7 +74,7 @@ static int write_table(lua_State *L, int idx, sx_buf *out, int depth, char *err,
   key_ref *keys = NULL;
   int n = 0, cap = 0, i, ok = 1, keytab;
   idx = lua_absindex(L, idx);
-  if (depth >= SX_SER_MAX_DEPTH) {
+  if (depth >= SX_SER_MAX_DEPTH || !lua_checkstack(L, 8)) {
     snprintf(err, errlen, "table nesting too deep (cycle?)");
     return 0;
   }
@@ -113,7 +113,7 @@ static int write_table(lua_State *L, int idx, sx_buf *out, int depth, char *err,
     lua_pop(L, 1);
   }
   if (ok) {
-    qsort(keys, (size_t)n, sizeof(key_ref), key_cmp);
+    if (n) qsort(keys, (size_t)n, sizeof(key_ref), key_cmp);
     put_u8(out, T_TAB);
     put_u64(out, (uint64_t)n);
     for (i = 0; i < n && ok; i++) {
@@ -186,7 +186,7 @@ static int get_u64(reader *r, uint64_t *v) {
 static int read_value(lua_State *L, reader *r, int depth) {
   uint64_t v, n, i;
   int t;
-  if (r->p >= r->end || depth > SX_SER_MAX_DEPTH) return 0;
+  if (r->p >= r->end || depth > SX_SER_MAX_DEPTH || !lua_checkstack(L, 4)) return 0;
   t = *r->p++;
   switch (t) {
   case T_NIL: lua_pushnil(L); return 1;

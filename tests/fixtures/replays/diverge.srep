@@ -1,0 +1,6 @@
+SREP 1
+engine 0.1.0
+seed 42
+players 1
+h 60 0000000000000001
+end 120

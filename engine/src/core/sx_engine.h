@@ -22,6 +22,7 @@ typedef struct sx_options {
   char root[512];     /* folder that holds data/ and mods/ */
   char user_dir[512]; /* saves, bindings, logs */
   char mods[256];     /* comma separated enabled mods, "" = all */
+  char mods_dir[512]; /* default <root>/mods */
   uint64_t seed;
   int headless;
   char script[512];   /* game test script (VFS-independent path) */

@@ -92,7 +92,8 @@ int sx_replay_parse(sx_replay *r, const char *text, char *err, int errlen) {
     memcpy(line, p, n);
     line[n] = 0;
     p = e ? e + 1 : p + strlen(p);
-    if (!line[0]) continue;
+    if (n && line[n - 1] == '\r') line[n - 1] = 0; /* tolerate CRLF checkouts */
+    if (!line[0] || line[0] == '#') continue;
     if (!have_magic) {
       if (strcmp(line, "SREP 1") != 0) {
         snprintf(err, (size_t)errlen, "not a replay (line %d)", lineno);

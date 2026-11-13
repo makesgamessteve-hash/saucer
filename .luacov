@@ -1,0 +1,8 @@
+-- luacov configuration: coverage of the base game's Lua (tests/lua specs).
+return {
+  statsfile = "build/luacov.stats.out",
+  reportfile = "build/luacov.report.out",
+  include = { "data/base/scripts/" },
+  exclude = { "tests/", "luacov" },
+  deletestats = false,
+}

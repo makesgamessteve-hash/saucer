@@ -1,0 +1,6 @@
+* text=auto
+*.srep text eol=lf
+*.lua text eol=lf
+*.png binary
+*.jpg binary
+*.wav binary

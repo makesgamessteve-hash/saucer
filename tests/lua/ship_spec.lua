@@ -1,0 +1,70 @@
+-- SPDX-License-Identifier: MIT
+-- spec saucer-size
+local ship = require("sim.ship")
+local configs = require("sim.config")
+local never = function() return false end
+local always = function() return true end
+
+describe("saucer configurations", function()
+  it("has four sizes from Villa to Seat", function()
+    expect(configs.count()).to_be(4)
+    expect(configs.get(1).id).to_be("villa")
+    expect(configs.get(4).id).to_be("seat")
+    expect(configs.by_id("pod")).to_be(3)
+    expect(configs.by_id("nope")).to_be(nil)
+  end)
+end)
+
+describe("size changes", function()
+  local s
+  before_each(function() s = ship.new({ 0, 0, 0 }, 0, 1) end)
+  it("Villa to Seat costs 5+10+15 Charge", function()
+    expect(ship.cost(1, 4)).to_be(30)
+    expect(ship.cost(4, 1)).to_be(15)
+  end)
+  it("shrinks after the shrink time", function()
+    local ok = ship.request(s, 2, never)
+    expect(ok).to_be(true)
+    expect(s.charge).to_be(95)
+    local done
+    for _ = 1, 40 do done = ship.update(s, 1 / 60, false) or done end
+    expect(done).to_be("done")
+    expect(s.size).to_be(2)
+  end)
+  it("rejects invalid, same, busy and unaffordable requests", function()
+    expect(select(2, ship.request(s, 0, never))).to_be("range")
+    expect(select(2, ship.request(s, 1, never))).to_be("same")
+    ship.request(s, 3, never)
+    expect(select(2, ship.request(s, 4, never))).to_be("busy")
+    local poor = ship.new({ 0, 0, 0 }, 0, 1)
+    poor.charge = 1
+    expect(select(2, ship.request(poor, 2, never))).to_be("charge")
+  end)
+  it("blocks growing without clearance and keeps Charge", function()
+    local small = ship.new({ 0, 0, 0 }, 0, 4)
+    small.charge = 50
+    local ok, why = ship.request(small, 3, always)
+    expect(ok).to_be(false)
+    expect(why).to_be("clearance")
+    expect(small.charge).to_be(50)
+    expect(ship.request(small, 3, never)).to_be(true)
+  end)
+  it("uses the larger hull while morphing", function()
+    local small = ship.new({ 0, 0, 0 }, 0, 4)
+    ship.request(small, 3, never)
+    local r = ship.dims(small)
+    expect(r).to_be(2)
+    ship.request(s, 2, never)
+    expect((ship.dims(s))).to_be(12)
+  end)
+  it("regenerates Charge only in open space", function()
+    s.charge = 50
+    ship.update(s, 1, false)
+    expect(s.charge).to_be(50)
+    ship.update(s, 1, true)
+    expect(s.charge).to_be(52)
+    s.charge = 99.5
+    ship.update(s, 1, true)
+    expect(s.charge).to_be(100)
+  end)
+end)

@@ -37,6 +37,7 @@ const char *sx_usage(void) {
          "  --root DIR            folder containing data/ and mods/ (default: beside the binary)\n"
          "  --user-dir DIR        saves, bindings and logs\n"
          "  --mods a,b            enable only these mods (base is always loaded)\n"
+         "  --mods-dir DIR        folder with user mods (default: <root>/mods)\n"
          "  --seed N              universe seed\n"
          "  --headless            null renderer/audio, no window\n"
          "  --script FILE         run a game test script (implies --headless --test)\n"
@@ -73,6 +74,7 @@ int sx_options_parse(sx_options *o, int argc, char **argv, char *err, int errlen
     if (strcmp(a, "--root") == 0) { NEEDV(); copy_str(o->root, sizeof o->root, v); }
     else if (strcmp(a, "--user-dir") == 0) { NEEDV(); copy_str(o->user_dir, sizeof o->user_dir, v); }
     else if (strcmp(a, "--mods") == 0) { NEEDV(); copy_str(o->mods, sizeof o->mods, v); }
+    else if (strcmp(a, "--mods-dir") == 0) { NEEDV(); copy_str(o->mods_dir, sizeof o->mods_dir, v); }
     else if (strcmp(a, "--seed") == 0) { NEEDV(); o->seed = strtoull(v, NULL, 10); }
     else if (strcmp(a, "--headless") == 0) o->headless = 1;
     else if (strcmp(a, "--script") == 0) { NEEDV(); copy_str(o->script, sizeof o->script, v); o->headless = o->test_mode = 1; }
@@ -296,6 +298,16 @@ static void resume_test(sx_engine *e) {
   if (nres) lua_pop(e->test_co, nres);
 }
 
+/* luacov must hook in before any mod code runs so module bodies count */
+static void start_coverage(lua_State *L) {
+  lua_getglobal(L, "require");
+  lua_pushstring(L, "luacov");
+  if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
+    fprintf(stderr, "luacov not available: %s\n", lua_tostring(L, -1));
+    lua_pop(L, 1);
+  }
+}
+
 sx_engine *sx_engine_create(const sx_options *o) {
   sx_engine *e = (sx_engine *)calloc(1, sizeof(sx_engine));
   char *base, *mods;
@@ -304,7 +316,7 @@ sx_engine *sx_engine_create(const sx_options *o) {
   sx_vfs_init(&e->vfs);
   sx_modset_init(&e->mods);
   base = sx_path_join(o->root, "data/base");
-  mods = sx_path_join(o->root, "mods");
+  mods = o->mods_dir[0] ? sx_strdup(o->mods_dir) : sx_path_join(o->root, "mods");
   if (!sx_modset_scan(&e->mods, base, mods, o->mods[0] ? o->mods : NULL)) {
     free(base);
     free(mods);
@@ -348,7 +360,8 @@ sx_engine *sx_engine_create(const sx_options *o) {
                            : sx_render_fallback_font(&e->render);
     free(d);
   }
-  if (!sx_script_open(e) || !sx_script_load_mods(e)) {
+  if (sx_script_open(e) && o->coverage) start_coverage(e->L);
+  if (!e->L || !sx_script_load_mods(e)) {
     SX_ERROR("failed to start the Lua runtime / base mod");
     sx_engine_destroy(e);
     return NULL;
@@ -554,14 +567,6 @@ int sx_run_lua_tests(const sx_options *o) {
   e = sx_engine_create(&oo);
   if (!e) return 2;
   L = e->L;
-  if (o->coverage) {
-    lua_getglobal(L, "require");
-    lua_pushstring(L, "luacov");
-    if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
-      fprintf(stderr, "luacov not available: %s\n", lua_tostring(L, -1));
-      lua_pop(L, 1);
-    }
-  }
   sx_fs_list(o->test_lua, 0, &files);
   env = sx_script_new_env(L, "test");
   /* specs may use io/debug for tooling; the game sandbox is unchanged */
