@@ -1,0 +1,14 @@
+schema: spec-driven
+
+context: |
+  Saucer: C11 engine core + SDL3/OpenGL 3.3/WebGL2 platform layer, gameplay in moddable Lua 5.4.
+  Targets Windows (MSVC), Linux (GCC/Clang) and Web (emscripten, WebXR); macOS is out of scope.
+  The sim is deterministic: fixed 60 Hz ticks, command frames only, saucer.math, sorted_pairs, state hashes.
+  Every player owns their own saucer, hold, credits, Charge and loot (co-op ready).
+  Coverage gates: >= 95% lines for C (gcovr) and Lua (luacov). Full conventions: openspec/project.md.
+
+rules:
+  tasks:
+    - Map every scenario to a named unit or game test
+  specs:
+    - Use SHALL/SHALL NOT and WHEN/THEN scenarios
