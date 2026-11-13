@@ -1,0 +1,38 @@
+# SPDX annotations for the whole tree (https://reuse.software/spec-3.3/).
+version = 1
+
+[[annotations]]
+path = ["**"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Steve Makesgames and contributors"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = ["data/base/authored/**"]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Steve Makesgames and contributors"
+SPDX-License-Identifier = "CC-BY-4.0"
+
+[[annotations]]
+path = ["data/base/generated/**", "art/src/generated/**"]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Steve Makesgames; Created with Grok"
+SPDX-License-Identifier = "LicenseRef-xAI-Output"
+
+[[annotations]]
+path = ["data/base/**/*.meta.lua"]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Steve Makesgames and contributors"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = ["third_party/lua/**"]
+precedence = "override"
+SPDX-FileCopyrightText = "1994-2024 Lua.org, PUC-Rio"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = ["third_party/stb/**"]
+precedence = "override"
+SPDX-FileCopyrightText = "Sean Barrett and stb contributors"
+SPDX-License-Identifier = "MIT OR Unlicense"
