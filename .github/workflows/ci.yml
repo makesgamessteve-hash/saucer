@@ -1,0 +1,120 @@
+# SPDX-License-Identifier: MIT
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  SDL_LINUX_DEPS: >-
+    ninja-build libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxss-dev libxtst-dev
+    libxkbcommon-dev libwayland-dev libegl1-mesa-dev libgl1-mesa-dev libasound2-dev libpulse-dev libudev-dev
+
+jobs:
+  linux-gcc:
+    name: linux-gcc (tests + coverage gate + windowed smoke test)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y $SDL_LINUX_DEPS gcovr lua5.4 liblua5.4-dev luarocks xvfb mesa-utils
+          sudo luarocks --lua-version 5.4 install luacov
+      - name: Coverage gate (C via gcovr, Lua via luacov, >= 95% lines)
+        run: tools/coverage.sh build/cov
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: build/luacov.report.out
+      - name: Build game (SDL3 fetched)
+        run: |
+          cmake -S . -B build/game -G Ninja -DCMAKE_BUILD_TYPE=Release -DSAUCER_BUILD_TESTS=OFF
+          cmake --build build/game
+      - name: Windowed smoke test under Xvfb (renders and screenshots tick 120)
+        run: |
+          cd build/game
+          SDL_AUDIODRIVER=dummy xvfb-run -s "-screen 0 1280x720x24" ./saucer --seed 42 --screenshot ../../shot.png --screenshot-tick 120 --user-dir ../tmp-user
+          test -s ../../shot.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-screenshot
+          path: shot.png
+
+  linux-clang:
+    name: linux-clang (ASan/UBSan)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build clang
+      - name: Build and test
+        env:
+          CC: clang
+        run: |
+          cmake -S . -B build/asan -G Ninja -DCMAKE_BUILD_TYPE=Debug -DSAUCER_BUILD_GAME=OFF -DSAUCER_SANITIZE=ON
+          cmake --build build/asan
+          ctest --test-dir build/asan --output-on-failure
+
+  windows-msvc:
+    name: windows-msvc
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure (SDL3 fetched and built statically)
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+      - name: Build
+        run: cmake --build build --config Release --parallel
+      - name: Test (unit, game tests, replays must match the Linux hashes)
+        run: ctest --test-dir build -C Release --output-on-failure
+      - uses: actions/upload-artifact@v4
+        with:
+          name: saucer-windows
+          path: |
+            build/Release/saucer.exe
+            build/Release/data
+            build/Release/mods
+
+  emscripten:
+    name: emscripten (wasm tests under node + web build)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: latest
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Build
+        run: |
+          emcmake cmake -S . -B build/web -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/web
+      - name: Test under node (same replay hashes as native)
+        run: ctest --test-dir build/web --output-on-failure
+      - uses: actions/upload-artifact@v4
+        with:
+          name: saucer-web
+          path: |
+            build/web/saucer.html
+            build/web/saucer.js
+            build/web/saucer.wasm
+            build/web/data
+
+  lint:
+    name: lint (OpenSpec, asset licenses and prompts)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pillow
+      - name: OpenSpec
+        run: |
+          npm install -g @fission-ai/openspec
+          openspec validate --all --strict
+      - name: Asset licenses, sidecars and prompt records
+        run: python3 tools/artpipe/artpipe.py lint
