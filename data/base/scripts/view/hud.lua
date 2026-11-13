@@ -10,8 +10,8 @@ local WHITE, DIM, GREEN, RED, AMBER, CYAN = { 1, 1, 1, 1 }, { 0.6, 0.65, 0.75, 1
 M.MSG_TICKS = 300
 
 local HINTS = {
-  kbm = "WASD move  SPACE/CTRL lift  MOUSE turn  Q/E size  F tractor  C camera  H help",
-  pad = "LS move  RS look  LT/RT lift  LB/RB size  A tractor  BACK camera",
+  kbm = "WASD move SPC/CTRL lift MOUSE turn Q/E size F beam H help",
+  pad = "LS move RS look LT/RT lift LB/RB size A beam BACK cam",
   touch = "Stick move  drag look  slider lift  buttons size/tractor",
   xr = "Sticks fly  lever size  trigger tractor",
 }

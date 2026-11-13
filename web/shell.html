@@ -1,0 +1,66 @@
+<!doctype html>
+<!-- Saucer web shell. SPDX-License-Identifier: MIT -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Saucer</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; color: #9cf; font: 14px monospace; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; touch-action: none; image-rendering: pixelated; }
+  #status { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); text-align: center; }
+  #vr { position: fixed; right: 12px; bottom: 12px; display: none; padding: 10px 16px; background: #123;
+        color: #9cf; border: 1px solid #9cf; font: 14px monospace; cursor: pointer; }
+</style>
+</head>
+<body>
+<canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+<div id="status">loading data…</div>
+<button id="vr">Enter VR</button>
+<script>
+  // Assets are plain files beside the page: data/index.json lists the tree,
+  // and every file is fetched into the in-memory filesystem before start.
+  var statusEl = document.getElementById('status');
+  var vrBtn = document.getElementById('vr');
+  var Module = {
+    canvas: document.getElementById('canvas'),
+    noInitialRun: true,
+    print: function (t) { console.log(t); },
+    printErr: function (t) { console.warn(t); },
+    onXRAvailable: function () { vrBtn.style.display = 'block'; },
+    onXRStart: function () { vrBtn.textContent = 'Exit VR'; },
+    onXREnd: function () { vrBtn.textContent = 'Enter VR'; },
+    onRuntimeInitialized: function () {
+      fetch('data/index.json').then(function (r) {
+        if (!r.ok) throw new Error('data/index.json: HTTP ' + r.status);
+        return r.json();
+      }).then(function (files) {
+        var done = 0;
+        return Promise.all(files.map(function (path) {
+          return fetch(path).then(function (r) {
+            if (!r.ok) throw new Error(path + ': HTTP ' + r.status);
+            return r.arrayBuffer();
+          }).then(function (buf) {
+            var dir = path.substring(0, path.lastIndexOf('/'));
+            Module.FS.mkdirTree('/' + dir);
+            Module.FS.writeFile('/' + path, new Uint8Array(buf));
+            statusEl.textContent = 'loading data… ' + (++done) + '/' + files.length;
+          });
+        }));
+      }).then(function () {
+        Module.FS.mkdirTree('/mods');
+        Module.FS.mkdirTree('/user');
+        statusEl.style.display = 'none';
+        var args = ['--root', '/', '--width', String(window.innerWidth), '--height', String(window.innerHeight)];
+        var q = new URLSearchParams(location.search);
+        if (q.get('seed')) args.push('--seed', q.get('seed'));
+        if (q.get('players')) args.push('--local-players', q.get('players'), '--viewports', q.get('players'), '--coop');
+        Module.callMain(args);
+      }).catch(function (e) { statusEl.textContent = 'failed to load: ' + e.message; });
+    },
+  };
+  vrBtn.addEventListener('click', function () { if (Module.saucerEnterVR) Module.saucerEnterVR(); });
+</script>
+{{{ SCRIPT }}}
+</body>
+</html>

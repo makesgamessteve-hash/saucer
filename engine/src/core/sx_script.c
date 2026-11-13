@@ -1180,7 +1180,8 @@ static int l_v_camera(lua_State *L) {
   field_vec(L, 2, "pos", v->cam.pos, 3);
   v->cam.yaw = field_num(L, 2, "yaw", v->cam.yaw);
   v->cam.pitch = field_num(L, 2, "pitch", v->cam.pitch);
-  v->cam.fov = field_num(L, 2, "fov", v->cam.fov);
+  /* fov is given in degrees (vertical) */
+  v->cam.fov = field_num(L, 2, "fov", v->cam.fov * (float)(180.0 / SX_PI)) * (float)(SX_PI / 180.0);
   v->cam.znear = field_num(L, 2, "near", v->cam.znear);
   v->cam.zfar = field_num(L, 2, "far", v->cam.zfar);
   return 0;
