@@ -15,7 +15,7 @@ typedef enum {
   SX_TOUCH_GROW,
   SX_TOUCH_TRACTOR,
   SX_TOUCH_SCAN,
-  SX_TOUCH_DOOR,
+  SX_TOUCH_USE,
   SX_TOUCH_BOOST,
   SX_TOUCH_COUNT
 } sx_touch_ctl;

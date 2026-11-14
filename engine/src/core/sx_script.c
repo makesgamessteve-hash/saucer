@@ -35,7 +35,7 @@ static void get_vec3(lua_State *L, int idx, double out[3]) {
   int i;
   luaL_checktype(L, idx, LUA_TTABLE);
   for (i = 0; i < 3; i++) {
-    lua_rawgeti(L, idx, i + 1);
+    lua_geti(L, idx, i + 1);
     out[i] = luaL_optnumber(L, -1, 0.0);
     lua_pop(L, 1);
   }
@@ -64,7 +64,7 @@ static int field_vec(lua_State *L, int idx, const char *k, float out[], int n) {
   if (lua_istable(L, -1)) {
     ok = 1;
     for (i = 0; i < n; i++) {
-      lua_rawgeti(L, -1, i + 1);
+      lua_geti(L, -1, i + 1); /* honours read-only state proxies */
       if (lua_isnumber(L, -1)) out[i] = (float)lua_tonumber(L, -1);
       lua_pop(L, 1);
     }
@@ -971,10 +971,16 @@ static int build_part(lua_State *L, int idx, sx_mesh *m) {
     const char *k = lua_tostring(L, -1);
     int seg = (int)field_num(L, idx, "seg", 12);
     float r = field_num(L, idx, "r", 1), h = field_num(L, idx, "h", 1);
+    int open;
+    void (*fr)(sx_mesh *, const float *, float, float, float, int, const sx_part_style *);
+    lua_getfield(L, idx, "open"); /* open = true: no end caps (shells you can stand inside) */
+    open = lua_toboolean(L, -1);
+    lua_pop(L, 1);
+    fr = open ? sx_mesh_tube : sx_mesh_frustum;
     if (strcmp(k, "box") == 0) sx_mesh_box(m, mn, mx, &s);
     else if (strcmp(k, "wedge") == 0) sx_mesh_wedge(m, mn, mx, field_num(L, idx, "low", 0), &s);
-    else if (strcmp(k, "cylinder") == 0) sx_mesh_cylinder(m, c, r, h, seg, &s);
-    else if (strcmp(k, "cone") == 0) sx_mesh_frustum(m, c, r, field_num(L, idx, "r1", 0), h, seg, &s);
+    else if (strcmp(k, "cylinder") == 0) fr(m, c, r, r, h, seg, &s);
+    else if (strcmp(k, "cone") == 0) fr(m, c, r, field_num(L, idx, "r1", 0), h, seg, &s);
     else if (strcmp(k, "ring") == 0) sx_mesh_ring(m, c, field_num(L, idx, "rin", 0.5f), r, h, seg, &s);
     else if (strcmp(k, "hemisphere") == 0) sx_mesh_dome(m, c, r, h, seg, (int)field_num(L, idx, "rings", 4), &s);
     else if (strcmp(k, "sphere") == 0) {
@@ -1019,7 +1025,7 @@ static int build_part(lua_State *L, int idx, sx_mesh *m) {
           cc[0] = c[0];
           cc[1] = c[1] + buf[i + 1];
           cc[2] = c[2];
-          sx_mesh_frustum(m, cc, buf[i], buf[i + 2], buf[i + 3] - buf[i + 1], seg, &s);
+          fr(m, cc, buf[i], buf[i + 2], buf[i + 3] - buf[i + 1], seg, &s);
         }
       }
     } else if (strcmp(k, "stars") == 0) {

@@ -31,6 +31,8 @@ void sx_mesh_wedge(sx_mesh *m, const float mn[3], const float mx[3], float low, 
 void sx_mesh_cylinder(sx_mesh *m, const float c[3], float r, float h, int seg, const sx_part_style *s);
 /* Cone frustum: bottom radius r0 at c.y, top radius r1 at c.y + h. */
 void sx_mesh_frustum(sx_mesh *m, const float c[3], float r0, float r1, float h, int seg, const sx_part_style *s);
+/* Frustum without end caps (open tube): hull shells you can stand inside. */
+void sx_mesh_tube(sx_mesh *m, const float c[3], float r0, float r1, float h, int seg, const sx_part_style *s);
 void sx_mesh_ring(sx_mesh *m, const float c[3], float rin, float rout, float h, int seg, const sx_part_style *s);
 /* Upper hemisphere (scaled ellipsoid) of radius r and height h. */
 void sx_mesh_dome(sx_mesh *m, const float c[3], float r, float h, int seg, int rings, const sx_part_style *s);

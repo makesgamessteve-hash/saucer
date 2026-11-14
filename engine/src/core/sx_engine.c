@@ -433,7 +433,9 @@ int sx_engine_tick(sx_engine *e) {
     int i;
     sx_touch_apply(&e->touch, &e->input.raw);
     for (i = 0; i < SX_XR_COUNT; i++) e->input.raw.xr[i] = e->xr.values[i];
-    sx_xr_aim(&e->xr, e->input.raw.aim);
+    /* the head pose only steers anything while an immersive session runs */
+    if (e->xr.session) sx_xr_aim(&e->xr, e->input.raw.aim);
+    else memset(e->input.raw.aim, 0, sizeof e->input.raw.aim);
     sx_input_build(&e->input, e->tick, cmds, &n);
     apply_injection(e, cmds, n);
   }

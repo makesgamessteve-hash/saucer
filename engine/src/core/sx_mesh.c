@@ -148,7 +148,8 @@ void sx_mesh_box(sx_mesh *m, const float mn[3], const float mx[3], const sx_part
   sx_mesh_wedge(m, mn, mx, 1.0f, s);
 }
 
-void sx_mesh_frustum(sx_mesh *m, const float c[3], float r0, float r1, float h, int seg, const sx_part_style *s) {
+static void frustum(sx_mesh *m, const float c[3], float r0, float r1, float h, int seg, int caps,
+                    const sx_part_style *s) {
   int i;
   float top[3], bot[3];
   if (seg < 3) seg = 3;
@@ -168,9 +169,17 @@ void sx_mesh_frustum(sx_mesh *m, const float c[3], float r0, float r1, float h, 
       else if (r0 <= 0) tri(m, b0, t1, t0, s);
       else quad(m, b0, b1, t1, t0, s);
     }
-    if (r1 > 0) tri(m, top, t0, t1, s);
-    if (r0 > 0) tri(m, bot, b1, b0, s);
+    if (caps && r1 > 0) tri(m, top, t0, t1, s);
+    if (caps && r0 > 0) tri(m, bot, b1, b0, s);
   }
+}
+
+void sx_mesh_frustum(sx_mesh *m, const float c[3], float r0, float r1, float h, int seg, const sx_part_style *s) {
+  frustum(m, c, r0, r1, h, seg, 1, s);
+}
+
+void sx_mesh_tube(sx_mesh *m, const float c[3], float r0, float r1, float h, int seg, const sx_part_style *s) {
+  frustum(m, c, r0, r1, h, seg, 0, s);
 }
 
 void sx_mesh_cylinder(sx_mesh *m, const float c[3], float r, float h, int seg, const sx_part_style *s) {
