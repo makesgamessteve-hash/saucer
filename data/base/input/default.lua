@@ -1,5 +1,7 @@
 -- SPDX-License-Identifier: MIT
--- Default actions and bindings (concept §8). Every local player gets the same
+-- Default actions and bindings (concept §10). On foot, move/turn/look walk and
+-- look around; at the helm the same actions fly the saucer. Use takes or
+-- leaves the helm. Every local player gets the same
 -- binding list; device claims decide which physical device feeds which player.
 -- Syntax: device:control[:scale]. Players can rebind in game (persisted).
 return {
@@ -16,12 +18,10 @@ return {
     grow   = { "key:E", "mouse:wheel:1", "pad:rightshoulder", "touch:grow", "xr:lever_up", "xr:b" },
     size1  = { "key:1" },
     size2  = { "key:2" },
-    size3  = { "key:3" },
-    size4  = { "key:4" },
     tractor = { "mouse:left", "key:F", "pad:a", "touch:tractor", "xr:trigger_r" },
     scan   = { "key:V", "pad:y", "touch:scan", "xr:x" },
     boost  = { "key:LShift", "pad:leftstick", "touch:boost", "xr:grip_l" },
-    door   = { "key:G", "pad:b", "touch:door" },
+    use    = { "key:G", "key:Return", "pad:x", "touch:use", "xr:trigger_l" },
     camera = { "key:C", "pad:back" },
     menu   = { "key:F1", "key:H", "pad:start", "xr:menu" },
     jam    = { "key:T", "pad:rightstick", "xr:y" },
@@ -29,6 +29,6 @@ return {
   },
   -- stable order so action slots (and therefore replays) never depend on table order
   axis_order = { "move_x", "move_z", "lift", "turn", "look" },
-  button_order = { "shrink", "grow", "size1", "size2", "size3", "size4", "tractor", "scan", "boost", "door",
+  button_order = { "shrink", "grow", "size1", "size2", "tractor", "scan", "boost", "use",
                    "camera", "menu", "jam", "mystery_mode" },
 }

@@ -29,12 +29,28 @@ describe("derelict generation", function()
       end
     end
   end)
-  it("the tutorial site has a Cruiser hangar", function()
-    local r = ruin.generate(99, "starship", civs[2], { 0, 0, 0 }, nil, 3)
-    expect(r.rooms[1].class).to_be(3)
+  it("halls take the whole Villa; ducts need the Seat", function()
+    local ducts = 0
+    for seed = 1, 30 do
+      local r = ruin.generate(seed, "starship", civs[1], { 0, 0, 0 })
+      expect(r.rooms[1].class).to_be(4)
+      local villa = require("sim.config").get(1)
+      local kit = ruin.kit_of("starship")
+      expect(kit.doors[4][1]).to_be_greater(villa.diameter + 4)
+      expect(kit.doors[4][2]).to_be_greater(villa.height + 2)
+      for _, room in ipairs(r.rooms) do
+        if room.class == 1 then ducts = ducts + 1 end
+        if room.kind == "hall" or room.kind == "vault" then expect(room.class).to_be(4) end
+      end
+    end
+    expect(ducts).to_be_greater(29)
+  end)
+  it("can force the entrance class", function()
+    local r = ruin.generate(99, "starship", civs[2], { 0, 0, 0 }, nil, 4)
+    expect(r.rooms[1].class).to_be(4)
   end)
   it("falls back to a fixed layout when every try fails", function()
-    local tiny = { entrance = { { 3, 1 } }, size_lock = 0 }
+    local tiny = { entrance = { { 4, 1 } }, size_lock = 0 }
     local saved = ruin.GRID
     ruin.GRID = { 4, 2, 4 }
     local r = ruin.generate(5, "starship", tiny, { 0, 0, 0 }, 2)

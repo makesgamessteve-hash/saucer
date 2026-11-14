@@ -15,15 +15,15 @@ function M.generate(seed)
       pos = { rng:int(-20, 20) - 96, -8, 150 + rng:int(0, 30) }
     else
       local a = saucer.math.tau * (i - 1) / M.SITES + rng:float() * 0.6
-      local d = 420 + rng:int(0, 220)
+      local d = 760 + rng:int(0, 260)
       pos = { saucer.math.sin(a) * d // 1, rng:int(-40, 40), saucer.math.cos(a) * d // 1 }
     end
     sites[i] = {
       id = i, pos = pos, seed = saucer.seed_child(seed, "site", i),
       kit = (i == 2) and "station" or "starship", civ = rng:int(1, #civs),
     }
-    -- the first derelict is the tutorial: a Velari hulk with a Cruiser-size hangar
-    if i == 1 then sites[i].civ, sites[i].first = 1, 3 end
+    -- the first derelict is the tutorial: a Velari hulk whose hangar takes the whole Villa
+    if i == 1 then sites[i].civ = 1 end
   end
   return { sites = sites, trader = { pos = { -260, 30, -140 } } }
 end

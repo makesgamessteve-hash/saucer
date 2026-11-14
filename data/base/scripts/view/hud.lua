@@ -3,6 +3,7 @@
 local configs = require("sim.config")
 local loot = require("sim.loot")
 local vec = require("lib.vec")
+local avatar = require("sim.avatar")
 local M = {}
 
 local WHITE, DIM, GREEN, RED, AMBER, CYAN = { 1, 1, 1, 1 }, { 0.6, 0.65, 0.75, 1 }, { 0.4, 1, 0.5, 1 },
@@ -10,19 +11,20 @@ local WHITE, DIM, GREEN, RED, AMBER, CYAN = { 1, 1, 1, 1 }, { 0.6, 0.65, 0.75, 1
 M.MSG_TICKS = 300
 
 local HINTS = {
-  kbm = "WASD move SPC/CTRL lift MOUSE turn Q/E size F beam H help",
-  pad = "LS move RS look LT/RT lift LB/RB size A beam BACK cam",
-  touch = "Stick move  drag look  slider lift  buttons size/tractor",
-  xr = "Sticks fly  lever size  trigger tractor",
+  kbm = "WASD walk/fly MOUSE look G use/helm Q/E fold F beam H help",
+  pad = "LS move RS look X use LB/RB fold A beam LT/RT lift BACK cam",
+  touch = "Stick move  drag look  USE helm  buttons fold/tractor",
+  xr = "Stick walk/fly  L trigger use  lever fold  R trigger beam",
 }
 M.HINTS = HINTS
 
 local HELP = {
   "SAUCER - controls",
-  "Move W A S D, lift Space/Ctrl (or R/Z)",
-  "Turn/look: mouse (click to capture) or arrows",
-  "Shrink Q / grow E, or 1-4 to pick a size",
-  "Tractor F or left click, boost Shift",
+  "Walk or fly: W A S D, look: mouse (click to capture)",
+  "Use G/Enter: take the helm, or stand up from it",
+  "At the helm: lift Space/Ctrl, boost Shift",
+  "Fold Q (to the Seat) / unfold E, or 1-2",
+  "Tractor F or left click (helm or under the dome)",
   "Camera C, mystery mode M, help H/F1",
   "Gamepad, touch and WebXR work too.",
 }
@@ -32,11 +34,22 @@ function M.ladder(v, p, x, y)
   local ship = p.ship
   for i, c in ipairs(configs.all()) do
     local col = DIM
-    if i == ship.size then col = GREEN end
-    if ship.target and i == ship.target then col = AMBER end
+    if i == ship.size then col = ship.morph and AMBER or GREEN end
     v:rect(x + (i - 1) * 12, y, 10, 10, { col[1] * 0.3, col[2] * 0.3, col[3] * 0.3, 0.8 })
     v:text(x + 1 + (i - 1) * 12, y + 1, c.name:sub(1, 1), col)
   end
+end
+
+-- where the player is and what Use would do right now
+function M.status(p)
+  local L = avatar.layout()
+  if p.mode == "walk" then
+    local room = avatar.room(L, p.body):upper()
+    if avatar.near_helm(L, p.body) then return room, "USE: TAKE THE HELM" end
+    return room, nil
+  end
+  if configs.get(p.ship.size).interior then return "AT THE HELM", "USE: STAND UP" end
+  return "SEAT", "E: UNFOLD THE VILLA"
 end
 
 function M.bearing(p, target)
@@ -72,8 +85,11 @@ function M.draw(v, state, p, target)
   local hot = 0
   for _, it in ipairs(p.hold) do if it.hot then hot = hot + 1 end end
   v:text(8, 36, string.format("HOLD %d/%d HOT %d BANK %dc", #p.hold, configs.all().hold_slots, hot, p.banked_value), DIM)
-  -- crosshair
+  -- crosshair, where you are and what Use does
   v:text(W // 2 - 4, H // 2 - 4, "+", p.tractor and AMBER or WHITE)
+  local where, hint = M.status(p)
+  v:text(8, 46, where, CYAN)
+  if hint then v:text(W // 2 - #hint * 4, H // 2 + 40, hint, AMBER) end
   -- navigation
   local site, d = M.nav(state, p)
   if site then

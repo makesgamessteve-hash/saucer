@@ -1,8 +1,14 @@
 -- SPDX-License-Identifier: MIT
 -- One player's saucer: position, size configuration, Charge and the
--- size-transition state machine (concept §3.1, spec saucer-size).
+-- reconfiguration state machine (concept §3.1-3.2, spec saucer-size).
 -- Config index 1 is the largest (Villa); higher index = smaller.
+--
+-- A size change happens around the pilot: the pilot's eye point stays fixed
+-- in the world and the hull re-forms around it. The new size, pose and
+-- collision hull apply at once; `morph` keeps the old pose for the fold
+-- animation and blocks further changes until it has played out.
 local configs = require("sim.config")
+local sm = saucer.math
 local M = {}
 
 function M.new(pos, yaw, size)
@@ -12,27 +18,38 @@ function M.new(pos, yaw, size)
     yaw = yaw or 0,
     pitch = 0,
     size = size or 1,
-    target = false,
+    morph = false,
     t_left = 0,
     charge = configs.all().max_charge,
   }
 end
 
--- collision radius and half height; during a transition the larger hull counts
+-- collision radius and half height of the current configuration
 function M.dims(ship)
-  local c = configs.get(ship.size)
-  local r, hh = c.diameter / 2, c.height / 2
-  if ship.target then
-    local t = configs.get(ship.target)
-    if t.diameter / 2 > r then r = t.diameter / 2 end
-    if t.height / 2 > hh then hh = t.height / 2 end
-  end
-  return r, hh
+  return M.dims_of(ship.size)
 end
 
 function M.dims_of(size)
   local c = configs.get(size)
   return c.diameter / 2, c.height / 2
+end
+
+local function rot(yaw, v)
+  local c, s = sm.cos(yaw), sm.sin(yaw)
+  return { v[1] * c + v[3] * s, v[2], -v[1] * s + v[3] * c }
+end
+M.rot = rot
+
+-- world position of the pilot's eyes in a given config and pose
+function M.eye_world(pos, yaw, size)
+  local e = rot(yaw, configs.get(size).pilot_eye)
+  return { pos[1] + e[1], pos[2] + e[2], pos[3] + e[3] }
+end
+
+-- hull centre for config `size` whose pilot eye sits at `eye` facing `yaw`
+function M.center_for_eye(eye, yaw, size)
+  local e = rot(yaw, configs.get(size).pilot_eye)
+  return { eye[1] - e[1], eye[2] - e[2], eye[3] - e[3] }
 end
 
 -- Charge cost to go from config `from` to config `to`. Shrinking pays each
@@ -48,34 +65,49 @@ function M.cost(from, to)
   return cost
 end
 
--- request(ship, to, blocked) -> ok, reason
--- blocked(ship, r, hh, margin) must return true when a hull of that size
--- would not fit at the ship's position (walls or other players' saucers).
-function M.request(ship, to, blocked)
+-- request(ship, to, blocked, eye, yaw) -> ok, reason
+-- eye/yaw: the pilot's eye point and facing to keep (default: the helm of the
+-- current config). blocked(pos, r, hh, margin) must return true when a hull
+-- of that size would not fit at pos (walls or other players' saucers); it is
+-- only asked when growing.
+function M.request(ship, to, blocked, eye, yaw)
   local all = configs.all()
   if to < 1 or to > #all then return false, "range" end
   if to == ship.size then return false, "same" end
-  if ship.target then return false, "busy" end
+  if ship.morph then return false, "busy" end
   local cost = M.cost(ship.size, to)
   if ship.charge < cost then return false, "charge" end
+  yaw = yaw or ship.yaw
+  eye = eye or M.eye_world(ship.pos, ship.yaw, ship.size)
+  local center = M.center_for_eye(eye, yaw, to)
   if to < ship.size then
     local r, hh = M.dims_of(to)
-    if blocked(ship, r, hh, all.grow_margin) then return false, "clearance" end
+    if blocked(center, r, hh, all.grow_margin) then return false, "clearance", center end
   end
   ship.charge = ship.charge - cost
-  ship.t_left = to > ship.size and all.shrink_time or all.grow_time
-  ship.target = to
+  ship.morph = { from = ship.size, pos = { ship.pos[1], ship.pos[2], ship.pos[3] }, yaw = ship.yaw,
+                 total = to > ship.size and all.shrink_time or all.grow_time, eye = { eye[1], eye[2], eye[3] } }
+  ship.t_left = ship.morph.total
+  ship.size = to
+  ship.pos = center
+  ship.yaw = yaw
+  ship.vel = { 0, 0, 0 }
   return true
 end
 
--- advance a transition; regenerate Charge when `regen` (open space).
--- returns "done" on the tick a transition completes.
+-- 0 at the start of a reconfiguration, 1 when it is done (or idle)
+function M.progress(ship)
+  if not ship.morph then return 1 end
+  return 1 - ship.t_left / ship.morph.total
+end
+
+-- advance a reconfiguration; regenerate Charge when `regen` (open space).
+-- returns "done" on the tick a reconfiguration completes.
 function M.update(ship, dt, regen)
-  if ship.target then
+  if ship.morph then
     ship.t_left = ship.t_left - dt
     if ship.t_left <= 1e-9 then
-      ship.size = ship.target
-      ship.target = false
+      ship.morph = false
       ship.t_left = 0
       return "done"
     end

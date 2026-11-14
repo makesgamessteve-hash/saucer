@@ -13,7 +13,7 @@ T.assert(not by.cycle_a.ok and by.cycle_a.status:find("cycle"), "cycle reported:
 T.assert(not by.old_dep.ok, "unsatisfied version reported")
 T.assert(by.broken_manifest == nil or not by.broken_manifest.ok, "broken manifest skipped")
 -- the data override wins over base
-T.assert(require("sim.config").get(4).tractor_range == 30, "mod overrides saucer/configs.lua")
+T.assert(require("sim.config").get(2).tractor_range == 30, "mod overrides saucer/configs.lua")
 T.wait(5)
 T.press(1, "shrink")
 T.wait(40)

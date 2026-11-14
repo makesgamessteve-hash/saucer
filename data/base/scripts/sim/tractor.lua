@@ -34,15 +34,17 @@ function M.candidates(state, p, site_idx, ruin)
   return out
 end
 
--- best target in the cone (nearest), or nil
-function M.find(state, p, site_idx, ruin)
+-- best target in the cone (nearest), or nil. eye/yaw/pitch: where the
+-- player looks from (the helm or the body under the dome); default: the hull.
+function M.find(state, p, site_idx, ruin, eye, yaw, pitch)
   local ship = p.ship
   local c = configs.get(ship.size)
-  local dir = vec.aim(ship.yaw, ship.pitch)
+  eye = eye or ship.pos
+  local dir = vec.aim(yaw or ship.yaw, pitch or ship.pitch)
   local best, bd
   for _, cand in ipairs(M.candidates(state, p, site_idx, ruin)) do
-    local d = vec.dist(cand.pos, ship.pos)
-    if saucer.physics.cone_visible(ship.pos, dir, M.CONE, c.tractor_range, cand.pos, 1) and (not bd or d < bd) then
+    local d = vec.dist(cand.pos, eye)
+    if saucer.physics.cone_visible(eye, dir, M.CONE, c.tractor_range, cand.pos, 1) and (not bd or d < bd) then
       best, bd = cand, d
     end
   end

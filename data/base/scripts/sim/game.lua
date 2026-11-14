@@ -11,6 +11,7 @@ local sector = require("sim.sector")
 local loot = require("sim.loot")
 local mystery = require("sim.mystery")
 local tractor = require("sim.tractor")
+local avatar = require("sim.avatar")
 local data = require("lib.data")
 local M = {}
 
@@ -51,19 +52,23 @@ local function fx(state, p, sound)
   while #list > M.MAX_FX do table.remove(list, 1) end
 end
 
+-- A player is a person (body) living in their own saucer (ship). mode is
+-- "walk" (on foot inside the Villa) or "helm" (seated, flying it; the Seat
+-- has room for nothing else).
 function M.new_player(index, pos, yaw)
   return {
     index = index, record_index = index - 1,
     ship = shipm.new(pos, yaw, 1),
+    mode = "walk", body = avatar.new(),
     hold = {}, credits = 0, banked_value = 0, looted = {},
-    site = 0, tractor = false, ghost = 0, cam = "cockpit", help = false,
+    site = 0, tractor = false, ghost = 0, cam = "first", help = false,
     msgs = {}, fx = {},
   }
 end
 
 function M.init(state, ctx)
   local seed = ctx.seed
-  state.version = 1
+  state.version = 2
   state.seed = seed
   state.tick = 0
   state.sector = sector.generate(seed)
@@ -77,7 +82,19 @@ function M.init(state, ctx)
     local x = door[1] + (i - 1 - (n - 1) / 2) * 34
     state.players[i] = M.new_player(i, { x, door[2], door[3] - 120 }, 0)
   end
-  for i = 1, n do msg(state, state.players[i], "Derelict ahead. Shrink to fit its hangar door.") end
+  for i = 1, n do msg(state, state.players[i], "Walk to the helm at the front of the dome and press Use.") end
+end
+
+-- where this player's eyes are (world) and where they look: the tractor and
+-- the camera both start here. On foot that is the body under the dome.
+function M.viewpoint(p)
+  local ship = p.ship
+  if p.mode == "walk" then
+    local L = avatar.layout()
+    local e = avatar.rot(ship.yaw, avatar.eye(L, p.body))
+    return { ship.pos[1] + e[1], ship.pos[2] + e[2], ship.pos[3] + e[3] }, ship.yaw + p.body.yaw, p.body.pitch
+  end
+  return shipm.eye_world(ship.pos, ship.yaw, ship.size), ship.yaw, ship.pitch
 end
 
 -- hull blocked by walls or by other players' saucers?
@@ -124,18 +141,54 @@ local REASONS = {
   busy = "Hull is still reshaping",
 }
 
+-- reconfigure around the player: seated, the helm's eye point stays put; on
+-- foot, the saucer folds down around wherever the player stands and looks
 local function size_request(state, p, to)
   local ship = p.ship
-  local ok, why = shipm.request(ship, to, function(s, r, hh, margin) return M.blocked(state, p, s.pos, r, hh, margin) end)
+  local from = ship.size
+  local eye, yaw
+  if p.mode == "walk" then eye, yaw = M.viewpoint(p) end
+  local blocked = function(pos, r, hh, margin) return M.blocked(state, p, pos, r, hh, margin) end
+  local ok, why, where = shipm.request(ship, to, blocked, eye, yaw)
   if ok then
-    fx(state, p, to > ship.size and "shrink" or "grow")
-    saucer.events.emit({ type = "size_change", player = p.index, from = ship.size, to = to })
+    if p.mode == "walk" then ship.pitch = p.body.pitch end
+    p.mode = "helm"
+    p.tractor = false
+    fx(state, p, to > from and "shrink" or "grow")
+    saucer.events.emit({ type = "size_change", player = p.index, from = from, to = to })
   elseif REASONS[why] then
     msg(state, p, REASONS[why])
     fx(state, p, "denied")
-    if why == "clearance" then p.ghost = 45; p.ghost_size = to end
+    if why == "clearance" then p.ghost = 45; p.ghost_size = to; p.ghost_pos = where end
   end
 end
+
+-- the Use button: take the helm, or stand up from it
+local function use(state, p)
+  local L = avatar.layout()
+  local ship = p.ship
+  if p.mode == "helm" then
+    if not configs.get(ship.size).interior or ship.morph then
+      msg(state, p, "No room to stand up in the " .. configs.get(ship.size).name)
+      fx(state, p, "denied")
+      return
+    end
+    p.mode = "walk"
+    p.tractor = false
+    p.body = avatar.new(L, L.helm.stand, 0)
+    p.body.pitch = ship.pitch
+    msg(state, p, "You leave the helm. The saucer holds station.")
+  elseif avatar.near_helm(L, p.body) then
+    p.mode = "helm"
+    ship.pitch = p.body.pitch
+    msg(state, p, "At the helm: fly with move and look, Use to stand up.")
+  else
+    msg(state, p, "Nothing to use here")
+  end
+end
+
+local STILL = { axis = function() return 0 end, held = function() return false end,
+                pressed = function() return false end }
 
 local function bank(state, p)
   local n, v = 0, 0
@@ -163,7 +216,8 @@ local function tractor_step(state, p, cmd, dt)
       if c.key == t.key then cand = c end
     end
     local c = configs.get(ship.size)
-    if not cand or vec.dist(cand.pos, ship.pos) > c.tractor_range * 1.25 or not tractor.can_lift(ship, cand.item) then
+    local eye = M.viewpoint(p)
+    if not cand or vec.dist(cand.pos, eye) > c.tractor_range * 1.25 or not tractor.can_lift(ship, cand.item) then
       p.tractor = false
       msg(state, p, "Tractor lock lost")
       return
@@ -195,7 +249,7 @@ local function tractor_step(state, p, cmd, dt)
     fx(state, p, "denied")
     return
   end
-  local cand = tractor.find(state, p, p.site, rt.ruins[p.site])
+  local cand = tractor.find(state, p, p.site, rt.ruins[p.site], M.viewpoint(p))
   if not cand then
     msg(state, p, "Nothing in tractor range")
     fx(state, p, "denied")
@@ -215,18 +269,28 @@ local SIZE_KEYS = { "size1", "size2", "size3", "size4" }
 
 function M.step_player(state, p, cmd, dt)
   local ship = p.ship
-  if cmd:pressed("camera") then p.cam = p.cam == "cockpit" and "chase" or "cockpit" end
+  if cmd:pressed("camera") then p.cam = p.cam == "first" and "chase" or "first" end
   if cmd:pressed("menu") then p.help = not p.help end
   if cmd:pressed("mystery_mode") then
     state.mystery.mode = mystery.next_mode(state.mystery.mode)
     msg(state, p, "Mystery: " .. state.mystery.mode)
   end
-  if cmd:pressed("shrink") then size_request(state, p, (ship.target or ship.size) + 1)
-  elseif cmd:pressed("grow") then size_request(state, p, (ship.target or ship.size) - 1) end
+  if cmd:pressed("use") then use(state, p) end
+  if cmd:pressed("shrink") then size_request(state, p, ship.size + 1)
+  elseif cmd:pressed("grow") then size_request(state, p, ship.size - 1) end
   for i, k in ipairs(SIZE_KEYS) do
-    if cmd:pressed(k) and i ~= ship.size then size_request(state, p, i) end
+    if i <= configs.count() and cmd:pressed(k) and i ~= ship.size then size_request(state, p, i) end
   end
-  flight.step(ship, cmd, dt, mover(state, p))
+  if ship.morph then
+    ship.vel = { 0, 0, 0 }
+  elseif p.mode == "helm" then
+    flight.step(ship, cmd, dt, mover(state, p))
+  else
+    -- nobody at the helm: the saucer brakes to a stop and holds station
+    flight.step(ship, STILL, dt, mover(state, p))
+    avatar.step(p.body, { move_x = cmd:axis("move_x"), move_z = cmd:axis("move_z"), turn = cmd:axis("turn"),
+                          look = cmd:axis("look"), run = cmd:held("boost"), aim = cmd.aim }, dt)
+  end
   local site = M.site_at(ship.pos)
   if site ~= p.site then
     if site == 0 then bank(state, p) else msg(state, p, "Entering derelict site " .. site) end

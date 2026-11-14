@@ -1,6 +1,7 @@
 -- SPDX-License-Identifier: MIT
 -- Two local players (run with --local-players 2 --viewports 2): each has an
--- own saucer, size, Charge and loot instances; saucers block each other.
+-- own saucer (and own body in it), size, Charge and loot instances;
+-- saucers block each other.
 local T = saucer.test
 local game = require("sim.game")
 local tractor = require("sim.tractor")
@@ -9,8 +10,10 @@ T.assert(#st.players == 2, "two players")
 local p1, p2 = st.players[1], st.players[2]
 
 T.press(2, "shrink")
-T.wait(45)
-T.assert(T.state().players[2].ship.size == 2, "player 2 shrank")
+T.wait(60)
+T.assert(T.state().players[2].ship.size == 2, "player 2 folded into the Seat")
+T.assert(T.state().players[2].mode == "helm", "the Seat formed around player 2")
+T.assert(T.state().players[1].mode == "walk", "player 1 is still on foot in their own Villa")
 T.assert(T.state().players[1].ship.size == 1, "player 1 did not")
 T.assert(T.state().players[1].ship.charge > T.state().players[2].ship.charge, "Charge is per player")
 
@@ -31,4 +34,4 @@ for _ = 1, 240 do
 end
 local q1, q2 = T.state().players[1].ship, T.state().players[2].ship
 local dx = math.abs(q1.pos[1] - q2.pos[1])
-T.assert(dx >= 12 + 5 - 0.01, "saucers are solid to each other (dx " .. dx .. ")")
+T.assert(dx >= 13 + 0.9 - 0.01, "saucers are solid to each other (dx " .. dx .. ")")

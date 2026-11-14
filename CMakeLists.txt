@@ -124,6 +124,7 @@ if(SAUCER_BUILD_TESTS)
   add_test(NAME game_slice_seed7 COMMAND ${HL} --seed 7 --script tests/game/slice.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_slice_restore_every_tick COMMAND ${HL} --seed 42 --script tests/game/slice.lua --restore-every-tick
            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  add_test(NAME game_interior COMMAND ${HL} --seed 42 --script tests/game/interior.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_coop COMMAND ${HL} --seed 42 --local-players 2 --viewports 2 --script tests/game/coop.lua
            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_mods COMMAND ${HL} --seed 42 --mods-dir tests/fixtures/mods --script tests/game/mods.lua

@@ -1,14 +1,15 @@
 -- SPDX-License-Identifier: MIT
--- Derelict generation (concept §5.2, spec ruin-gen): a mission graph with
--- non-increasing size locks is embedded on a cell grid, turned into wall
--- boxes with door holes, then validated with the room-size reachability
--- search. Up to 8 derived seeds are tried before a fixed fallback layout.
+-- Derelict generation (concept §5.2, spec ruin-gen): a mission graph of
+-- great halls (big enough for the whole Villa) with tight ducts branching off
+-- (Seat only) is embedded on a cell grid, turned into wall boxes with door
+-- holes, then validated with the room-size reachability search. Up to 8
+-- derived seeds are tried before a fixed fallback layout.
 local data = require("lib.data")
 local M = {}
 
-M.GRID = { 48, 4, 48 }
+M.GRID = { 64, 8, 96 }
 M.MAX_TRIES = 8
-M.FALLBACK_GRID = { 48, 4, 48 }
+M.FALLBACK_GRID = { 64, 8, 96 }
 local DIRS = {
   { name = "+z", axis = 3, sign = 1 },
   { name = "+x", axis = 1, sign = 1 },
@@ -19,33 +20,30 @@ local DIRS = {
 local function kit_of(id) return data.load("kits/" .. id .. ".lua") end
 M.kit_of = kit_of
 
-local function new_room(id, class, kit, kind, parent)
-  local d = kit.rooms[class]
+local function new_room(id, class, kit, kind, parent, size)
+  local d = size or kit.rooms[class]
   return { id = id, class = class, kind = kind, parent = parent, size = { d[1], d[2], d[3] }, cell = { 0, 0, 0 },
            inclass = class, faces = {} }
 end
 
--- mission graph: chain from the entrance to the vault plus side branches
+-- mission graph: a chain of great halls from the entrance to the vault, plus
+-- ducts off random halls (at least one), some ending in a small cache chamber
 function M.graph(rng, kit, civ, first_class)
-  local n = rng:int(kit.rooms_min, kit.rooms_max)
-  local nbranch = math.min(rng:int(0, kit.branches), n - 2)
-  local nchain = n - nbranch
-  local opts = {}
-  for _, e in ipairs(civ.entrance) do opts[#opts + 1] = { w = e[2], v = e[1] } end
-  local first = rng:weighted(opts)
-  if first_class then first = first_class end
-  local rooms = { new_room(1, first, kit, "entrance", 0) }
-  for i = 2, nchain do
-    local prev = rooms[i - 1].class
-    local c = prev
-    if prev > 1 and rng:int(1, 100) <= civ.size_lock then c = prev - 1 end
-    rooms[i] = new_room(i, c, kit, i == nchain and "vault" or "hall", i - 1)
+  local big = kit.big or 4
+  local nhalls = rng:int(kit.halls_min, kit.halls_max)
+  local nducts = rng:int(kit.ducts_min or 1, kit.ducts_max or 1)
+  local rooms = { new_room(1, first_class or big, kit, "entrance", 0) }
+  for i = 2, nhalls do
+    rooms[i] = new_room(i, big, kit, i == nhalls and "vault" or "hall", i - 1)
   end
-  for b = 1, nbranch do
-    local host = rng:int(1, math.max(1, nchain - 1))
-    local c = rooms[host].class
-    if c > 1 and rng:int(1, 2) == 1 then c = c - 1 end
-    rooms[#rooms + 1] = new_room(#rooms + 1, c, kit, "side", host)
+  for _ = 1, nducts do
+    local host = rng:int(1, nhalls)
+    local duct = new_room(#rooms + 1, 1, kit, "side", host)
+    rooms[#rooms + 1] = duct
+    if kit.chamber and rng:int(1, 100) <= civ.size_lock then
+      duct.kind = "duct"
+      rooms[#rooms + 1] = new_room(#rooms + 1, 1, kit, "side", duct.id, kit.chamber)
+    end
   end
   return rooms
 end
@@ -88,8 +86,12 @@ function M.embed(rng, rooms, kit, dims)
       order[k], order[j] = order[j], order[k]
     end
     local placed = false
+    local base = { r.size[1], r.size[2], r.size[3] }
     for _, di in ipairs(order) do
       local dir = DIRS[di]
+      -- small rooms run away from their parent (a duct is long, not wide)
+      if r.class < (kit.big or 4) and dir.axis == 1 then r.size = { base[3], base[2], base[1] }
+      else r.size = { base[1], base[2], base[3] } end
       local cell, lo, hi = fit(grid, p, r, dir, kit)
       if cell then
         r.cell = cell
@@ -147,6 +149,7 @@ local function face_holes(r, doors, rooms, kit, origin, axis, sign)
   end
   return holes
 end
+M.face_holes = face_holes
 
 function M.walls(rooms, doors, kit, origin)
   local boxes = {}
@@ -183,7 +186,7 @@ function M.debris(rng, rooms, kit, origin)
       local mn, mx = room_box(r, kit, origin)
       for _, f in ipairs({ "+x", "-x", "+z", "-z" }) do
         if not r.faces[f] and rng:int(1, 100) <= 50 and #out < kit.debris * #rooms then
-          local s = r.class >= 3 and 2.0 or 1.2
+          local s = r.class >= (kit.big or 4) and 5.0 or 1.2
           local c = { (mn[1] + mx[1]) / 2, mn[2] + kit.wall, (mn[3] + mx[3]) / 2 }
           local axis = f:sub(2, 2) == "x" and 1 or 3
           local edge = f:sub(1, 1) == "+" and mx[axis] - kit.wall - s or mn[axis] + kit.wall
@@ -204,12 +207,13 @@ function M.slots(rng, rooms, kit, origin, seed)
     local n = 0
     if r.kind == "vault" then n = 2 elseif r.kind == "side" then n = 1 elseif r.kind == "hall" then n = rng:int(0, 1) end
     local mn, mx = room_box(r, kit, origin)
+    local big = r.class >= (kit.big or 4)
     for k = 1, n do
-      local cx = (mn[1] + mx[1]) / 2 + (k - (n + 1) / 2) * math.min(3, (mx[1] - mn[1]) / 4)
+      local cx = (mn[1] + mx[1]) / 2 + (k - (n + 1) / 2) * math.min(big and 10 or 3, (mx[1] - mn[1]) / 4)
       local cz = (mn[3] + mx[3]) / 2
       out[#out + 1] = {
-        id = #out + 1, room = r.id, pos = { cx, mn[2] + kit.wall + 1.0, cz },
-        max_size = math.min(r.inclass, 3), tier = r.kind == "vault" and 2 or 1,
+        id = #out + 1, room = r.id, pos = { cx, mn[2] + kit.wall + (big and 1.5 or 1.0), cz },
+        max_size = math.min(r.inclass, 3), tier = (r.kind == "vault" or r.kind == "side") and 2 or 1,
         seed = saucer.seed_child(seed, "slot", #out + 1),
       }
     end
@@ -260,9 +264,9 @@ function M.try(seed, kit, civ, origin, first_class)
            hash = layout_hash(rooms, doors), reach = why }
 end
 
--- fallback: entrance (L) -> vault (M), always valid
+-- fallback: great hall -> duct vault, always valid
 function M.fallback(seed, kit, origin)
-  local rooms = { new_room(1, 3, kit, "entrance", 0), new_room(2, 2, kit, "vault", 1) }
+  local rooms = { new_room(1, kit.big or 4, kit, "entrance", 0), new_room(2, 1, kit, "vault", 1) }
   local rng = saucer.rng.new(seed)
   local doors = M.embed(rng, rooms, kit, M.FALLBACK_GRID)
   local slots = M.slots(rng, rooms, kit, origin, seed)
