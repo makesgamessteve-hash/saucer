@@ -1,0 +1,69 @@
+# SPDX-License-Identifier: MIT
+name: pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Do not cancel a deploy already in flight; a new push queues behind it.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build web and upload Pages artifact
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: latest
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Build web target
+        run: |
+          emcmake cmake -S . -B build/web -G Ninja -DCMAKE_BUILD_TYPE=Release -DSAUCER_BUILD_TESTS=OFF
+          cmake --build build/web --target saucer
+      - name: Stage GitHub Pages site
+        run: |
+          set -euo pipefail
+          mkdir -p _site
+          cp build/web/saucer.html _site/index.html
+          cp build/web/saucer.js build/web/saucer.wasm _site/
+          cp -a build/web/data _site/data
+          # Dotfile so Jekyll does not rewrite the asset tree. upload-pages-artifact
+          # v4+ omits hidden files unless include-hidden-files is set.
+          touch _site/.nojekyll
+          # Project Pages live at /saucer/. A <base> keeps relative fetches and
+          # saucer.js / saucer.wasm working if the trailing slash is missing.
+          if ! grep -q '<base ' _site/index.html; then
+            sed -i 's|<head>|<head><base href="/saucer/">|' _site/index.html
+          fi
+          grep -q '<base href="/saucer/">' _site/index.html
+          test -s _site/index.html
+          test -s _site/saucer.js
+          test -s _site/saucer.wasm
+          test -s _site/data/index.json
+          test -f _site/.nojekyll
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+          include-hidden-files: true
+
+  deploy:
+    name: deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

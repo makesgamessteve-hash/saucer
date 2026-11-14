@@ -14,6 +14,9 @@ gamepad, touch (mobile web) and basic WebXR are supported.
 
 ![In space](docs/shots/space.png) ![Inside a derelict](docs/shots/derelict.png)
 
+[Play in browser](https://makesgamessteve-hash.github.io/saucer/) — the live
+web build on GitHub Pages, rebuilt on every push to `main`.
+
 ## Layout
 
 | Path | What |
@@ -48,6 +51,7 @@ cmake --build build --config Release
 build\Release\saucer.exe
 
 # Web (emscripten); serve build/web over HTTP and open saucer.html
+# A live build is also at https://makesgamessteve-hash.github.io/saucer/
 emcmake cmake -S . -B build/web -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build/web
 python3 -m http.server -d build/web 8000   # http://localhost:8000/saucer.html?seed=42
@@ -103,7 +107,9 @@ tools/coverage.sh                            # coverage gate: >= 95% lines, C (g
 CI (`.github/workflows/ci.yml`) runs linux-gcc with the coverage gate and an
 Xvfb screenshot, linux-clang with ASan/UBSan, windows-msvc, emscripten
 (tests under node plus the web build) and a lint job (OpenSpec validation,
-asset licenses and prompt records).
+asset licenses and prompt records). Pushing to `main` also builds the
+emscripten web target and deploys it to
+[GitHub Pages](https://makesgamessteve-hash.github.io/saucer/).
 
 ## Modding
 
