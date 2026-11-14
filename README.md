@@ -1,18 +1,26 @@
 # Saucer
 
-A retro-3D exploration game. You live in a flying saucer whose glass dome is
-the size of a villa, fly through a randomly generated universe to derelict
-starships and stations, and shrink the saucer around yourself — Villa
-(24 m) → Cruiser (10 m) → Pod (4 m) → Seat (1.8 m) — to get through their
-doors and pick up alien tech. No lethal weapons: the risk is losing the
-loot you haven't banked yet.
+A first-person retro-3D exploration game. You are a person living inside a
+flying saucer: at its biggest it is a glass dome you walk around in — an
+open-plan kitchen, living room and helm under the glass, with a bedroom,
+bathroom and engine room on the deck below. Walk to the helm, take the seat
+and fly through a randomly generated universe to huge alien derelicts, so big
+that the whole saucer flies inside their halls. Only for really tight ducts
+does the saucer reconfigure around you, folding everything else away until
+it is a one-seat car (the Seat), and unfold again once there is room. No
+lethal weapons: the risk is losing the loot you haven't banked yet.
 
-Milestone 1 is a vertical slice: fly in space with a starfield, approach a
-procedurally generated derelict, shrink to fit its hangar, fly inside and
-tractor loot into your hold, then leave the site to bank it. Keyboard/mouse,
-gamepad, touch (mobile web) and basic WebXR are supported.
+The vertical slice (concept v0.4, [`docs/concept.md`](docs/concept.md)): walk
+the two decks, take the helm, fly the Villa into a derelict's great halls,
+tractor loot through the glass, fold down to the Seat for a duct, come back
+out, unfold, and leave the site to bank it. Keyboard/mouse, gamepad, touch
+(mobile web) and basic WebXR are supported.
 
-![In space](docs/shots/space.png) ![Inside a derelict](docs/shots/derelict.png)
+| | |
+|---|---|
+| ![Kitchen and living room under the dome](docs/shots/kitchen_dome.png) | ![At the helm in a derelict's great hall](docs/shots/helm_great_hall.png) |
+| ![Bedroom on the lower deck](docs/shots/bedroom.png) | ![Engine room](docs/shots/engine_room.png) |
+| ![The Seat in a tight duct](docs/shots/seat_duct.png) | |
 
 [Play in browser](https://makesgamessteve-hash.github.io/saucer/) — the live
 web build on GitHub Pages, rebuilt on every push to `main`.
@@ -28,7 +36,7 @@ web build on GitHub Pages, rebuilt on every push to `main`.
 | `mods/` | user mods (`mods/<id>/mod.lua`), created beside the binary |
 | `tests/` | C unit tests, Lua specs, headless game tests, replays, fixtures |
 | `tools/` | `artpipe` (asset pipeline + license lint), `coverage.sh` |
-| `openspec/` | project conventions and changes 0–21 |
+| `openspec/` | project conventions and changes 0–22 |
 
 Assets are never baked into the binary: the build copies `data/` next to the
 executable, and the web build fetches the files listed in `data/index.json`.
@@ -63,15 +71,20 @@ macOS is not a target for now.
 
 | | Keyboard / mouse | Gamepad | Touch | WebXR |
 |---|---|---|---|---|
-| Move | W A S D | left stick | left stick | left stick |
-| Lift | Space / Ctrl | triggers | right slider | right stick |
-| Turn / look | mouse (click to capture, Esc releases), arrows | right stick | drag right half | right stick |
-| Shrink / grow | Q / E, wheel, 1–4 | LB / RB | buttons | A / B, or grip + stick (size lever) |
+| Walk (on foot) / fly (at the helm) | W A S D | left stick | left stick | left stick (walks where you look) |
+| Lift (at the helm) | Space / Ctrl | triggers | right slider | right stick |
+| Turn / look | mouse (click to capture, Esc releases), arrows | right stick | drag right half | head, right stick |
+| Use: take the helm / stand up | G / Return | X | Use button | left trigger |
+| Fold to the Seat / unfold the Villa | Q / E, wheel, 1–2 | LB / RB | buttons | A / B, or grip + stick (size lever) |
 | Tractor beam | F / left click | A | button | right trigger |
-| Scan, boost, camera, help | V, Shift, C, H | Y, LS, Back, Start | buttons | X, left grip, —, menu |
+| Scan, run/boost, camera, help | V, Shift, C, H | Y, LS, Back, Start | buttons | X, left grip, —, menu |
+
+You start on foot under the dome. Walk to the helm at the front and press Use
+to fly; press Use again to stand up (the saucer holds station). Folding on
+foot forms the Seat around wherever you stand and seats you in it.
 
 Press A on a second gamepad (with `--coop`) to join as player 2; each player
-flies their own saucer. `--local-players 2 --viewports 2` starts split screen.
+lives in and flies their own saucer. `--local-players 2 --viewports 2` starts split screen.
 
 ## Useful options
 
@@ -97,8 +110,10 @@ tools/coverage.sh                            # coverage gate: >= 95% lines, C (g
 - **Lua specs** (`tests/lua/*_spec.lua`) for every base-game module.
 - **Game tests** (`tests/game`): headless, seeded, scripted input
   (`saucer.test.press/axis/touch/xr/wait`). `slice.lua` plays the whole
-  vertical slice; `coop.lua` runs two players; `mods.lua` loads the fixture
-  mods.
+  vertical slice (walk to the helm, fly into the halls, fold for a duct,
+  unfold, bank, walk to the kitchen); `interior.lua` tours both decks on foot;
+  `boot.lua` covers touch, XR and rendering; `coop.lua` runs two players;
+  `mods.lua` loads the fixture mods.
 - **Replays** (`tests/replays/*.srep`): recorded command frames with a state
   hash every 60 ticks; they must reproduce bit-for-bit on Linux, Windows and
   wasm. Re-record after an intended sim change with
