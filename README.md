@@ -24,6 +24,9 @@ out, unfold, and leave the site to bank it. Keyboard/mouse, gamepad, touch
 | ![The Seat in a tight duct](docs/shots/seat_duct.png) | ![Waking up: the title card](docs/shots/wake_title.png) |
 | ![The helm console: radar desk and wing screens](docs/shots/helm_console.png) | ![Folding: rooms pack away one by one](docs/shots/fold_packing.png) |
 | ![The bedroom door slides open](docs/shots/door_open.png) | ![Sleep in the bed to save](docs/shots/bed_save.png) |
+| ![The lab bench identifies and decodes](docs/shots/lab_bench.png) | ![Selling at the trade terminal](docs/shots/trade_terminal.png) |
+| ![A Watcher locks on, Scanner cones shown](docs/shots/watcher_locked.png) | ![A Snatcher siphons from the Seat](docs/shots/snatcher_latch.png) |
+| ![The Resonant vault](docs/shots/resonant_vault.png) | ![The vault opens: the Curio](docs/shots/vault_curio.png) |
 
 [Play in browser](https://makesgamessteve-hash.github.io/saucer/) — the live
 web build on GitHub Pages, rebuilt on every push to `main`.
@@ -39,7 +42,7 @@ web build on GitHub Pages, rebuilt on every push to `main`.
 | `mods/` | user mods (`mods/<id>/mod.lua`), created beside the binary |
 | `tests/` | C unit tests, Lua specs, headless game tests, replays, fixtures |
 | `tools/` | `artpipe` (asset pipeline + license lint), `coverage.sh` |
-| `openspec/` | project conventions and changes 0–23 |
+| `openspec/` | project conventions and changes 0–24 |
 
 Assets are never baked into the binary: the build copies `data/` next to the
 executable, and the web build fetches the files listed in `data/index.json`.
@@ -81,7 +84,8 @@ macOS is not a target for now.
 | Menu up / down (title, bed) | W / S | left stick | left stick | left stick |
 | Fold to the Seat / unfold the Villa | Q / E, wheel, 1–2 | LB / RB | buttons | A / B, or grip + stick (size lever) |
 | Tractor beam | F / left click | A | button | right trigger |
-| Scan, run/boost, camera, help | V, Shift, C, H | Y, LS, Back, Start | buttons | X, left grip, —, menu |
+| Scanner / Jammer | V / T | Y / right stick click | SCAN / JAM buttons | X / Y |
+| Run/boost, camera, help | Shift, C, H | LS, Back, Start | buttons | left grip, —, menu |
 
 You wake up in the bedroom on the lower deck. The title card offers **Get
 up** or **Load saved game**. Doors slide open as you walk up to them. Take
@@ -94,6 +98,16 @@ and **saves the game**, or loading the last save. Folding on foot forms
 the Seat around wherever you stand and seats you in it. The rooms visibly
 pack away one after another before the hull shrinks.
 
+The loop (milestone 3): loot comes in unidentified. Queue it at the **lab
+bench** (it works while you fly, as long as you are the Villa), then dock
+at the trader and sell at the **trade terminal** (prices fall with every
+sale of a kind and recover over time; every sale saves). Derelicts 2 and 3
+are guarded: Watchers in the great halls ignore the Seat but stun the
+Villa, and Snatchers in the ducts siphon hot loot from a Seat and carry it
+to their nest. **V** scans, **T** jams. Nothing is lethal: at hull 0 you
+Fold Retreat to the trader and your hot loot waits as a cache. Follow the
+optional Echoes (Who → Where → Key) to the Resonant vault.
+
 Press A on a second gamepad (with `--coop`) to join as player 2; each player
 lives in and flies their own saucer. `--local-players 2 --viewports 2` starts split screen.
 
@@ -104,7 +118,7 @@ lives in and flies their own saucer. `--local-players 2 --viewports 2` starts sp
 --local-players N  --viewports N  --coop
 --record FILE.srep  --play FILE.srep  --restore-every-tick
 --screenshot FILE.png --screenshot-tick N     (exits after the capture)
---windowed            (with --script: run a scripted tour in a real window, e.g. tools/shots/m2.lua)
+--windowed            (with --script: run a scripted tour in a real window, e.g. tools/shots/m3.lua)
 --headless --ticks N  --script tests/game/slice.lua  --test-lua tests/lua
 ```
 
@@ -127,7 +141,11 @@ tools/coverage.sh                            # coverage gate: >= 95% lines, C (g
   `fold.lua` checks that the rooms pack away in a staggered order (farthest
   first) while the hull holds its size, then unpack nearest first;
   `home.lua` covers wake-up, doors, kitchen/engine/lab/trade Use, and sleep
-  to save then load;
+  to save then load; `trade.lua` identifies, sells against the price
+  formula, and saves and loads the economy; `sentries.lua` plays a sentry
+  encounter (Watcher lock, Snatcher latch, Jammer, nest, Fold Retreat and the
+  cache); `mystery.lua` plays the whole Echo chain to the vault's Curio and
+  reloads it;
   `boot.lua` covers touch, XR and rendering; `coop.lua` runs two players;
   `mods.lua` loads the fixture mods.
 - **Replays** (`tests/replays/*.srep`): recorded command frames with a state

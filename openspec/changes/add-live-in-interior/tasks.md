@@ -17,4 +17,4 @@
 
 - [x] 3.1 Lua specs, C unit tests and game tests pass; coverage ≥ 95 % (C and Lua)
 - [x] 3.2 `tests/replays/slice_seed42.srep` re-recorded (sim version 3)
-- [ ] 3.3 CI green on linux-gcc, linux-clang, windows-msvc, emscripten and lint; Pages deployed
+- [x] 3.3 CI green on linux-gcc, linux-clang, windows-msvc, emscripten and lint; Pages deployed

@@ -24,7 +24,7 @@ return {
     use    = { "key:G", "key:Return", "pad:x", "touch:use", "xr:trigger_l" },
     camera = { "key:C", "pad:back" },
     menu   = { "key:F1", "key:H", "pad:start", "xr:menu" },
-    jam    = { "key:T", "pad:rightstick", "xr:y" },
+    jam    = { "key:T", "pad:rightstick", "touch:jam", "xr:y" },
     mystery_mode = { "key:M", "pad:dpup" },
   },
   -- stable order so action slots (and therefore replays) never depend on table order

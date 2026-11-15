@@ -1,6 +1,6 @@
 # Saucer — Game Concept & Design
 
-> Status: draft v0.5 (2026-11-15). Updated with Steve's answers on combat, co-op, the mystery, WebXR, and art (v0.2), on co-op saucers, licensing, and hero meshes (v0.3), with Steve's correction of the core fantasy: you are a person on foot inside the saucer, and it reconfigures around you (v0.4), and with the milestone 2 live-in interior (v0.5). · Owner: Steve Makesgames · Repo: <https://github.com/makesgamessteve-hash/saucer> (`main`)
+> Status: draft v0.6 (2026-11-15). Updated with Steve's answers on combat, co-op, the mystery, WebXR, and art (v0.2), on co-op saucers, licensing, and hero meshes (v0.3), with Steve's correction of the core fantasy: you are a person on foot inside the saucer, and it reconfigures around you (v0.4), with the milestone 2 live-in interior (v0.5), and with the milestone 3 one-sector loop (v0.6). · Owner: Steve Makesgames · Repo: <https://github.com/makesgamessteve-hash/saucer> (`main`)
 > Licenses: code (including all Lua) is MIT · hand-authored art and audio are CC BY 4.0 · Grok Imagine–generated images are under xAI's terms for outputs (§11.6)
 > Purpose: the source document for OpenSpec specs. Section 16 lists capabilities with SHALL requirements and scenarios ready to paste into `openspec/specs/` or `openspec/changes/`.
 
@@ -39,6 +39,14 @@
   - The **helm** is a low desk with a radar well plus two angled wing screens (Charge, hull, and shield on the left; hold slots and the size ladder on the right). It stays below the pilot's sight line.
   - **The fold is a packing.** The Villa's 11 room groups pack one by one, farthest from the pilot first. Each one flattens onto its floor, then slides into fold-space at the pilot's feet. The hull holds its full size during this room phase (the first half) and shrinks about the eye afterwards. Unfolding reverses it: the hull grows first, then the decks and rooms unpack nearest first.
   - So that the packing reads on screen, shrinking takes **1.5 s** (was 0.9 s) and growing **1.8 s** (was 1.2 s). Both values stay data in `saucer/configs.lua`.
+- **Notes from milestone 3 (v0.6), the one-sector loop:**
+  - The **lab bench** keeps a job queue: identify (3 Charge, 30 s × tier) and decode Echoes (20 s). It works in flight but only as the Villa; folded, the bench is packed away and jobs pause.
+  - Docking at a trader (within 150 m) enables the **trade terminal**: sell, refill Charge (1 c per point) and repair hull (2 c per point). Trader stock and modules wait for a later milestone.
+  - **Sentries are placed from the layout**, never saved: a Watcher at the far end of every great hall except the entrance, and a Snatcher per duct branch with its nest in the deepest small room. Each Snatcher is **leashed** to its branch (it only notices a Seat inside it). The tutorial derelict has none.
+  - The **Jammer** also pulses 3 m all round (so a Snatcher right beside you is always hit), and jamming a Disabled sentry restarts its 12 s.
+  - **Fold Retreat** lands you as the Villa 60 m from the last trader with hull 30 and shields down. The cache waits where the hull failed.
+  - **The mystery is a chain you carry.** Each Echo becomes a hold item and the next one appears only after the previous one is decoded. Where reveals the **Resonant vault**, a monolith in open space; the Key (never decoded) opens it within 80 m. Inside is one unique Curio and the line "The signal continues beyond the fold."
+  - Echoes and the Curio are never hot, never for sale, and never lost.
 - All names in this doc (capabilities, Lua modules, folders) are proposals. Nothing in the repo constrains them yet.
 
 ---
@@ -795,6 +803,13 @@ Compiler and determinism flags: no `-ffast-math`, `-ffp-contract=off`, `/fp:prec
 ## 16. Proposed OpenSpec capabilities & changes
 
 Format follows OpenSpec (`### Requirement:` + `#### Scenario:` with WHEN/THEN). Requirements and scenarios are written out in full for the **MVP** capabilities. The later ones are listed with their purpose only.
+
+**Changes in v0.6:**
+- **`trading`, `items-and-identification`:** the lab queue, unknown labels, the terminal with refills and repairs, saved on every transaction.
+- **`sentries-and-tools`:** layout-derived placement, the Snatcher leash, the Jammer's 3 m pulse and timer restart. Grid consoles are deferred.
+- **`hazards-and-failure`:** shields and hull, Fold Retreat to the last trader, caches.
+- **`mystery`:** the carried chain, the Resonant vault and the Curio. **`persistence`:** traders, clock, nests, caches, vault, credits and lab queue in the diffs.
+- Recorded in the OpenSpec change `add-one-sector-loop`.
 
 **Changes in v0.5:**
 - **`saucer-interior`:** wake-up/title start, doors, furniture Use (kitchen, shower, engine, lab bench, trade terminal, bed), the helm console, and the room-packing fold.

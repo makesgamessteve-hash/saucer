@@ -25,7 +25,13 @@ function M.generate(seed)
     -- the first derelict is the tutorial: a Velari hulk whose hangar takes the whole Villa
     if i == 1 then sites[i].civ = 1 end
   end
-  return { sites = sites, trader = { pos = { -260, 30, -140 } } }
+  -- milestone 3: the Resonant vault of the mystery waits in open space (drawn after the
+  -- sites so their positions do not change)
+  -- (in the empty wedge between the tutorial derelict and site 2)
+  local va = 0.8 + rng:float() * 0.6
+  local vd = 520 + rng:int(0, 120)
+  local vault = { pos = { saucer.math.sin(va) * vd // 1, rng:int(-30, 30), saucer.math.cos(va) * vd // 1 } }
+  return { sites = sites, trader = { pos = { -260, 30, -140 } }, vault = vault }
 end
 
 return M

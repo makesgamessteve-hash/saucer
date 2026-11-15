@@ -22,6 +22,56 @@ M.SOUNDS = {
   echo = "authored/sounds/echo.wav",
 }
 
+-- milestone 3: sentry state lights (Dormant green, Alert yellow, Locked red,
+-- Disabled blue), Watcher cones while a Scanner pulse lasts, stun bolts,
+-- Snatcher nests and the Resonant vault once Echo II reveals it
+M.STATE_TINT = {
+  dormant = { 0.3, 0.9, 0.5, 0.7 }, alert = { 1, 0.85, 0.2, 0.95 }, locked = { 1, 0.25, 0.2, 1 },
+  latched = { 1, 0.25, 0.2, 1 }, flee = { 1, 0.55, 0.2, 0.9 }, disabled = { 0.35, 0.5, 1, 0.8 },
+}
+
+function M.draw_sentries(v, A, state, p)
+  local sentry = require("sim.sentry")
+  local scanned = (p.scan_until or 0) > state.tick
+  local t = sentry.tune()
+  for site, list in pairs(state.sentries or {}) do
+    for i, def in ipairs(game.sentries(site)) do
+      local dyn = list[i]
+      if dyn then
+        local tint = M.STATE_TINT[dyn.st] or M.STATE_TINT.dormant
+        local show = scanned and p.site == site
+        if def.kind == "watcher" then
+          v:mesh(A.watcher, { pos = def.pos, yaw = dyn.yaw })
+          local f = sentry.dir_of(dyn.yaw, def.pitch)
+          v:billboard(A.tex.beam, vec.add(def.pos, vec.scale(f, 1.9)), 1.0, { palette = A.pal.base, tint = tint })
+          if show then
+            for _, da in ipairs({ -t.watcher.half_angle, 0, t.watcher.half_angle }) do
+              local d = sentry.dir_of(dyn.yaw + da, def.pitch)
+              for k = 1, 12 do
+                v:billboard(A.tex.beam, vec.add(def.pos, vec.scale(d, k * t.watcher.range / 12)), 0.7,
+                  { palette = A.pal.base, tint = { tint[1], tint[2], tint[3], 0.45 } })
+              end
+            end
+          end
+        else
+          local pos = dyn.pos or def.pos
+          v:mesh(A.snatcher, { pos = pos, yaw = state.tick * 0.05 })
+          v:billboard(A.tex.beam, { pos[1], pos[2] + 0.55, pos[3] }, show and 1.4 or 0.5,
+            { palette = A.pal.base, tint = tint })
+          v:mesh(A.nest, { pos = def.nest })
+        end
+      end
+    end
+  end
+  for _, b in ipairs(state.bolts or {}) do
+    v:billboard(A.tex.beam, b.pos, 0.9, { palette = A.pal.base, tint = { 0.5, 0.8, 1, 1 } })
+  end
+  local m = state.mystery
+  if m and m.vault_revealed and state.vault then
+    v:mesh(m.vault_open and A.vault_open or A.vault, { pos = state.vault.pos, yaw = 0.4 })
+  end
+end
+
 function M.camera(p, xr)
   local ship = p.ship
   if p.cam == "chase" and not xr then
@@ -112,7 +162,35 @@ function M.radar_targets(state, p)
   end
   return out
 end
-M.extra_radar = {} -- functions(state, p) -> list of { pos, color }; milestone 3 adds sentries and Resonant marks
+M.extra_radar = {} -- functions(state, p) -> list of { pos, color }
+
+-- milestone 3: Resonant sites and the vault (violet), your caches (orange),
+-- and sentries while a Scanner pulse lasts (coloured by state)
+local VIOLET, ORANGE = { 0.8, 0.5, 1, 1 }, { 1, 0.6, 0.2, 1 }
+M.extra_radar[#M.extra_radar + 1] = function(state, p)
+  local out = {}
+  local mystery = require("sim.mystery")
+  local m = state.mystery
+  if m then
+    for _, i in ipairs(mystery.resonant_sites(m)) do
+      local s = state.sector.sites[i]
+      if s then out[#out + 1] = { pos = { s.pos[1], s.pos[2] + 30, s.pos[3] }, color = VIOLET } end
+    end
+    if m.vault_revealed and state.vault then out[#out + 1] = { pos = state.vault.pos, color = VIOLET } end
+  end
+  for _, c in ipairs(state.caches or {}) do
+    if c.owner == p.record_index then out[#out + 1] = { pos = c.pos, color = ORANGE } end
+  end
+  if (p.scan_until or 0) > state.tick then
+    for site, list in pairs(state.sentries or {}) do
+      for i, def in ipairs(game.sentries(site)) do
+        local dyn = list[i]
+        if dyn then out[#out + 1] = { pos = dyn.pos or def.pos, color = M.STATE_TINT[dyn.st] or M.STATE_TINT.dormant } end
+      end
+    end
+  end
+  return out
+end
 
 -- live helm readouts (milestone 2): a radar on the desk, Charge/hull/shield
 -- bars on the left wing screen, hold slots and the size ladder on the right
@@ -255,13 +333,15 @@ function M.render(v, state, alpha)
     if r then v:mesh(assets.ruin_mesh(r, site.pos), { tex = A.tex.hull, palette = A.pal.base }) end
   end
   v:mesh(A.station, { pos = state.sector.trader.pos, yaw = state.tick * 0.002 })
-  -- this player's loot instances and Echoes
+  M.draw_sentries(v, A, state, p)
+  -- this player's loot instances, Echoes, nests, caches and the vault's Curio
   local spin = (state.tick % 360) * sm.tau / 360
-  if p.site ~= 0 then
-    for _, cand in ipairs(tractor.candidates(state, p, p.site, game.ruin(p.site))) do
+  do
+    local ruin = p.site ~= 0 and game.ruin(p.site) or nil
+    for _, cand in ipairs(tractor.candidates(state, p, p.site, ruin)) do
       local s = 0.6 + cand.item.size * 0.35
-      if cand.echo then
-        v:billboard(A.tex.echo, cand.pos, 1.6, { palette = A.pal.base })
+      if cand.echo or cand.kind == "curio" then
+        v:billboard(A.tex.echo, cand.pos, cand.kind == "curio" and 2.4 or 1.6, { palette = A.pal.base })
       else
         v:billboard(A.tex.loot, cand.pos, s, { palette = A.pal.base })
         v:mesh(A.cache_mesh, { pos = { cand.pos[1], cand.pos[2] - s * 0.7, cand.pos[3] }, yaw = spin, scale = s * 0.6 })
@@ -275,7 +355,7 @@ function M.render(v, state, alpha)
   -- tractor beam: a dotted line of sprites from just below the eyes
   local target
   local eye, yaw, pitch = game.viewpoint(p)
-  if p.site ~= 0 then target = tractor.find(state, p, p.site, game.ruin(p.site), eye, yaw, pitch) end
+  target = tractor.find(state, p, p.site, p.site ~= 0 and game.ruin(p.site) or nil, eye, yaw, pitch)
   if p.tractor and target then
     local from = { eye[1], eye[2] - 0.6, eye[3] }
     for k = 1, 10 do

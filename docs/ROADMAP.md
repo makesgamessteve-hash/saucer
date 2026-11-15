@@ -71,7 +71,7 @@ Screenshots: `docs/shots/wake_title.png`, `door_open.png`,
 `helm_console.png`, `fold_packing.png`, `fold_packing_late.png`,
 `bed_save.png`.
 
-## 3. One-sector loop — next
+## 3. One-sector loop — done
 
 **Goal.** The explore → identify or sell loop is fun, and the only risk is
 losing unbanked loot.
@@ -83,7 +83,31 @@ Snatcher with Scanner and Jammer; hot/banked items and Fold Retreat; a
 **Done when.** Headless tests cover identify, trade, a sentry encounter,
 the mystery chain, and save/restore, on all CI platforms.
 
-## 4. Presentation and packaging — planned
+**Status (2026-11-15).** Done in OpenSpec change `add-one-sector-loop`
+(it also completes most of the trading, sentries-and-tools,
+hazards-and-failure, mystery and items changes). Loot comes in as
+"Unknown <Civ> <Category> T<tier>"; the lab bench identifies it in
+30 s × tier for 3 Charge and decodes Echoes, while you fly, as long as you
+are the Villa. Dock at the trader and the trade terminal pays
+base × tier × (1+affixes) × civ rarity × demand × 0.6 (or 0.4 unidentified).
+Demand falls 0.05 per sale and recovers 0.01 per sim minute, and every
+transaction saves. Derelicts 2 and 3 are guarded (the tutorial one is not):
+ceiling Watchers in the great halls ignore the Seat but stun the Villa's
+shields and hull, and duct Snatchers siphon one hot item from a Seat in 3 s
+and carry it to a nest you can tractor it back from. Scanner (V) reveals
+them for 10 s; Jammer (T, touch JAM) disables them for 12 s. At hull 0 the
+saucer Fold Retreats to the trader and the hot items stay behind as a cache.
+The optional mystery runs Who → Where → Key; decoding Where reveals the
+Resonant vault, and the Key opens it for a unique Curio and a teaser. Save
+diffs now include traders, the clock, nests, caches, the vault, credits and
+the lab queue. Tests: `tests/game/trade.lua`, `sentries.lua`, `mystery.lua`
+(the last two also pass with `--restore-every-tick`), and
+`tests/lua/loop_spec.lua`. Screenshots: `docs/shots/lab_bench.png`,
+`trade_terminal.png`, `watcher_locked.png`, `snatcher_latch.png`,
+`resonant_vault.png`, `vault_curio.png`. Deferred: trader stock and
+modules, grid consoles, on-foot Snatchers.
+
+## 4. Presentation and packaging — next
 
 **Goal.** It looks and ships like the retro-3D game in the concept.
 

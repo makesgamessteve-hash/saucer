@@ -52,7 +52,7 @@ end
 -- route(ruin, origin, room_id) -> list of { pos, size } from outside the
 -- entrance to the centre of room_id, shrinking before each smaller door.
 -- Three waypoints per room: before its door, just through it, its centre.
-function M.route(ruin, origin, room_id)
+function M.route(ruin, origin, room_id, min_size)
   local kit = ruinm.kit_of(ruin.kit)
   local chain = M.chain(ruin, room_id)
   local doors = {}
@@ -60,7 +60,7 @@ function M.route(ruin, origin, room_id)
   local wps = {}
   for _, rid in ipairs(chain) do
     local d = doors[rid]
-    local size = M.config_for_class(d.class)
+    local size = math.max(M.config_for_class(d.class), min_size or 1)
     local r, hh = configs.get(size).diameter / 2, configs.get(size).height / 2
     local c = door_center(d, ruin.rooms, kit, origin)
     local step = { 0, 0, 0 }
@@ -269,6 +269,101 @@ function M.face(t, pl, get, pos, max_ticks)
     M.hold(t, pl, axes)
   end
   return false
+end
+
+-- milestone 3 drivers ---------------------------------------------------
+
+-- walk to the helm and take it (from anywhere on foot)
+function M.take_helm(t, pl, get)
+  if get().mode == "helm" then return true end
+  if not M.walk_to(t, pl, get, "helm") then return false end
+  t.press(pl, "use")
+  t.wait(1)
+  return get().mode == "helm"
+end
+
+-- stand up from the helm and walk to a station node (lab, trade, bed, ...)
+function M.walk_to_station(t, pl, get, node)
+  if get().mode == "helm" then
+    t.press(pl, "use")
+    t.wait(1)
+    if get().mode ~= "walk" then return false end
+  end
+  return M.walk_to(t, pl, get, node)
+end
+
+-- fly a long way in open space, refreshing the target every leg
+function M.travel(t, pl, get, pos, tol, max_ticks)
+  return M.fly(t, pl, get, pos, tol or 4, max_ticks or 6000)
+end
+
+-- fly into a derelict to room_id (min_size 2 keeps to the Seat, which
+-- Watchers ignore). -> ok, the route used
+function M.enter(t, pl, get, ruin, origin, room_id, min_size)
+  local route = M.route(ruin, origin, room_id, min_size)
+  local first = route[1]
+  if get().ship.size ~= first.size then
+    -- reconfigure well outside, where there is room
+    if not M.resize(t, pl, get, first.size) then return false, route end
+  end
+  if not M.travel(t, pl, get, first.pos, 3) then return false, route end
+  local ok = M.follow(t, pl, get, route, 1500)
+  return ok, route
+end
+
+-- fly back out along a route (reverse), then clear of the site
+function M.leave(t, pl, get, route, away)
+  local back = {}
+  for i = #route, 1, -1 do back[#back + 1] = { pos = route[i].pos, tol = route[i].tol } end
+  if not M.follow(t, pl, get, back, 1500) then return false end
+  local o = get().ship.pos
+  local a = away or { o[1], o[2], o[3] - 70 }
+  return M.fly(t, pl, get, a, 3, 2400)
+end
+
+-- tractor every target of this player in a room that the current saucer can
+-- lift (filter(c) optional). Parks `dist` from each item on the line from
+-- `from`. -> number picked up
+function M.grab(t, pl, get, site_idx, ruin, room_id, from, filter, dist)
+  local tractor = require("sim.tractor")
+  local game = require("sim.game")
+  local kit = ruinm.kit_of(ruin.kit)
+  local origin = t.state().sector.sites[site_idx].pos
+  local room = ruin.rooms[room_id]
+  local floor_y = ruinm.room_box(room, kit, origin)[2] + kit.wall
+  local got = 0
+  for _ = 1, 8 do
+    local best
+    for _, c in ipairs(tractor.candidates(t.state(), get(), site_idx, ruin)) do
+      if (c.room == room_id or (not c.room and filter)) and tractor.can_lift(get().ship, c.item)
+          and (not filter or filter(c)) then
+        local e = game.viewpoint(get())
+        local d = (c.pos[1] - e[1]) ^ 2 + (c.pos[3] - e[3]) ^ 2
+        if not best or d < best.d then best = { c = c, d = d } end
+      end
+    end
+    if not best then break end
+    local p = best.c.pos
+    local size = get().ship.size
+    local center, yaw, eye = M.stand_for(p, from, size, floor_y, dist or (size == 1 and 12 or 2.0))
+    M.fly(t, pl, get, center, 0.5, 900, p)
+    M.look(t, pl, get, yaw, M.pitch_to(eye, p), 240)
+    local before = #get().hold
+    t.press(pl, "tractor")
+    t.wait(45)
+    if #get().hold <= before then break end
+    got = got + 1
+  end
+  return got
+end
+
+-- wait (holding still) until cond() or max ticks
+function M.wait_until(t, pl, cond, max_ticks)
+  for _ = 1, max_ticks or 600 do
+    if cond() then return true end
+    M.hold(t, pl, {})
+  end
+  return cond()
 end
 
 return M

@@ -12,7 +12,7 @@ M.SLOT = "slot1"
 M.FORMAT = 1
 -- per-player fields that are transient UI and never saved
 M.SKIP = { msgs = true, fx = true, panel = true, tractor = true, ghost = true, ghost_size = true, ghost_pos = true,
-           help = true }
+           help = true, latched_by = true, jam_flash = true, scan_until = true, docked = true }
 -- world diffs copied as-is when present (filled by later systems)
 M.WORLD_KEYS = { "traders", "nests", "caches", "vault", "clock" }
 

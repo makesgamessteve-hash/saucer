@@ -108,9 +108,14 @@ ok, leg = ap.follow(T, 1, get, inside, 1500)
 T.assert(ok, "squeezed through the duct (stuck on leg " .. tostring(leg) .. ")")
 print("tick", T.state().tick, "seat in the duct")
 T.assert(grab_room(duct) >= 1, "picked up loot in the duct")
-local hot = 0
-for _, it in ipairs(get().hold) do if it.hot then hot = hot + 1 end end
-T.assert(hot == #get().hold, "fresh loot is hot until we leave the site")
+local hot, loot_n = 0, 0
+for _, it in ipairs(get().hold) do
+  if not it.echo then
+    loot_n = loot_n + 1
+    if it.hot then hot = hot + 1 end
+  end
+end
+T.assert(hot == loot_n and hot > 0, "fresh loot is hot until we leave the site (Echoes never are)")
 T.screenshot("slice_duct.png")
 
 -- 4. back out into the hall and unfold the Villa around the seat

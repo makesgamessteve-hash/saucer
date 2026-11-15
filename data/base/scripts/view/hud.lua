@@ -6,6 +6,7 @@ local vec = require("lib.vec")
 local avatar = require("sim.avatar")
 local panel = require("sim.panel")
 local fold = require("sim.fold")
+local items = require("sim.items")
 local M = {}
 
 local WHITE, DIM, GREEN, RED, AMBER, CYAN = { 1, 1, 1, 1 }, { 0.6, 0.65, 0.75, 1 }, { 0.4, 1, 0.5, 1 },
@@ -13,9 +14,9 @@ local WHITE, DIM, GREEN, RED, AMBER, CYAN = { 1, 1, 1, 1 }, { 0.6, 0.65, 0.75, 1
 M.MSG_TICKS = 300
 
 local HINTS = {
-  kbm = "WASD walk/fly MOUSE look G use/helm Q/E fold F beam H help",
-  pad = "LS move RS look X use LB/RB fold A beam LT/RT lift BACK cam",
-  touch = "Stick move  drag look  USE helm  buttons fold/tractor",
+  kbm = "WASD walk/fly MOUSE look G use/helm Q/E fold F beam V scan T jam H help",
+  pad = "LS move RS look X use LB/RB fold A beam Y scan RS-click jam BACK cam",
+  touch = "Stick move  drag look  USE helm  buttons fold/tractor/scan/jam",
   xr = "Stick walk/fly  L trigger use  lever fold  R trigger beam",
 }
 M.HINTS = HINTS
@@ -27,6 +28,8 @@ local HELP = {
   "At the helm: lift Space/Ctrl, boost Shift",
   "Fold Q (to the Seat) / unfold E, or 1-2",
   "Tractor F or left click (helm or under the dome)",
+  "Scanner V (reveals sentries 10 s), Jammer T (disables 12 s)",
+  "Lab bench: identify and decode; trade terminal when docked",
   "Camera C, mystery mode M, help H/F1",
   "Gamepad, touch and WebXR work too.",
 }
@@ -124,6 +127,32 @@ function M.fold_status(p)
   return string.format("FOLDING %d/%d ROOMS%s", packed, total, busy and (": " .. busy:upper()) or "")
 end
 
+-- milestone 3 readouts: the lab bench, a Snatcher latch and sentry alarms
+function M.lab_status(state, p)
+  local q = p.lab and p.lab.queue or {}
+  local job = q[1]
+  if not job then return nil end
+  local it = items.find(p, job.uid)
+  local what = it and items.label(it) or "?"
+  local pct = math.floor((1 - job.left / job.total) * 100)
+  local paused = not require("sim.lab").running(p)
+  return string.format("LAB %s %d%%%s%s", job.kind == "decode" and "DECODE" or "ID", pct,
+    paused and " (PAUSED)" or "", #q > 1 and (" +" .. (#q - 1)) or ""), what
+end
+
+function M.alarm(state, p)
+  local worst
+  for site, list in pairs(state.sentries or {}) do
+    if site == p.site then
+      for _, dyn in pairs(list) do
+        if dyn.target == p.index and (dyn.st == "locked" or dyn.st == "latched") then worst = "LOCKED"
+        elseif dyn.target == p.index and dyn.st == "alert" and not worst then worst = "ALERT" end
+      end
+    end
+  end
+  return worst
+end
+
 function M.draw(v, state, p, target)
   local W, H = v.width, v.height
   local ship = p.ship
@@ -146,6 +175,25 @@ function M.draw(v, state, p, target)
   local hot = 0
   for _, it in ipairs(p.hold) do if it.hot then hot = hot + 1 end end
   v:text(8, 36, string.format("HOLD %d/%d HOT %d BANK %dc", #p.hold, configs.all().hold_slots, hot, p.banked_value), DIM)
+  -- hull, shield and credits (milestone 3)
+  local sh, hu = (ship.shield or 100) / 100, (ship.hull or 100) / 100
+  v:rect(128, 6, 60, 4, { 0.15, 0.15, 0.2, 1 })
+  v:rect(128, 6, 60 * math.max(0, sh), 4, CYAN)
+  v:rect(128, 12, 60, 4, { 0.15, 0.15, 0.2, 1 })
+  v:rect(128, 12, 60 * math.max(0, hu), 4, hu > 0.3 and GREEN or RED)
+  v:text(128, 19, string.format("%dc", p.credits or 0), AMBER)
+  local ls = M.lab_status(state, p)
+  if ls then v:text(8, 56, ls, DIM) end
+  local alarm = M.alarm(state, p)
+  if alarm then
+    local a = alarm == "LOCKED" and "! SENTRY LOCKED - JAM (T) OR RUN !" or "! SENTRY ALERT !"
+    v:text(W // 2 - #a * 4, H // 2 - 44, a, alarm == "LOCKED" and RED or AMBER)
+  end
+  if p.latched_by then
+    local f = math.min(1, (p.latched_by.t or 0) / 3)
+    v:text(W // 2 - 72, H // 2 - 70, "SNATCHER SIPHONING", RED)
+    v:rect(W // 2 - 40, H // 2 - 60, 80 * f, 3, RED)
+  end
   -- crosshair, where you are and what Use does
   v:text(W // 2 - 4, H // 2 - 4, "+", p.tractor and AMBER or WHITE)
   local where, hint = M.status(p)
@@ -155,13 +203,15 @@ function M.draw(v, state, p, target)
   local site, d = M.nav(state, p)
   if site then
     v:text(W // 2 - 60, 6, string.format("%s SITE %d %dm", M.bearing(p, site.pos), site.id, d // 1), CYAN)
+    if p.docked then v:text(W // 2 - 60, 16, "DOCKED AT THE TRADER", GREEN) end
   elseif p.site ~= 0 then
     v:text(W // 2 - 40, 6, "IN DERELICT " .. p.site, AMBER)
+    if (p.scan_until or 0) > state.tick then v:text(W // 2 - 40, 16, "SCANNING", CYAN) end
   end
   -- tractor
   if target then
     local ok = target.item.size <= c.tractor_class
-    local t = string.format("%s [%s]", target.item.name, loot.size_name(target.item.size))
+    local t = string.format("%s [%s]", items.label(target.item), loot.size_name(target.item.size))
     v:text(W // 2 - #t * 4, H // 2 + 10, t, ok and GREEN or RED)
     if not ok then v:text(W // 2 - 60, H // 2 + 20, "needs a bigger saucer", RED) end
   end

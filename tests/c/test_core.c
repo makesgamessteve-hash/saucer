@@ -154,6 +154,8 @@ TEST(touch_widgets) {
   memset(&raw, 0, sizeof raw);
   sx_touch_init(&t, 0.1f);
   CHECK(sx_touch_ctl_from_name("boost") == SX_TOUCH_BOOST);
+  CHECK(sx_touch_ctl_from_name("jam") == SX_TOUCH_JAM);
+  CHECK(strcmp(t.widgets[t.nwidgets - 2].name, "jam") == 0); /* the Jammer button, before the look area */
   CHECK(sx_touch_ctl_from_name("nope") == -1);
   CHECK(strcmp(sx_touch_ctl_name(SX_TOUCH_LIFT), "lift") == 0);
   CHECK(strcmp(sx_touch_ctl_name(-1), "?") == 0);

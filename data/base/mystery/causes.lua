@@ -1,6 +1,7 @@
 -- SPDX-License-Identifier: MIT
 -- Mystery cause templates (concept §5.6). {civ} {object} {place} get filled
--- from the universe seed. MVP: a 3-Echo chain that points at a Resonant vault.
+-- from the universe seed. MVP: a 3-Echo chain, Who -> Where -> Key, that
+-- opens a Resonant vault in open space. `curio` names the unique reward.
 return {
   {
     id = "silence",
@@ -10,6 +11,7 @@ return {
       "Echo II: They were building a {object} near {place}. It was meant to listen.",
       "Echo III: It heard something. The Resonant vault holds what it recorded.",
     },
+    curio = "Listening Shard",
   },
   {
     id = "exodus",
@@ -19,5 +21,6 @@ return {
       "Echo II: A {object} was found at {place}, pointing out of the galaxy.",
       "Echo III: The way they went is sealed inside the Resonant vault.",
     },
+    curio = "Fleet Compass",
   },
 }

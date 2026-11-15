@@ -14,6 +14,12 @@ local tractor = require("sim.tractor")
 local avatar = require("sim.avatar")
 local home = require("sim.home")
 local panel = require("sim.panel")
+local items = require("sim.items")
+local lab = require("sim.lab")
+local trade = require("sim.trade")
+local sentry = require("sim.sentry")
+local hull = require("sim.hull")
+local clock = require("sim.clock")
 local data = require("lib.data")
 local M = {}
 
@@ -21,19 +27,21 @@ M.SITE_PAD = 30
 M.MAX_MSGS = 4
 M.MAX_FX = 8
 
-local rt = { ruins = {}, bounds = {} } -- derived, rebuilt on restore
+local rt = { ruins = {}, bounds = {}, sentries = {} } -- derived, rebuilt on restore
 
 function M.ruin(i) return rt.ruins[i] end
 function M.site_bounds(i) return rt.bounds[i] end
+function M.sentries(i) return rt.sentries[i] or {} end
 
 local function civ_of(site) return data.load("civs/civs.lua")[site.civ] end
 
 function M.rebuild(state)
   saucer.physics.clear()
-  rt.ruins, rt.bounds = {}, {}
+  rt.ruins, rt.bounds, rt.sentries = {}, {}, {}
   for i, site in ipairs(state.sector.sites) do
     local r = ruinm.generate(site.seed, site.kit, civ_of(site), site.pos, nil, site.first)
     rt.ruins[i] = r
+    rt.sentries[i] = sentry.layout(site, r, civ_of(site))
     local lo, hi = ruinm.bounds(r, site.pos, M.SITE_PAD)
     rt.bounds[i] = { lo, hi }
     for _, b in ipairs(r.walls) do saucer.physics.add_box(b[1], b[2], 1) end
@@ -66,7 +74,8 @@ function M.new_player(index, pos, yaw)
     index = index, record_index = index - 1,
     ship = shipm.new(pos, yaw, 1),
     mode = "walk", body = avatar.new(L, L.spawn.pos, L.spawn.yaw), doors = home.new_doors(L),
-    hold = {}, credits = 0, banked_value = 0, looted = {},
+    hold = {}, credits = 0, banked_value = 0, looted = {}, lab = lab.new(), next_uid = 0, last_trader = 1,
+    scan_ready = 0, jam_ready = 0, scan_until = 0, jam_flash = 0,
     site = 0, tractor = false, ghost = 0, cam = "first", help = false, panel = false,
     msgs = {}, fx = {},
   }
@@ -76,13 +85,23 @@ end
 
 function M.init(state, ctx)
   local seed = ctx.seed
-  state.version = 3
+  state.version = 4
   state.seed = seed
   state.tick = 0
   state.sector = sector.generate(seed)
   state.mystery = mystery.generate(seed, "on", #state.sector.sites)
   state.players = {}
+  -- milestone 3 world state: trader demand, Snatcher nests, Fold Retreat
+  -- caches, the Resonant vault and the sim clock (all saved), plus the live
+  -- sentries and stun bolts (reset on load)
+  state.traders = trade.new_traders(state.sector)
+  state.nests, state.caches = {}, {}
+  state.vault = { pos = vec.copy(state.sector.vault.pos), taken = false }
+  state.clock = clock.new()
+  state.bolts = {}
   M.rebuild(state)
+  state.sentries = {}
+  for i = 1, #state.sector.sites do state.sentries[i] = sentry.new_state(rt.sentries[i]) end
   local site1 = state.sector.sites[1]
   local door = ruinm.entrance(rt.ruins[1], site1.pos)
   local n = ctx.players or 1
@@ -223,7 +242,7 @@ local function tractor_step(state, p, cmd, dt)
   local ship = p.ship
   if p.tractor then
     local t = p.tractor
-    local ruin = rt.ruins[t.site]
+    local ruin = t.site ~= 0 and rt.ruins[t.site] or nil
     local cand
     for _, c in ipairs(tractor.candidates(state, p, t.site, ruin)) do
       if c.key == t.key then cand = c end
@@ -238,38 +257,19 @@ local function tractor_step(state, p, cmd, dt)
     t.left = t.left - dt
     if t.left <= 1e-9 then
       p.tractor = false
-      if cand.echo then
-        p.looted[cand.key] = true
-        local solved = mystery.found(state.mystery, cand.echo, p.index)
-        msg(state, p, state.mystery.echoes[cand.echo].text)
-        if solved then msg(state, p, "The chain is complete: the Resonant vault is revealed.") end
-        fx(state, p, "echo")
-      else
-        p.looted[cand.key] = true
-        local it = cand.item
-        it.hot = true
-        p.hold[#p.hold + 1] = it
-        msg(state, p, "Got " .. it.name .. " (" .. it.value .. " c)")
-        fx(state, p, "pickup")
-        saucer.events.emit({ type = "loot", player = p.index, item = it.type })
-      end
+      M.pick_up(state, p, cand, t.site)
     end
     return
   end
   if not cmd:pressed("tractor") then return end
-  if p.site == 0 then
-    msg(state, p, "Nothing in tractor range")
-    fx(state, p, "denied")
-    return
-  end
   local cand = tractor.find(state, p, p.site, rt.ruins[p.site], M.viewpoint(p))
   if not cand then
     msg(state, p, "Nothing in tractor range")
     fx(state, p, "denied")
   elseif not tractor.can_lift(ship, cand.item) then
-    msg(state, p, cand.item.name .. " needs a size " .. loot.size_name(cand.item.size) .. " tractor")
+    msg(state, p, items.label(cand.item) .. " needs a size " .. loot.size_name(cand.item.size) .. " tractor")
     fx(state, p, "denied")
-  elseif not cand.echo and #p.hold >= configs.all().hold_slots then
+  elseif cand.kind ~= "cache" and #p.hold >= configs.all().hold_slots then
     msg(state, p, "Hold is full")
     fx(state, p, "denied")
   else
@@ -278,9 +278,118 @@ local function tractor_step(state, p, cmd, dt)
   end
 end
 
+-- a tractored target lands in the hold
+function M.pick_up(state, p, cand, site_idx)
+  local civ = site_idx ~= 0 and civ_of(state.sector.sites[site_idx]) or nil
+  if cand.kind == "echo" then
+    p.looted[cand.key] = true
+    mystery.found(state.mystery, cand.echo, p.index)
+    local it = items.stamp(p, cand.item, 1, civ and civ.id)
+    it.hot = false -- Echoes are never lost
+    p.hold[#p.hold + 1] = it
+    local e = state.mystery.echoes[cand.echo]
+    msg(state, p, string.format("Got %s. Decode it at your lab bench.", it.name))
+    if e.role == "key" then msg(state, p, "A key fragment: it should open the Resonant vault") end
+    fx(state, p, "echo")
+  elseif cand.kind == "nest" then
+    local n = table.remove(state.nests, cand.index)
+    n.item.hot = true
+    p.hold[#p.hold + 1] = n.item
+    msg(state, p, "Recovered " .. items.label(n.item) .. " from the nest")
+    fx(state, p, "pickup")
+  elseif cand.kind == "cache" then
+    local c = state.caches[cand.index]
+    local got = 0
+    while #c.items > 0 and #p.hold < configs.all().hold_slots do
+      local it = table.remove(c.items, 1)
+      it.hot = true
+      p.hold[#p.hold + 1] = it
+      got = got + 1
+    end
+    if #c.items == 0 then table.remove(state.caches, cand.index) end
+    msg(state, p, string.format("Recovered %d item%s from your cache", got, got == 1 and "" or "s"))
+    fx(state, p, "pickup")
+  elseif cand.kind == "curio" then
+    state.vault.taken = true
+    local it = items.stamp(p, cand.item, 5, nil)
+    it.hot = false
+    p.hold[#p.hold + 1] = it
+    msg(state, p, "You take the " .. it.name .. ".")
+    msg(state, p, mystery.TEASER)
+    fx(state, p, "echo")
+  else
+    p.looted[cand.key] = true
+    local it = items.stamp(p, cand.item, cand.item.tier, civ and civ.id)
+    it.hot = true
+    p.hold[#p.hold + 1] = it
+    msg(state, p, "Got " .. items.label(it))
+    fx(state, p, "pickup")
+    saucer.events.emit({ type = "loot", player = p.index, item = it.type })
+  end
+end
+
+-- Scanner pulse and Jammer (concept §8.3); costs and cooldowns are data
+local function scan(state, p)
+  local t = sentry.tune().scanner
+  if state.tick < p.scan_ready then
+    msg(state, p, "Scanner recharging")
+    fx(state, p, "denied")
+    return
+  end
+  if p.ship.charge < t.charge then
+    msg(state, p, "Not enough Charge to scan")
+    fx(state, p, "denied")
+    return
+  end
+  p.ship.charge = p.ship.charge - t.charge
+  p.scan_ready = state.tick + math.floor(t.cooldown * 60)
+  p.scan_until = state.tick + math.floor(t.reveal * 60)
+  local site = p.site
+  if site == 0 then
+    local best, bd
+    for i, s in ipairs(state.sector.sites) do
+      local d = vec.dist(s.pos, p.ship.pos)
+      if not bd or d < bd then best, bd = i, d end
+    end
+    site = best
+  end
+  local w, sn = sentry.summary(rt.sentries[site] or {})
+  msg(state, p, string.format("Scan: site %d, danger %d, %d Watcher%s, %d Snatcher%s", site, site == 1 and 1 or 2, w,
+    w == 1 and "" or "s", sn, sn == 1 and "" or "s"))
+  fx(state, p, "scan")
+end
+
+local function jam(state, p)
+  local t = sentry.tune().jammer
+  if state.tick < p.jam_ready then
+    msg(state, p, "Jammer recharging")
+    fx(state, p, "denied")
+    return
+  end
+  if p.ship.charge < t.charge then
+    msg(state, p, "Not enough Charge to jam")
+    fx(state, p, "denied")
+    return
+  end
+  p.ship.charge = p.ship.charge - t.charge
+  p.jam_ready = state.tick + math.floor(t.cooldown * 60)
+  p.jam_flash = state.tick + 20
+  local eye, yaw, pitch = M.viewpoint(p)
+  local n = 0
+  if p.site ~= 0 then n = sentry.jam(state, p.site, rt.sentries[p.site], eye, vec.aim(yaw, pitch), p) end
+  msg(state, p, n > 0 and string.format("Jammer: %d sentr%s disabled for 12 s", n, n == 1 and "y" or "ies")
+    or "Jammer pulse: nothing in range")
+  fx(state, p, "jam")
+end
+
 local SIZE_KEYS = { "size1", "size2", "size3", "size4" }
 
 -- what happens to a player's saucer every tick, whatever they are doing
+local function trader_pos(state, p)
+  local list = state.sector.traders or { state.sector.trader }
+  return (list[p.last_trader or 1] or list[1]).pos
+end
+
 local function world_step(state, p, dt)
   local ship = p.ship
   local site = M.site_at(ship.pos)
@@ -293,6 +402,39 @@ local function world_step(state, p, dt)
   end
   if p.ghost > 0 then p.ghost = p.ghost - 1 end
   home.doors_step(avatar.layout(), p, dt)
+  -- milestone 3: docking, the lab bench, shields, Fold Retreat and the Resonant vault
+  local docked = trade.docked_at(state, p)
+  if docked and not p.docked then
+    p.last_trader = docked
+    msg(state, p, "Docked at the trader. Walk to the trade terminal to sell.")
+    fx(state, p, "bank")
+  end
+  p.docked = docked or false
+  lab.step(state, p, dt, ctx_fns)
+  hull.regen(ship, dt)
+  if ship.hull <= 0 then
+    local from = p.site
+    local cache = hull.retreat(state, p, trader_pos(state, p))
+    p.site = M.site_at(ship.pos)
+    msg(state, p, "FOLD RETREAT: the hull gave out and you folded back to the trader.")
+    if cache then
+      msg(state, p, string.format("%d hot item%s stayed behind as a cache at site %d.", #cache.items,
+        #cache.items == 1 and "" or "s", from))
+    end
+    fx(state, p, "grow")
+  end
+  local m = state.mystery
+  if p.site == 0 and m.vault_revealed and not m.vault_open and vec.dist(ship.pos, state.vault.pos) < 80 then
+    for _, it in ipairs(p.hold) do
+      if it.echo and m.echoes[it.echo].role == "key" then
+        items.remove(p, it.uid)
+        mystery.open_vault(m)
+        msg(state, p, "The key fragment fits. The Resonant vault opens: inside rests the " .. m.curio .. ".")
+        fx(state, p, "echo")
+        break
+      end
+    end
+  end
 end
 
 function M.step_player(state, p, cmd, dt)
@@ -314,6 +456,8 @@ function M.step_player(state, p, cmd, dt)
   end
   if p.mode == "wake" then home.get_up(state, p, ctx_fns) end
   if cmd:pressed("use") then use(state, p) end
+  if cmd:pressed("scan") then scan(state, p) end
+  if cmd:pressed("jam") then jam(state, p) end
   if cmd:pressed("shrink") then size_request(state, p, ship.size + 1)
   elseif cmd:pressed("grow") then size_request(state, p, ship.size - 1) end
   for i, k in ipairs(SIZE_KEYS) do
@@ -340,6 +484,9 @@ function M.step(state, cmds, dt)
     local p = state.players[i]
     if p and cmds[i] then M.step_player(state, p, cmds[i], dt) end
   end
+  -- sentries act once per tick for everyone, then their stun bolts fly
+  for i = 1, #state.sector.sites do sentry.step(state, i, rt.sentries[i], dt, ctx_fns) end
+  sentry.step_bolts(state, dt)
 end
 
 home.register_panels(M, ctx_fns)

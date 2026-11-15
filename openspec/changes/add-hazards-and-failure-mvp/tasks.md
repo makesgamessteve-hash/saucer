@@ -1,9 +1,9 @@
 ## 1. Requirements
 
-- [ ] 1.1 The dome is safe: not in milestone 1
+- [x] 1.1 The dome is safe (milestone 3): `sim/hull.lua` changes ship shields and hull only; the person under the dome is never touched
 - [x] 1.2 Hot and banked items: slice.lua "fresh loot is hot until we leave the site", "loot banked after leaving"
-- [ ] 1.3 Fold Retreat: not in milestone 1
-- [ ] 1.4 Non-lethal damage: not in milestone 1
+- [x] 1.3 Fold Retreat (milestone 3): `hull.retreat`; `sentries.lua` "Fold Retreat at hull 0", "a cache with the hot items sits in the derelict", "recovered the cache"
+- [x] 1.4 Non-lethal damage (milestone 3): only shields, hull and (later) Suit Charge; hull 0 is a Fold Retreat, never game over
 
 ## 2. Verification
 

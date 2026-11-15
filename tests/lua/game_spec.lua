@@ -3,6 +3,8 @@
 local game = require("sim.game")
 local ship = require("sim.ship")
 local tractor = require("sim.tractor")
+local vec = require("lib.vec")
+local mystery = require("sim.mystery")
 local ap = require("sim.autopilot")
 local input_setup = require("input_setup")
 
@@ -236,21 +238,43 @@ describe("game", function()
     expect(p.banked_value).to_be(10)
     expect(texts(p)).to_contain("Banked 1 item (10 c)")
   end)
-  it("collects an Echo and completes the chain", function()
+  it("collects an Echo, opens the vault with the Key and takes the Curio", function()
     local st = new_state()
     local p = st.players[1]
-    st.mystery.echoes[2].found_by, st.mystery.echoes[3].found_by, st.mystery.found = 1, 1, 2
-    st.mystery.echoes[1].site = 1
     local r = game.ruin(1)
     local echo
-    for _, c in ipairs(tractor.candidates(st, p, 1, r)) do if c.echo then echo = c end end
+    for _, c in ipairs(tractor.candidates(st, p, 1, r)) do if c.kind == "echo" then echo = c end end
+    expect(echo.echo).to_be(1)
     p.tractor = { key = echo.key, site = 1, left = 0.01 }
     p.ship.size = 2
     p.mode = "helm"
     p.ship.pos = { echo.pos[1], echo.pos[2], echo.pos[3] - 2 }
     run(st, cmd())
-    expect(st.mystery.solved).to_be(true)
-    expect(texts(p)).to_contain("Resonant vault")
+    local held = p.hold[#p.hold]
+    expect(held.name).to_be("Echo I: glyph tablet")
+    expect(held.hot).to_be(false)
+    expect(st.mystery.echoes[1].found_by).to_be(1)
+    expect(texts(p)).to_contain("Decode it at your lab bench")
+    -- the chain jumps ahead: Who and Where decoded, the Key in the hold
+    local m = st.mystery
+    for i = 1, 3 do m.echoes[i].found_by = 1 end
+    m.echoes[1].decoded, m.echoes[2].decoded, m.vault_revealed, m.found = true, true, true, 3
+    p.hold = { mystery.item(m, 3) }
+    p.hold[1].uid = 99
+    p.ship.pos = vec.add(st.vault.pos, { 0, 0, -30 })
+    run(st, cmd())
+    expect(m.vault_open).to_be(true)
+    expect(m.solved).to_be(true)
+    expect(#p.hold).to_be(0)
+    expect(texts(p)).to_contain("Resonant vault opens")
+    local curio
+    for _, c in ipairs(tractor.candidates(st, p, 0, nil)) do if c.kind == "curio" then curio = c end end
+    expect(curio ~= nil).to_be(true)
+    game.pick_up(st, p, curio, 0)
+    expect(st.vault.taken).to_be(true)
+    expect(p.hold[1].unique).to_be(true)
+    expect(texts(p)).to_contain(mystery.TEASER)
+    expect(#tractor.candidates(st, p, 0, nil)).to_be(0)
   end)
   it("rebuilds derived data identically after restore", function()
     local st = new_state()

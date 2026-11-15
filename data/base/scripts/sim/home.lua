@@ -7,6 +7,7 @@ local avatar = require("sim.avatar")
 local configs = require("sim.config")
 local panel = require("sim.panel")
 local save = require("sim.save")
+local clock = require("sim.clock")
 local M = {}
 
 M.FED_TICKS = 5 * 60 * 60      -- a meal: faster Charge regeneration for five sim minutes
@@ -97,12 +98,15 @@ end
 
 M.USE.bed = function(_, p) panel.open(p, "bed") end
 
-M.USE.lab = function(state, p, _, ctx)
-  say(ctx, state, p, "The lab bench hums. Nothing to identify yet.")
-end
+-- milestone 3: the lab bench identifies and decodes; the terminal trades when docked
+M.USE.lab = function(_, p) panel.open(p, "lab") end
 
 M.USE.trade = function(state, p, _, ctx)
-  say(ctx, state, p, "No trader in range. Dock at a trader station first.", "denied")
+  if not require("sim.trade").docked_at(state, p) then
+    say(ctx, state, p, "No trader in range. Dock at a trader station first.", "denied")
+    return
+  end
+  panel.open(p, "trade")
 end
 
 -- sleep until morning: only outside derelicts; refills Charge and saves
@@ -114,6 +118,7 @@ function M.sleep(state, p, ctx)
   p.ship.charge = configs.all().max_charge
   p.slept_tick = state.tick
   p.sleeps = (p.sleeps or 0) + 1
+  clock.skip(state, M.SLEEP_MINUTES)
   for _, h in ipairs(M.hooks.sleep) do h(state, p, M.SLEEP_MINUTES) end
   panel.close(p)
   local ok = save.write(state)
@@ -165,6 +170,14 @@ function M.register_panels(game, ctx)
         { text = "Load saved game", act = function(state, p) M.load(state, p, ctx, game) end },
       }
     end,
+  })
+  panel.register("lab", {
+    title = "LAB BENCH",
+    rows = function(state, p) return require("sim.lab").rows(state, p, ctx) end,
+  })
+  panel.register("trade", {
+    title = "TRADE TERMINAL",
+    rows = function(state, p) return require("sim.trade").rows(state, p, ctx) end,
   })
   panel.register("bed", {
     title = "BED",

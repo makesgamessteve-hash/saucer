@@ -21,6 +21,7 @@ function M.new(pos, yaw, size)
     morph = false,
     t_left = 0,
     charge = configs.all().max_charge,
+    hull = 100, shield = 100, since_hit = 99,   -- milestone 3: stun bolts drain shields, then hull
   }
 end
 
