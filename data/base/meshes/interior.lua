@@ -7,6 +7,7 @@ local data = require("lib.data")
 local sm = saucer.math
 
 local P = kit.part
+local props = data.load("meshes/props.lua")
 
 local function box(x0, y0, z0, x1, y1, z1, color, extra)
   local p = P("box", { min = { x0, y0, z0 }, max = { x1, y1, z1 }, color = color })
@@ -26,7 +27,17 @@ BUILD.wall, BUILD.wardrobe = BUILD.box, BUILD.box
 function BUILD.rail(out, f, y)
   local b = f.box
   out[#out + 1] = box(b[1], y + f.h - 0.08, b[2], b[3], y + f.h, b[4], f.color)
-  out[#out + 1] = box(b[1], y, b[2], b[3], y + f.h - 0.08, b[4], { 0.55, 0.8, 0.95 }, { emissive = 0.1 })
+  out[#out + 1] = box(b[1], y + 0.25, b[2], b[3], y + f.h - 0.08, b[4], { 0.55, 0.8, 0.95 }, { emissive = 0.1 })
+  -- add-detail-pass: balusters every half meter and a kick plate
+  local along = (b[3] - b[1]) >= (b[4] - b[2]) and 1 or 3
+  local a0, a1 = along == 1 and b[1] or b[2], along == 1 and b[3] or b[4]
+  local n = math.max(1, math.floor((a1 - a0) / 0.5 + 0.5))
+  for k = 0, n do
+    local a = a0 + (a1 - a0) * k / n
+    if along == 1 then out[#out + 1] = box(a - 0.025, y, b[2] - 0.01, a + 0.025, y + f.h, b[4] + 0.01, f.color)
+    else out[#out + 1] = box(b[1] - 0.01, y, a - 0.025, b[3] + 0.01, y + f.h, a + 0.025, f.color) end
+  end
+  out[#out + 1] = box(b[1], y, b[2], b[3], y + 0.12, b[4], { 0.35, 0.37, 0.42 })
 end
 function BUILD.console(out, f, y)
   local b = f.box
@@ -242,6 +253,106 @@ local function lights(out, L, only)
   end
 end
 
+-- add-detail-pass: visual-only dressing (no collision, no sim effect)
+-- decor props (saucer/decor.lua) for one fold group, or all when gid is nil
+local function decor(out, L, gid)
+  local fold = require("sim.fold")
+  for _, d in ipairs(data.load("saucer/decor.lua")) do
+    if not gid or fold.group_of(L, d.deck, d.at[1], d.at[2]) == gid then props.build(out, d, L.decks[d.deck].floor) end
+  end
+end
+
+-- the glass dome's frame: meridian struts (none straight ahead of the helm),
+-- a ring brace and a lit hub at the crown; plus floor inlay rings
+local DOME_PHI = 1.42
+local function dome_frame(out, L)
+  local d1 = L.decks[1]
+  local R, H = L.dome.radius - 0.1, L.dome.height - 0.08
+  local col = { 0.55, 0.58, 0.66 }
+  for k = 0, 11 do
+    local a = (k + 0.5) * sm.tau / 12
+    local sa, ca = sm.sin(a), sm.cos(a)
+    local prev
+    for s = 0, 7 do
+      local phi = s / 7 * DOME_PHI
+      local p = { sa * R * sm.cos(phi), d1.floor + H * sm.sin(phi), ca * R * sm.cos(phi) }
+      if prev then out[#out + 1] = props.bar(prev, p, 0.12, 0.08, col) end
+      prev = p
+    end
+  end
+  local phi = 0.75
+  local rr = R * sm.cos(phi)
+  out[#out + 1] = P("ring", { c = { 0, d1.floor + H * sm.sin(phi) - 0.04, 0 }, rin = rr - 0.12, r = rr, h = 0.08, seg = 32,
+                              color = col })
+  local top, hub = d1.floor + H * sm.sin(DOME_PHI), R * sm.cos(DOME_PHI) + 0.15
+  out[#out + 1] = P("cylinder", { c = { 0, top - 0.1, 0 }, r = hub, h = 0.16, seg = 12, color = col })
+  out[#out + 1] = P("cylinder", { c = { 0, top - 0.13, 0 }, r = hub * 0.6, h = 0.03, seg = 12, color = { 1, 0.9, 0.7 },
+                                  emissive = 1 })
+  for _, ring in ipairs({ { 2.9, 3.05 }, { 7.45, 7.6 } }) do
+    out[#out + 1] = P("ring", { c = { 0, d1.floor, 0 }, rin = ring[1], r = ring[2], h = 0.008, seg = 32,
+                                color = { 0.3, 0.55, 0.6 } })
+  end
+end
+
+-- lower deck: ceiling ribs (clear of the stairwell), baseboard, a cove
+-- light ring and wall pilasters between the portholes
+local function lower_trim(out, L)
+  local d2, st = L.decks[2], L.stairs
+  local Rw = d2.radius + 0.2
+  out[#out + 1] = P("ring", { c = { 0, d2.floor, 0 }, rin = Rw - 0.1, r = Rw, h = 0.14, seg = 24, color = { 0.35, 0.34, 0.33 } })
+  out[#out + 1] = P("ring", { c = { 0, d2.ceiling - 0.14, 0 }, rin = Rw - 0.22, r = Rw, h = 0.05, seg = 24,
+                              color = { 0.6, 0.85, 1.0 }, emissive = 1 })
+  for k = 0, 11 do
+    local a = k * sm.tau / 12
+    out[#out + 1] = P("box", { min = { -0.14, 0, -0.16 }, max = { 0.14, d2.ceiling - d2.floor, 0 }, yaw = a,
+                               pos = { sm.sin(a) * Rw, d2.floor, sm.cos(a) * Rw }, color = { 0.66, 0.64, 0.6 } })
+  end
+  local function in_well(x, z)
+    return x > st.low - 0.25 and x < st.high + 0.25 and z > st.z0 - 0.25 and z < st.z1 + 0.25
+  end
+  for k = 0, 11 do
+    local a = (k + 0.5) * sm.tau / 12
+    local sa, ca = sm.sin(a), sm.cos(a)
+    local run0
+    local t = 1.4
+    while t <= Rw - 0.1 + 1e-6 do
+      local inside = in_well(sa * t, ca * t)
+      if not inside and not run0 then run0 = t end
+      local last = t + 0.1 > Rw - 0.1 + 1e-6
+      if run0 and (inside or last) then
+        local t1 = inside and t - 0.1 or t
+        if t1 - run0 > 0.3 then
+          local y = d2.ceiling - 0.1
+          out[#out + 1] = props.bar({ sa * run0, y, ca * run0 }, { sa * t1, y, ca * t1 }, 0.16, 0.18, { 0.5, 0.5, 0.52 })
+        end
+        run0 = nil
+      end
+      t = t + 0.1
+    end
+  end
+end
+
+-- stairs: lit step nosings and a handrail with posts on both sides
+local function stair_rails(out, L)
+  local st, lo, hi = L.stairs, L.decks[2].floor, L.decks[1].floor
+  local n = st.steps
+  local run = (st.high - st.low) / n
+  for i = 0, n - 1 do
+    local top = lo + (hi - lo) * (i + 1) / n
+    local x0 = st.low + i * run
+    out[#out + 1] = box(x0, top - 0.02, st.z0 + 0.1, x0 + 0.05, top + 0.004, st.z1 - 0.1, { 1.0, 0.75, 0.3 }, { emissive = 0.8 })
+  end
+  for _, z in ipairs({ st.z0 + 0.08, st.z1 - 0.08 }) do
+    out[#out + 1] = props.bar({ st.low, lo + 0.95, z }, { st.high, hi + 0.95, z }, 0.05, 0.06, { 0.6, 0.62, 0.7 })
+    for i = 1, n - 1, 3 do
+      local x = st.low + (i + 0.5) * run
+      local top = lo + (hi - lo) * (i + 1) / n
+      out[#out + 1] = props.tube({ x, top, z }, { x, top + 0.95 + 0.5 * run * (hi - lo) / (st.high - st.low), z }, 0.02,
+                                 { 0.6, 0.62, 0.7 }, 4)
+    end
+  end
+end
+
 -- one sliding door leaf (drawn by the renderer at its open offset)
 local function door(L, id)
   for _, d in ipairs(L.doors or {}) do
@@ -270,6 +381,7 @@ local function group(L, gid)
   if gid == "1:deck" then
     floor_strips(out, L)
     lights(out, L, 1)
+    dome_frame(out, L)
   elseif gid == "2:deck" then
     local d2 = L.decks[2]
     out[#out + 1] = P("cylinder", { c = { 0, d2.floor - 0.3, 0 }, r = d2.radius + 0.2, h = 0.3, seg = 24,
@@ -283,9 +395,12 @@ local function group(L, gid)
                                  emissive = 0.6, pos = { sm.sin(a) * r, d2.floor + 1.8, sm.cos(a) * r }, yaw = a })
     end
     lights(out, L, 2)
+    lower_trim(out, L)
   elseif gid == "1:Stairs" then
     stairs(out, L)
+    stair_rails(out, L)
   end
+  decor(out, L, gid)
   for _, f in ipairs(L.furniture) do
     local cx, cz
     if f.circle then cx, cz = f.circle[1], f.circle[2] else cx, cz = (f.box[1] + f.box[3]) / 2, (f.box[2] + f.box[4]) / 2 end
@@ -321,11 +436,15 @@ return function(params, rng)
                                emissive = 0.6, pos = { sm.sin(a) * r, d2.floor + 1.8, sm.cos(a) * r }, yaw = a })
   end
   stairs(out, L)
+  stair_rails(out, L)
   for _, f in ipairs(L.furniture) do
     local y = L.decks[f.deck].floor
     local b = BUILD[f.kind] or BUILD.box
     b(out, f, y)
   end
   lights(out, L)
+  dome_frame(out, L)
+  lower_trim(out, L)
+  decor(out, L)
   return { parts = out }
 end

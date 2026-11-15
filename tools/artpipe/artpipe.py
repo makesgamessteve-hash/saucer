@@ -19,15 +19,17 @@ import struct
 import sys
 import wave
 
-from PIL import Image
+from PIL import Image, ImageEnhance
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 BASE = os.path.join(ROOT, "data", "base")
 LOG = os.path.join(ROOT, "art", "prompts", "log.jsonl")
 AUTHOR = "Steve Makesgames and contributors"
 
-# palette regions: 1..63 hull, 64..127 nebula, 128..191 sprites, 192..255 spare
-REGIONS = {"hull": (1, 63), "nebula": (64, 127), "sprites": (128, 191)}
+# palette regions: 1..63 hull, 64..127 nebula, 128..191 sprites, 192..255 the
+# three derelict kit materials (add-detail-pass), 21 or 22 colours each
+REGIONS = {"hull": (1, 63), "nebula": (64, 127), "sprites": (128, 191),
+           "kit_starship": (192, 212), "kit_station": (213, 233), "kit_city": (234, 255)}
 
 GENERATED = [
     {
@@ -49,6 +51,40 @@ GENERATED = [
         "region": "nebula",
         "cutout": 18,  # luminance below this becomes index 0 (transparent)
         "prompt_id": "2026-11-13-nebula-01",
+    },
+    # add-detail-pass: one wall material per derelict kit
+    {
+        "id": "kit_starship",
+        "src": "art/src/generated/kit_starship_src.jpg",
+        "out": "generated/textures/kit_starship.png",
+        "crop": (0, 0, 512, 512),  # 2x2 repeat again; keep one tile
+        "size": (64, 64),
+        "region": "kit_starship",
+        "cutout": None,
+        "gain": 1.7,  # the source is very dark; walls multiply it by the kit colour
+        "prompt_id": "2026-11-16-kit-starship-01",
+    },
+    {
+        "id": "kit_station",
+        "src": "art/src/generated/kit_station_src.jpg",
+        "out": "generated/textures/kit_station.png",
+        "crop": None,
+        "size": (128, 128),
+        "region": "kit_station",
+        "cutout": None,
+        "gain": 1.3,
+        "prompt_id": "2026-11-16-kit-station-01",
+    },
+    {
+        "id": "kit_city",
+        "src": "art/src/generated/kit_city_src.jpg",
+        "out": "generated/textures/kit_city.png",
+        "crop": None,
+        "size": (128, 128),
+        "region": "kit_city",
+        "cutout": None,
+        "gain": 1.1,
+        "prompt_id": "2026-11-16-kit-city-01",
     },
 ]
 
@@ -86,6 +122,8 @@ def build_generated(palette):
         if g["crop"]:
             img = img.crop(g["crop"])
         img = img.resize(g["size"], Image.Resampling.BOX)
+        if g.get("gain"):
+            img = ImageEnhance.Brightness(img.convert("RGB")).enhance(g["gain"])
         lo, hi = REGIONS[g["region"]]
         idx, colors = quantize(img, hi - lo + 1, g["cutout"])
         for i, c in enumerate(colors):
@@ -143,6 +181,7 @@ def build_sprites(palette):
         "authored/sprites/loot.png": sprite(16, orb("gold", 16, False)),
         "authored/sprites/echo.png": sprite(32, orb("cyan", 32, True)),
         "authored/sprites/beam.png": sprite(8, orb("beam", 8, False)),
+        "authored/sprites/glow.png": sprite(16, orb("cyan", 16, False)),  # thruster glow (add-detail-pass)
     }
     for rel, img in out.items():
         path = os.path.join(BASE, rel)

@@ -23,6 +23,7 @@ function M.init()
     loot = M.texture("authored/sprites/loot.png"),
     echo = M.texture("authored/sprites/echo.png"),
     beam = M.texture("authored/sprites/beam.png"),
+    glow = M.texture("authored/sprites/glow.png"),
   }
   cache.stars = saucer.mesh.build({ parts = { { kind = "stars", count = 1400, r = 900, size = 2.2, seed = 7 } } })
   cache.station = kit.build("station", {}, 11)
@@ -53,6 +54,20 @@ function M.init()
   end
   cache.doors = {}
   for i, d in ipairs(L.doors or {}) do cache.doors[i] = kit.build("interior", { part = "door", door = d.id }, 1) end
+  -- add-detail-pass: the engine's spinning rotor ring and a piston, and the
+  -- thruster layout the renderer hangs glow sprites on
+  local rotor = { { kind = "ring", c = { 0, -0.04, 0 }, rin = 1.18, r = 1.32, h = 0.08, seg = 20, color = { 0.8, 0.62, 0.22 } } }
+  for k = 0, 3 do
+    local a = k * saucer.math.tau / 4
+    rotor[#rotor + 1] = { kind = "box", min = { -0.09, -0.07, 1.14 }, max = { 0.09, 0.07, 1.4 }, yaw = a,
+                          color = { 0.35, 0.9, 1.0 }, emissive = 1 }
+  end
+  cache.engine_rotor = saucer.mesh.build({ parts = rotor })
+  cache.piston = saucer.mesh.build({ parts = {
+    { kind = "cylinder", c = { 0, 0, 0 }, r = 0.05, h = 1.1, seg = 6, color = { 0.75, 0.78, 0.82 } },
+    { kind = "box", min = { -0.1, 1.1, -0.1 }, max = { 0.1, 1.3, 0.1 }, color = { 0.8, 0.62, 0.22 } },
+  } })
+  cache.thrusters = require("lib.data").load("meshes/saucer.lua").THRUSTERS
   cache.unit = saucer.mesh.build({ parts = { { kind = "box", min = { -0.5, -0.5, -0.5 }, max = { 0.5, 0.5, 0.5 },
                                               color = { 1, 1, 1 }, emissive = 1 } } })
   cache.ready = true

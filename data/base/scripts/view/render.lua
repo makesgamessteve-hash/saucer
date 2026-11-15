@@ -338,16 +338,77 @@ function M.rooms(v, A, o, d, state)
                                      scale = d.scale }) end
     end
     if state then M.console(v, A, state, o, d) end
+    if (amounts["2:Engine room"] or 0) == 0 then M.engine_parts(v, A, d, state and state.tick or 0) end
   end
   return drawn
 end
 
-local function draw_saucer(v, A, o, own_eyes, state, xr)
+-- add-detail-pass: the engine's moving parts. Two rotor rings spin opposite
+-- ways round the core and two pistons pump beside it. Render-only: driven by
+-- the tick, never stored. -> number of meshes drawn
+function M.engine_parts(v, A, d, tick)
+  local L = avatar.layout()
+  local e
+  for _, f in ipairs(L.furniture) do
+    if f.kind == "engine" then e = f end
+  end
+  if not e or not A.engine_rotor then return 0 end
+  local fl = L.decks[e.deck].floor
+  local spin = (tick % 7200) * 0.06
+  local n = 0
+  for i, h in ipairs({ 0.95, 2.35 }) do
+    v:mesh(A.engine_rotor, { pos = at(d, { e.circle[1], fl + h, e.circle[2] }), yaw = d.yaw + (i == 1 and spin or -spin * 1.3),
+                             roll = d.roll, scale = d.scale })
+    n = n + 1
+  end
+  for k = 0, 1 do
+    local bob = 0.22 * sm.sin((tick % 7200) * 0.15 + k * sm.pi)
+    local x = e.circle[1] + (k == 0 and -1.55 or 1.55)
+    v:mesh(A.piston, { pos = at(d, { x, fl + 0.9 + bob, e.circle[2] }), yaw = d.yaw, roll = d.roll, scale = d.scale })
+    n = n + 1
+  end
+  return n
+end
+
+-- add-detail-pass: thruster glow sprites, brighter the faster the saucer moves
+M.SAUCER_LOD = 260 -- other players' saucers beyond this skip their rooms and props
+function M.thruster_glow(v, A, o, d, c)
+  local T = A.thrusters
+  if not T then return 0 end
+  local vel = o.ship.vel or { 0, 0, 0 }
+  local speed = vec.len(vel)
+  local k = math.min(1, speed / 25)
+  local n = 0
+  local tint = { 0.8, 0.95, 1, 0.6 + 0.4 * k }
+  if c.id == "villa" then
+    local lift = math.min(1, math.max(0, vel[2] / 10))
+    for _, t in ipairs(T.belly) do
+      local lp = { sm.sin(t[2]) * t[1], T.belly_y - 0.25, sm.cos(t[2]) * t[1] }
+      v:billboard(A.tex.glow, at(d, lp), (1.1 + 1.6 * math.max(k * 0.5, lift)) * d.scale, { palette = A.pal.base, tint = tint })
+      n = n + 1
+    end
+    for _, tip in ipairs(T.rear) do
+      v:billboard(A.tex.glow, at(d, { tip[1], tip[2], tip[3] - 0.3 - k * 0.8 }), (0.9 + 1.5 * k) * d.scale,
+                  { palette = A.pal.base, tint = tint })
+      n = n + 1
+    end
+  elseif c.id == "seat" then
+    v:billboard(A.tex.glow, at(d, { 0, -0.35, -1.1 - k * 0.2 }), (0.35 + 0.6 * k) * d.scale, { palette = A.pal.base, tint = tint })
+    n = n + 1
+  end
+  return n
+end
+
+local function draw_saucer(v, A, o, own_eyes, state, xr, cam)
   local d = M.pose(o.ship, xr)
   local c = configs.get(d.size)
   local m = A.saucer[d.size]
   v:mesh(m.hull, { pos = d.pos, yaw = d.yaw, roll = d.roll, scale = d.scale, tex = A.tex.hull, palette = A.pal.base })
-  if c.interior then
+  M.thruster_glow(v, A, o, d, c)
+  local far = not own_eyes and cam and vec.dist(cam.pos, d.pos) > M.SAUCER_LOD
+  if c.interior and far then
+    v:mesh(A.glass, { pos = d.pos, yaw = d.yaw, roll = d.roll, scale = d.scale, ghost = true, tint = { 0.55, 0.8, 1, 0.3 } })
+  elseif c.interior then
     M.rooms(v, A, o, d, state)
     v:mesh(A.glass, { pos = d.pos, yaw = d.yaw, roll = d.roll, scale = d.scale, ghost = true, tint = { 0.55, 0.8, 1, 0.3 } })
     if o.mode == "walk" and not own_eyes and not o.ship.morph then
@@ -447,7 +508,7 @@ function M.render(v, state, alpha)
   end
   -- saucers (and, through their domes, the people in them)
   for j, o in ipairs(state.players) do
-    draw_saucer(v, A, o, j == v.player and (p.cam ~= "chase" or v.xr), state, v.xr)
+    draw_saucer(v, A, o, j == v.player and (p.cam ~= "chase" or v.xr), state, v.xr, cam)
   end
   -- tractor beam: a dotted line of sprites from just below the eyes
   local target
