@@ -78,7 +78,8 @@ macOS is not a target for now.
 | | Keyboard / mouse | Gamepad | Touch | WebXR |
 |---|---|---|---|---|
 | Walk (on foot) / fly (at the helm) | W A S D | left stick | left stick | left stick (walks where you look) |
-| Lift (at the helm) | Space / Ctrl | triggers | right slider | right stick |
+| Fly up / down (at the helm) | Space / Ctrl, or R / Z | right / left trigger | right slider, or the **up** / **dn** buttons | right stick (up / down) |
+| Climb / dive | look up or down and fly forward (thrust follows your view) | right stick + left stick | drag + stick | right stick + left stick |
 | Turn / look | mouse (click to capture, Esc releases), arrows | right stick | drag right half | head, right stick |
 | Use: take the helm / stand up / furniture / pick a menu row | G / Return | X | Use button | left trigger |
 | Menu up / down (title, bed) | W / S | left stick | left stick | left stick |

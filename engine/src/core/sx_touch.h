@@ -1,5 +1,5 @@
 /* Virtual touch controls for mobile web (left stick, right-half look drag,
- * vertical lift slider, buttons). Positions are normalized 0..1 screen space.
+ * vertical lift slider with UP/DN hold buttons, buttons). Positions are normalized 0..1 screen space.
  * SPDX-License-Identifier: MIT */
 #ifndef SX_TOUCH_H
 #define SX_TOUCH_H
@@ -25,7 +25,8 @@ typedef struct sx_touch_widget {
   const char *name;
   int ctl;          /* sx_touch_ctl it drives */
   float x, y, w, h; /* normalized rect */
-  int kind;         /* 0 button, 1 stick, 2 slider, 3 look area */
+  int kind;         /* 0 button, 1 stick, 2 slider, 3 look area, 4 hold-to-climb/dive button */
+  float sign;       /* kind 4: +1 up, -1 down */
 } sx_touch_widget;
 
 #define SX_TOUCH_MAX_FINGERS 10

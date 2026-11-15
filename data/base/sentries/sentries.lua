@@ -7,7 +7,7 @@ return {
   lose_time = 1.0,        -- out of sight this long: back to Dormant
   disabled_time = 12.0,   -- Jammer reboot
   watcher = {
-    range = 70, half_angle = 0.62, sweep = 0.9, sweep_period = 9.0,
+    range = 100, half_angle = 0.62, sweep = 0.9, sweep_period = 9.0,
     -- size band by the civ's body scale: it ignores anything smaller (the Seat is class 1)
     band = { human = { 2, 4 }, tiny = { 2, 4 } },
     fire_every = 1.6, bolt_speed = 18, bolt_life = 5.0, bolt_damage = 9, bolt_radius = 0.4,

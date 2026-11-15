@@ -1,6 +1,6 @@
 # Saucer — Game Concept & Design
 
-> Status: draft v0.6 (2026-11-15). Updated with Steve's answers on combat, co-op, the mystery, WebXR, and art (v0.2), on co-op saucers, licensing, and hero meshes (v0.3), with Steve's correction of the core fantasy: you are a person on foot inside the saucer, and it reconfigures around you (v0.4), with the milestone 2 live-in interior (v0.5), and with the milestone 3 one-sector loop (v0.6). · Owner: Steve Makesgames · Repo: <https://github.com/makesgamessteve-hash/saucer> (`main`)
+> Status: draft v0.7 (2026-11-15). Updated with Steve's answers on combat, co-op, the mystery, WebXR, and art (v0.2), on co-op saucers, licensing, and hero meshes (v0.3), with Steve's correction of the core fantasy: you are a person on foot inside the saucer, and it reconfigures around you (v0.4), with the milestone 2 live-in interior (v0.5), with the milestone 3 one-sector loop (v0.6), and with Steve's request for true 3D: the saucer flies up and down, and sites grow in every direction and are huge (v0.7). · Owner: Steve Makesgames · Repo: <https://github.com/makesgamessteve-hash/saucer> (`main`)
 > Licenses: code (including all Lua) is MIT · hand-authored art and audio are CC BY 4.0 · Grok Imagine–generated images are under xAI's terms for outputs (§11.6)
 > Purpose: the source document for OpenSpec specs. Section 16 lists capabilities with SHALL requirements and scenarios ready to paste into `openspec/specs/` or `openspec/changes/`.
 
@@ -47,6 +47,12 @@
   - **Fold Retreat** lands you as the Villa 60 m from the last trader with hull 30 and shields down. The cache waits where the hull failed.
   - **The mystery is a chain you carry.** Each Echo becomes a hold item and the next one appears only after the previous one is decoded. Where reveals the **Resonant vault**, a monolith in open space; the Key (never decoded) opens it within 80 m. Inside is one unique Curio and the line "The signal continues beyond the fold."
   - Echoes and the Curio are never hot, never for sale, and never lost.
+- **Decisions from Steve (v0.7), true 3D:**
+  - The saucer **flies up and down**. Flight has six axes: forward and back thrust follows where you look (yaw *and* pitch, so you climb or dive by looking up or down), plus strafe, lift (Space/Ctrl, R/Z, gamepad triggers, the touch slider or the new **up**/**dn** hold buttons, and the XR right stick's vertical axis), yaw and pitch. Pitch reaches ±83°, so you can look straight up or down a shaft. Dampening brakes to a hover that holds altitude.
+  - The hull still never pitches or flips. Gravity plating keeps the deck level, so walking around inside stays comfortable. It does **bank** into turns and strafes, by at most about 10° (0.18 rad). The interior and the pilot's eye are locked to the saucer frame and bank with it. There is no bank in XR or mid-fold.
+  - **Sites grow in all six directions and are huge.** Rooms attach above and below through floor and ceiling hatches, and shafts climb or drop many levels. Every kit has a minimum vertical span and a minimum number of levels. Exterior hull spines (ships), trusses (stations) and towers (the new **city** kit) make each site span well over 100 m on every axis. The three sites sit at different heights, 1.3–1.6 km apart.
+  - The helm radar is 3D: contacts hang on stalks above or below the disc. The HUD has an altitude tape and "UP/DN n m" cues. Sentries work in 3D: Watchers look along a hatch's axis or down a shaft from its top, cones use pitch, and Snatchers patrol vertical chutes.
+  - For performance, physics uses a uniform-grid broadphase. Rendering uses per-room chunks with cone culling, a far silhouette LOD beyond 1.1 km, and culling beyond 3.2 km in the fog.
 - All names in this doc (capabilities, Lua modules, folders) are proposals. Nothing in the repo constrains them yet.
 
 ---
@@ -200,7 +206,7 @@ A sector draws from 2–4 civs, and a civ can appear across neighbouring sectors
 
 ### 5.4 Ruin generation (kits + grammar)
 
-0. **Scale (v0.4):** derelicts are huge. Their **great halls** (about 56 × 24 × 64 m in the starship kit, joined by 34 × 16 m doors) take the whole Villa. A chain of great halls runs from the entrance to the Vault, and **ducts** (2.6 × 2.1 m openings into 3 × 3 m-class rooms, sometimes chambers behind) branch off them. Only the ducts need the Seat. Ruin cells use a 64 × 8 × 96 m grid.
+0. **Scale (v0.7, true 3D):** rooms attach on all six faces (side doors on the higher floor, floor and ceiling hatches, multi-level shafts), so a site is a 3D sprawl rather than a floor plan. Per-kit grids are 72 × 60 × 120 cells (starship), 80 × 72 × 110 (station) and 110 × 90 × 120 (city). Exterior solids add spines, trusses or towers. If 8 tries cannot meet the kit's minimum span and levels, a hand-placed three-level layout (hall → shaft → duct vault) is used. **(v0.4):** derelicts are huge. Their **great halls** (about 56 × 24 × 64 m in the starship kit, joined by 34 × 16 m doors) take the whole Villa. A chain of great halls runs from the entrance to the Vault, and **ducts** (2.6 × 2.1 m openings into 3 × 3 m-class rooms, sometimes chambers behind) branch off them. Only the ducts need the Seat. Ruin cells use a 64 × 8 × 96 m grid.
 1. **Kit:** a folder of modules (each one is a `module.lua` descriptor declaring a mesh recipe (§11.8), collision, and generated textures). Each module defines its cell footprint on a **4 m grid**, plus **sockets** (position, facing, class XL/L/M/S/F, and tags such as `door`, `breach`, `duct`). Kits belong to a site archetype (starship, station, city) and declare which shape languages they fit.
 2. **Mission graph (grammar):** a Lua graph grammar rewrites `Start → Hub → … → Vault` into a graph of rooms with **locks** and **keys**:
    - *Size lock*: the opening class is smaller than the incoming path, so you have to shrink. This is the signature lock.
@@ -357,7 +363,7 @@ All tools are items (Module or Tool category), so alien affixes and quirks apply
 
 ## 10. Controls
 
-General (v0.4): the camera is always the player's own eyes. On foot you walk the decks; at the helm it's a seated first-person view; in the Seat you're under its canopy. An optional third-person chase cam exists for flat screens only. The same move actions walk on foot and fly at the helm. **Use** (G / Return, gamepad X, touch Use button, XR left trigger) takes the helm, stands up, and later interacts. The saucer always stays level (no roll), which is good for comfort and essential for VR.
+General (v0.4): the camera is always the player's own eyes. On foot you walk the decks; at the helm it's a seated first-person view; in the Seat you're under its canopy. An optional third-person chase cam exists for flat screens only. The same move actions walk on foot and fly at the helm. **Use** (G / Return, gamepad X, touch Use button, XR left trigger) takes the helm, stands up, and later interacts. The deck always stays level (no hull pitch or flip), which is good for comfort and essential for VR. Since v0.7 the saucer flies in full 3D: forward thrust follows the look pitch, and it banks gently (at most about 10°) into turns on flat screens, never in XR.
 
 **Input architecture (MVP, required for co-op later):** devices map to **players** and players map to **actions**. Every connected device is *claimed* by a local player slot (P1–P4). In the MVP only P1 exists, but the claim screen and code path are real. Each sim tick, each player's actions are packed into one **command frame** (§14.1), and gameplay code only ever reads command frames, never devices. Bindings are stored per player profile.
 
@@ -366,7 +372,7 @@ General (v0.4): the camera is always the player's own eyes. On foot you walk the
 | Move / strafe | WASD | L-stick | Left virtual stick | L-stick (saucer-relative) | Grab the **throttle orb** on the console and push it |
 | Yaw | Mouse | R-stick X | Drag right half | R-stick X snap-turn 30° (or smooth) | Twist the throttle orb |
 | Look | Mouse | R-stick | Drag right half | Head | Head |
-| Up / down | Space / Ctrl | RT / LT | Vertical slider | R-stick Y | Lift or lower the throttle orb |
+| Up / down | Space / Ctrl (or R / Z) | RT / LT | Vertical slider, or the **up** / **dn** hold buttons (v0.7) | R-stick Y | Lift or lower the throttle orb |
 | Boost | Shift | L3 | Double-tap stick | L-stick click | Fist-squeeze the orb |
 | Shrink / grow | Q / E (or wheel) | LB / RB | − / + buttons | A / B, or grab the **size lever** | Grab the size lever and pull or push it to a detent |
 | Pick size directly | 1–2 (v0.4) | D-pad (hold) | Long-press opens a radial | Lever detents | Lever detents |
@@ -803,6 +809,12 @@ Compiler and determinism flags: no `-ffast-math`, `-ffp-contract=off`, `/fp:prec
 ## 16. Proposed OpenSpec capabilities & changes
 
 Format follows OpenSpec (`### Requirement:` + `#### Scenario:` with WHEN/THEN). Requirements and scenarios are written out in full for the **MVP** capabilities. The later ones are listed with their purpose only.
+
+**Changes in v0.7:**
+- **`saucer-flight-3d`:** six-axis flight that follows the look pitch, lift on every device, a capped bank with the interior locked to the saucer frame, and a 3D radar and altitude tape.
+- **`ruin-generation-3d`:** six-direction growth, hatches and shafts, per-kit minimum span and levels, exterior solids, the city kit, and layout known answers.
+- **`derelict-play-3d`:** collision on every axis with a broadphase, and 3D sentries and tools.
+- Recorded in the OpenSpec change `add-true-3d-flight`. The sim version is 5 and the save format is 2.
 
 **Changes in v0.6:**
 - **`trading`, `items-and-identification`:** the lab queue, unknown labels, the terminal with refills and repairs, saved on every transaction.

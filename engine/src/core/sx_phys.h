@@ -11,9 +11,21 @@ typedef struct sx_box {
   int used;
 } sx_box;
 
+/* Broadphase: a uniform grid of box ids (CSR layout), rebuilt lazily after
+ * boxes are added or the world is cleared. Results never depend on it: every
+ * candidate still gets the exact test and ties resolve by box id. */
 typedef struct sx_phys {
   sx_box *boxes;
   int count, cap;
+  int dirty;
+  double cell, org[3];
+  int dims[3];
+  int *cell_start; /* dims[0]*dims[1]*dims[2] + 1 */
+  int *cell_ids;
+  int cells_cap, ids_cap;
+  unsigned *stamp; /* per box: last query that tested it */
+  unsigned stamp_id;
+  int stamp_cap;
 } sx_phys;
 
 typedef struct sx_hit {
@@ -39,4 +51,6 @@ sx_hit sx_phys_raycast(const sx_phys *w, const double o[3], const double dir[3],
 /* Is target within the cone (half angle cos) and range of origin, unoccluded? */
 int sx_phys_cone_visible(const sx_phys *w, const double o[3], const double dir[3], double cos_half,
                          double range, const double target[3], unsigned mask);
+/* Broadphase cell size in use (after the last rebuild), for tests and stats. */
+double sx_phys_cell_size(sx_phys *w);
 #endif

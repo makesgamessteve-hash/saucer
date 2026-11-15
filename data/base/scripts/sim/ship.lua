@@ -17,6 +17,7 @@ function M.new(pos, yaw, size)
     vel = { 0, 0, 0 },
     yaw = yaw or 0,
     pitch = 0,
+    bank = 0,                                   -- true 3D: visual roll into turns (sim/flight.lua)
     size = size or 1,
     morph = false,
     t_left = 0,
@@ -93,6 +94,7 @@ function M.request(ship, to, blocked, eye, yaw)
   ship.pos = center
   ship.yaw = yaw
   ship.vel = { 0, 0, 0 }
+  ship.bank = 0
   return true
 end
 

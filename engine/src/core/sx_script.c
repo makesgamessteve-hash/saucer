@@ -1186,6 +1186,7 @@ static int l_v_camera(lua_State *L) {
   field_vec(L, 2, "pos", v->cam.pos, 3);
   v->cam.yaw = field_num(L, 2, "yaw", v->cam.yaw);
   v->cam.pitch = field_num(L, 2, "pitch", v->cam.pitch);
+  v->cam.roll = field_num(L, 2, "roll", 0.0f);
   /* fov is given in degrees (vertical) */
   v->cam.fov = field_num(L, 2, "fov", v->cam.fov * (float)(180.0 / SX_PI)) * (float)(SX_PI / 180.0);
   v->cam.znear = field_num(L, 2, "near", v->cam.znear);
@@ -1209,7 +1210,7 @@ static void read_tint(lua_State *L, int idx, float t[4]) {
   if (idx && lua_istable(L, idx)) field_vec(L, idx, "tint", t, 4);
 }
 
-/* view:mesh(id, {pos=, yaw=, scale= num|{x,y,z}, tex=, palette=, tint=, sky=, ghost=, unlit=}) */
+/* view:mesh(id, {pos=, yaw=, pitch=, roll=, scale= num|{x,y,z}, tex=, palette=, tint=, sky=, ghost=, unlit=}) */
 static int l_v_mesh(lua_State *L) {
   sx_viewport *v = check_view(L);
   sx_draw_mesh d;
@@ -1234,7 +1235,10 @@ static int l_v_mesh(lua_State *L) {
     if (lua_toboolean(L, -1)) d.flags |= SX_DRAW_UNLIT;
     lua_pop(L, 3);
   }
-  sx_mat4_model(d.model, pos, o ? field_num(L, o, "yaw", 0) : 0.0f, sc);
+  if (o && (field_num(L, o, "pitch", 0) != 0.0f || field_num(L, o, "roll", 0) != 0.0f))
+    sx_mat4_model_ypr(d.model, pos, field_num(L, o, "yaw", 0), field_num(L, o, "pitch", 0), field_num(L, o, "roll", 0), sc);
+  else
+    sx_mat4_model(d.model, pos, o ? field_num(L, o, "yaw", 0) : 0.0f, sc);
   sx_view_mesh(v, &d);
   return 0;
 }

@@ -23,6 +23,7 @@ static void add(sx_touch *t, const char *name, int ctl, float x, float y, float 
   wd->w = w;
   wd->h = h;
   wd->kind = kind;
+  wd->sign = 0;
 }
 
 void sx_touch_init(sx_touch *t, float aspect) {
@@ -33,6 +34,11 @@ void sx_touch_init(sx_touch *t, float aspect) {
   if (bw < 0.06f) bw = 0.06f;
   add(t, "stick", SX_TOUCH_STICK_X, 0.02f, 0.45f, 0.30f, 0.53f, 1);
   add(t, "lift", SX_TOUCH_LIFT, 0.93f, 0.25f, 0.06f, 0.50f, 2);
+  /* true 3D: hold UP / DN above and below the slider to climb or dive at full rate */
+  add(t, "up", SX_TOUCH_LIFT, 0.93f, 0.07f, 0.06f, 0.16f, 4);
+  t->widgets[t->nwidgets - 1].sign = 1.0f;
+  add(t, "dn", SX_TOUCH_LIFT, 0.93f, 0.77f, 0.06f, 0.16f, 4);
+  t->widgets[t->nwidgets - 1].sign = -1.0f;
   add(t, "shrink", SX_TOUCH_SHRINK, 0.93f - 2.2f * bw, 0.80f, bw, 0.16f, 0);
   add(t, "grow", SX_TOUCH_GROW, 0.93f - 1.1f * bw, 0.80f, bw, 0.16f, 0);
   add(t, "tractor", SX_TOUCH_TRACTOR, 0.93f - 3.3f * bw, 0.80f, bw, 0.16f, 0);
@@ -74,6 +80,8 @@ static void update_finger(sx_touch *t, int f) {
     t->values[SX_TOUCH_LIFT] = clampf(-((t->fingers[f].y - (w->y + w->h * 0.5f)) / (w->h * 0.5f)), -1, 1);
   } else if (w->kind == 0) {
     t->values[w->ctl] = 1.0f;
+  } else if (w->kind == 4) {
+    t->values[SX_TOUCH_LIFT] = w->sign;
   }
 }
 
@@ -108,7 +116,7 @@ void sx_touch_up(sx_touch *t, long long id) {
   if (wi >= 0) {
     const sx_touch_widget *w = &t->widgets[wi];
     if (w->kind == 1) t->values[SX_TOUCH_STICK_X] = t->values[SX_TOUCH_STICK_Y] = 0;
-    else if (w->kind == 2) t->values[SX_TOUCH_LIFT] = 0; /* auto-hover: release = hold altitude */
+    else if (w->kind == 2 || w->kind == 4) t->values[SX_TOUCH_LIFT] = 0; /* auto-hover: release = hold altitude */
     else if (w->kind == 0) t->values[w->ctl] = 0;
   }
   t->fingers[f] = t->fingers[--t->nfingers];

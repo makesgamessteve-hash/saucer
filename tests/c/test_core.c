@@ -167,6 +167,17 @@ TEST(touch_widgets) {
   sx_touch_up(&t, 1);
   sx_touch_apply(&t, &raw);
   CHECK(raw.touch[SX_TOUCH_LIFT] == 0);
+  /* UP and DN hold buttons climb and dive at full rate, release hovers */
+  sx_touch_down(&t, 3, 0.95f, 0.10f);
+  sx_touch_apply(&t, &raw);
+  CHECK(raw.touch[SX_TOUCH_LIFT] == 1.0f);
+  sx_touch_up(&t, 3);
+  sx_touch_down(&t, 4, 0.95f, 0.85f);
+  sx_touch_apply(&t, &raw);
+  CHECK(raw.touch[SX_TOUCH_LIFT] == -1.0f);
+  sx_touch_up(&t, 4);
+  sx_touch_apply(&t, &raw);
+  CHECK(raw.touch[SX_TOUCH_LIFT] == 0);
   /* look area accumulates drags into look_x/look_y */
   sx_touch_down(&t, 2, 0.6f, 0.3f);
   sx_touch_down(&t, 2, 0.6f, 0.3f); /* duplicate id ignored */

@@ -135,9 +135,14 @@ if(SAUCER_BUILD_TESTS)
   # milestone 3: identify + trade, a sentry encounter, the mystery chain (trade and mystery save and load)
   add_test(NAME game_trade COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-trade --quiet
            --seed 42 --script tests/game/trade.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
-  add_test(NAME game_sentries COMMAND ${HL} --seed 42 --script tests/game/sentries.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  add_test(NAME game_sentries COMMAND ${HL} --seed 42 --ticks 72000 --script tests/game/sentries.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_mystery COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-mystery --quiet
            --seed 42 --ticks 60000 --script tests/game/mystery.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  # true 3D flight: vertical flight and a multi-level derelict traversal
+  add_test(NAME game_vertical COMMAND ${HL} --seed 42 --script tests/game/vertical.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  add_test(NAME game_derelict3d COMMAND ${HL} --seed 42 --script tests/game/derelict3d.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  add_test(NAME game_derelict3d_seed7 COMMAND ${HL} --seed 7 --script tests/game/derelict3d.lua
+           WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_coop COMMAND ${HL} --seed 42 --local-players 2 --viewports 2 --script tests/game/coop.lua
            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_mods COMMAND ${HL} --seed 42 --mods-dir tests/fixtures/mods --script tests/game/mods.lua

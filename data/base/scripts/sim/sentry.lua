@@ -31,20 +31,28 @@ function M.layout(site, ruin, civ)
   for _, r in ipairs(ruin.rooms) do
     local mn, mx = ruinm.room_box(r, kit, site.pos)
     if r.class >= big and r.kind ~= "entrance" then
-      -- a ceiling turret at the far end of the hall, looking back at the door you come in by
+      -- a ceiling turret at the far end of the hall, looking back at the door you
+      -- come in by; in a vertical shaft it hangs at the top and looks down the shaft
       local door
       for _, d in ipairs(ruin.doors) do if d.b == r.id then door = d end end
+      local ax, sg = door and door.axis or 3, door and door.sign or 1
+      if ax == 2 then ax = 3 end -- entered through the floor or ceiling: sit at the +z end
       local c = { (mn[1] + mx[1]) / 2, mx[2] - kit.wall - 3.0, (mn[3] + mx[3]) / 2 }
       local tgt = { c[1], mn[2], c[3] }
       local pos = { c[1], c[2], c[3] }
-      local ax, sg = door and door.axis or 3, door and door.sign or 1
       local near = sg > 0 and mn[ax] or mx[ax]
       local far = sg > 0 and mx[ax] or mn[ax]
       tgt[ax] = near
-      pos[ax] = far - sg * (kit.wall + 6.0)
+      local pitch = -0.32
+      if r.kind == "shaft" then
+        pos[ax] = far - sg * (kit.wall + 4.0)
+        pitch = -1.15
+      else
+        pos[ax] = far - sg * (kit.wall + 6.0)
+      end
       local yaw = sm.atan2(tgt[1] - pos[1], tgt[3] - pos[3])
       out[#out + 1] = { id = #out + 1, kind = "watcher", site = site.id, room = r.id, pos = pos, yaw = yaw,
-                        pitch = -0.32, band = band }
+                        pitch = pitch, band = band }
     elseif r.class < big and r.kind == "duct" or (r.class < big and r.kind == "side" and ruin.rooms[r.parent]
         and ruin.rooms[r.parent].class >= big) then
       -- a Snatcher in the duct; its nest at the deepest small room of the branch
@@ -55,20 +63,24 @@ function M.layout(site, ruin, civ)
       local dmn, dmx = ruinm.room_box(deepest, kit, site.pos)
       local floor = mn[2] + kit.wall
       local cx, cz = (mn[1] + mx[1]) / 2, (mn[3] + mx[3]) / 2
-      local along = (mx[1] - mn[1]) > (mx[3] - mn[3]) and 1 or 3
-      local a, b = { cx, floor + 1.6, cz }, { cx, floor + 1.6, cz }
-      local half = ((along == 1) and (mx[1] - mn[1]) or (mx[3] - mn[3])) / 2 - 1.5
+      -- patrol along the duct's long axis (a vertical chute runs along y)
+      local len = { mx[1] - mn[1], mx[2] - mn[2], mx[3] - mn[3] }
+      local along = 1
+      for k = 2, 3 do if len[k] > len[along] then along = k end end
+      local cy = along == 2 and (mn[2] + mx[2]) / 2 or floor + 1.6
+      local a, b = { cx, cy, cz }, { cx, cy, cz }
+      local half = len[along] / 2 - 1.5
       a[along] = a[along] - half
       b[along] = b[along] + half
       local nest = { (dmn[1] + dmx[1]) / 2, dmn[2] + kit.wall + 0.6, (dmn[3] + dmx[3]) / 2 }
-      if deepest == r then nest = { b[1], floor + 0.6, b[3] } end
+      if deepest == r then nest = { b[1], along == 2 and b[2] - 0.6 or floor + 0.6, b[3] } end
       -- leashed to its duct branch: leave it and the Snatcher gives up
       local lo, hi = {}, {}
       for k = 1, 3 do
         lo[k] = math.min(mn[k], dmn[k]) - 2
         hi[k] = math.max(mx[k], dmx[k]) + 2
       end
-      out[#out + 1] = { id = #out + 1, kind = "snatcher", site = site.id, room = r.id, pos = { cx, floor + 1.6, cz },
+      out[#out + 1] = { id = #out + 1, kind = "snatcher", site = site.id, room = r.id, pos = { cx, cy, cz },
                         patrol = { a, b }, nest = nest, nest_room = deepest.id, leash = { lo, hi } }
     end
   end
@@ -79,7 +91,7 @@ function M.new_state(defs)
   local out = {}
   for i, d in ipairs(defs) do
     if d.kind == "watcher" then
-      out[i] = { st = "dormant", t = 0, lost = 0, fire = 0, target = 0, yaw = d.yaw }
+      out[i] = { st = "dormant", t = 0, lost = 0, fire = 0, target = 0, yaw = d.yaw, pitch = d.pitch }
     else
       out[i] = { st = "dormant", t = 0, lost = 0, target = 0, pos = vec.copy(d.pos), wp = 2, carry = false }
     end
@@ -100,7 +112,7 @@ function M.watcher_sees(def, dyn, p, tick, t)
   local cls = configs.get(ship.size).class
   if cls < def.band[1] or cls > def.band[2] then return false end
   local yaw = dyn.yaw
-  local dir = dir_of(yaw, def.pitch)
+  local dir = dir_of(yaw, dyn.pitch or def.pitch)
   local r = configs.get(ship.size).diameter / 2
   return saucer.physics.cone_visible(def.pos, dir, sm.cos(t.watcher.half_angle), t.watcher.range + r, ship.pos, 1)
 end
@@ -118,10 +130,13 @@ local function step_watcher(state, def, dyn, dt, ctx, t)
   end
   local target = dyn.target > 0 and state.players[dyn.target] or nil
   if dyn.st == "locked" and target then
+    -- true 3D: a locked turret tracks its target in yaw and pitch
     local d = vec.sub(target.ship.pos, def.pos)
     dyn.yaw = sm.atan2(d[1], d[3])
+    dyn.pitch = sm.atan2(d[2], sm.sqrt(d[1] * d[1] + d[3] * d[3]))
   else
     dyn.yaw = sweep_yaw(def, state.tick, t)
+    dyn.pitch = def.pitch
   end
   local seen
   if target and M.watcher_sees(def, dyn, target, state.tick, t) then

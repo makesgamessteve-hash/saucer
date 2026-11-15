@@ -284,6 +284,32 @@ void sx_mat4_model(float m[16], const float pos[3], float yaw, const float scale
   m[14] = pos[2];
 }
 
+void sx_mat4_model_ypr(float m[16], const float pos[3], float yaw, float pitch, float roll, const float scale[3]) {
+  float cy = (float)sx_cos(yaw), sy = (float)sx_sin(yaw);
+  float cp = (float)sx_cos(pitch), sp = (float)sx_sin(pitch);
+  float cr = (float)sx_cos(roll), sr = (float)sx_sin(roll);
+  float r[9]; /* row-major rotation R = Ry * Rx * Rz */
+  int i, j;
+  {
+    /* Rx(pitch) lifts +z toward +y; Rz(roll) turns +x toward +y (the right side, -x, dips) */
+    float rz[9] = {cr, -sr, 0, sr, cr, 0, 0, 0, 1};
+    float rx[9] = {1, 0, 0, 0, cp, sp, 0, -sp, cp};
+    float ry[9] = {cy, 0, sy, 0, 1, 0, -sy, 0, cy};
+    float t[9];
+    for (i = 0; i < 3; i++)
+      for (j = 0; j < 3; j++) t[i * 3 + j] = rx[i * 3 + 0] * rz[0 * 3 + j] + rx[i * 3 + 1] * rz[1 * 3 + j] + rx[i * 3 + 2] * rz[2 * 3 + j];
+    for (i = 0; i < 3; i++)
+      for (j = 0; j < 3; j++) r[i * 3 + j] = ry[i * 3 + 0] * t[0 * 3 + j] + ry[i * 3 + 1] * t[1 * 3 + j] + ry[i * 3 + 2] * t[2 * 3 + j];
+  }
+  sx_mat4_identity(m);
+  /* column-major: column j is the image of local axis j */
+  for (j = 0; j < 3; j++)
+    for (i = 0; i < 3; i++) m[j * 4 + i] = r[i * 3 + j] * scale[j];
+  m[12] = pos[0];
+  m[13] = pos[1];
+  m[14] = pos[2];
+}
+
 void sx_camera_forward(const sx_camera *c, float f[3]) {
   float cp = (float)sx_cos(c->pitch);
   f[0] = (float)sx_sin(c->yaw) * cp;
@@ -324,6 +350,18 @@ void sx_camera_view(const sx_camera *c, float m[16]) {
   up[0] = rgt[1] * f[2] - rgt[2] * f[1];
   up[1] = rgt[2] * f[0] - rgt[0] * f[2];
   up[2] = rgt[0] * f[1] - rgt[1] * f[0];
+  if (c->roll != 0.0f) {
+    /* bank about the view axis: right' = right cos - up sin, up' = up cos + right sin */
+    float cr = (float)sx_cos(c->roll), sr = (float)sx_sin(c->roll), r2[3], u2[3];
+    for (i = 0; i < 3; i++) {
+      r2[i] = rgt[i] * cr - up[i] * sr;
+      u2[i] = up[i] * cr + rgt[i] * sr;
+    }
+    for (i = 0; i < 3; i++) {
+      rgt[i] = r2[i];
+      up[i] = u2[i];
+    }
+  }
   sx_mat4_identity(m);
   for (i = 0; i < 3; i++) {
     m[i * 4 + 0] = rgt[i];

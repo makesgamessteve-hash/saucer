@@ -42,11 +42,12 @@ function M.draw_sentries(v, A, state, p)
         local show = scanned and p.site == site
         if def.kind == "watcher" then
           v:mesh(A.watcher, { pos = def.pos, yaw = dyn.yaw })
-          local f = sentry.dir_of(dyn.yaw, def.pitch)
+          local pitch = dyn.pitch or def.pitch
+          local f = sentry.dir_of(dyn.yaw, pitch)
           v:billboard(A.tex.beam, vec.add(def.pos, vec.scale(f, 1.9)), 1.0, { palette = A.pal.base, tint = tint })
           if show then
             for _, da in ipairs({ -t.watcher.half_angle, 0, t.watcher.half_angle }) do
-              local d = sentry.dir_of(dyn.yaw + da, def.pitch)
+              local d = sentry.dir_of(dyn.yaw + da, pitch)
               for k = 1, 12 do
                 v:billboard(A.tex.beam, vec.add(def.pos, vec.scale(d, k * t.watcher.range / 12)), 0.7,
                   { palette = A.pal.base, tint = { tint[1], tint[2], tint[3], 0.45 } })
@@ -80,10 +81,30 @@ function M.camera(p, xr)
     local f = vec.fwd(ship.yaw)
     local back = R * 2.2 + 6
     return { pos = { ship.pos[1] - f[1] * back, ship.pos[2] + H * 1.2 + 3, ship.pos[3] - f[3] * back },
-             yaw = ship.yaw, pitch = ship.pitch - 0.22, fov = 70, near = 0.1 }
+             yaw = ship.yaw, pitch = ship.pitch - 0.22, fov = 70, near = 0.1, far = 4000 }
   end
   local eye, yaw, pitch = game.viewpoint(p)
-  return { pos = eye, yaw = yaw, pitch = pitch, fov = 75, near = 0.05 }
+  local roll = M.bank_of(ship, xr)
+  if roll ~= 0 then
+    -- the interior is locked to the saucer frame: the eye leans with the bank
+    local rel = avatar.rot(-ship.yaw, vec.sub(eye, ship.pos))
+    eye = vec.add(ship.pos, M.rot3(ship.yaw, roll, rel))
+  end
+  return { pos = eye, yaw = yaw, pitch = pitch, roll = roll, fov = 75, near = 0.05, far = 4000 }
+end
+
+-- the bank (roll) a saucer is drawn with. Never in XR (the headset owns the
+-- horizon) and never mid-fold (the pose there is about the pilot's eye).
+function M.bank_of(ship, xr)
+  if xr or ship.morph then return 0 end
+  return ship.bank or 0
+end
+
+-- hull-local -> world rotation: roll about the hull's forward axis, then yaw
+function M.rot3(yaw, roll, v)
+  if roll == 0 then return avatar.rot(yaw, v) end
+  local c, s = sm.cos(roll), sm.sin(roll)
+  return avatar.rot(yaw, { v[1] * c - v[2] * s, v[1] * s + v[2] * c, v[3] })
 end
 
 -- Where to draw a saucer this frame. A fold to the Seat happens in two
@@ -100,9 +121,10 @@ local function hull_t(ship, t)
 end
 M.hull_t = hull_t
 
-function M.pose(ship)
+function M.pose(ship, xr)
   if not ship.morph then
-    return { size = ship.size, pos = ship.pos, yaw = ship.yaw, scale = 1, fold = 1, ipos = ship.pos, iscale = 1, ht = 1 }
+    return { size = ship.size, pos = ship.pos, yaw = ship.yaw, roll = M.bank_of(ship, xr), scale = 1, fold = 1,
+             ipos = ship.pos, iscale = 1, ht = 1 }
   end
   local m = ship.morph
   local t = hull_t(ship, shipm.progress(ship))
@@ -117,7 +139,7 @@ function M.pose(ship)
   local e = m.eye
   local rel = avatar.rot(yaw - base_yaw, vec.sub(base, e))
   return {
-    size = size, yaw = yaw, scale = k, fold = f, ht = t,
+    size = size, yaw = yaw, roll = 0, scale = k, fold = f, ht = t,
     pos = vec.add(e, vec.scale(rel, k)),
     ipos = vec.add(e, vec.scale(rel, k * f)), iscale = k * f,
   }
@@ -137,24 +159,40 @@ end
 
 -- hull-local point -> world, for a drawn pose
 local function at(d, lp)
-  local w = avatar.rot(d.yaw, { lp[1] * d.scale, lp[2] * d.scale, lp[3] * d.scale })
+  local w = M.rot3(d.yaw, d.roll or 0, { lp[1] * d.scale, lp[2] * d.scale, lp[3] * d.scale })
   return { d.pos[1] + w[1], d.pos[2] + w[2], d.pos[3] + w[3] }
 end
 M.at = at
 
 -- a glowing block on a console: hull-local centre and size
 local function blip(v, A, d, lp, size, color)
-  v:mesh(A.unit, { pos = at(d, lp), yaw = d.yaw, scale = { size[1] * d.scale, size[2] * d.scale, size[3] * d.scale },
+  v:mesh(A.unit, { pos = at(d, lp), yaw = d.yaw, roll = d.roll, scale = { size[1] * d.scale, size[2] * d.scale, size[3] * d.scale },
                    tint = color })
 end
 M.blip = blip
 
-M.RADAR_RANGE = 1200
+M.RADAR_RANGE = 2400
+M.RADAR_RADIUS = 0.42   -- disc radius on the desk (m)
+M.RADAR_LIFT = 0.20     -- the disc floats this high over the desk
+M.RADAR_HEIGHT = 0.20   -- stalks reach at most this far above/below the disc
+
+-- a contact's spot on the 3D radar (desk-local offsets from the disc centre):
+-- x/z by bearing and range, y by elevation, exaggerated x4 so a few hundred
+-- meters above or below you still reads at a glance
+function M.radar_point(ship, pos)
+  local rel = avatar.rot(-ship.yaw, vec.sub(pos, ship.pos))
+  local k = M.RADAR_RADIUS / M.RADAR_RANGE
+  local x, z = rel[1] * k, rel[3] * k
+  local r = sm.sqrt(x * x + z * z)
+  if r > M.RADAR_RADIUS then x, z = x * M.RADAR_RADIUS / r, z * M.RADAR_RADIUS / r end
+  local y = vec.clamp(rel[2] * k * 4, -M.RADAR_HEIGHT, M.RADAR_HEIGHT)
+  return { x, y, z }
+end
 -- radar targets for a player: { pos, color }
 function M.radar_targets(state, p)
   local out = {}
   for _, s in ipairs(state.sector.sites) do
-    out[#out + 1] = { pos = s.pos, color = s.id == p.site and { 1, 0.75, 0.3, 1 } or { 0.9, 0.95, 1, 1 } }
+    out[#out + 1] = { pos = hud.site_center(state, s), color = s.id == p.site and { 1, 0.75, 0.3, 1 } or { 0.9, 0.95, 1, 1 } }
   end
   out[#out + 1] = { pos = state.sector.trader.pos, color = { 0.35, 1, 0.45, 1 } }
   for _, t in ipairs(M.extra_radar) do
@@ -174,7 +212,10 @@ M.extra_radar[#M.extra_radar + 1] = function(state, p)
   if m then
     for _, i in ipairs(mystery.resonant_sites(m)) do
       local s = state.sector.sites[i]
-      if s then out[#out + 1] = { pos = { s.pos[1], s.pos[2] + 30, s.pos[3] }, color = VIOLET } end
+      if s then
+        local c = hud.site_center(state, s)
+        out[#out + 1] = { pos = { c[1], c[2] + 30, c[3] }, color = VIOLET }
+      end
     end
     if m.vault_revealed and state.vault then out[#out + 1] = { pos = state.vault.pos, color = VIOLET } end
   end
@@ -209,13 +250,22 @@ function M.console(v, A, state, o, d)
   local cx, cz = (desk.box[1] + desk.box[3]) / 2, (desk.box[2] + desk.box[4]) / 2
   local top = fl + desk.h + 0.02
   local n = 0
-  blip(v, A, d, { cx, top, cz }, { 0.03, 0.02, 0.03 }, { 1, 1, 1, 1 })
+  -- true 3D radar: a holographic disc floating over the desk. Each contact
+  -- sits on a stalk above or below the disc by its (exaggerated) elevation.
+  local base = top + M.RADAR_LIFT
+  blip(v, A, d, { cx, base, cz }, { 0.03, 0.02, 0.03 }, { 1, 1, 1, 1 })
+  for k = 0, 15 do
+    local a = k * sm.tau / 16
+    blip(v, A, d, { cx + sm.sin(a) * (M.RADAR_RADIUS + 0.01), base, cz + sm.cos(a) * (M.RADAR_RADIUS + 0.01) }, { 0.012, 0.004, 0.012 }, { 0.3, 0.6, 0.8, 1 })
+  end
   for _, tg in ipairs(M.radar_targets(state, o)) do
-    local rel = avatar.rot(-ship.yaw, vec.sub(tg.pos, ship.pos))
-    local x, z = rel[1] / M.RADAR_RANGE * 0.22, rel[3] / M.RADAR_RANGE * 0.22
-    local r = sm.sqrt(x * x + z * z)
-    if r > 0.22 then x, z = x * 0.22 / r, z * 0.22 / r end
-    blip(v, A, d, { cx + x, top + 0.01, cz + z }, { 0.035, 0.025, 0.035 }, tg.color)
+    local q = M.radar_point(ship, tg.pos)
+    blip(v, A, d, { cx + q[1], base + q[2], cz + q[3] }, { 0.07, 0.05, 0.07 }, tg.color)
+    local h = math.abs(q[2])
+    if h > 0.004 then
+      blip(v, A, d, { cx + q[1], base + q[2] / 2, cz + q[3] }, { 0.016, h, 0.016 },
+        { tg.color[1] * 0.6, tg.color[2] * 0.6, tg.color[3] * 0.6, 1 })
+    end
     n = n + 1
   end
   local function wing_face(w)
@@ -268,11 +318,11 @@ function M.rooms(v, A, o, d, state)
     local m = A.groups[g.id]
     if a < 1 and m then
       local lp, sc = fold.transform(g, a, { eye[1], g.anchor[2], eye[3] })
-      local opts = { pos = at(d, lp), yaw = d.yaw, scale = { sc[1] * d.scale, sc[2] * d.scale, sc[3] * d.scale } }
+      local opts = { pos = at(d, lp), yaw = d.yaw, roll = d.roll, scale = { sc[1] * d.scale, sc[2] * d.scale, sc[3] * d.scale } }
       v:mesh(m, opts)
       if a > 0 then
         -- fold-space shimmer around a room while it packs
-        v:mesh(m, { pos = opts.pos, yaw = d.yaw, scale = { opts.scale[1] * 1.04, opts.scale[2] * 1.04 + 0.02,
+        v:mesh(m, { pos = opts.pos, yaw = d.yaw, roll = d.roll, scale = { opts.scale[1] * 1.04, opts.scale[2] * 1.04 + 0.02,
                     opts.scale[3] * 1.04 }, ghost = true, tint = { 0.4, 1, 0.9, 0.6 } })
       end
       drawn = drawn + 1
@@ -284,33 +334,83 @@ function M.rooms(v, A, o, d, state)
       local b = door.box
       local w = b[3] - b[1]
       local side = (b[1] + b[3]) > 0 and 1 or -1
-      if A.doors[i] then v:mesh(A.doors[i], { pos = at(d, { open * w * side * 0.95, 0, 0 }), yaw = d.yaw, scale = d.scale }) end
+      if A.doors[i] then v:mesh(A.doors[i], { pos = at(d, { open * w * side * 0.95, 0, 0 }), yaw = d.yaw, roll = d.roll,
+                                     scale = d.scale }) end
     end
     if state then M.console(v, A, state, o, d) end
   end
   return drawn
 end
 
-local function draw_saucer(v, A, o, own_eyes, state)
-  local d = M.pose(o.ship)
+local function draw_saucer(v, A, o, own_eyes, state, xr)
+  local d = M.pose(o.ship, xr)
   local c = configs.get(d.size)
   local m = A.saucer[d.size]
-  v:mesh(m.hull, { pos = d.pos, yaw = d.yaw, scale = d.scale, tex = A.tex.hull, palette = A.pal.base })
+  v:mesh(m.hull, { pos = d.pos, yaw = d.yaw, roll = d.roll, scale = d.scale, tex = A.tex.hull, palette = A.pal.base })
   if c.interior then
     M.rooms(v, A, o, d, state)
-    v:mesh(A.glass, { pos = d.pos, yaw = d.yaw, scale = d.scale, ghost = true, tint = { 0.55, 0.8, 1, 0.3 } })
+    v:mesh(A.glass, { pos = d.pos, yaw = d.yaw, roll = d.roll, scale = d.scale, ghost = true, tint = { 0.55, 0.8, 1, 0.3 } })
     if o.mode == "walk" and not own_eyes and not o.ship.morph then
       local L = avatar.layout()
-      local w = vec.add(o.ship.pos, avatar.rot(o.ship.yaw, o.body.pos))
+      local w = at(d, o.body.pos)
       v:mesh(A.person, { pos = w, yaw = o.ship.yaw + o.body.yaw })
     end
   else
-    v:mesh(m.dome, { pos = d.pos, yaw = d.yaw, scale = d.scale, ghost = true, tint = { 0.55, 0.8, 1, 0.3 } })
+    v:mesh(m.dome, { pos = d.pos, yaw = d.yaw, roll = d.roll, scale = d.scale, ghost = true, tint = { 0.55, 0.8, 1, 0.3 } })
   end
   if o.ghost > 0 and o.ghost_size then
     v:mesh(A.saucer[o.ghost_size].hull, { pos = o.ghost_pos or o.ship.pos, yaw = o.ship.yaw, ghost = true,
                                           tint = { 1, 0.2, 0.2, 0.5 } })
   end
+end
+
+M.FOG = 0.0009
+M.LOD_DIST = 1100     -- beyond this a site is drawn as its coarse silhouette
+M.CULL_DIST = 3200    -- beyond this (fog) nothing of a site is drawn
+M.VIEW_HALF = 1.15    -- radians: half of the widest view angle plus slack
+M.stats = { chunks = 0, culled = 0, lod = 0 }
+
+-- is a sphere (centre c, radius r) possibly visible from camera cam?
+function M.visible(cam, c, r, xr)
+  local d = vec.sub(c, cam.pos)
+  local dist = vec.len(d)
+  if dist - r > M.CULL_DIST then return false end
+  if xr or dist <= r then return true end
+  local f = vec.aim(cam.yaw, cam.pitch)
+  local cosang = vec.dot(d, f) / dist
+  local slack = sm.atan2(r, sm.sqrt(dist * dist - r * r))
+  return cosang >= sm.cos(math.min(3.14159, M.VIEW_HALF + slack))
+end
+
+function M.draw_ruins(v, A, state, cam, xr)
+  local st = { chunks = 0, culled = 0, lod = 0 }
+  for i, site in ipairs(state.sector.sites) do
+    local r = game.ruin(i)
+    if r then
+      local set = assets.ruin_chunks(r, site.pos)
+      local lod = set.lod
+      local far = vec.dist(lod.center, cam.pos) - lod.radius > M.LOD_DIST
+      if far then
+        if M.visible(cam, lod.center, lod.radius, xr) then
+          v:mesh(lod.mesh, { tex = A.tex.hull, palette = A.pal.base })
+          st.lod = st.lod + 1
+        else
+          st.culled = st.culled + #set.chunks
+        end
+      else
+        for _, ch in ipairs(set.chunks) do
+          if M.visible(cam, ch.center, ch.radius, xr) then
+            v:mesh(ch.mesh, { tex = A.tex.hull, palette = A.pal.base })
+            st.chunks = st.chunks + 1
+          else
+            st.culled = st.culled + 1
+          end
+        end
+      end
+    end
+  end
+  M.stats = st
+  return st
 end
 
 function M.render(v, state, alpha)
@@ -319,19 +419,16 @@ function M.render(v, state, alpha)
   local A = assets.init()
   local cam = M.camera(p, v.xr)
   v:camera(cam)
-  v:fog({ color = { 0.02, 0.02, 0.06 }, density = 0.0012, clear = { 0.0, 0.0, 0.025 }, light = { 0.35, 0.8, 0.45 },
-          ambient = 0.42 })
+  v:fog({ color = { 0.02, 0.02, 0.06 }, density = M.FOG, clear = { 0.0, 0.0, 0.025 }, light = { 0.35, 0.8, 0.45 },
+          ambient = 0.55 })
   v:mesh(A.stars, { pos = cam.pos, sky = true })
   -- distant nebula sprites
   v:billboard(A.tex.nebula, { cam.pos[1] + 700, cam.pos[2] + 160, cam.pos[3] + 520 }, 900,
               { palette = A.pal.base, tint = { 0.8, 0.7, 1, 0.9 } })
   v:billboard(A.tex.nebula, { cam.pos[1] - 820, cam.pos[2] - 120, cam.pos[3] - 300 }, 700,
               { palette = A.pal.base, tint = { 1, 0.6, 0.5, 0.8 } })
-  -- derelicts
-  for i, site in ipairs(state.sector.sites) do
-    local r = game.ruin(i)
-    if r then v:mesh(assets.ruin_mesh(r, site.pos), { tex = A.tex.hull, palette = A.pal.base }) end
-  end
+  -- derelicts, in chunks: culled against the view, far sites as one silhouette
+  M.draw_ruins(v, A, state, cam, v.xr)
   v:mesh(A.station, { pos = state.sector.trader.pos, yaw = state.tick * 0.002 })
   M.draw_sentries(v, A, state, p)
   -- this player's loot instances, Echoes, nests, caches and the vault's Curio
@@ -350,7 +447,7 @@ function M.render(v, state, alpha)
   end
   -- saucers (and, through their domes, the people in them)
   for j, o in ipairs(state.players) do
-    draw_saucer(v, A, o, j == v.player and (p.cam ~= "chase" or v.xr), state)
+    draw_saucer(v, A, o, j == v.player and (p.cam ~= "chase" or v.xr), state, v.xr)
   end
   -- tractor beam: a dotted line of sprites from just below the eyes
   local target

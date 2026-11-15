@@ -52,7 +52,9 @@ local first = ap.route(ruin, origin, wdef.room)[1]
 T.assert(ap.travel(T, 1, get, first.pos, 4, 6000), "flew to derelict 2")
 T.press(1, "scan")
 T.wait(1)
-T.assert(said("Scan: site 2, danger 2, 3 Watchers, 1 Snatcher"), "the scanner reads the site")
+local nw, ns = require("sim.sentry").summary(defs)
+T.assert(nw >= 2, "a huge 3D station has several Watchers (" .. nw .. ")")
+T.assert(said(string.format("Scan: site 2, danger 2, %d Watchers, %d Snatcher", nw, ns)), "the scanner reads the site")
 T.assert(get().scan_until > T.state().tick, "sentries revealed for 10 s")
 
 -- the Villa in the Watcher's hall

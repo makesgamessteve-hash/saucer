@@ -30,6 +30,7 @@ typedef struct sx_rmesh {
 typedef struct sx_camera {
   float pos[3];
   float yaw, pitch; /* radians; yaw 0 looks toward +z */
+  float roll;       /* radians about the view axis; > 0 banks right (ignored with XR matrices) */
   float fov;        /* vertical, radians */
   float znear, zfar;
   int has_matrices; /* XR: explicit view/proj */
@@ -124,6 +125,8 @@ void sx_mat4_identity(float m[16]);
 void sx_mat4_mul(float out[16], const float a[16], const float b[16]);
 void sx_mat4_perspective(float m[16], float fovy, float aspect, float zn, float zf);
 void sx_mat4_model(float m[16], const float pos[3], float yaw, const float scale[3]);
+/* Ry(yaw) * Rx(pitch) * Rz(roll) * S: pitch > 0 tips the nose (+z) up, roll > 0 dips the right side (-x). */
+void sx_mat4_model_ypr(float m[16], const float pos[3], float yaw, float pitch, float roll, const float scale[3]);
 void sx_camera_view(const sx_camera *c, float m[16]);
 void sx_camera_forward(const sx_camera *c, float f[3]);
 

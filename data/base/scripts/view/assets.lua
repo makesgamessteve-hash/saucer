@@ -59,53 +59,237 @@ function M.init()
   return cache
 end
 
--- one mesh per generated derelict (keyed by its layout hash)
+-- True 3D derelicts are drawn in chunks (one per room, one per exterior
+-- solid) so the renderer can cull what is behind the camera or outside the
+-- view, plus one coarse silhouette mesh per site for when it is far away
+-- (render.lua picks). All keyed by the layout hash; nothing here is sim state.
+local GLOW, RIB = { 0.4, 1.0, 0.8 }, { 0.42, 0.44, 0.5 }
+
+local function overlaps(a0, a1, b0, b1, pad) return a0 < b1 + (pad or 0) and a1 > b0 - (pad or 0) end
+
+-- is there a room sitting right on top of r (no antennas poking into it)?
+local function covered(ruin, r)
+  for _, q in ipairs(ruin.rooms) do
+    if q.cell[2] == r.cell[2] + r.size[2] and overlaps(q.cell[1], q.cell[1] + q.size[1], r.cell[1], r.cell[1] + r.size[1])
+        and overlaps(q.cell[3], q.cell[3] + q.size[3], r.cell[3], r.cell[3] + r.size[3]) then
+      return true
+    end
+  end
+  return false
+end
+
+-- decoration for one room: light strips, hall ribs, shaft rings and level
+-- markers, exterior greebles. -> list of mesh parts
+function M.room_decor(ruin, r, k, origin)
+  local parts = {}
+  local function box(mn, mx, color, extra)
+    local p = { kind = "box", min = mn, max = mx, color = color, uv = 0.5 }
+    if extra then p.emissive = 1 end
+    parts[#parts + 1] = p
+  end
+  local mn, mx = ruinm.room_box(r, k, origin)
+  local t = k.wall
+  local cx, cz = (mn[1] + mx[1]) / 2, (mn[3] + mx[3]) / 2
+  local hole = {}
+  for _, f in ipairs(ruinm.FACES) do
+    hole[ruinm.face_name(f[1], f[2])] = ruinm.face_holes(r, ruin.doors, ruin.rooms, k, origin, f[1], f[2])
+  end
+  local hatch = #hole["+y"] > 0
+  local function clear_of(list, u0, u1, v0, v1)
+    for _, h in ipairs(list) do
+      if overlaps(u0, u1, h[1], h[2], 1) and overlaps(v0, v1, h[3], h[4], 1) then return false end
+    end
+    return true
+  end
+  if not hatch then
+    -- ceiling light strip
+    box({ cx - 0.3, mx[2] - t - 0.12, mn[3] + 1 }, { cx + 0.3, mx[2] - t, mx[3] - 1 }, GLOW, true)
+  end
+  if r.kind == "shaft" then
+    -- rings every 12 m up the shaft with glowing level markers: reads well looking up or down
+    local y = mn[2] + 8
+    while y < mx[2] - 4 do
+      for _, f in ipairs({ { 1, -1 }, { 1, 1 }, { 3, -1 }, { 3, 1 } }) do
+        local axis, sign = f[1], f[2]
+        local l = ruinm.lateral(axis)
+        local name = ruinm.face_name(axis, sign)
+        if clear_of(hole[name], mn[l], mx[l], y - 0.6, y + 0.6) then
+          local bmn, bmx = {}, {}
+          local a0 = sign < 0 and mn[axis] + t or mx[axis] - t - 1.0
+          bmn[axis], bmx[axis] = a0, a0 + 1.0
+          bmn[l], bmx[l] = mn[l] + t, mx[l] - t
+          bmn[2], bmx[2] = y - 0.6, y + 0.6
+          box(bmn, bmx, RIB)
+          local gmn, gmx = { bmn[1], bmn[2], bmn[3] }, { bmx[1], bmx[2], bmx[3] }
+          gmn[2], gmx[2] = y + 0.6, y + 0.85
+          local mid = (mn[l] + mx[l]) / 2
+          gmn[l], gmx[l] = mid - 3, mid + 3
+          box(gmn, gmx, { 1.0, 0.7, 0.3 }, true)
+        end
+      end
+      y = y + 12
+    end
+  elseif r.class >= (k.big or 4) then
+    -- great halls: structural ribs down the walls and across the ceiling, glow strips
+    local z = mn[3] + 6
+    while z < mx[3] - 4 do
+      if not hatch or clear_of(hole["+y"], mn[1], mx[1], z - 0.6, z + 0.6) then
+        box({ mn[1] + t, mx[2] - t - 1.2, z - 0.6 }, { mx[1] - t, mx[2] - t, z + 0.6 }, RIB)
+      end
+      for _, side in ipairs({ -1, 1 }) do
+        if clear_of(hole[side < 0 and "-x" or "+x"], z - 0.6, z + 0.6, mn[2], mx[2]) then
+          local x0 = side < 0 and mn[1] + t or mx[1] - t - 1.2
+          box({ x0, mn[2] + t, z - 0.6 }, { x0 + 1.2, mx[2] - t, z + 0.6 }, RIB)
+          box({ x0 + (side < 0 and 1.2 or -0.1), mn[2] + 6, z - 0.15 }, { x0 + (side < 0 and 1.3 or 0), mn[2] + 14, z + 0.15 },
+            GLOW, true)
+        end
+      end
+      z = z + 8
+    end
+  end
+  -- exterior running lights: window rows on blank outer walls and corner
+  -- beacons, so a derelict reads from above, below and far away
+  local win = k.window_color or { 0.55, 0.9, 1.0 }
+  for _, f in ipairs({ { 1, -1 }, { 1, 1 }, { 3, -1 }, { 3, 1 } }) do
+    local axis, sign = f[1], f[2]
+    local l = ruinm.lateral(axis)
+    local name = ruinm.face_name(axis, sign)
+    if #hole[name] == 0 and (r.class >= (k.big or 4)) then
+      local a0 = sign < 0 and mn[axis] - 0.25 or mx[axis]
+      local rows = {}
+      if r.kind == "shaft" then
+        local y = mn[2] + 6
+        while y < mx[2] - 4 do rows[#rows + 1] = y y = y + 8 end
+      else
+        rows = { mn[2] + (mx[2] - mn[2]) * 0.62 }
+      end
+      for _, y in ipairs(rows) do
+        local u = mn[l] + 4
+        while u < mx[l] - 4 do
+          local bmn, bmx = {}, {}
+          bmn[axis], bmx[axis] = a0, a0 + 0.25
+          bmn[l], bmx[l] = u, u + 2.2
+          bmn[2], bmx[2] = y, y + 1.1
+          box(bmn, bmx, win, true)
+          u = u + (r.kind == "shaft" and 14 or 6)
+        end
+      end
+    end
+  end
+  -- belly lights: strips under the floor of big rooms (so the underside reads when you fly below)
+  if r.class >= (k.big or 4) and #hole["-y"] == 0 then
+    local z = mn[3] + 8
+    while z < mx[3] - 6 do
+      box({ mn[1] + 4, mn[2] - 0.3, z - 0.4 }, { mx[1] - 4, mn[2], z + 0.4 }, win, true)
+      z = z + 16
+    end
+  end
+  for _, cx0 in ipairs({ mn[1], mx[1] }) do
+    for _, cz0 in ipairs({ mn[3], mx[3] }) do
+      box({ cx0 - 0.6, mn[2] - 0.6, cz0 - 0.6 }, { cx0 + 0.6, mn[2] + 0.6, cz0 + 0.6 }, { 1, 0.3, 0.25 }, true)
+      box({ cx0 - 0.5, mx[2] - 0.5, cz0 - 0.5 }, { cx0 + 0.5, mx[2] + 0.5, cz0 + 0.5 }, { 1, 1, 0.9 }, true)
+    end
+  end
+  if not covered(ruin, r) then
+    local g = kit.recipe("derelict_greeble", { w = mx[1] - mn[1], d = mx[3] - mn[3], top = mx[2] - mn[2] },
+                         saucer.seed_child(ruin.seed, "greeble", r.id))
+    for _, p in ipairs(kit.transform(g.parts, { pos = { cx, mn[2], cz } })) do parts[#parts + 1] = p end
+  end
+  return parts
+end
+
+-- exterior solid: plain block plus lit window bands (towers) or tip beacons
+function M.solid_parts(s, k)
+  local mn, mx = s[1], s[2]
+  local parts = { { kind = "box", min = mn, max = mx, color = k.solid_color or k.color, uv = 0.25 } }
+  if s.kind == "tower" then
+    -- lit floors every 6 m, a dark gap every fourth floor, and a beacon on top
+    local win = k.window_color or { 1.0, 0.85, 0.5 }
+    local y, n = mn[2] + 3, 0
+    while y < mx[2] - 2 do
+      n = n + 1
+      if n % 4 ~= 0 then
+        parts[#parts + 1] = { kind = "box", min = { mn[1] - 0.15, y, mn[3] - 0.15 }, max = { mx[1] + 0.15, y + 1.2, mx[3] + 0.15 },
+                              color = win, emissive = 1 }
+      end
+      y = y + 6
+    end
+    local c = { (mn[1] + mx[1]) / 2, mx[2], (mn[3] + mx[3]) / 2 }
+    parts[#parts + 1] = { kind = "box", min = { c[1] - 0.25, c[2], c[3] - 0.25 }, max = { c[1] + 0.25, c[2] + 9, c[3] + 0.25 },
+                          color = { 0.5, 0.5, 0.55 } }
+    parts[#parts + 1] = { kind = "box", min = { c[1] - 0.8, c[2] + 9, c[3] - 0.8 }, max = { c[1] + 0.8, c[2] + 10.6, c[3] + 0.8 },
+                          color = { 1, 0.3, 0.25 }, emissive = 1 }
+  else
+    local c = { (mn[1] + mx[1]) / 2, mx[2], (mn[3] + mx[3]) / 2 }
+    parts[#parts + 1] = { kind = "box", min = { c[1] - 0.6, c[2], c[3] - 0.6 }, max = { c[1] + 0.6, c[2] + 1.2, c[3] + 0.6 },
+                          color = { 1, 0.3, 0.2 }, emissive = 1 }
+  end
+  return parts
+end
+
+local function sphere_of(parts)
+  local lo, hi = { 1e30, 1e30, 1e30 }, { -1e30, -1e30, -1e30 }
+  for _, p in ipairs(parts) do
+    for a = 1, 3 do
+      if p.min and p.min[a] < lo[a] then lo[a] = p.min[a] end
+      if p.max and p.max[a] > hi[a] then hi[a] = p.max[a] end
+    end
+  end
+  local c = { (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2, (lo[3] + hi[3]) / 2 }
+  local dx, dy, dz = hi[1] - c[1], hi[2] - c[2], hi[3] - c[3]
+  return c, saucer.math.sqrt(dx * dx + dy * dy + dz * dz) + 12 -- + greebles and antennas
+end
+
+-- -> { chunks = { { mesh, center, radius, room } ... }, lod = { mesh, center, radius } }
+function M.ruin_chunks(ruin, origin)
+  local hit = cache.chunks and cache.chunks[ruin.hash]
+  if hit then return hit end
+  cache.chunks = cache.chunks or {}
+  local k = ruinm.kit_of(ruin.kit)
+  local by_room = {}
+  for _, r in ipairs(ruin.rooms) do by_room[r.id] = {} end
+  local function add(list, b, color, uv)
+    list[#list + 1] = { kind = "box", min = b[1], max = b[2], color = color, uv = uv }
+  end
+  for _, b in ipairs(ruin.walls) do add(by_room[b.room or 1], b, k.color, 0.25) end
+  for _, b in ipairs(ruin.debris) do add(by_room[b.room or 1], b, { 0.55, 0.45, 0.32 }, 0.5) end
+  local out = { chunks = {} }
+  local coarse = {}
+  for _, r in ipairs(ruin.rooms) do
+    local parts = by_room[r.id]
+    for _, p in ipairs(M.room_decor(ruin, r, k, origin)) do parts[#parts + 1] = p end
+    local c, rad = sphere_of(parts)
+    out.chunks[#out.chunks + 1] = { mesh = saucer.mesh.build({ parts = parts }), center = c, radius = rad, room = r.id }
+    local mn, mx = ruinm.room_box(r, k, origin)
+    coarse[#coarse + 1] = { kind = "box", min = mn, max = mx, color = k.color, uv = 0.25 }
+  end
+  for _, s in ipairs(ruin.solids or {}) do
+    local parts = M.solid_parts(s, k)
+    local c, rad = sphere_of(parts)
+    out.chunks[#out.chunks + 1] = { mesh = saucer.mesh.build({ parts = parts }), center = c, radius = rad, solid = true }
+    coarse[#coarse + 1] = { kind = "box", min = s[1], max = s[2], color = k.solid_color or k.color, uv = 0.25 }
+  end
+  local c, rad = sphere_of(coarse)
+  out.lod = { mesh = saucer.mesh.build({ parts = coarse }), center = c, radius = rad }
+  cache.chunks[ruin.hash] = out
+  return out
+end
+
+-- one mesh for a whole derelict (kept for mods and tools; the game draws chunks)
 function M.ruin_mesh(ruin, origin)
   local m = cache.ruin[ruin.hash]
   if m then return m end
   local k = ruinm.kit_of(ruin.kit)
   local parts = {}
-  for _, b in ipairs(ruin.walls) do
-    parts[#parts + 1] = { kind = "box", min = b[1], max = b[2], color = k.color, uv = 0.25 }
-  end
+  for _, b in ipairs(ruin.walls) do parts[#parts + 1] = { kind = "box", min = b[1], max = b[2], color = k.color, uv = 0.25 } end
   for _, b in ipairs(ruin.debris) do
     parts[#parts + 1] = { kind = "box", min = b[1], max = b[2], color = { 0.55, 0.45, 0.32 }, uv = 0.5 }
   end
   for _, r in ipairs(ruin.rooms) do
-    local mn, mx = ruinm.room_box(r, k, origin)
-    local cx, cz = (mn[1] + mx[1]) / 2, (mn[3] + mx[3]) / 2
-    -- ceiling light strip
-    parts[#parts + 1] = { kind = "box", min = { cx - 0.3, mx[2] - k.wall - 0.12, mn[3] + 1 },
-                          max = { cx + 0.3, mx[2] - k.wall, mx[3] - 1 }, color = { 0.4, 1.0, 0.8 }, emissive = 1 }
-    if r.class >= (k.big or 4) then
-      -- great halls: structural ribs down the walls and across the ceiling, glow strips
-      local t = k.wall
-      local holes = { [-1] = ruinm.face_holes(r, ruin.doors, ruin.rooms, k, origin, 1, -1),
-                      [1] = ruinm.face_holes(r, ruin.doors, ruin.rooms, k, origin, 1, 1) }
-      local z = mn[3] + 6
-      while z < mx[3] - 4 do
-        parts[#parts + 1] = { kind = "box", min = { mn[1] + t, mx[2] - t - 1.2, z - 0.6 },
-                              max = { mx[1] - t, mx[2] - t, z + 0.6 }, color = { 0.42, 0.44, 0.5 }, uv = 0.5 }
-        for _, side in ipairs({ -1, 1 }) do
-          local clear = true
-          for _, h in ipairs(holes[side]) do
-            if z + 0.6 > h[1] - 1 and z - 0.6 < h[2] + 1 then clear = false end
-          end
-          if clear then
-            local x0 = side < 0 and mn[1] + t or mx[1] - t - 1.2
-            parts[#parts + 1] = { kind = "box", min = { x0, mn[2] + t, z - 0.6 }, max = { x0 + 1.2, mx[2] - t, z + 0.6 },
-                                  color = { 0.42, 0.44, 0.5 }, uv = 0.5 }
-            parts[#parts + 1] = { kind = "box", min = { x0 + (side < 0 and 1.2 or -0.1), mn[2] + 6, z - 0.15 },
-                                  max = { x0 + (side < 0 and 1.3 or 0), mn[2] + 14, z + 0.15 },
-                                  color = { 0.4, 1.0, 0.8 }, emissive = 1 }
-          end
-        end
-        z = z + 8
-      end
-    end
-    local g = kit.recipe("derelict_greeble", { w = mx[1] - mn[1], d = mx[3] - mn[3], top = mx[2] - mn[2] },
-                         saucer.seed_child(ruin.seed, "greeble", r.id))
-    for _, p in ipairs(kit.transform(g.parts, { pos = { cx, mn[2], cz } })) do parts[#parts + 1] = p end
+    for _, p in ipairs(M.room_decor(ruin, r, k, origin)) do parts[#parts + 1] = p end
+  end
+  for _, s in ipairs(ruin.solids or {}) do
+    for _, p in ipairs(M.solid_parts(s, k)) do parts[#parts + 1] = p end
   end
   m = saucer.mesh.build({ parts = parts })
   cache.ruin[ruin.hash] = m

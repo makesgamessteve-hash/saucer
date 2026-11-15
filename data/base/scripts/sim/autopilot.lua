@@ -16,12 +16,21 @@ function M.config_for_class(c)
   return best or configs.count()
 end
 
+-- centre of a door hole (world). Side doors sit on the higher of the two
+-- floors; floor/ceiling hatches are centred in the overlap of the two rooms.
 local function door_center(d, rooms, kit, origin)
   local child = rooms[d.b]
   local mn, mx = ruinm.room_box(child, kit, origin)
-  local p = { 0, mn[2] + kit.wall + kit.doors[d.class][2] / 2, 0 }
-  local l = d.axis == 1 and 3 or 1
-  p[l] = origin[l] + (d.lo + d.hi) / 2 * kit.cell
+  local p = { 0, 0, 0 }
+  if d.axis == 2 then
+    p[1] = origin[1] + (d.lo + d.hi) / 2 * kit.cell
+    p[3] = origin[3] + (d.lo3 + d.hi3) / 2 * kit.cell
+  else
+    local l = d.axis == 1 and 3 or 1
+    p[l] = origin[l] + (d.lo + d.hi) / 2 * kit.cell
+    local floor = d.vlo and origin[2] + d.vlo * kit.cell or mn[2]
+    p[2] = floor + kit.wall + kit.doors[d.class][2] / 2
+  end
   p[d.axis] = d.sign > 0 and mn[d.axis] or mx[d.axis]
   return p
 end
@@ -64,11 +73,13 @@ function M.route(ruin, origin, room_id, min_size)
     local r, hh = configs.get(size).diameter / 2, configs.get(size).height / 2
     local c = door_center(d, ruin.rooms, kit, origin)
     local step = { 0, 0, 0 }
-    step[d.axis] = d.sign * (r + 1.0)
-    wps[#wps + 1] = { pos = vec.sub(c, vec.scale(step, d.sign == 0 and 0 or 1)), size = size, tol = 0.6 }
-    wps[#wps + 1] = { pos = vec.add(c, step), size = size, tol = 0.8 }
+    local hatch = d.axis == 2
+    -- through a floor or ceiling hatch the hull clears it by its half height
+    step[d.axis] = d.sign * ((hatch and hh or r) + 1.0)
+    wps[#wps + 1] = { pos = vec.sub(c, step), size = size, tol = hatch and 0.3 or 0.6 }
+    wps[#wps + 1] = { pos = vec.add(c, step), size = size, tol = hatch and 0.5 or 0.8 }
     local rc = M.room_center(ruin.rooms[rid], kit, origin, hh)
-    rc[2] = c[2]
+    rc[2] = c[2] + step[2]
     wps[#wps + 1] = { pos = rc, size = size, tol = 1.0 }
   end
   -- the first waypoint stands well clear of the hull
@@ -88,14 +99,20 @@ function M.steer(ship, target, face)
   local want_yaw = saucer.math.atan2(ld[1], ld[3])
   local diff = saucer.math.wrap(want_yaw - ship.yaw)
   if not face and math.abs(ld[1]) + math.abs(ld[3]) < 2 then diff = 0 end
+  -- wanted velocity (in units of top speed), split over the three thrust axes:
+  -- forward thrust follows the pitch, so part of it is vertical (sim/flight.lua)
+  local flight = require("sim.flight")
   local f, r = vec.fwd(ship.yaw), vec.right(ship.yaw)
   local gain = 1.2 / cfg.speed
   local damp = 0.9 / cfg.speed
-  local lz = vec.dot(d, f) * gain - vec.dot(ship.vel, f) * damp
-  local lx = vec.dot(d, r) * gain - vec.dot(ship.vel, r) * damp
-  local ly = (d[2] * gain - ship.vel[2] * damp) / 0.6
+  local want = vec.sub(vec.scale(d, gain), vec.scale(ship.vel, damp))
+  local pitch = ship.pitch or 0
+  local cp, sp = saucer.math.cos(pitch), saucer.math.sin(pitch)
+  local lz = vec.clamp(vec.dot(want, f) / cp, -1, 1)
+  local lx = vec.dot(want, r)
+  local ly = (want[2] - lz * sp) / flight.LIFT_FACTOR
   return {
-    move_x = vec.clamp(lx, -1, 1), move_z = vec.clamp(lz, -1, 1), lift = vec.clamp(ly, -1, 1),
+    move_x = vec.clamp(lx, -1, 1), move_z = lz, lift = vec.clamp(ly, -1, 1),
     turn = vec.clamp(-diff * 2.5, -1, 1),
   }, dist, diff
 end
@@ -292,8 +309,38 @@ function M.walk_to_station(t, pl, get, node)
   return M.walk_to(t, pl, get, node)
 end
 
--- fly a long way in open space, refreshing the target every leg
+-- is the straight flight from a to b clear for a hull of radius r and half
+-- height hh? (five rays: the centre line and the four hull edges)
+function M.clear_line(a, b, r, hh)
+  local d = vec.sub(b, a)
+  for _, o in ipairs({ { 0, 0, 0 }, { r, 0, 0 }, { -r, 0, 0 }, { 0, hh, 0 }, { 0, -hh, 0 }, { 0, 0, r }, { 0, 0, -r } }) do
+    if saucer.physics.raycast(vec.add(a, o), d, 1.0, 1) then return false end
+  end
+  return true
+end
+
+-- altitude of the sky lane: above every site in the sector
+function M.sky_lane(state)
+  local game = require("sim.game")
+  local top = 0
+  for i = 1, #state.sector.sites do
+    local b = game.site_bounds(i)
+    if b and b[2][2] > top then top = b[2][2] end
+  end
+  return top + 40
+end
+
+-- fly a long way in open space. Sites are huge and 3D, so when something is
+-- in the way the saucer climbs to the sky lane, crosses over, and drops onto
+-- the target from above (the approach face of every derelict is kept clear).
 function M.travel(t, pl, get, pos, tol, max_ticks)
+  local ship = get().ship
+  local r, hh = configs.get(ship.size).diameter / 2, configs.get(ship.size).height / 2
+  if not M.clear_line(ship.pos, pos, r, hh) then
+    local h = M.sky_lane(t.state())
+    if not M.fly(t, pl, get, { ship.pos[1], h, ship.pos[3] }, 4, max_ticks or 6000) then return false end
+    if not M.fly(t, pl, get, { pos[1], h, pos[3] }, 4, max_ticks or 6000) then return false end
+  end
   return M.fly(t, pl, get, pos, tol or 4, max_ticks or 6000)
 end
 

@@ -46,6 +46,7 @@ function M.rebuild(state)
     rt.bounds[i] = { lo, hi }
     for _, b in ipairs(r.walls) do saucer.physics.add_box(b[1], b[2], 1) end
     for _, b in ipairs(r.debris) do saucer.physics.add_box(b[1], b[2], 1) end
+    for _, b in ipairs(r.solids or {}) do saucer.physics.add_box(b[1], b[2], 1) end
   end
 end
 
@@ -85,7 +86,7 @@ end
 
 function M.init(state, ctx)
   local seed = ctx.seed
-  state.version = 4
+  state.version = 5   -- v5: true 3D sector and derelicts (add-true-3d-flight)
   state.seed = seed
   state.tick = 0
   state.sector = sector.generate(seed)
@@ -158,6 +159,15 @@ end
 local function inside(b, pos)
   return pos[1] >= b[1][1] and pos[1] <= b[2][1] and pos[2] >= b[1][2] and pos[2] <= b[2][2]
     and pos[3] >= b[1][3] and pos[3] <= b[2][3]
+end
+
+-- distance from pos to a site's (huge, 3D) bounding volume; 0 inside
+function M.site_distance(i, pos)
+  local b = rt.bounds[i]
+  if not b then return math.huge end
+  local q = {}
+  for k = 1, 3 do q[k] = vec.clamp(pos[k], b[1][k], b[2][k]) end
+  return vec.dist(q, pos)
 end
 
 function M.site_at(pos)
@@ -347,8 +357,8 @@ local function scan(state, p)
   local site = p.site
   if site == 0 then
     local best, bd
-    for i, s in ipairs(state.sector.sites) do
-      local d = vec.dist(s.pos, p.ship.pos)
+    for i in ipairs(state.sector.sites) do
+      local d = M.site_distance(i, p.ship.pos)
       if not bd or d < bd then best, bd = i, d end
     end
     site = best

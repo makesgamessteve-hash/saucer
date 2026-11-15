@@ -14,10 +14,10 @@ local WHITE, DIM, GREEN, RED, AMBER, CYAN = { 1, 1, 1, 1 }, { 0.6, 0.65, 0.75, 1
 M.MSG_TICKS = 300
 
 local HINTS = {
-  kbm = "WASD walk/fly MOUSE look G use/helm Q/E fold F beam V scan T jam H help",
-  pad = "LS move RS look X use LB/RB fold A beam Y scan RS-click jam BACK cam",
-  touch = "Stick move  drag look  USE helm  buttons fold/tractor/scan/jam",
-  xr = "Stick walk/fly  L trigger use  lever fold  R trigger beam",
+  kbm = "WASD fly MOUSE aim SPACE/CTRL up/down G helm Q/E fold F beam V scan T jam H help",
+  pad = "LS move RS aim RT/LT up/down X use LB/RB fold A beam Y scan RS-click jam",
+  touch = "Stick move  drag aim  UP/DN climb/dive  USE helm  buttons fold/tractor/scan/jam",
+  xr = "L stick fly  R stick up/down + turn  L trigger use  lever fold  R trigger beam",
 }
 M.HINTS = HINTS
 
@@ -25,7 +25,8 @@ local HELP = {
   "SAUCER - controls",
   "Walk or fly: W A S D, look: mouse (click to capture)",
   "Use G/Enter: take the helm, or stand up from it",
-  "At the helm: lift Space/Ctrl, boost Shift",
+  "At the helm: you fly where you look (mouse up/down climbs/dives)",
+  "Up/down: Space/Ctrl (or R/Z), boost Shift",
   "Fold Q (to the Seat) / unfold E, or 1-2",
   "Tractor F or left click (helm or under the dome)",
   "Scanner V (reveals sentries 10 s), Jammer T (disables 12 s)",
@@ -67,11 +68,54 @@ function M.bearing(p, target)
   return "^"
 end
 
+-- vertical cue toward a target: "UP 120M", "DN 40M" or "LEVEL"
+function M.elevation_cue(p, target)
+  local dy = target[2] - p.ship.pos[2]
+  if dy > 8 then return string.format("UP %dM", dy // 1) end
+  if dy < -8 then return string.format("DN %dM", (-dy) // 1) end
+  return "LEVEL"
+end
+
+-- the altitude tape at the helm (true 3D): ticks every 20 m around your
+-- altitude, vertical speed and pitch. -> number of ticks drawn
+function M.altitude(v, p)
+  local W, H = v.width, v.height
+  local ship = p.ship
+  local x, y0, h = W - 48, H // 2 - 50, 100
+  local alt = ship.pos[2]
+  v:rect(x - 2, y0 - 2, 26, h + 4, { 0, 0, 0, 0.35 })
+  local n = 0
+  local base = (alt // 20) * 20
+  for k = -3, 3 do
+    local a = base + k * 20
+    local yy = y0 + h / 2 - (a - alt) * (h / 140)
+    if yy >= y0 and yy <= y0 + h - 2 then
+      v:rect(x, yy, a % 100 == 0 and 8 or 4, 1, DIM)
+      if a % 40 == 0 then v:text(x + 9, yy - 3, string.format("%d", a // 1), DIM) end
+      n = n + 1
+    end
+  end
+  v:rect(x - 4, y0 + h / 2, 10, 1, GREEN)
+  v:text(x - 20, y0 + h + 6, string.format("ALT %d", alt // 1), CYAN)
+  local vs = ship.vel[2]
+  v:text(x - 20, y0 + h + 16, string.format("VS %s%d", vs >= 0 and "+" or "-", math.abs(vs) // 1), vs >= 0 and GREEN or AMBER)
+  v:text(x - 20, y0 - 12, string.format("P %d", (ship.pitch * 57.2958) // 1), DIM)
+  return n
+end
+
+-- the middle of a site's build volume (sites are huge; their origin is a corner)
+function M.site_center(state, site)
+  local game = require("sim.game")
+  local b = game.site_bounds and game.site_bounds(site.id)
+  if not b then return site.pos end
+  return { (b[1][1] + b[2][1]) / 2, (b[1][2] + b[2][2]) / 2, (b[1][3] + b[2][3]) / 2 }
+end
+
 function M.nav(state, p)
   if p.site ~= 0 then return nil end
   local best, bd
   for _, s in ipairs(state.sector.sites) do
-    local d = vec.dist(s.pos, p.ship.pos)
+    local d = vec.dist(M.site_center(state, s), p.ship.pos)
     if not bd or d < bd then best, bd = s, d end
   end
   return best, bd
@@ -194,6 +238,7 @@ function M.draw(v, state, p, target)
     v:text(W // 2 - 72, H // 2 - 70, "SNATCHER SIPHONING", RED)
     v:rect(W // 2 - 40, H // 2 - 60, 80 * f, 3, RED)
   end
+  if p.mode == "helm" then M.altitude(v, p) end
   -- crosshair, where you are and what Use does
   v:text(W // 2 - 4, H // 2 - 4, "+", p.tractor and AMBER or WHITE)
   local where, hint = M.status(p)
@@ -202,8 +247,10 @@ function M.draw(v, state, p, target)
   -- navigation
   local site, d = M.nav(state, p)
   if site then
-    v:text(W // 2 - 60, 6, string.format("%s SITE %d %dm", M.bearing(p, site.pos), site.id, d // 1), CYAN)
-    if p.docked then v:text(W // 2 - 60, 16, "DOCKED AT THE TRADER", GREEN) end
+    local c = M.site_center(state, site)
+    v:text(W // 2 - 60, 6, string.format("%s SITE %d %dm", M.bearing(p, c), site.id, vec.dist(c, p.ship.pos) // 1), CYAN)
+    v:text(W // 2 - 60, 16, M.elevation_cue(p, c), CYAN)
+    if p.docked then v:text(W // 2 - 60, 26, "DOCKED AT THE TRADER", GREEN) end
   elseif p.site ~= 0 then
     v:text(W // 2 - 40, 6, "IN DERELICT " .. p.site, AMBER)
     if (p.scan_until or 0) > state.tick then v:text(W // 2 - 40, 16, "SCANNING", CYAN) end

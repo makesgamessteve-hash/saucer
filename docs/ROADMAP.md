@@ -107,6 +107,32 @@ the lab queue. Tests: `tests/game/trade.lua`, `sentries.lua`, `mystery.lua`
 `resonant_vault.png`, `vault_curio.png`. Deferred: trader stock and
 modules, grid consoles, on-foot Snatchers.
 
+## 3½. True 3D — done
+
+**Goal.** Steve: "adapt the engine to be true 3d. The saucer should be able
+to fly up and down. The alien ships/stations/cities should also expand in
+all directions and should be huge."
+
+**Status (2026-11-15).** Done in OpenSpec change `add-true-3d-flight`
+(concept v0.7). Flight has six axes: thrust follows where you look, so you
+climb or dive by looking up or down. Lift is Space/Ctrl or R/Z, the gamepad
+triggers, the touch slider or the new up/dn buttons, or the XR right stick.
+Dampening brakes to an altitude hold. The hull banks up to about 10° into
+turns, with the interior and your eye locked to it, and the deck otherwise
+stays level. Derelicts grow in all six directions through hatches and
+shafts. Each kit (starship, station, and the new city kit) guarantees a
+minimum vertical span and number of levels. Spines, trusses and towers make
+every site span well over 100 m on every axis, and the sites sit at
+different heights. The radar is 3D and the HUD has an altitude tape and
+UP/DN cues. Sentries, scanner, jammer, mystery and caches work in 3D.
+Physics has a grid broadphase, and rendering has chunk culling, LOD and fog.
+Tests: `tests/game/vertical.lua`, `tests/game/derelict3d.lua` (seeds 42 and
+7), `tests/c/test_phys3d.c`, plus new flight and ruin specs with layout
+known answers. The sim version is 5 and the save format is 2. Screenshot
+tour: `tools/shots/true3d.lua`. Known gaps: XR has no bank and no
+head-steered flight path, the hull never truly pitches, and the trader
+station has no collision.
+
 ## 4. Presentation and packaging — next
 
 **Goal.** It looks and ships like the retro-3D game in the concept.
