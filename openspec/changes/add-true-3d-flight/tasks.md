@@ -22,4 +22,4 @@
 - [x] 3.3 Coverage of at least 95 % (C and Lua)
 - [x] 3.4 Screenshot tour `tools/shots/true3d.lua`
 - [x] 3.5 Docs: `docs/concept.md` v0.6, `docs/ROADMAP.md`, README controls
-- [ ] 3.6 CI green on linux-gcc, linux-clang, windows-msvc, emscripten and lint; Pages deployed
+- [x] 3.6 CI green on linux-gcc, linux-clang, windows-msvc, emscripten and lint; Pages deployed
