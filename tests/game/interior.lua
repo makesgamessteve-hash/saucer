@@ -14,6 +14,11 @@ local function pause(name)
   T.wait(40)
 end
 
+-- out of bed, through the sliding bedroom door and up the stairs
+T.assert(ap.wake(T, 1, get), "got up")
+T.assert(room() == "Bedroom" and deck() == 2, "woke up in the bedroom")
+T.assert(ap.walk_to(T, 1, get, "dome"), "walked up to the dome deck")
+
 -- kitchen: look out over the island through the dome at space
 T.assert(ap.walk_path(T, 1, get, { { 1.5, 0.6, -2.0 }, { 3.0, 0.6, -2.6 } }, 0.3, 600), "walked to the kitchen")
 T.assert(room() == "Kitchen" and deck() == 1, "in the kitchen on the dome deck")

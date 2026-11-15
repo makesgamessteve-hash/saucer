@@ -125,6 +125,13 @@ if(SAUCER_BUILD_TESTS)
   add_test(NAME game_slice_restore_every_tick COMMAND ${HL} --seed 42 --script tests/game/slice.lua --restore-every-tick
            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_interior COMMAND ${HL} --seed 42 --script tests/game/interior.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  add_test(NAME game_fold COMMAND ${HL} --seed 42 --script tests/game/fold.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  # the home test saves and loads: give each run its own user dir so parallel ctest runs cannot race
+  add_test(NAME game_home COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-home --quiet
+           --seed 42 --script tests/game/home.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  add_test(NAME game_home_restore_every_tick COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR}
+           --user-dir ${USERDIR}-home-ret --quiet --seed 42 --script tests/game/home.lua --restore-every-tick
+           WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_coop COMMAND ${HL} --seed 42 --local-players 2 --viewports 2 --script tests/game/coop.lua
            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_mods COMMAND ${HL} --seed 42 --mods-dir tests/fixtures/mods --script tests/game/mods.lua

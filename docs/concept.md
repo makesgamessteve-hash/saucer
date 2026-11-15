@@ -1,6 +1,6 @@
 # Saucer — Game Concept & Design
 
-> Status: draft v0.4 (2026-11-15). Updated with Steve's answers on combat, co-op, the mystery, WebXR, and art (v0.2), on co-op saucers, licensing, and hero meshes (v0.3), and with Steve's correction of the core fantasy: you are a person on foot inside the saucer, and it reconfigures around you (v0.4). · Owner: Steve Makesgames · Repo: <https://github.com/makesgamessteve-hash/saucer> (`main`)
+> Status: draft v0.5 (2026-11-15). Updated with Steve's answers on combat, co-op, the mystery, WebXR, and art (v0.2), on co-op saucers, licensing, and hero meshes (v0.3), with Steve's correction of the core fantasy: you are a person on foot inside the saucer, and it reconfigures around you (v0.4), and with the milestone 2 live-in interior (v0.5). · Owner: Steve Makesgames · Repo: <https://github.com/makesgamessteve-hash/saucer> (`main`)
 > Licenses: code (including all Lua) is MIT · hand-authored art and audio are CC BY 4.0 · Grok Imagine–generated images are under xAI's terms for outputs (§11.6)
 > Purpose: the source document for OpenSpec specs. Section 16 lists capabilities with SHALL requirements and scenarios ready to paste into `openspec/specs/` or `openspec/changes/`.
 
@@ -32,6 +32,13 @@
   - For those the saucer **reconfigures around the player**: it shrinks to a one-seat, car-sized Seat, packing every other room away into fold-space, and unfolds again when there is room. The pilot's eye stays fixed while the hull folds around it.
   - Sizes are simplified to two: **Villa** and **Seat**. Cruiser, Pod, and Pocket are cut from the MVP (they may return as mods).
   - Co-op is unchanged: every player still has their own saucer (§3.6).
+- **Notes from milestone 2 (v0.5), the live-in interior:**
+  - The game starts with you **waking up in the bedroom**. A title card offers Get up or Load saved game.
+  - The bedroom and bathroom have **sliding doors** that open as you walk up and are solid when closed.
+  - **Use** works on furniture: the kitchen (a meal gives ×1.5 Charge regeneration for five sim minutes), shower, engine console, lab bench, trade terminal, and **bed** (sleep until morning: refills Charge and **saves**; or load the last save). Sleeping is refused inside a derelict.
+  - The **helm** is a low desk with a radar well plus two angled wing screens (Charge, hull, and shield on the left; hold slots and the size ladder on the right). It stays below the pilot's sight line.
+  - **The fold is a packing.** The Villa's 11 room groups pack one by one, farthest from the pilot first. Each one flattens onto its floor, then slides into fold-space at the pilot's feet. The hull holds its full size during this room phase (the first half) and shrinks about the eye afterwards. Unfolding reverses it: the hull grows first, then the decks and rooms unpack nearest first.
+  - So that the packing reads on screen, shrinking takes **1.5 s** (was 0.9 s) and growing **1.8 s** (was 1.2 s). Both values stay data in `saucer/configs.lua`.
 - All names in this doc (capabilities, Lua modules, folders) are proposals. Nothing in the repo constrains them yet.
 
 ---
@@ -74,8 +81,8 @@ Cut in v0.4: Cruiser, Pod, and Pocket. Mods can add sizes back through `saucer/c
 ### 3.2 Transition rules
 
 - **Around the player:** a reconfiguration keeps the player's eye point fixed. At the helm that's the pilot's eye; on foot the Seat forms around wherever you stand, facing where you look, and you end up seated in it. Unfolding puts the helm back around the pilot's eye.
-- **Shrink:** always allowed if you have enough Charge. It takes 0.9 s in v0.4 (rooms fold away in the first half, the hull shrinks about the eye), during which shields are down and the hull is immune to collision damage (so you can't get crushed mid-transition).
-- **Grow:** before growing, the engine sweeps the target hull cylinder plus a 0.5 m margin at the current position (against static geometry, and in co-op against other players' saucers and on-foot players, §3.6). If it's blocked, the UI shows a red ghost hull and the grow is refused, with no cost. It takes 1.2 s in v0.4 with shields down. No flying while the saucer reconfigures.
+- **Shrink:** always allowed if you have enough Charge. It takes 1.5 s in v0.5 (0.9 s in v0.4): rooms pack away one by one in the first half, then the hull shrinks about the eye, during which shields are down and the hull is immune to collision damage (so you can't get crushed mid-transition).
+- **Grow:** before growing, the engine sweeps the target hull cylinder plus a 0.5 m margin at the current position (against static geometry, and in co-op against other players' saucers and on-foot players, §3.6). If it's blocked, the UI shows a red ghost hull and the grow is refused, with no cost. It takes 1.8 s in v0.5 (1.2 s in v0.4) with shields down: the hull grows first, then the rooms unpack. No flying while the saucer reconfigures.
 - Each step costs Charge (table above). Growing costs half of what shrinking costs. Charge regenerates slowly while you're in open space, or quickly at a trader.
 - You can skip steps (Villa→Seat in one press). The cost is the sum of the steps and the time is the longest single step.
 - No transitions while a sentry is clamped onto the hull (the Clamp, M2). That's the only lock. Snatchers can only latch onto a Seat hull (§8.2).
@@ -789,6 +796,12 @@ Compiler and determinism flags: no `-ffast-math`, `-ffp-contract=off`, `/fp:prec
 
 Format follows OpenSpec (`### Requirement:` + `#### Scenario:` with WHEN/THEN). Requirements and scenarios are written out in full for the **MVP** capabilities. The later ones are listed with their purpose only.
 
+**Changes in v0.5:**
+- **`saucer-interior`:** wake-up/title start, doors, furniture Use (kitchen, shower, engine, lab bench, trade terminal, bed), the helm console, and the room-packing fold.
+- **`persistence`:** sleeping in the bed saves (seed plus diffs, per-player records). Loading is offered on the title card and at the bed.
+- **`saucer-configurations`:** shrink takes 1.5 s, grow 1.8 s.
+- Recorded in the OpenSpec change `add-live-in-interior`.
+
 **Changes in v0.4:**
 - **New capability `saucer-interior`:** a first-person avatar on foot, the walkable two-deck Villa interior (dome deck with kitchen, living room, and helm; lower deck with bedroom, bathroom, and engine room), taking and leaving the helm, and reconfiguration around the player.
 - **`saucer-configurations`:** two sizes (Villa, Seat). Cruiser, Pod, and Pocket are cut. The Seat is only for tight spaces.
@@ -1296,11 +1309,11 @@ The saucer SHALL have two configurations defined in `data/base/saucer/configs.lu
 - **THEN** clearance checks and collision use 2.4 m for the Seat
 
 ### Requirement: Shrink always succeeds with Charge
-Shrinking SHALL succeed whenever the saucer has enough Charge and isn't clamped. It SHALL complete in 0.9 s, with shields disabled and collision damage ignored during the transition.
+Shrinking SHALL succeed whenever the saucer has enough Charge and isn't clamped. It SHALL complete in 1.5 s, with shields disabled and collision damage ignored during the transition.
 
 #### Scenario: Shrink in tight space
 - **WHEN** the saucer is Villa with 50 Charge and the player selects Seat
-- **THEN** the saucer becomes Seat after 0.9 s and Charge drops by 20
+- **THEN** the saucer becomes Seat after 1.5 s and Charge drops by 20
 
 #### Scenario: Not enough Charge
 - **WHEN** Charge is 3 and the player selects Seat from Villa
@@ -1314,7 +1327,7 @@ Unfolding SHALL be refused at no cost when the Villa's hull around the pilot's e
 - **THEN** the request is refused with "No room to grow here", Charge is unchanged and a red ghost is shown
 
 ### Requirement: No flight while reconfiguring
-Flight input SHALL be ignored while the saucer reconfigures (0.9 s folding, 1.2 s unfolding), and Charge SHALL NOT regenerate during it.
+Flight input SHALL be ignored while the saucer reconfigures (1.5 s folding, 1.8 s unfolding), and Charge SHALL NOT regenerate during it.
 
 #### Scenario: Busy
 - **WHEN** the player asks for another size during a reconfiguration

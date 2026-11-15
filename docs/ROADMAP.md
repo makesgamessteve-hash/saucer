@@ -41,7 +41,7 @@ keyboard/mouse, gamepad, touch and WebXR; `slice.lua` and `interior.lua`.
 hashes, and the game is playable at
 <https://makesgamessteve-hash.github.io/saucer/>.
 
-## 2. Live-in interior — next
+## 2. Live-in interior — done
 
 **Goal.** The Villa feels like a home you use, not a set you walk through.
 
@@ -54,7 +54,24 @@ bench as a place); a title or wake-up in the home.
 flight; at least one Use interaction besides taking the helm exists;
 screenshots and Pages are updated.
 
-## 3. One-sector loop — planned
+**Status (2026-11-15).** Done in OpenSpec change `add-live-in-interior`.
+You wake up in the bedroom to a title card (Get up / Load saved game). The
+bedroom and bathroom have sliding doors that open as you approach. Use
+works at the kitchen (a meal speeds up Charge regeneration), shower, engine
+console (Charge readout), lab bench, trade terminal, and bed (sleep until
+morning, which saves; or load). The helm is a low desk with a radar plus
+two side wing screens (Charge, hull, shield; hold slots and size ladder),
+and it stays below the sight line in flight. The fold packs the 11 room
+groups one by one, farthest from you first: each flattens, then slides into
+fold-space. Only after that does the hull shrink about your eye. Unfolding
+runs in reverse. Shrink now takes 1.5 s and grow 1.8 s (concept v0.5) so the
+packing can be read. Tests: `tests/game/fold.lua`, `tests/game/home.lua`
+(also with `--restore-every-tick`), and `tests/lua/home_spec.lua`.
+Screenshots: `docs/shots/wake_title.png`, `door_open.png`,
+`helm_console.png`, `fold_packing.png`, `fold_packing_late.png`,
+`bed_save.png`.
+
+## 3. One-sector loop — next
 
 **Goal.** The explore → identify or sell loop is fun, and the only risk is
 losing unbanked loot.

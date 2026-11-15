@@ -4,6 +4,8 @@ local configs = require("sim.config")
 local loot = require("sim.loot")
 local vec = require("lib.vec")
 local avatar = require("sim.avatar")
+local panel = require("sim.panel")
+local fold = require("sim.fold")
 local M = {}
 
 local WHITE, DIM, GREEN, RED, AMBER, CYAN = { 1, 1, 1, 1 }, { 0.6, 0.65, 0.75, 1 }, { 0.4, 1, 0.5, 1 },
@@ -43,9 +45,12 @@ end
 -- where the player is and what Use would do right now
 function M.status(p)
   local L = avatar.layout()
+  if p.mode == "wake" then return "BEDROOM", nil end
   if p.mode == "walk" then
     local room = avatar.room(L, p.body):upper()
     if avatar.near_helm(L, p.body) then return room, "USE: TAKE THE HELM" end
+    local st = avatar.station(L, p.body)
+    if st then return room, st.label end
     return room, nil
   end
   if configs.get(p.ship.size).interior then return "AT THE HELM", "USE: STAND UP" end
@@ -69,10 +74,66 @@ function M.nav(state, p)
   return best, bd
 end
 
+-- the open menu (title, bed, lab, trade): a box with a highlighted row
+function M.panel(v, state, p)
+  if not p.panel then return 0 end
+  local W, H = v.width, v.height
+  local rows = panel.rows(state, p)
+  local title = panel.title(state, p)
+  local w = 8
+  for _, r in ipairs(rows) do w = math.max(w, #r.text + 4) end
+  w = math.min(math.max(w, #title + 4) * 8, W - 16)
+  local x, y = W // 2 - w // 2, H // 2 - (#rows * 11 + 24) // 2
+  local is_title = p.panel.kind == "title"
+  if is_title then
+    v:text(W // 2 - 6 * 8 * 3 // 2, y - 46, "SAUCER", AMBER, 3)
+    v:text(W // 2 - 13 * 8 // 2, y - 18, "a cozy salvage", DIM)
+  end
+  local top = is_title and 0 or 12
+  v:rect(x - 4, y - 4, w + 8, #rows * 11 + top + 12, { 0, 0.02, 0.06, 0.82 })
+  if not is_title then v:text(x, y, title, AMBER) end
+  for i, r in ipairs(rows) do
+    local sel = i == p.panel.sel
+    local col = r.enabled == false and DIM or (sel and GREEN or WHITE)
+    if sel then v:rect(x - 2, y + top + (i - 1) * 11 - 1, w + 4, 10, { 0.2, 0.5, 0.3, 0.5 }) end
+    v:text(x, y + top + (i - 1) * 11, (sel and "> " or "  ") .. r.text, col)
+  end
+  local mode = saucer.input.device_mode(v.player)
+  local nav = mode == "pad" and "STICK UP/DOWN  X: PICK" or (mode == "touch" and "STICK UP/DOWN  USE: PICK" or
+    "W/S: CHOOSE  G/ENTER: PICK")
+  v:text(W // 2 - #nav * 4, y + top + 10 + #rows * 11, nav, DIM)
+  return #rows
+end
+
+-- what the fold is doing right now, for the HUD (nil when idle)
+function M.fold_status(p)
+  local ship = p.ship
+  if not ship.morph then return nil end
+  local amounts, order = fold.amounts(ship)
+  if not order then return nil end
+  local packed, out, total, busy = 0, 0, #order, nil
+  for _, g in ipairs(order) do
+    local a = amounts[g.id]
+    if a >= 1 then packed = packed + 1 elseif a > 0 and not busy then busy = g.name end
+    if a <= 0 then out = out + 1 end
+  end
+  local growing = ship.size < ship.morph.from
+  if growing then
+    return string.format("UNFOLDING %d/%d ROOMS%s", out, total, busy and (": " .. busy:upper()) or "")
+  end
+  return string.format("FOLDING %d/%d ROOMS%s", packed, total, busy and (": " .. busy:upper()) or "")
+end
+
 function M.draw(v, state, p, target)
   local W, H = v.width, v.height
   local ship = p.ship
   local c = configs.get(ship.size)
+  if p.mode == "wake" then
+    -- waking up: just the title card over the bedroom (and the touch buttons)
+    M.panel(v, state, p)
+    if saucer.input.device_mode(v.player) == "touch" then M.touch(v) end
+    return
+  end
   -- size + charge
   v:rect(4, 4, 120, 28, { 0, 0, 0, 0.45 })
   v:text(8, 7, c.name:upper(), WHITE)
@@ -125,6 +186,12 @@ function M.draw(v, state, p, target)
       y = y - 10
     end
   end
+  local fs = M.fold_status(p)
+  if fs then v:text(W // 2 - #fs * 4, H // 2 - 30, fs, CYAN) end
+  if p.slept_tick and state.tick - p.slept_tick < 120 then
+    v:rect(0, 0, W, H, { 0, 0, 0.02, 1 - (state.tick - p.slept_tick) / 120 })
+  end
+  M.panel(v, state, p)
   if p.help then
     v:rect(W // 2 - 170, 50, 340, 12 * #HELP + 8, { 0, 0, 0.05, 0.8 })
     for i, line in ipairs(HELP) do v:text(W // 2 - 164, 46 + i * 12, line, i == 1 and AMBER or WHITE) end

@@ -16,7 +16,8 @@ local get = function() return T.state().players[1] end
 
 local st = T.state()
 T.assert(get().ship.size == 1, "starts as the Villa")
-T.assert(get().mode == "walk", "starts on foot under the dome")
+T.assert(get().mode == "wake", "wakes up in the bedroom")
+T.assert(ap.wake(T, 1, get), "got up")
 T.assert(get().ship.charge == 100, "starts with full Charge")
 local site = st.sector.sites[1]
 local origin = site.pos
@@ -24,7 +25,7 @@ local ruin = game.ruin(1)
 local kit = ruinm.kit_of(ruin.kit)
 
 -- 1. walk across the dome deck to the helm and take it
-T.assert(ap.walk_path(T, 1, get, { { -1.0, 0.6, 2.5 }, L.helm.stand }, 0.3, 900), "walked to the helm")
+T.assert(ap.walk_to(T, 1, get, "helm"), "walked upstairs to the helm")
 T.press(1, "use")
 T.wait(1)
 T.assert(get().mode == "helm", "took the helm")

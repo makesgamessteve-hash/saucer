@@ -10,7 +10,7 @@ local get = function() return T.state().players[1] end
 T.wait(5)
 T.assert(T.state().tick == 5, "ticks advance")
 T.assert(saucer.input.device_mode(1) == "kbm", "keyboard/mouse by default")
-T.assert(get().mode == "walk", "starts on foot")
+T.assert(get().mode == "wake" and get().panel.kind == "title", "wakes up in bed with the title card")
 
 local function widget(name)
   for _, w in ipairs(saucer.input.touch_layout()) do if w.name == name then return w end end
@@ -22,6 +22,13 @@ local function tap(name, id)
   T.touch("up", id)
   T.wait(1)
 end
+
+-- touch: the Use button picks "Get up" on the title card
+tap("use", 3)
+T.assert(get().mode == "walk", "touch Use gets the player out of bed")
+T.assert(saucer.input.device_mode(1) == "touch", "touch mode after a touch")
+T.assert(ap.walk_to(T, 1, get, "dome"), "walked up to the dome deck")
+T.assert(ap.look(T, 1, get, 0, 0), "facing the helm")
 
 -- touch: push the virtual stick up -> the player walks forward under the dome
 local z0 = get().body.pos[3]
@@ -52,7 +59,7 @@ T.assert(get().ship.pos[3] > z1 + 1, "at the helm the touch stick flies the sauc
 -- touch buttons: fold down to the Seat
 local sounds = T.audio_count()
 tap("shrink", 8)
-T.wait(60)
+T.wait(95)
 T.assert(get().ship.size == 2, "touch shrink folds the Villa into the Seat")
 T.assert(T.audio_count() > sounds, "size change plays a sound")
 
@@ -65,7 +72,7 @@ T.assert(saucer.xr.session() == "standing", "XR session visible to mods")
 T.xr({ controls = { stick_ly = 0, lever_up = 1 } })
 T.wait(2)
 T.xr({ controls = { lever_up = 0 } })
-T.wait(80)
+T.wait(115)
 T.assert(get().ship.size == 1, "XR size lever unfolds the Villa")
 -- left trigger: stand up; then walk where the head looks (turned to +x)
 T.xr({ controls = { trigger_l = 1 } })

@@ -38,7 +38,7 @@ describe("size changes", function()
     expect(s.morph.from).to_be(1)
     expect(ship.progress(s)).to_be(0)
     local done
-    for _ = 1, 60 do done = ship.update(s, 1 / 60, false) or done end
+    for _ = 1, 90 do done = ship.update(s, 1 / 60, false) or done end
     expect(done).to_be("done")
     expect(s.morph).to_be(false)
     expect(ship.progress(s)).to_be(1)

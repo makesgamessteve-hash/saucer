@@ -12,6 +12,8 @@ local loot = require("sim.loot")
 local mystery = require("sim.mystery")
 local tractor = require("sim.tractor")
 local avatar = require("sim.avatar")
+local home = require("sim.home")
+local panel = require("sim.panel")
 local data = require("lib.data")
 local M = {}
 
@@ -52,23 +54,29 @@ local function fx(state, p, sound)
   while #list > M.MAX_FX do table.remove(list, 1) end
 end
 
+local ctx_fns = { msg = msg, fx = fx }
+M.ctx = ctx_fns
+
 -- A player is a person (body) living in their own saucer (ship). mode is
--- "walk" (on foot inside the Villa) or "helm" (seated, flying it; the Seat
--- has room for nothing else).
+-- "wake" (just woke up, the title panel is open), "walk" (on foot inside the
+-- Villa) or "helm" (seated, flying it; the Seat has room for nothing else).
 function M.new_player(index, pos, yaw)
-  return {
+  local L = avatar.layout()
+  local p = {
     index = index, record_index = index - 1,
     ship = shipm.new(pos, yaw, 1),
-    mode = "walk", body = avatar.new(),
+    mode = "walk", body = avatar.new(L, L.spawn.pos, L.spawn.yaw), doors = home.new_doors(L),
     hold = {}, credits = 0, banked_value = 0, looted = {},
-    site = 0, tractor = false, ghost = 0, cam = "first", help = false,
+    site = 0, tractor = false, ghost = 0, cam = "first", help = false, panel = false,
     msgs = {}, fx = {},
   }
+  home.wake(p)
+  return p
 end
 
 function M.init(state, ctx)
   local seed = ctx.seed
-  state.version = 2
+  state.version = 3
   state.seed = seed
   state.tick = 0
   state.sector = sector.generate(seed)
@@ -82,13 +90,18 @@ function M.init(state, ctx)
     local x = door[1] + (i - 1 - (n - 1) / 2) * 34
     state.players[i] = M.new_player(i, { x, door[2], door[3] - 120 }, 0)
   end
-  for i = 1, n do msg(state, state.players[i], "Walk to the helm at the front of the dome and press Use.") end
+  for i = 1, n do msg(state, state.players[i], "You wake up in your saucer. Press Use to get up.") end
 end
 
 -- where this player's eyes are (world) and where they look: the tractor and
 -- the camera both start here. On foot that is the body under the dome.
 function M.viewpoint(p)
   local ship = p.ship
+  if p.mode == "wake" then
+    local L = avatar.layout()
+    local e = avatar.rot(ship.yaw, L.wake.eye)
+    return { ship.pos[1] + e[1], ship.pos[2] + e[2], ship.pos[3] + e[3] }, ship.yaw + L.wake.yaw, L.wake.pitch
+  end
   if p.mode == "walk" then
     local L = avatar.layout()
     local e = avatar.rot(ship.yaw, avatar.eye(L, p.body))
@@ -182,7 +195,7 @@ local function use(state, p)
     p.mode = "helm"
     ship.pitch = p.body.pitch
     msg(state, p, "At the helm: fly with move and look, Use to stand up.")
-  else
+  elseif not home.use_station(state, p, ctx_fns) then
     msg(state, p, "Nothing to use here")
   end
 end
@@ -267,6 +280,21 @@ end
 
 local SIZE_KEYS = { "size1", "size2", "size3", "size4" }
 
+-- what happens to a player's saucer every tick, whatever they are doing
+local function world_step(state, p, dt)
+  local ship = p.ship
+  local site = M.site_at(ship.pos)
+  if site ~= p.site then
+    if site == 0 then bank(state, p) else msg(state, p, "Entering derelict site " .. site) end
+    p.site = site
+  end
+  if shipm.update(ship, dt, site == 0 and home.regen_factor(state, p)) == "done" then
+    msg(state, p, "Configuration: " .. configs.get(ship.size).name)
+  end
+  if p.ghost > 0 then p.ghost = p.ghost - 1 end
+  home.doors_step(avatar.layout(), p, dt)
+end
+
 function M.step_player(state, p, cmd, dt)
   local ship = p.ship
   if cmd:pressed("camera") then p.cam = p.cam == "first" and "chase" or "first" end
@@ -275,6 +303,16 @@ function M.step_player(state, p, cmd, dt)
     state.mystery.mode = mystery.next_mode(state.mystery.mode)
     msg(state, p, "Mystery: " .. state.mystery.mode)
   end
+  if p.panel then
+    -- a menu is open: it takes the stick and Use; the saucer holds station
+    panel.step(state, p, cmd)
+    if state.players[p.index] ~= p then return end -- a save was loaded
+    if p.mode == "wake" and not p.panel then home.get_up(state, p, ctx_fns) end
+    flight.step(ship, STILL, dt, mover(state, p))
+    world_step(state, p, dt)
+    return
+  end
+  if p.mode == "wake" then home.get_up(state, p, ctx_fns) end
   if cmd:pressed("use") then use(state, p) end
   if cmd:pressed("shrink") then size_request(state, p, ship.size + 1)
   elseif cmd:pressed("grow") then size_request(state, p, ship.size - 1) end
@@ -288,27 +326,23 @@ function M.step_player(state, p, cmd, dt)
   else
     -- nobody at the helm: the saucer brakes to a stop and holds station
     flight.step(ship, STILL, dt, mover(state, p))
+    local L = avatar.layout()
     avatar.step(p.body, { move_x = cmd:axis("move_x"), move_z = cmd:axis("move_z"), turn = cmd:axis("turn"),
-                          look = cmd:axis("look"), run = cmd:held("boost"), aim = cmd.aim }, dt)
+                          look = cmd:axis("look"), run = cmd:held("boost"), aim = cmd.aim }, dt, L, home.solids(L, p))
   end
-  local site = M.site_at(ship.pos)
-  if site ~= p.site then
-    if site == 0 then bank(state, p) else msg(state, p, "Entering derelict site " .. site) end
-    p.site = site
-  end
-  if shipm.update(ship, dt, site == 0) == "done" then
-    msg(state, p, "Configuration: " .. configs.get(ship.size).name)
-  end
-  if p.ghost > 0 then p.ghost = p.ghost - 1 end
+  world_step(state, p, dt)
   tractor_step(state, p, cmd, dt)
 end
 
 function M.step(state, cmds, dt)
   state.tick = state.tick + 1
-  for i, p in ipairs(state.players) do
-    if cmds[i] then M.step_player(state, p, cmds[i], dt) end
+  for i = 1, #state.players do
+    local p = state.players[i]
+    if p and cmds[i] then M.step_player(state, p, cmds[i], dt) end
   end
 end
+
+home.register_panels(M, ctx_fns)
 
 function M.on_event(ev, state)
   -- base keeps no extra bookkeeping; mods listen for "size_change"/"loot"

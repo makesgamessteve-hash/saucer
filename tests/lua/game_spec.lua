@@ -10,9 +10,18 @@ local avatar = require("sim.avatar")
 local L = avatar.layout()
 
 local function cmd(t) return saucer.input.command(t or {}) end
-local function new_state(players)
+-- a fresh universe with every player already out of bed, standing in the
+-- living room (where milestone 1 spawned them)
+local HOME = { -2.0, 0.6, -1.0 }
+local function new_state(players, raw)
   local st = {}
   game.init(st, { seed = 42, players = players or 1 })
+  if not raw then
+    for _, p in ipairs(st.players) do
+      p.mode, p.panel = "walk", false
+      p.body = avatar.new(L, HOME, 0)
+    end
+  end
   return st
 end
 local function run(st, c, n)
@@ -43,16 +52,21 @@ local function texts(p)
 end
 
 describe("game", function()
-  it("starts every player on foot in their own Villa", function()
-    local st = new_state(2)
+  it("wakes every player up in the bedroom of their own Villa", function()
+    local st = new_state(2, true)
     expect(#st.players).to_be(2)
     expect(st.players[1].ship.size).to_be(1)
-    expect(st.players[1].mode).to_be("walk")
+    expect(st.players[1].mode).to_be("wake")
+    expect(st.players[1].panel.kind).to_be("title")
     expect(st.players[1].body.pos).to_equal(L.spawn.pos)
     expect(st.players[2].ship.pos[1] ~= st.players[1].ship.pos[1]).to_be(true)
     expect(game.ruin(1)).to_be_truthy()
     expect(game.site_bounds(1)).to_be_truthy()
     expect(game.on_event({ type = "x" }, st)).to_be("x")
+    expect(texts(st.players[1])).to_contain("wake up")
+    run(st, cmd({ pressed = { "use" } }))
+    expect(st.players[1].mode).to_be("walk")
+    expect(st.players[1].panel).to_be(false)
     expect(texts(st.players[1])).to_contain("helm")
   end)
   it("toggles camera, help and mystery mode", function()
@@ -71,7 +85,7 @@ describe("game", function()
     local pos = { p.ship.pos[1], p.ship.pos[2], p.ship.pos[3] }
     p.ship.vel = { 0, 0, 5 }
     run(st, cmd({ axes = { move_z = 1 } }), 150)
-    expect(p.body.pos[3]).to_be_greater(L.spawn.pos[3] + 2)
+    expect(p.body.pos[3]).to_be_greater(HOME[3] + 2)
     expect(math.abs(p.ship.vel[3])).to_be_less(0.5)
     expect(p.ship.pos[1]).to_be(pos[1])
   end)
@@ -103,11 +117,11 @@ describe("game", function()
     for k = 1, 3 do expect(now[k]).to_be_near(eye[k], 1e-9) end
     run(st, cmd({ pressed = { "use" } }))
     expect(texts(p)).to_contain("No room to stand up")
-    run(st, cmd(), 60)
+    run(st, cmd(), 90)
     expect(texts(p)).to_contain("Configuration: Seat")
     run(st, cmd({ pressed = { "size1" } }))
     expect(p.ship.size).to_be(1)
-    run(st, cmd(), 80)
+    run(st, cmd(), 110)
     expect(p.ship.morph).to_be(false)
     expect(texts(p)).to_contain("Configuration: Villa")
     run(st, cmd({ pressed = { "grow" } }))

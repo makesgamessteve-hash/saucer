@@ -15,6 +15,7 @@ T.assert(by.broken_manifest == nil or not by.broken_manifest.ok, "broken manifes
 -- the data override wins over base
 T.assert(require("sim.config").get(2).tractor_range == 30, "mod overrides saucer/configs.lua")
 T.wait(5)
+T.press(1, "use")
 T.press(1, "shrink")
 T.wait(40)
 T.assert(T.state().bigger_tractor.changes == 1, "mod hook saw the size change event")

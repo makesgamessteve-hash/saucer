@@ -13,8 +13,8 @@ return {
     speed = 10.0, accel = 5.0, turn = 2.8, hull = 0.20, shield = 0.30, tractor_class = 1, tractor_range = 10.0,
     enter_cost = 20, interior = false, pilot_eye = { 0, 0.45, -0.1 },
     rooms = { "seat" } },
-  shrink_time = 0.9,
-  grow_time = 1.2,
+  shrink_time = 1.5,       -- v0.5: rooms pack away one by one (0.75 s), then the hull shrinks
+  grow_time = 1.8,         -- v0.5: the hull grows (0.9 s), then the rooms unpack
   grow_margin = 0.5,
   max_charge = 100,
   charge_regen = 2.0,      -- per second in open space

@@ -21,7 +21,9 @@ out, unfold, and leave the site to bank it. Keyboard/mouse, gamepad, touch
 |---|---|
 | ![Kitchen and living room under the dome](docs/shots/kitchen_dome.png) | ![At the helm in a derelict's great hall](docs/shots/helm_great_hall.png) |
 | ![Bedroom on the lower deck](docs/shots/bedroom.png) | ![Engine room](docs/shots/engine_room.png) |
-| ![The Seat in a tight duct](docs/shots/seat_duct.png) | |
+| ![The Seat in a tight duct](docs/shots/seat_duct.png) | ![Waking up: the title card](docs/shots/wake_title.png) |
+| ![The helm console: radar desk and wing screens](docs/shots/helm_console.png) | ![Folding: rooms pack away one by one](docs/shots/fold_packing.png) |
+| ![The bedroom door slides open](docs/shots/door_open.png) | ![Sleep in the bed to save](docs/shots/bed_save.png) |
 
 [Play in browser](https://makesgamessteve-hash.github.io/saucer/) — the live
 web build on GitHub Pages, rebuilt on every push to `main`.
@@ -37,7 +39,7 @@ web build on GitHub Pages, rebuilt on every push to `main`.
 | `mods/` | user mods (`mods/<id>/mod.lua`), created beside the binary |
 | `tests/` | C unit tests, Lua specs, headless game tests, replays, fixtures |
 | `tools/` | `artpipe` (asset pipeline + license lint), `coverage.sh` |
-| `openspec/` | project conventions and changes 0–22 |
+| `openspec/` | project conventions and changes 0–23 |
 
 Assets are never baked into the binary: the build copies `data/` next to the
 executable, and the web build fetches the files listed in `data/index.json`.
@@ -75,14 +77,22 @@ macOS is not a target for now.
 | Walk (on foot) / fly (at the helm) | W A S D | left stick | left stick | left stick (walks where you look) |
 | Lift (at the helm) | Space / Ctrl | triggers | right slider | right stick |
 | Turn / look | mouse (click to capture, Esc releases), arrows | right stick | drag right half | head, right stick |
-| Use: take the helm / stand up | G / Return | X | Use button | left trigger |
+| Use: take the helm / stand up / furniture / pick a menu row | G / Return | X | Use button | left trigger |
+| Menu up / down (title, bed) | W / S | left stick | left stick | left stick |
 | Fold to the Seat / unfold the Villa | Q / E, wheel, 1–2 | LB / RB | buttons | A / B, or grip + stick (size lever) |
 | Tractor beam | F / left click | A | button | right trigger |
 | Scan, run/boost, camera, help | V, Shift, C, H | Y, LS, Back, Start | buttons | X, left grip, —, menu |
 
-You start on foot under the dome. Walk to the helm at the front and press Use
-to fly; press Use again to stand up (the saucer holds station). Folding on
-foot forms the Seat around wherever you stand and seats you in it.
+You wake up in the bedroom on the lower deck. The title card offers **Get
+up** or **Load saved game**. Doors slide open as you walk up to them. Take
+the stairs to the dome deck and walk to the helm at the front, then press
+Use to fly. Press Use again to stand up (the saucer holds station). Use
+also works at the kitchen (a meal makes Charge recharge faster for five
+minutes), the shower, the engine console, the lab bench and the trade
+terminal. At the bed, Use offers sleep until morning, which refills Charge
+and **saves the game**, or loading the last save. Folding on foot forms
+the Seat around wherever you stand and seats you in it. The rooms visibly
+pack away one after another before the hull shrinks.
 
 Press A on a second gamepad (with `--coop`) to join as player 2; each player
 lives in and flies their own saucer. `--local-players 2 --viewports 2` starts split screen.
@@ -94,6 +104,7 @@ lives in and flies their own saucer. `--local-players 2 --viewports 2` starts sp
 --local-players N  --viewports N  --coop
 --record FILE.srep  --play FILE.srep  --restore-every-tick
 --screenshot FILE.png --screenshot-tick N     (exits after the capture)
+--windowed            (with --script: run a scripted tour in a real window, e.g. tools/shots/m2.lua)
 --headless --ticks N  --script tests/game/slice.lua  --test-lua tests/lua
 ```
 
@@ -113,12 +124,19 @@ tools/coverage.sh                            # coverage gate: >= 95% lines, C (g
   (`saucer.test.press/axis/touch/xr/wait`). `slice.lua` plays the whole
   vertical slice (walk to the helm, fly into the halls, fold for a duct,
   unfold, bank, walk to the kitchen); `interior.lua` tours both decks on foot;
+  `fold.lua` checks that the rooms pack away in a staggered order (farthest
+  first) while the hull holds its size, then unpack nearest first;
+  `home.lua` covers wake-up, doors, kitchen/engine/lab/trade Use, and sleep
+  to save then load;
   `boot.lua` covers touch, XR and rendering; `coop.lua` runs two players;
   `mods.lua` loads the fixture mods.
 - **Replays** (`tests/replays/*.srep`): recorded command frames with a state
   hash every 60 ticks; they must reproduce bit-for-bit on Linux, Windows and
   wasm. Re-record after an intended sim change with
   `saucer_headless --seed 42 --script tests/game/slice.lua --record tests/replays/slice_seed42.srep`.
+  Saves are written by the sim itself (bed → sleep), and loading rebuilds
+  the universe from the saved seed plus diffs. The committed replays never
+  load a save, so they stay independent of the user directory.
 
 CI (`.github/workflows/ci.yml`) runs linux-gcc with the coverage gate and an
 Xvfb screenshot, linux-clang with ASan/UBSan, windows-msvc, emscripten

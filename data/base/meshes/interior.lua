@@ -133,6 +133,62 @@ function BUILD.engine(out, f, y)
   end
 end
 
+-- helm (milestone 2): a low desk under the pilot's eye line with a flat radar
+-- well in the middle, and two angled wing screens; live readouts are drawn on
+-- top of these by the renderer (view/render.lua console())
+function BUILD.helm_desk(out, f, y)
+  local b = f.box
+  out[#out + 1] = box(b[1], y, b[2], b[3], y + f.h - 0.05, b[4], f.color)
+  out[#out + 1] = box(b[1] - 0.05, y + f.h - 0.05, b[2] - 0.1, b[3] + 0.05, y + f.h, b[4] + 0.02, darker(f.color, 0.75))
+  local cx, cz = (b[1] + b[3]) / 2, (b[2] + b[4]) / 2
+  out[#out + 1] = P("cylinder", { c = { cx, y + f.h, cz }, r = 0.24, h = 0.012, seg = 16, color = { 0.05, 0.12, 0.1 },
+                                  emissive = 0.6 })
+  out[#out + 1] = P("ring", { c = { cx, y + f.h, cz }, rin = 0.24, r = 0.27, h = 0.02, seg = 16, color = { 0.3, 1.0, 0.7 },
+                              emissive = 1 })
+end
+function BUILD.helm_wing(out, f, y)
+  local b = f.box
+  out[#out + 1] = box(b[1], y, b[2], b[3], y + 0.12, b[4], darker(f.color, 0.8))
+  out[#out + 1] = box((b[1] + b[3]) / 2 - 0.06, y + 0.12, (b[2] + b[4]) / 2 - 0.06, (b[1] + b[3]) / 2 + 0.06, y + f.h * 0.55,
+                      (b[2] + b[4]) / 2 + 0.06, { 0.5, 0.5, 0.55 })
+  -- the screen panel, facing the pilot (inward and back)
+  local inner = f.side < 0 and b[3] or b[1]
+  local outer = f.side < 0 and b[1] or b[3]
+  local x0, x1 = math.min(inner, outer), math.max(inner, outer)
+  out[#out + 1] = box(x0, y + f.h * 0.55, b[2], x1, y + f.h, b[4], f.color)
+  local face = f.side < 0 and x1 + 0.005 or x0 - 0.015
+  out[#out + 1] = box(face, y + f.h * 0.58, b[2] + 0.05, face + 0.01, y + f.h * 0.97, b[4] - 0.05, { 0.04, 0.08, 0.12 },
+                      { emissive = 0.5 })
+end
+function BUILD.lab_bench(out, f, y)
+  local b = f.box
+  out[#out + 1] = box(b[1] + 0.05, y, b[2] + 0.05, b[3] - 0.05, y + f.h - 0.08, b[4] - 0.05, darker(f.color, 0.6))
+  out[#out + 1] = box(b[1], y + f.h - 0.08, b[2], b[3], y + f.h, b[4], f.color)
+  local cx, cz = (b[1] + b[3]) / 2, (b[2] + b[4]) / 2
+  -- scanner ring and arm over the sample plate
+  out[#out + 1] = P("cylinder", { c = { cx, y + f.h, cz }, r = 0.3, h = 0.03, seg = 12, color = { 0.3, 0.9, 1.0 },
+                                  emissive = 1 })
+  out[#out + 1] = box(cx - 0.05, y + f.h, b[2] + 0.05, cx + 0.05, y + f.h + 0.9, b[2] + 0.15, { 0.6, 0.62, 0.7 })
+  out[#out + 1] = P("ring", { c = { cx, y + f.h + 0.55, cz }, rin = 0.3, r = 0.38, h = 0.06, seg = 12,
+                              color = { 0.4, 1.0, 0.8 }, emissive = 1 })
+  -- a backboard with sample screens
+  out[#out + 1] = box(b[1], y + f.h, b[2] - 0.02, b[3], y + f.h + 0.7, b[2] + 0.04, darker(f.color, 0.5))
+  for i = 0, 2 do
+    local x0 = b[1] + 0.15 + i * (b[3] - b[1] - 0.3) / 3
+    out[#out + 1] = box(x0, y + f.h + 0.2, b[2] + 0.04, x0 + (b[3] - b[1] - 0.3) / 3 - 0.08, y + f.h + 0.6, b[2] + 0.05,
+                        i == 1 and { 0.9, 0.7, 0.3 } or { 0.3, 0.7, 1.0 }, { emissive = 1 })
+  end
+end
+function BUILD.terminal(out, f, y)
+  local b = f.box
+  out[#out + 1] = box(b[1], y, b[2], b[3], y + 0.9, b[4], f.color)
+  out[#out + 1] = box(b[1] + 0.05, y + 0.9, b[2], b[3] - 0.05, y + f.h, b[2] + 0.2, darker(f.color, 0.8))
+  out[#out + 1] = box(b[1] + 0.12, y + 0.95, b[2] + 0.2, b[3] - 0.12, y + f.h - 0.06, b[2] + 0.21, { 1.0, 0.75, 0.3 },
+                      { emissive = 1 })
+  -- the cargo hatch beside it
+  out[#out + 1] = box(b[1], y + 0.005, b[4] + 0.1, b[3], y + 0.02, b[4] + 1.0, { 0.85, 0.65, 0.2 })
+end
+
 local function floor_strips(out, L)
   local d1 = L.decks[1]
   local st = L.stairs
@@ -169,15 +225,15 @@ local function stairs(out, L)
   end
 end
 
-local function lights(out, L)
+local function lights(out, L, only)
   local d1, d2 = L.decks[1], L.decks[2]
   -- lower deck ceiling panels
-  for _, p in ipairs({ { 4, 4 }, { -4, 4 }, { 0, -1.8 }, { 5, -3 }, { -5, -3 } }) do
+  for _, p in ipairs(only == 1 and {} or { { 4, 4 }, { -4, 4 }, { 0, -1.8 }, { 5, -3 }, { -5, -3 } }) do
     out[#out + 1] = box(p[1] - 0.6, d2.ceiling - 0.04, p[2] - 0.6, p[1] + 0.6, d2.ceiling, p[2] + 0.6,
                         { 1.0, 0.9, 0.7 }, { emissive = 1 })
   end
   -- floor lights around the dome rim
-  for i = 0, 15 do
+  for i = 0, (only == 2 and -1 or 15) do
     local a = sm.tau * i / 16
     local r = L.dome.radius - 0.9
     local x, z = sm.sin(a) * r, sm.cos(a) * r
@@ -186,8 +242,63 @@ local function lights(out, L)
   end
 end
 
+-- one sliding door leaf (drawn by the renderer at its open offset)
+local function door(L, id)
+  for _, d in ipairs(L.doors or {}) do
+    if d.id == id then
+      local b = d.box
+      local y = L.decks[d.deck].floor
+      local h = L.decks[d.deck].ceiling - y
+      return { parts = {
+        box(b[1], y, b[2] - 0.02, b[3], y + h, b[4] + 0.02, { 0.82, 0.84, 0.9 }),
+        box(b[1] + 0.1, y + 1.0, b[2] - 0.03, b[1] + 0.2, y + 1.3, b[4] + 0.03, { 0.3, 1.0, 0.6 }, { emissive = 1 }),
+      } }
+    end
+  end
+  return { parts = {} }
+end
+
+-- parts for one fold group (see sim/fold.lua), relative to the group's anchor
+local function group(L, gid)
+  local fold = require("sim.fold")
+  local g
+  for _, x in ipairs(fold.groups(L)) do
+    if x.id == gid then g = x end
+  end
+  if not g then return { parts = {} } end
+  local out = {}
+  if gid == "1:deck" then
+    floor_strips(out, L)
+    lights(out, L, 1)
+  elseif gid == "2:deck" then
+    local d2 = L.decks[2]
+    out[#out + 1] = P("cylinder", { c = { 0, d2.floor - 0.3, 0 }, r = d2.radius + 0.2, h = 0.3, seg = 24,
+                                    color = { 0.42, 0.40, 0.38 } })
+    out[#out + 1] = P("cylinder", { c = { 0, d2.floor, 0 }, r = d2.radius + 0.2, h = d2.ceiling - d2.floor, seg = 24,
+                                    color = { 0.78, 0.76, 0.70 }, open = true })
+    for i = 0, 11 do
+      local a = sm.tau * (i + 0.5) / 12
+      local r = d2.radius + 0.04
+      out[#out + 1] = P("box", { min = { -0.35, -0.35, -0.03 }, max = { 0.35, 0.35, 0.03 }, color = { 0.2, 0.5, 0.8 },
+                                 emissive = 0.6, pos = { sm.sin(a) * r, d2.floor + 1.8, sm.cos(a) * r }, yaw = a })
+    end
+    lights(out, L, 2)
+  elseif gid == "1:Stairs" then
+    stairs(out, L)
+  end
+  for _, f in ipairs(L.furniture) do
+    local cx, cz
+    if f.circle then cx, cz = f.circle[1], f.circle[2] else cx, cz = (f.box[1] + f.box[3]) / 2, (f.box[2] + f.box[4]) / 2 end
+    if fold.group_of(L, f.deck, cx, cz) == gid then (BUILD[f.kind] or BUILD.box)(out, f, L.decks[f.deck].floor) end
+  end
+  local a = g.anchor
+  return { parts = kit.transform(out, { pos = { -a[1], -a[2], -a[3] } }) }
+end
+
 return function(params, rng)
   local L = data.load("saucer/interior.lua")
+  if params.part == "group" then return group(L, params.group) end
+  if params.part == "door" then return door(L, params.door) end
   if params.part == "glass" then
     return { parts = {
       P("hemisphere", { c = { 0, L.decks[1].floor, 0 }, r = L.dome.radius, h = L.dome.height, seg = 24, rings = 6,
@@ -205,7 +316,7 @@ return function(params, rng)
   -- portholes on the lower deck wall
   for i = 0, 11 do
     local a = sm.tau * (i + 0.5) / 12
-    local r = d2.radius + 0.15
+    local r = d2.radius + 0.04
     out[#out + 1] = P("box", { min = { -0.35, -0.35, -0.03 }, max = { 0.35, 0.35, 0.03 }, color = { 0.2, 0.5, 0.8 },
                                emissive = 0.6, pos = { sm.sin(a) * r, d2.floor + 1.8, sm.cos(a) * r }, yaw = a })
   end

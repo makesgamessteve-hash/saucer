@@ -157,6 +157,45 @@ function M.walk_path(t, pl, get, pts, tol, max_ticks)
   return true
 end
 
+-- get out of bed: pick "Get up" on the wake-up title panel
+function M.wake(t, pl, get)
+  if get().mode ~= "wake" then return true end
+  t.press(pl, "use")
+  t.wait(1)
+  return get().mode == "walk"
+end
+
+-- walk to a named nav node of the interior layout along the nav graph
+function M.walk_to(t, pl, get, node, tol, max_ticks)
+  local avatar = require("sim.avatar")
+  local L = avatar.layout()
+  local from = avatar.nav_nearest(L, get().body)
+  local path = avatar.nav_path(L, from, node)
+  if not path then return false end
+  return M.walk_path(t, pl, get, path, tol or 0.3, max_ticks)
+end
+
+-- pick a panel row by its text prefix (moves the selection with the stick)
+function M.pick(t, pl, get, prefix)
+  local panel = require("sim.panel")
+  for _ = 1, 40 do
+    local p = get()
+    if not p.panel then return false end
+    local want = panel.find(t.state(), p, prefix)
+    if not want then return false end
+    if p.panel.sel == want then
+      t.press(pl, "use")
+      t.wait(1)
+      return true
+    end
+    t.axis(pl, "move_z", -1, 1, true)
+    t.wait(1)
+    t.axis(pl, "move_z", 0, 1, true)
+    t.wait(1)
+  end
+  return false
+end
+
 -- turn the body (on foot) or the saucer (at the helm) to a heading/pitch
 function M.look(t, pl, get, yaw, pitch, max_ticks)
   for _ = 1, max_ticks or 240 do

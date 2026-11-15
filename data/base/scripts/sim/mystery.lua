@@ -43,6 +43,23 @@ function M.found(m, idx, player)
   return m.solved
 end
 
+-- what a save keeps: the mode and who found which Echo (the text regenerates)
+function M.progress(m)
+  local out = { mode = m.mode, found = m.found, solved = m.solved, echoes = {} }
+  for i, e in ipairs(m.echoes) do out.echoes[i] = { found_by = e.found_by, decoded = e.decoded or false } end
+  return out
+end
+
+function M.restore(m, prog)
+  if not prog then return m end
+  m.mode, m.found, m.solved = prog.mode or m.mode, prog.found or 0, prog.solved or false
+  for i, e in ipairs(m.echoes) do
+    local pe = prog.echoes and prog.echoes[i]
+    if pe then e.found_by, e.decoded = pe.found_by, pe.decoded end
+  end
+  return m
+end
+
 function M.next_mode(mode)
   for i, x in ipairs(M.MODES) do
     if x == mode then return M.MODES[i % #M.MODES + 1] end

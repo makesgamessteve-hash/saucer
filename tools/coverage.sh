@@ -13,7 +13,7 @@ rm -f build/luacov.stats.out build/luacov.report.out
 (cd "$B" && ctest --output-on-failure)
 # Lua: base game scripts exercised by the specs and the game tests.
 "$B"/saucer_headless --root . --user-dir "$B/test-user" --quiet --coverage --test-lua tests/lua
-for s in boot slice interior coop; do
+for s in boot slice interior fold home coop; do
   extra=""
   [ "$s" = coop ] && extra="--local-players 2 --viewports 2"
   "$B"/saucer_headless --root . --user-dir "$B/test-user" --quiet --coverage --seed 42 $extra --script tests/game/$s.lua

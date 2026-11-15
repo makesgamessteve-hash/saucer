@@ -36,6 +36,19 @@ function M.init()
   cache.interior = kit.build("interior", { part = "rooms" }, 1)
   cache.glass = kit.build("interior", { part = "glass" }, 1)
   cache.person = kit.build("person", {}, 1)
+  -- milestone 2: one mesh per fold group so rooms can pack away one by one,
+  -- the sliding door leaves, and a white unit cube for live console readouts
+  local fold = require("sim.fold")
+  local avatar = require("sim.avatar")
+  local L = avatar.layout()
+  cache.groups = {}
+  for _, g in ipairs(fold.groups(L)) do
+    cache.groups[g.id] = kit.build("interior", { part = "group", group = g.id }, 1)
+  end
+  cache.doors = {}
+  for i, d in ipairs(L.doors or {}) do cache.doors[i] = kit.build("interior", { part = "door", door = d.id }, 1) end
+  cache.unit = saucer.mesh.build({ parts = { { kind = "box", min = { -0.5, -0.5, -0.5 }, max = { 0.5, 0.5, 0.5 },
+                                              color = { 1, 1, 1 }, emissive = 1 } } })
   cache.ready = true
   return cache
 end

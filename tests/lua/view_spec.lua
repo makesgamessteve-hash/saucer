@@ -23,9 +23,16 @@ local function fake_view(opts)
   return v
 end
 
-local function new_state(n)
+local function new_state(n, raw)
   local st = {}
   game.init(st, { seed = 42, players = n or 1 })
+  if not raw then
+    local avatar = require("sim.avatar")
+    for _, p in ipairs(st.players) do
+      p.mode, p.panel = "walk", false
+      p.body = avatar.new(avatar.layout(), { -2.0, 0.6, -1.0 }, 0)
+    end
+  end
   return st
 end
 
@@ -69,22 +76,30 @@ describe("render", function()
     expect(render.pose(s).scale).to_be(1)
     expect(render.morph_scale(s)).to_be(1)
     shipm.request(s, 2, function() return false end)
-    s.t_left = s.morph.total * 0.8 -- 20% in: still the Villa, shrinking, rooms folding
+    s.t_left = s.morph.total * 0.8 -- 20% in: still the Villa at full size, rooms packing
     local a = render.pose(s)
     expect(a.size).to_be(1)
-    expect(a.scale).to_be_less(1)
-    expect(a.iscale).to_be_less(a.scale)
-    s.t_left = s.morph.total * 0.2 -- 80% in: the Seat, rooms gone
+    expect(a.scale).to_be(1)
+    s.t_left = s.morph.total * 0.4 -- 60% in: rooms gone, the hull shrinks about the eye
+    local a2 = render.pose(s)
+    expect(a2.size).to_be(1)
+    expect(a2.scale).to_be_less(1)
+    expect(a2.iscale).to_be_less(a2.scale)
+    s.t_left = s.morph.total * 0.1 -- 90% in: the Seat, rooms gone
     local b = render.pose(s)
     expect(b.size).to_be(2)
     expect(b.iscale).to_be(0)
     shipm.update(s, 10, false)
     shipm.request(s, 1, function() return false end)
-    s.t_left = s.morph.total * 0.25 -- growing, 75% in: the Villa's rooms unfold
+    s.t_left = s.morph.total * 0.8 -- growing, 20% in: the hull grows first (the Seat swells)
     local g = render.pose(s)
-    expect(g.size).to_be(1)
-    expect(g.fold).to_be_greater(0)
-    expect(g.scale).to_be_less(1)
+    expect(g.size).to_be(2)
+    expect(g.scale).to_be_greater(1)
+    s.t_left = s.morph.total * 0.25 -- 75% in: full-size Villa, rooms unpacking
+    local g2 = render.pose(s)
+    expect(g2.size).to_be(1)
+    expect(g2.scale).to_be(1)
+    expect(render.hull_t(s, 0.75)).to_be(1)
   end)
   it("plays each sound cue once", function()
     local st = new_state()

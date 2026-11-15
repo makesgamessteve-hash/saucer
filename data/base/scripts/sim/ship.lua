@@ -102,6 +102,7 @@ function M.progress(ship)
 end
 
 -- advance a reconfiguration; regenerate Charge when `regen` (open space).
+-- regen may be a number: a multiplier on the regeneration rate (home comforts).
 -- returns "done" on the tick a reconfiguration completes.
 function M.update(ship, dt, regen)
   if ship.morph then
@@ -113,7 +114,8 @@ function M.update(ship, dt, regen)
     end
   elseif regen then
     local all = configs.all()
-    ship.charge = math.min(all.max_charge, ship.charge + all.charge_regen * dt)
+    local k = type(regen) == "number" and regen or 1
+    ship.charge = math.min(all.max_charge, ship.charge + all.charge_regen * k * dt)
   end
   return nil
 end

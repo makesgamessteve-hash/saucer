@@ -9,8 +9,12 @@ local st = T.state()
 T.assert(#st.players == 2, "two players")
 local p1, p2 = st.players[1], st.players[2]
 
+T.press(1, "use", 1, true)
+T.press(2, "use")
+T.wait(1)
+T.assert(T.state().players[1].mode == "walk" and T.state().players[2].mode == "walk", "both players got up")
 T.press(2, "shrink")
-T.wait(60)
+T.wait(95)
 T.assert(T.state().players[2].ship.size == 2, "player 2 folded into the Seat")
 T.assert(T.state().players[2].mode == "helm", "the Seat formed around player 2")
 T.assert(T.state().players[1].mode == "walk", "player 1 is still on foot in their own Villa")

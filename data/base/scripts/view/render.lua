@@ -10,6 +10,8 @@ local game = require("sim.game")
 local tractor = require("sim.tractor")
 local shipm = require("sim.ship")
 local avatar = require("sim.avatar")
+local fold = require("sim.fold")
+local panelm = require("sim.panel")
 local sm = saucer.math
 local M = {}
 
@@ -34,17 +36,26 @@ function M.camera(p, xr)
   return { pos = eye, yaw = yaw, pitch = pitch, fov = 75, near = 0.05 }
 end
 
--- Where to draw a saucer this frame. While it reconfigures, the old hull
--- shrinks (or the new one grows) about the pilot's eye point, and the rooms
--- fold away faster than the hull: they are gone by the halfway mark when
--- shrinking and only unfold in the second half when growing.
--- -> { size, pos, yaw, scale, fold, ipos, iscale }
+-- Where to draw a saucer this frame. A fold to the Seat happens in two
+-- beats (milestone 2): first the rooms pack away one by one while the hull
+-- holds its size (sim/fold.lua), then the hull shrinks about the player's eye.
+-- Unfolding plays it backwards: the hull grows first, then the rooms unpack.
+-- -> { size, pos, yaw, scale, fold, ipos, iscale, ht }
+local function hull_t(ship, t)
+  local m = ship.morph
+  local a, b = configs.get(m.from).interior, configs.get(ship.size).interior
+  if a and not b then return math.max(0, (t - fold.ROOM_PHASE) / (1 - fold.ROOM_PHASE)) end
+  if b and not a then return math.min(1, t / fold.ROOM_PHASE) end
+  return t
+end
+M.hull_t = hull_t
+
 function M.pose(ship)
   if not ship.morph then
-    return { size = ship.size, pos = ship.pos, yaw = ship.yaw, scale = 1, fold = 1, ipos = ship.pos, iscale = 1 }
+    return { size = ship.size, pos = ship.pos, yaw = ship.yaw, scale = 1, fold = 1, ipos = ship.pos, iscale = 1, ht = 1 }
   end
   local m = ship.morph
-  local t = shipm.progress(ship)
+  local t = hull_t(ship, shipm.progress(ship))
   local da, db = configs.get(m.from).diameter, configs.get(ship.size).diameter
   local d = da + (db - da) * t
   local size, base, base_yaw, k
@@ -52,13 +63,13 @@ function M.pose(ship)
   else size, base, base_yaw, k = ship.size, ship.pos, ship.yaw, d / db end
   local yaw = m.yaw + sm.wrap(ship.yaw - m.yaw) * t
   local shrinking = ship.size > m.from
-  local fold = shrinking and math.max(0, 1 - 2 * t) or math.max(0, 2 * t - 1)
+  local f = shrinking and math.max(0, 1 - 2 * t) or math.max(0, 2 * t - 1)
   local e = m.eye
   local rel = avatar.rot(yaw - base_yaw, vec.sub(base, e))
   return {
-    size = size, yaw = yaw, scale = k, fold = fold,
+    size = size, yaw = yaw, scale = k, fold = f, ht = t,
     pos = vec.add(e, vec.scale(rel, k)),
-    ipos = vec.add(e, vec.scale(rel, k * fold)), iscale = k * fold,
+    ipos = vec.add(e, vec.scale(rel, k * f)), iscale = k * f,
   }
 end
 
@@ -74,13 +85,141 @@ function M.audio(state, p)
   heard[p.index] = state.tick
 end
 
-local function draw_saucer(v, A, o, own_eyes)
+-- hull-local point -> world, for a drawn pose
+local function at(d, lp)
+  local w = avatar.rot(d.yaw, { lp[1] * d.scale, lp[2] * d.scale, lp[3] * d.scale })
+  return { d.pos[1] + w[1], d.pos[2] + w[2], d.pos[3] + w[3] }
+end
+M.at = at
+
+-- a glowing block on a console: hull-local centre and size
+local function blip(v, A, d, lp, size, color)
+  v:mesh(A.unit, { pos = at(d, lp), yaw = d.yaw, scale = { size[1] * d.scale, size[2] * d.scale, size[3] * d.scale },
+                   tint = color })
+end
+M.blip = blip
+
+M.RADAR_RANGE = 1200
+-- radar targets for a player: { pos, color }
+function M.radar_targets(state, p)
+  local out = {}
+  for _, s in ipairs(state.sector.sites) do
+    out[#out + 1] = { pos = s.pos, color = s.id == p.site and { 1, 0.75, 0.3, 1 } or { 0.9, 0.95, 1, 1 } }
+  end
+  out[#out + 1] = { pos = state.sector.trader.pos, color = { 0.35, 1, 0.45, 1 } }
+  for _, t in ipairs(M.extra_radar) do
+    for _, x in ipairs(t(state, p)) do out[#out + 1] = x end
+  end
+  return out
+end
+M.extra_radar = {} -- functions(state, p) -> list of { pos, color }; milestone 3 adds sentries and Resonant marks
+
+-- live helm readouts (milestone 2): a radar on the desk, Charge/hull/shield
+-- bars on the left wing screen, hold slots and the size ladder on the right
+function M.console(v, A, state, o, d)
+  local L = avatar.layout()
+  local ship = o.ship
+  local all = configs.all()
+  local desk, lw, rw
+  for _, f in ipairs(L.furniture) do
+    if f.kind == "helm_desk" then desk = f end
+    if f.kind == "helm_wing" and f.side < 0 then lw = f end
+    if f.kind == "helm_wing" and f.side > 0 then rw = f end
+  end
+  if not desk then return 0 end
+  local fl = L.decks[1].floor
+  local cx, cz = (desk.box[1] + desk.box[3]) / 2, (desk.box[2] + desk.box[4]) / 2
+  local top = fl + desk.h + 0.02
+  local n = 0
+  blip(v, A, d, { cx, top, cz }, { 0.03, 0.02, 0.03 }, { 1, 1, 1, 1 })
+  for _, tg in ipairs(M.radar_targets(state, o)) do
+    local rel = avatar.rot(-ship.yaw, vec.sub(tg.pos, ship.pos))
+    local x, z = rel[1] / M.RADAR_RANGE * 0.22, rel[3] / M.RADAR_RANGE * 0.22
+    local r = sm.sqrt(x * x + z * z)
+    if r > 0.22 then x, z = x * 0.22 / r, z * 0.22 / r end
+    blip(v, A, d, { cx + x, top + 0.01, cz + z }, { 0.035, 0.025, 0.035 }, tg.color)
+    n = n + 1
+  end
+  local function wing_face(w)
+    return w.side < 0 and w.box[3] + 0.02 or w.box[1] - 0.02
+  end
+  if lw then
+    local x = wing_face(lw)
+    local y0, y1 = fl + lw.h * 0.6, fl + lw.h * 0.95
+    local vals = {
+      { ship.charge / all.max_charge, { 0.4, 0.9, 1, 1 } },
+      { (ship.hull or 100) / 100, { 0.4, 1, 0.5, 1 } },
+      { (ship.shield or 100) / 100, { 0.5, 0.6, 1, 1 } },
+    }
+    for i, bar in ipairs(vals) do
+      local z = lw.box[2] + 0.15 + (i - 1) * 0.28
+      local h = math.max(0.01, (y1 - y0) * vec.clamp(bar[1], 0, 1))
+      blip(v, A, d, { x, y0 + h / 2, z }, { 0.012, h, 0.16 }, bar[1] < 0.3 and { 1, 0.35, 0.3, 1 } or bar[2])
+      n = n + 1
+    end
+  end
+  if rw then
+    local x = wing_face(rw)
+    local y0 = fl + rw.h * 0.62
+    for i = 1, all.hold_slots do
+      local it = o.hold[i]
+      local col = { 0.12, 0.14, 0.18, 1 }
+      if it then col = it.hot and { 1, 0.7, 0.25, 1 } or { 0.4, 1, 0.5, 1 } end
+      local row, colm = (i - 1) // 4, (i - 1) % 4
+      blip(v, A, d, { x, y0 + row * 0.07, rw.box[2] + 0.2 + colm * 0.16 }, { 0.012, 0.05, 0.1 }, col)
+      n = n + 1
+    end
+    for i = 1, configs.count() do
+      local on = i == ship.size
+      blip(v, A, d, { x, y0 + 0.24, rw.box[2] + 0.2 + (i - 1) * 0.16 }, { 0.012, 0.04, 0.12 },
+           on and { 0.4, 1, 0.5, 1 } or { 0.2, 0.22, 0.28, 1 })
+    end
+  end
+  return n
+end
+
+-- the Villa's rooms, each folding on its own (sim/fold.lua) plus the doors
+function M.rooms(v, A, o, d, state)
+  local L = avatar.layout()
+  local ship = o.ship
+  local amounts = fold.amounts(ship, L)
+  local eye = ship.morph and fold.eye_local(ship) or { 0, 0, 0 }
+  local drawn = 0
+  for _, g in ipairs(fold.groups(L)) do
+    local a = amounts[g.id] or 0
+    local m = A.groups[g.id]
+    if a < 1 and m then
+      local lp, sc = fold.transform(g, a, { eye[1], g.anchor[2], eye[3] })
+      local opts = { pos = at(d, lp), yaw = d.yaw, scale = { sc[1] * d.scale, sc[2] * d.scale, sc[3] * d.scale } }
+      v:mesh(m, opts)
+      if a > 0 then
+        -- fold-space shimmer around a room while it packs
+        v:mesh(m, { pos = opts.pos, yaw = d.yaw, scale = { opts.scale[1] * 1.04, opts.scale[2] * 1.04 + 0.02,
+                    opts.scale[3] * 1.04 }, ghost = true, tint = { 0.4, 1, 0.9, 0.6 } })
+      end
+      drawn = drawn + 1
+    end
+  end
+  if not ship.morph then
+    for i, door in ipairs(L.doors or {}) do
+      local open = o.doors and o.doors[i] or 0
+      local b = door.box
+      local w = b[3] - b[1]
+      local side = (b[1] + b[3]) > 0 and 1 or -1
+      if A.doors[i] then v:mesh(A.doors[i], { pos = at(d, { open * w * side * 0.95, 0, 0 }), yaw = d.yaw, scale = d.scale }) end
+    end
+    if state then M.console(v, A, state, o, d) end
+  end
+  return drawn
+end
+
+local function draw_saucer(v, A, o, own_eyes, state)
   local d = M.pose(o.ship)
   local c = configs.get(d.size)
   local m = A.saucer[d.size]
   v:mesh(m.hull, { pos = d.pos, yaw = d.yaw, scale = d.scale, tex = A.tex.hull, palette = A.pal.base })
   if c.interior then
-    if d.iscale > 0.01 then v:mesh(A.interior, { pos = d.ipos, yaw = d.yaw, scale = d.iscale }) end
+    M.rooms(v, A, o, d, state)
     v:mesh(A.glass, { pos = d.pos, yaw = d.yaw, scale = d.scale, ghost = true, tint = { 0.55, 0.8, 1, 0.3 } })
     if o.mode == "walk" and not own_eyes and not o.ship.morph then
       local L = avatar.layout()
@@ -131,7 +270,7 @@ function M.render(v, state, alpha)
   end
   -- saucers (and, through their domes, the people in them)
   for j, o in ipairs(state.players) do
-    draw_saucer(v, A, o, j == v.player and (p.cam ~= "chase" or v.xr))
+    draw_saucer(v, A, o, j == v.player and (p.cam ~= "chase" or v.xr), state)
   end
   -- tractor beam: a dotted line of sprites from just below the eyes
   local target
