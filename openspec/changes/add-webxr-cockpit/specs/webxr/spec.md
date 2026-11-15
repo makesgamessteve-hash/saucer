@@ -11,7 +11,7 @@ When `navigator.xr` supports `immersive-vr`, the web build SHALL offer an "Enter
 During size transitions in XR, the player's world scale and horizon SHALL remain constant, and only the cockpit geometry SHALL change.
 
 #### Scenario: Shrink in VR
-- **WHEN** the player pulls the size lever from Villa to Pod
+- **WHEN** the player pulls the size lever from Villa to Seat
 - **THEN** the interior folds in around the player over the transition time, the head height is unchanged, and the player feels one haptic pulse
 
 ### Requirement: Controller and hand mapping

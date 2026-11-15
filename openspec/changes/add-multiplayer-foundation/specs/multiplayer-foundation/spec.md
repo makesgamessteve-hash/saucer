@@ -18,7 +18,7 @@ Each player SHALL own exactly one saucer entity (`owner = record_index`), whose 
 Clearance checks for grow and deploy SHALL treat other players' unpocketed saucer hulls and on-foot player capsules as solid. Saucer-to-saucer contact SHALL only separate the saucers, with no hull damage.
 
 #### Scenario: Grow blocked by a friend
-- **WHEN** P1 at Pod tries to grow to Villa while P2's saucer is inside the Villa volume
+- **WHEN** P1 at Seat tries to unfold to Villa while P2's saucer is inside the Villa volume
 - **THEN** the grow is refused at no cost, and P1 sees the red ghost hull
 
 #### Scenario: Bump

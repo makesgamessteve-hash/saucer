@@ -14,7 +14,8 @@ The vertical slice (concept v0.4, [`docs/concept.md`](docs/concept.md)): walk
 the two decks, take the helm, fly the Villa into a derelict's great halls,
 tractor loot through the glass, fold down to the Seat for a duct, come back
 out, unfold, and leave the site to bank it. Keyboard/mouse, gamepad, touch
-(mobile web) and basic WebXR are supported.
+(mobile web) and basic WebXR are supported. The implementation plan is
+[`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 | | |
 |---|---|

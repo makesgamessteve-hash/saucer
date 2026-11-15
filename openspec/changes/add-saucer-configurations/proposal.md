@@ -1,8 +1,12 @@
 ## Why
 
-Four saucer sizes, transitions, clearance, Charge costs and tractor class.
+Two saucer sizes (Villa and Seat), transitions around the player, clearance,
+Charge costs, interior folding and tractor class. Cruiser, Pod and Pocket
+are not part of the base game.
 
-Change 12 of 0–21 in the order of concept v0.3 §16.2.
+Change 12 of 0–22 in the order of concept v0.4 §16.2. The four-size
+scenarios of the original draft are superseded by
+`add-walkable-saucer-interior`.
 
 ## What Changes
 
@@ -15,4 +19,4 @@ Change 12 of 0–21 in the order of concept v0.3 §16.2.
 ## Impact
 
 - Capability `saucer-configurations` (`openspec/specs/saucer-configurations/spec.md` once archived)
-- Milestone 1 status: **partial** (4/5 requirements fully met)
+- Milestone 1 status: **partial** (4/5 requirements fully met; interior folding / lab bench still open)

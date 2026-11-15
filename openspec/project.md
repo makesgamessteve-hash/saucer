@@ -1,9 +1,11 @@
 # Saucer — project conventions
 
-Saucer is a retro-3D exploration game: you live in a flying saucer whose glass
-dome is a villa, and shrink it down to a one-seat car to get into derelicts and
-pick up loot. Design source: the concept document v0.3 (§16 lists the
-capabilities and the change order 0–21 used here).
+Saucer is a first-person retro-3D exploration game: you are a person living
+inside a flying saucer whose glass dome is a walkable villa, and you fold it
+down to a one-seat car only for tight ducts inside huge derelicts. Design
+source: the concept document v0.4 (`docs/concept.md`; §16 lists the
+capabilities and the change order 0–22). The living implementation plan is
+`docs/ROADMAP.md`.
 
 ## Stack
 - C11 engine core (`engine/src/core`), no SDL: everything that is unit tested.
@@ -51,5 +53,6 @@ out of scope. Touch controls for mobile web ship in milestone 1.
 ## Process
 Every feature starts as a change in `openspec/changes/<id>/` (proposal, tasks,
 spec deltas). A change is archived into `openspec/specs/` only when all of its
-scenarios pass in CI. Milestone 1 implemented parts of many changes; each
-`tasks.md` marks what is done and what is still open.
+scenarios pass in CI. Milestones 0–1 (engine spine and the walkable-home
+vertical slice) implemented parts of many changes; each `tasks.md` marks what
+is done and what is still open. See `docs/ROADMAP.md`.

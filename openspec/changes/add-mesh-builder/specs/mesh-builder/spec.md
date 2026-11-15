@@ -11,8 +11,8 @@ The engine SHALL build meshes from Lua-declared primitives (box, wedge, cylinder
 All base-game meshes, including the saucer in each size configuration, every sentry, the trader station, and the cockpit console, lever, and throttle orb, SHALL be produced from Lua recipes in `data/base/meshes/`. The base game SHALL NOT ship mesh files.
 
 #### Scenario: Saucer per config
-- **WHEN** `meshes/saucer.lua` is built with `config = "villa"`, `"cruiser"`, `"pod"`, and `"seat"`
-- **THEN** four meshes are returned whose bounding cylinders match the hull sizes in `saucer/configs.lua` within 1 cm
+- **WHEN** `meshes/saucer.lua` is built with `config = "villa"` and `"seat"`
+- **THEN** two meshes are returned whose bounding cylinders match the hull sizes in `saucer/configs.lua` within 1 cm
 
 #### Scenario: No mesh files
 - **WHEN** CI scans `data/base/`

@@ -67,7 +67,7 @@ v0.4 simplifies the sizes to two. Derelicts are built big enough for the Villa (
 
 Cut in v0.4: Cruiser, Pod, and Pocket. Mods can add sizes back through `saucer/configs.lua`.
 
-**Interior fiction ("Fold"):** shrinking folds rooms away into a fold-space; it doesn't destroy them. Their contents persist, but you can only walk into a room while the saucer's config makes it available. That's a deliberate tension: to *work* on loot (lab, workshop) you need to come back out somewhere roomy enough for Cruiser or Villa.
+**Interior fiction ("Fold"):** shrinking folds rooms away into a fold-space; it doesn't destroy them. Their contents persist, but you can only walk into a room while the saucer's config makes it available. That's a deliberate tension: to *work* on loot (lab, workshop) you need to unfold back to the Villa.
 
 **Cargo rule:** the hold is one shared fold-space with a total capacity in slots, and it's the same at every size. Your size limits what you can *pick up* (the tractor class) and what you can *use* (the rooms), not what you can carry. Small fits are easy to explain and easy to test.
 
@@ -78,7 +78,7 @@ Cut in v0.4: Cruiser, Pod, and Pocket. Mods can add sizes back through `saucer/c
 - **Grow:** before growing, the engine sweeps the target hull cylinder plus a 0.5 m margin at the current position (against static geometry, and in co-op against other players' saucers and on-foot players, §3.6). If it's blocked, the UI shows a red ghost hull and the grow is refused, with no cost. It takes 1.2 s in v0.4 with shields down. No flying while the saucer reconfigures.
 - Each step costs Charge (table above). Growing costs half of what shrinking costs. Charge regenerates slowly while you're in open space, or quickly at a trader.
 - You can skip steps (Villa→Seat in one press). The cost is the sum of the steps and the time is the longest single step.
-- No transitions while a sentry is clamped onto the hull (the Clamp, M2). That's the only lock. Snatchers can only latch onto Pod and Seat hulls (§8.2).
+- No transitions while a sentry is clamped onto the hull (the Clamp, M2). That's the only lock. Snatchers can only latch onto a Seat hull (§8.2).
 - ~~Pocket~~: cut in v0.4. Standing up is something you do inside the Villa, not outside it.
 
 ### 3.3 Dome & interior as home
@@ -120,7 +120,7 @@ v0.4 cuts the Pocket. Being on foot now means walking around inside your own Vil
   - **Personal loot instances:** every Module, Curio, Tool, and Material loot slot rolls separately for each player (§5.5). You only see your own instance, and other players' instances show as faint ghosts. Nobody competes for loot, and co-op never halves the reward.
   - **Shared world objects:** Keys, power cells, Echoes, doors, grid consoles, and Snatcher nests are single objects in the world. **Claims:** the first tractor lock or hand-grab to complete wins. If two players complete on the same tick, the tie goes to the player with the lowest `(record_index + tick) mod n`, which is deterministic and rotates fairly. A Key opens its lock for everyone.
   - Hot and banked status is tracked per player. A site banks for each player when *that* player leaves its boundary.
-  - **Gifting:** eject an item (from the hold at Villa or Cruiser, or from your hands on foot) as a world pickup tagged "for P*n*" or "anyone". Ownership transfers when someone picks it up. If the receiver is inside a site, the item becomes hot for them.
+  - **Gifting:** eject an item (from the hold in the Villa, or from your hands on foot once excursions exist) as a world pickup tagged "for P*n*" or "anyone". Ownership transfers when someone picks it up. If the receiver is inside a site, the item becomes hot for them.
   - **Snatchers** steal from any player. A stolen item in a nest can only be picked up by its original owner.
   - **Failure is per player:** Fold Retreat and Lifeline affect only the player who failed. Everyone else carries on.
 - **Economy:** wallets are per player. Trader stock, demand, and requests are shared world state, so selling the same item depresses the price for everyone. The first player to deliver claims a request.
@@ -259,7 +259,7 @@ Every universe seed generates one central mystery: *why did all these civilizati
 
 - An unidentified item shows: its category glyph, origin civ (palette tint), size class, and tier (shown as 1–5 pips, ±1 fuzz).
 - There are three ways to identify an item:
-  1. **Lab bench** (Villa/Cruiser only): takes in-game time of `30 s × tier` and costs a little Charge. The result is full and safe. Several items can queue up while you fly.
+  1. **Lab bench** (Villa only): takes in-game time of `30 s × tier` and costs a little Charge. The result is full and safe. Several items can queue up while you fly.
   2. **Trial use:** install or equip it unidentified. Affixes reveal themselves over time, but quirks apply immediately.
   3. **Sell unidentified:** at 40% of the identified base value, with no affix premium.
 - Identifying adds the item's type to the Xenoarchive.
@@ -282,8 +282,8 @@ Every universe seed generates one central mystery: *why did all these civilizati
 | Layer | What can affect you | What you can lose |
 |---|---|---|
 | Dome (Villa interior) | Nothing | Nothing |
-| Saucer, Villa/Cruiser | Hazards and Watchers wear down shields and hull | At hull 0: **Fold Retreat**, which drops your *hot* items |
-| Saucer, Pod/Seat | The above, plus Snatchers can siphon a hot item from the hold | Single hot items, then Fold Retreat |
+| Saucer, Villa | Hazards and Watchers wear down shields and hull | At hull 0: **Fold Retreat**, which drops your *hot* items |
+| Saucer, Seat | The above, plus Snatchers can siphon a hot item from the hold | Single hot items, then Fold Retreat |
 | On foot | Hazards and Watchers drain Suit Charge, and Snatchers grab from your hands | Items in your hands (**Lifeline**, §4) |
 
 - **Hot items** (tracked per player in co-op): anything you've picked up at the current site stays *hot* until you leave the site boundary (the ruin's bounding volume plus 200 m). Leaving the site *banks* those items. Banked items, installed modules, identified cargo, credits, and the dome can **never** be lost.
@@ -298,7 +298,7 @@ Sentries are dormant robots left behind by a civilization. They are robots only:
 | Sentry | MVP | Behavior | Effect when Locked | Counter-play |
 |---|---|---|---|---|
 | **Watcher** | ✅ | Static turret with a cone sensor that sweeps on a visible path. Each one is calibrated to a size band set by the civ's body scale (e.g., it ignores anything smaller than M). | Fires slow, dodgeable *stun bolts* that drain shields, then hull (or Suit Charge on foot) | Avoid the cone, shrink below its size band, Jam it, use cover, or shut down its grid |
-| **Snatcher** | ✅ | A small drone that patrols between waypoints and is drawn to hot items. | Latches onto Pod/Seat hulls (3 s to siphon one hot item from the hold) or onto you on foot (it grabs one item from your hands), then flees to its **nest**. | Jam it before the latch finishes. Boost or shrink to shake it off. Follow it to the nest to get the item back. It can't latch onto Villa or Cruiser. |
+| **Snatcher** | ✅ | A small drone that patrols between waypoints and is drawn to hot items. | Latches onto a Seat hull (3 s to siphon one hot item from the hold) or onto you on foot once excursions exist (it grabs one item from your hands), then flees to its **nest**. | Jam it before the latch finishes. Boost or fold to shake it off. Follow it to the nest to get the item back. It can't latch onto the Villa. |
 | **Clamp** | M2 | A drone that clamps onto the hull | Blocks size transitions and drains Charge | Boost to shake it, shrink below its grip, or Jam it |
 | **Warden** | M3 | A patrolling hunter that tracks your size class and can follow you through openings of its own class | Fires stun bolts and calls nearby Snatchers | Decoy it, Shroud, or use routes too small for it |
 | **Lockdown node** | M2 | A wall unit that wakes up when an alarm goes off | Seals doors in its zone for 60 s | Override it, or take a different route |
@@ -526,7 +526,7 @@ Voxels are **cut**:
 
 There are **no hand-modelled meshes and no glTF in the MVP.** Every mesh is built at load time by the C mesh builder from a **Lua recipe**: kit modules, and the **hero meshes** too (the saucer at each size, the sentries, the trader station, the cockpit console, lever, throttle orb, and furniture). Recipes are code, so they're MIT. Their textures come from the art pipeline.
 
-- **Recipe file:** `data/base/meshes/<id>.lua` returns `function(params, rng) -> recipe`. `params` are typed and declared in the file, for example `config = "villa"|"cruiser"|"pod"|"seat"` for the saucer, or `civ`, `variant`, and `lod` for a Watcher.
+- **Recipe file:** `data/base/meshes/<id>.lua` returns `function(params, rng) -> recipe`. `params` are typed and declared in the file, for example `config = "villa"|"seat"` for the saucer, or `civ`, `variant`, and `lod` for a Watcher.
 - **Primitives:** `box`, `wedge`, `cylinder`, `cone`, `sphere`, `hemisphere`, `ring` (a segmented torus), `lathe` (revolve a 2D profile, which is how the saucer hull is made), and `extrude` (a 2D polygon plus depth).
 - **Operations:** `transform` (translate, rotate, scale), `mirror`, `radial_array(n)`, `linear_array(n, step)`, and `merge`.
 - **Named nodes and pivots** make up a hierarchy so Lua can animate parts: the Watcher's eye, the Snatcher's claws, the size lever, and the station's spinning ring.
@@ -829,17 +829,18 @@ Format follows OpenSpec (`### Requirement:` + `#### Scenario:` with WHEN/THEN). 
 | 10 | `mesh-builder` | ✅ | Deterministic Lua mesh recipes for **all** geometry (kit modules + hero meshes: saucer per size, sentries, station, cockpit props); no mesh files |
 | 11 | `art-pipeline` | ✅ | `tools/artpipe` (generate → curate → quantize → tile-check → pack → attrib), three license classes, prompt log + per-asset prompt records, separated `generated/` vs `authored/`, generated `ATTRIBUTION.md`/`REUSE.toml`, CI license/prompt lint |
 | 12 | `webxr` | ✅ | Seated/standing dome cockpit, controller + hand mapping, comfort options |
-| 13 | `saucer-configurations` | ✅ | Sizes, transitions, clearance, Charge costs, interior folding, tractor class |
-| 14 | `ruin-generation` | ✅ (2 kits) | Kits, mission grammar, embedding, decay, validation, injected archive rooms |
+| 13 | `saucer-configurations` | ✅ | Two sizes (Villa, Seat), transitions around the player, clearance, Charge costs, interior folding, tractor class |
+| 13a | `saucer-interior` | ✅ | First-person avatar, walkable two-deck Villa (dome deck and lower deck), helm, reconfiguration around the eye |
+| 14 | `ruin-generation` | ✅ (2 kits) | Kits, mission grammar, embedding, decay, validation, injected archive rooms; great halls fit the Villa, ducts need the Seat |
 | 15 | `sector-generation` | ✅ (1 sector) | Sites, traders, danger tier from seed |
 | 16 | `items-and-identification` | ✅ | Item model, affixes/quirks, Echoes, lab bench |
 | 17 | `trading` | ✅ | Price formula, demand, buy/sell at one trader |
-| 18 | `on-foot` | ✅ (minimal) | Pocket/deploy/recall, walking, Suit Charge, hands inventory, Lifeline |
+| 18 | `on-foot` | post-MVP | Pocket/deploy/recall, walking outside the saucer, Suit Charge, hands inventory, Lifeline |
 | 19 | `sentries-and-tools` | ✅ (Watcher, Snatcher, Scanner, Jammer, grid console) | Sentry state machine, non-lethal tools |
 | 20 | `hazards-and-failure` | ✅ (subset) | Hot/banked items, Fold Retreat, radiation, debris, dome safety |
 | 21 | `mystery` | ✅ (3-node chain) | Seeded central mystery, Echo placement and decoding, On/Hints/Off |
 | 22 | `save-system` | ✅ | Seed + diffs, per-player records, atomic writes, mod-set check |
-| — | `touch-controls` | M2 | Mobile web virtual controls, auto-hover, assists |
+| — | `touch-controls` | ✅ basic (polish in presentation) | Mobile web virtual controls, auto-hover, assists |
 | — | `coop-local` | M2 | Split-screen 2–4 players, each with their own saucer: join flow, split layouts, gifting, docking/dome visits, party fold jumps, shared mystery progress and ending vote |
 | — | `fold-jumps` | M2 | Multi-sector travel, Fold Core range |
 | — | `civilizations` | M2 (MVP has 2 hand-tuned trait sets) | Full trait generation, glyphs, style-family assignment, procedural music |
@@ -847,7 +848,7 @@ Format follows OpenSpec (`### Requirement:` + `#### Scenario:` with WHEN/THEN). 
 | — | `requests-and-reputation` | M2 | Trader requests, reputation unlocks |
 | — | `sentries-advanced` | M2/M3 | Clamp, Lockdown node, Warden; Decoy, Shroud, Override spike |
 | — | `mystery-full` | M2 | Multiple causes, 5–9 node chains across sectors, Heart site, endings, universe-state changes |
-| — | `dome-home` | M3 (basic dome + lab bench in MVP) | Display slots, Comfort, rooms, furniture, garden |
+| — | `dome-home` | M3 (two-deck home in the slice; lab bench in the one-sector loop) | Display slots, Comfort, rooms, furniture, garden |
 | — | `coop-network` | M3 | Lockstep (later rollback) over UDP/WebRTC, lobby, desync detection, host-stored player records |
 | — | `gltf-import` | Later (mods only) | Optional glTF mesh loading for mods; the base game never needs it |
 
@@ -875,8 +876,9 @@ Format follows OpenSpec (`### Requirement:` + `#### Scenario:` with WHEN/THEN). 
 19. `add-hazards-and-failure-mvp`
 20. `add-mystery-clue-chain-mvp`
 21. `add-save-system`
+22. `add-walkable-saucer-interior` (first-person avatar, two-deck Villa, two sizes, derelict scale; defers `on-foot`)
 
-Changes 1–8 are the architectural spine. Determinism, command frames, and viewports have to land before any gameplay, so co-op and XR aren't retrofitted later. Changes 9–11 can run in parallel with 12–17.
+Changes 1–8 are the architectural spine. Determinism, command frames, and viewports have to land before any gameplay, so co-op and XR aren't retrofitted later. Change 22 reworks 12 and 13 around the v0.4 fantasy. The living implementation plan is `docs/ROADMAP.md`.
 
 ### 16.3 MVP requirements & scenarios
 
@@ -1055,7 +1057,7 @@ Each player SHALL own exactly one saucer entity (`owner = record_index`), whose 
 Clearance checks for grow and deploy SHALL treat other players' unpocketed saucer hulls and on-foot player capsules as solid. Saucer-to-saucer contact SHALL only separate the saucers, with no hull damage.
 
 #### Scenario: Grow blocked by a friend
-- **WHEN** P1 at Pod tries to grow to Villa while P2's saucer is inside the Villa volume
+- **WHEN** P1 at Seat tries to unfold to Villa while P2's saucer is inside the Villa volume
 - **THEN** the grow is refused at no cost, and P1 sees the red ghost hull
 
 #### Scenario: Bump
@@ -1166,8 +1168,8 @@ The engine SHALL build meshes from Lua-declared primitives (box, wedge, cylinder
 All base-game meshes, including the saucer in each size configuration, every sentry, the trader station, and the cockpit console, lever, and throttle orb, SHALL be produced from Lua recipes in `data/base/meshes/`. The base game SHALL NOT ship mesh files.
 
 #### Scenario: Saucer per config
-- **WHEN** `meshes/saucer.lua` is built with `config = "villa"`, `"cruiser"`, `"pod"`, and `"seat"`
-- **THEN** four meshes are returned whose bounding cylinders match the hull sizes in `saucer/configs.lua` within 1 cm
+- **WHEN** `meshes/saucer.lua` is built with `config = "villa"` and `"seat"`
+- **THEN** two meshes are returned whose bounding cylinders match the hull sizes in `saucer/configs.lua` within 1 cm
 
 #### Scenario: No mesh files
 - **WHEN** CI scans `data/base/`
@@ -1260,7 +1262,7 @@ When `navigator.xr` supports `immersive-vr`, the web build SHALL offer an "Enter
 During size transitions in XR, the player's world scale and horizon SHALL remain constant, and only the cockpit geometry SHALL change.
 
 #### Scenario: Shrink in VR
-- **WHEN** the player pulls the size lever from Villa to Pod
+- **WHEN** the player pulls the size lever from Villa to Seat
 - **THEN** the interior folds in around the player over the transition time, the head height is unchanged, and the player feels one haptic pulse
 
 ### Requirement: Controller and hand mapping
@@ -1280,44 +1282,57 @@ XR SHALL provide a vignette (on by default), snap or smooth turning, teleport or
 ---
 **Capability: `saucer-configurations`** (`openspec/specs/saucer-configurations/spec.md`)
 
-### Requirement: Size configurations
-The saucer SHALL support Villa (XL), Cruiser (L), Pod (M), and Seat (S) configurations with the hull dimensions, stat multipliers, and Charge costs defined in Lua data (`data/base/saucer/configs.lua`).
+See also `saucer-interior` in change `add-walkable-saucer-interior`.
+
+### Requirement: Two sizes, Villa and Seat
+The saucer SHALL have two configurations defined in `data/base/saucer/configs.lua`: the Villa (class 4, 26 × 12 m, the walkable interior) and the Seat (class 1, 1.8 × 1.4 m, one seat under a canopy). Folding to the Seat SHALL cost 20 Charge and unfolding half that. Cruiser, Pod and Pocket are not part of the base game. Mods MAY add sizes through that data file.
+
+#### Scenario: Fold down and back
+- **WHEN** the Villa with 100 Charge folds to the Seat and later unfolds in open space
+- **THEN** the Seat uses its own 1.8 m hull for collision at once, and Charge ends at 70 before regeneration
 
 #### Scenario: Data-driven sizes
-- **WHEN** a mod changes Pod's hull diameter to 5 m
-- **THEN** clearance checks and collision use 5 m for Pod
+- **WHEN** a mod changes the Seat's hull diameter to 2.4 m
+- **THEN** clearance checks and collision use 2.4 m for the Seat
 
 ### Requirement: Shrink always succeeds with Charge
-Shrinking SHALL succeed whenever the saucer has enough Charge and isn't clamped. It SHALL complete in 0.6 s, with shields disabled and collision damage ignored during the transition.
+Shrinking SHALL succeed whenever the saucer has enough Charge and isn't clamped. It SHALL complete in 0.9 s, with shields disabled and collision damage ignored during the transition.
 
 #### Scenario: Shrink in tight space
 - **WHEN** the saucer is Villa with 50 Charge and the player selects Seat
-- **THEN** the saucer becomes Seat after 0.6 s and Charge drops by 30 (5+10+15)
+- **THEN** the saucer becomes Seat after 0.9 s and Charge drops by 20
 
 #### Scenario: Not enough Charge
-- **WHEN** Charge is 3 and the player selects Cruiser from Villa
+- **WHEN** Charge is 3 and the player selects Seat from Villa
 - **THEN** the transition is refused and the HUD shows "Not enough Charge"
 
-### Requirement: Grow requires clearance
-Growing SHALL be refused, at no cost, if the target hull volume plus a 0.5 m margin intersects static geometry, and the HUD SHALL show the target hull as a red ghost.
+### Requirement: Unfolding needs room
+Unfolding SHALL be refused at no cost when the Villa's hull around the pilot's eye plus a 0.5 m margin would intersect static geometry or another player's saucer, and the HUD SHALL show a red ghost Villa where it was asked to unfold.
 
-#### Scenario: Blocked grow in a duct
-- **WHEN** the saucer is Seat inside a 2.5 m duct and the player selects Pod (4 m)
-- **THEN** the grow is refused, Charge is unchanged, and a red Pod ghost is shown
+#### Scenario: Blocked in a duct
+- **WHEN** the Seat is inside a duct and the player asks for the Villa
+- **THEN** the request is refused with "No room to grow here", Charge is unchanged and a red ghost is shown
+
+### Requirement: No flight while reconfiguring
+Flight input SHALL be ignored while the saucer reconfigures (0.9 s folding, 1.2 s unfolding), and Charge SHALL NOT regenerate during it.
+
+#### Scenario: Busy
+- **WHEN** the player asks for another size during a reconfiguration
+- **THEN** the request is refused as busy
 
 ### Requirement: Interior folding
-Interior rooms SHALL be accessible only in the configurations that include them, and their contents SHALL persist through any sequence of transitions.
+Interior rooms SHALL be accessible only while the saucer is the Villa, and their contents SHALL persist through any sequence of transitions.
 
-#### Scenario: Lab unavailable at Pod
-- **WHEN** the saucer is Pod
-- **THEN** the lab bench can't be used, and its queued identifications pause until the saucer is Cruiser or Villa again
+#### Scenario: Lab unavailable in the Seat
+- **WHEN** the saucer is the Seat
+- **THEN** the lab bench can't be used, and its queued identifications pause until the saucer is the Villa again
 
 ### Requirement: Tractor size limit
 The tractor SHALL only pick up items whose size class is at most the current configuration's tractor class, and the hold SHALL keep the same total capacity at all sizes.
 
 #### Scenario: Item too big
 - **WHEN** the saucer is Seat (S) and targets an M-class item
-- **THEN** pickup is refused with the hint "Grow to Pod to lift this"
+- **THEN** pickup is refused with the hint "Unfold the Villa to lift this"
 
 ---
 **Capability: `ruin-generation`** (`openspec/specs/ruin-generation/spec.md`)
@@ -1440,7 +1455,7 @@ A Watcher SHALL detect targets only within its sensor cone and its civ's size ba
 - **THEN** the Watcher returns to Dormant within 2 s
 
 ### Requirement: Snatcher
-A Snatcher SHALL target only hot items. It SHALL latch onto a Pod or Seat hull (siphoning one hot item after 3 s) or onto the player on foot (taking one held item), then carry the item to its nest, where the player can recover it. It SHALL NOT be able to latch onto Villa or Cruiser.
+A Snatcher SHALL target only hot items. It SHALL latch onto a Seat hull (siphoning one hot item after 3 s) or onto the player on foot once excursions exist (taking one held item), then carry the item to its nest, where the player can recover it. It SHALL NOT be able to latch onto the Villa.
 
 #### Scenario: Recover from the nest
 - **WHEN** a Snatcher steals a hot item and reaches its nest
@@ -1565,60 +1580,21 @@ Draft requirements, so MVP work doesn't box co-op into a corner:
 - Fold jumps SHALL require every player to be at Villa size, outside ruins, and voting yes. *Scenario:* when P2 is inside a ruin, the jump option is greyed out, with "P2 is inside a site".
 - XR sessions SHALL NOT be combined with local split screen. *Scenario:* when a second local player joins during an XR session, the join is refused with an explanation.
 
-## 17. Scope: MVP vs later
+## 17. Scope and implementation plan
 
-### MVP ("Saucer 0.1: one sector, one loop")
-**Goal:** prove that the shrink/grow + pickup/sell loop is fun, on flat screens and in VR. **Targets: Windows, Linux, Web (desktop browsers), and WebXR (Quest Browser as the QA device).** macOS is out of scope.
+The living plan is [`docs/ROADMAP.md`](ROADMAP.md). It adapts the v0.3 MVP / M2 / M3 split to the v0.4 first-person, interior-centric design. Summary:
 
-- **1 sector** (a fixed default seed plus seed entry): 10 sites and **1 trader station**
-- **2 ruin kits**, built with the mesh builder plus generated textures, around 25 modules each:
-  - *derelict starship*: corridor-heavy, with size locks
-  - *orbital station*: hub-and-spoke, with hand locks and grid consoles
-- **2 civs**, with hand-tuned trait sets and **2 style families / palettes**: one human-scale and one giant-scale, so body scale visibly drives the layout
-- **Saucer:** all 4 sizes plus Pocket, transitions, clearance, Charge, and interior folding (the dome deck, lab bench, and hold as basic rooms)
-- **On foot:** walk, crouch, jet-hop, Suit Charge, 4-slot hands, hand-locks, and Lifeline
-- **Sentries and tools:** Watcher and Snatcher (with a nest), plus Scanner pulse, Jammer, and grid consoles
-- **Risk:** hot/banked items, Fold Retreat, radiation zones, and debris. Cozy and Standard difficulty.
-- **Items:** Module, Curio, Key, and Echo categories, around 12 base types, around 10 affixes, 3 quirks, and identification at the lab bench
-- **Economy:** sell/buy, demand decay, 4 standard modules for sale (including a Jammer upgrade), and Charge/repair
-- **Mystery slice:** one cause and a 3-Echo chain leading to a Resonant vault, with a teaser
-- **Controls:** KB/M, gamepad, and **WebXR** (controllers + hand tracking, seated/standing, comfort options)
-- **Architecture:** command frames, player-indexed state with one saucer per player, saucer-vs-saucer clearance and fold-phase, per-player loot instances, shared-object claims, a viewport list, and snapshot/restore. All of it is tested with 2 headless players, even though co-op ships later.
-- **Art:** the artpipe pipeline, with about 60 textures, about 40 sprites, and 2 skyboxes (generated, curated, palette-locked, and with prompt records), plus authored or CC BY sounds
-- **Meshes:** all made from recipes: 2 kits, plus the saucer ×4 sizes, Watcher, Snatcher, trader station, and cockpit props
-- **Licensing:** `LICENSES/`, `LICENSING.md`, generated `ATTRIBUTION.md` and `REUSE.toml`, and the license/prompt lint
-- **Save/load and mod loading:** the base mod plus one example mod in the repo (`mods/example_palette_swap`)
-- **Testing:** headless harness, golden replays, coverage gates, and the WebXR mock smoke test
-- **Not in the MVP:**
-  - touch controls
-  - co-op (local or networked)
-  - multiple sectors and fold jumps
-  - requests and the archive
-  - the garden
-  - advanced sentries
-  - mystery endings
-  - procedural music (2 fixed tracks instead)
+- **Done — engine spine:** deterministic C + Lua engine, tests and coverage gates, CI on Windows, Linux and Web, GitHub Pages.
+- **Done — walkable home (vertical slice):** first-person Villa with two walkable decks, helm flight, Seat only for tight ducts, huge derelict halls, tractor and bank. Basic KB/M, gamepad, touch and WebXR.
+- **Next — live-in interior:** a usable helm console, a real fold (rooms pack away, not a uniform scale), doors, and furniture you can use.
+- **Then — one-sector loop:** lab identification, trading, non-lethal sentries (the risk is losing unbanked loot), a 3-node mystery you can ignore, and save/load.
+- **Then — presentation and packaging:** Grok Imagine art pass with logged prompts, audio, WebXR and touch polish, Windows package.
+- **Post-MVP — on-foot excursions:** stepping out of the saucer (Pocket, Suit Charge, Lifeline, hand-locks). Cut from the MVP in v0.4.
+- **M2 "The wider dark":** local split-screen co-op (one saucer each), multiple sectors, the full mystery, archive, requests, advanced sentries.
+- **M3 "Home among the stars":** networked co-op, dome customization, Warden and later tools, mod browser, Hardcore.
+- **Later / maybe:** rivals, planet-surface cities, a fabricator, and a macOS port.
 
-### M2: "The wider dark"
-- **Local split-screen co-op** (2–4 players, one saucer each): gifting, docking/dome visits, party fold jumps, and shared mystery progress
-- Multiple sectors, fold jumps, and Fold Core tiers
-- The civ trait generator and glyphs
-- The Xenoarchive, with Echo translation gates
-- **The full mystery:** multiple causes, a 5–9 node chain across sectors, the Heart site, and endings
-- Requests and reputation
-- Clamp drones, the Lockdown node, Decoy, Shroud, and the Override spike
-- **Touch controls on mobile web**
-- A third kit (city shard), more style families, and procedural music layers
-
-### M3: "Home among the stars"
-- **Networked co-op** (lockstep, then rollback; UDP on desktop and WebRTC on web), with an XR player able to join
-- Dome customization (display slots, rooms, furniture, garden)
-- The Warden, and the cutter and grapple tools
-- A mod browser and web mod import
-- Hardcore mode
-
-### Later / maybe
-Rivals, planet-surface cities, a fabricator and crafting, and a macOS port (it's cheap through SDL3 once CI capacity allows).
+**Targets** remain Windows, Linux, Web and WebXR (Quest Browser as the QA device). macOS is out of scope. Co-op architecture (one saucer per player, command frames, viewports) is already in the spine; split-screen and network ship in M2/M3.
 
 ## 18. Open questions & actions for Steve
 

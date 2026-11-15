@@ -15,7 +15,7 @@ A Watcher SHALL detect targets only within its sensor cone and its civ's size ba
 - **THEN** the Watcher returns to Dormant within 2 s
 
 ### Requirement: Snatcher
-A Snatcher SHALL target only hot items. It SHALL latch onto a Pod or Seat hull (siphoning one hot item after 3 s) or onto the player on foot (taking one held item), then carry the item to its nest, where the player can recover it. It SHALL NOT be able to latch onto Villa or Cruiser.
+A Snatcher SHALL target only hot items. It SHALL latch onto a Seat hull (siphoning one hot item after 3 s) or onto the player on foot once excursions exist (taking one held item), then carry the item to its nest, where the player can recover it. It SHALL NOT be able to latch onto the Villa.
 
 #### Scenario: Recover from the nest
 - **WHEN** a Snatcher steals a hot item and reaches its nest
