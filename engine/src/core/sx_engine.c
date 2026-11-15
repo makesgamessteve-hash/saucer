@@ -52,6 +52,7 @@ const char *sx_usage(void) {
          "  --restore-every-tick  snapshot+restore before every tick\n"
          "  --screenshot FILE     save a PNG of the frame at --screenshot-tick (windowed)\n"
          "  --screenshot-tick N   tick for --screenshot (default 120)\n"
+         "  --windowed            run a --script in the game window (screenshot tours)\n"
          "  --width W --height H  window size\n"
          "  --coop                allow extra devices to join as P2-P4\n"
          "  --test                enable test/debug checks\n"
@@ -94,6 +95,7 @@ int sx_options_parse(sx_options *o, int argc, char **argv, char *err, int errlen
     else if (strcmp(a, "--coop") == 0) o->coop = 1;
     else if (strcmp(a, "--test") == 0) o->test_mode = 1;
     else if (strcmp(a, "--quiet") == 0) o->quiet = 1;
+    else if (strcmp(a, "--windowed") == 0) o->windowed = 1;
     else if (strcmp(a, "--help") == 0 || strcmp(a, "-h") == 0) o->show_help = 1;
     else {
       snprintf(err, (size_t)errlen, "unknown option %s", a);
@@ -101,6 +103,7 @@ int sx_options_parse(sx_options *o, int argc, char **argv, char *err, int errlen
     }
 #undef NEEDV
   }
+  if (o->windowed) o->headless = 0;
   if (o->local_players < 1 || o->local_players > SX_MAX_PLAYERS) {
     snprintf(err, (size_t)errlen, "--local-players must be 1-4");
     return 0;

@@ -25,6 +25,7 @@ typedef struct sx_options {
   char mods_dir[512]; /* default <root>/mods */
   uint64_t seed;
   int headless;
+  int windowed; /* --windowed: run a --script in the window (screenshot tours) */
   char script[512];   /* game test script (VFS-independent path) */
   char test_lua[512]; /* folder with runner.lua + *_spec.lua */
   char filter[128];   /* only run spec files containing this */

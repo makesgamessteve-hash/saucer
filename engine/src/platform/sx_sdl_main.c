@@ -166,6 +166,10 @@ static void frame(void) {
   if (e->opt.max_ticks > 0 && e->tick >= e->opt.max_ticks) A.running = 0;
   if (e->playing && e->tick >= e->play.end_tick && !e->opt.screenshot[0]) A.running = 0;
   if (e->failed && e->playing) A.running = 0;
+  if (e->opt.script[0] && (e->test_done || e->failed)) {
+    if (e->failed) A.status = 1;
+    A.running = 0;
+  }
 }
 
 static void shutdown_app(void) {
@@ -300,7 +304,7 @@ int main(int argc, char **argv) {
   if (!has_flag(argc, argv, "--user-dir")) SDL_strlcpy(o.user_dir, "/user", sizeof o.user_dir);
 #endif
   memset(&A, 0, sizeof A);
-  A.fixed_step = o.screenshot[0] != 0;
+  A.fixed_step = o.screenshot[0] != 0 || o.script[0] != 0;
   if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD | SDL_INIT_AUDIO)) {
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
       fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
