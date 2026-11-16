@@ -126,6 +126,7 @@ if(SAUCER_BUILD_TESTS)
            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_interior COMMAND ${HL} --seed 42 --script tests/game/interior.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_fold COMMAND ${HL} --seed 42 --script tests/game/fold.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  add_test(NAME game_tractor COMMAND ${HL} --seed 42 --script tests/game/tractor.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   # the home test saves and loads: give each run its own user dir so parallel ctest runs cannot race
   add_test(NAME game_home COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-home --quiet
            --seed 42 --script tests/game/home.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})

@@ -12,9 +12,12 @@ end
 
 describe("interior layout", function()
   it("has a dome deck over a lower deck joined by stairs", function()
-    expect(#L.decks).to_be(2)
+    expect(#L.decks).to_be(3)
     expect(L.decks[1].floor).to_be_greater(L.decks[2].floor)
+    expect(L.decks[2].floor).to_be_greater(L.decks[3].floor)
     expect(L.stairs.high).to_be_greater(L.stairs.low)
+    expect(#avatar.flights(L)).to_be(2)
+    expect(L.decks[3].name).to_be("Tractor deck")
   end)
   it("names the rooms people expect", function()
     local names = {}
@@ -91,6 +94,22 @@ describe("walking", function()
     walk(b, { move_z = 1 }, 200)
     expect(avatar.deck_of(L, b)).to_be(1)
     expect(b.pos[2]).to_be(L.decks[1].floor)
+  end)
+  it("walks down the belly stair to the Tractor Room and back up", function()
+    local S = L.belly_stairs
+    local z = (S.z0 + S.z1) / 2
+    local b = avatar.new(L, { S.high - 0.3, L.decks[2].floor, z }, saucer.math.pi / 2) -- facing +x
+    walk(b, { move_z = 1 }, 240)
+    expect(avatar.deck_of(L, b)).to_be(3)
+    expect(b.pos[2]).to_be(L.decks[3].floor)
+    expect(b.pos[1]).to_be_greater(S.low)
+    expect(avatar.room(L, b)).to_be("Tractor room")
+    expect(avatar.flight_at(L, (S.low + S.high) / 2, z, -4.2)).to_be_truthy()
+    expect(avatar.flight_at(L, (S.low + S.high) / 2, z, 5)).to_be(nil)
+    b.yaw = -saucer.math.pi / 2
+    walk(b, { move_z = 1 }, 300)
+    expect(avatar.deck_of(L, b)).to_be(2)
+    expect(b.pos[2]).to_be(L.decks[2].floor)
   end)
   it("cannot step into the stairwell from the side or over the rail", function()
     local b = avatar.new(L, { 0, 0.6, -3.5 }, saucer.math.pi) -- dome deck, facing -z toward the hole

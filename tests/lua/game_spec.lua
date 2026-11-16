@@ -47,6 +47,29 @@ local function park(st, p, c)
   p.site = 1
 end
 
+-- hover the saucer over candidate c with the keel lined up, level and still;
+-- the Villa's operator sits at the beam console
+local function align(st, p, c, size)
+  p.ship.size, p.ship.morph, p.site = size, false, 1
+  p.ship.pos = ap.beam_spot(c.pos, size)
+  p.ship.yaw = ap.beam_yaw(c, 0)
+  p.ship.bank, p.ship.pitch, p.ship.vel = 0, 0, { 0, 0, 0 }
+  p.tractor = false
+  if size == 1 then
+    p.mode = "walk"
+    p.body = avatar.new(L, avatar.station_by_id(L, "tractor").pos, 0)
+    p.beam_console = true
+  else
+    p.mode, p.beam_console = "helm", false
+  end
+end
+-- something the Villa's beam can lift in a room it fits
+local function villa_target(st, p, r)
+  for _, x in ipairs(tractor.candidates(st, p, 1, r)) do
+    if x.kind == "slot" and r.rooms[x.room].class >= 4 then return x end
+  end
+end
+
 local function texts(p)
   local t = {}
   for _, m in ipairs(p.msgs) do t[#t + 1] = m.text end
@@ -158,85 +181,124 @@ describe("game", function()
     expect(a.ship.pos[3] < b.ship.pos[3] - 25).to_be(true)
     expect(game.blocked(st, a, b.ship.pos, 1, 1, 0)).to_be(true)
   end)
-  it("tractor reports nothing in range outside a site and in an empty view", function()
+  it("tells the pilot where the beam runs from and when nothing is under it", function()
     local st = new_state()
     local p = st.players[1]
     run(st, cmd({ pressed = { "tractor" } }))
-    expect(texts(p)).to_contain("Nothing in tractor range")
-    p.site = 1
+    expect(texts(p)).to_contain("Use the beam console in the Tractor Room")
     p.mode = "helm"
-    p.ship.yaw = saucer.math.pi
     run(st, cmd({ pressed = { "tractor" } }))
+    expect(texts(p)).to_contain("The beam runs from the Tractor Room")
+    p.ship.size, p.ship.morph = 2, false
+    run(st, cmd({ pressed = { "tractor" } }))
+    expect(texts(p)).to_contain("Nothing under the beam")
     expect(p.tractor).to_be(false)
   end)
-  it("tractors loot into the hold, refuses too-big items and a full hold", function()
+  it("sits down at the beam console in the Tractor Room and gets up again", function()
+    local st = new_state()
+    local p = st.players[1]
+    local s = avatar.station_by_id(L, "tractor")
+    p.body = avatar.new(L, s.pos, 0)
+    local helm_eye = game.viewpoint(p)
+    run(st, cmd({ pressed = { "use" } }))
+    expect(p.beam_console).to_be(true)
+    expect(texts(p)).to_contain("Beam console")
+    local eye, yaw, pitch = game.viewpoint(p)
+    expect(eye[2]).to_be_less(helm_eye[2])
+    expect(yaw).to_be_near(p.ship.yaw + L.tractor.yaw, 1e-9)
+    expect(pitch).to_be(L.tractor.pitch)
+    -- the stick trims the hull slowly in the operator's frame
+    local x = p.ship.pos[1]
+    run(st, cmd({ axes = { move_z = 1 } }), 30)
+    expect(math.abs(p.ship.pos[1] - x)).to_be_greater(0.2)
+    run(st, cmd({ pressed = { "use" } }))
+    expect(p.beam_console).to_be(false)
+    expect(texts(p)).to_contain("You get up from the beam console")
+    -- folding stands you up too
+    p.beam_console = true
+    run(st, cmd({ pressed = { "shrink" } }))
+    expect(p.beam_console).to_be(false)
+  end)
+  it("pulls lined-up loot up the beam, shrinking it into the hold", function()
     local st = new_state()
     local p = st.players[1]
     local r = game.ruin(1)
-    local cands = tractor.candidates(st, p, 1, r)
-    local c = cands[1]
-    park(st, p, c)
-    local size = p.ship.size
-    local found = tractor.find(st, p, 1, r, game.viewpoint(p))
-    expect(found ~= nil).to_be(true)
-    -- the Seat's tractor is too weak for M items
-    p.ship.size = 2
-    found.item.size = 2
-    expect(tractor.can_lift(p.ship, found.item)).to_be(false)
-    p.ship.size = size
-    local full = {}
-    for i = 1, 12 do full[i] = { name = "x", value = 1, hot = false } end
-    p.hold = full
-    if not found.echo then
-      run(st, cmd({ pressed = { "tractor" } }))
-      expect(texts(p)).to_contain("Hold is full")
-    end
+    local c = villa_target(st, p, r)
+    align(st, p, c, 1)
     p.hold = {}
+    for i = 1, 12 do p.hold[i] = { name = "x", value = 1, hot = false } end
     run(st, cmd({ pressed = { "tractor" } }))
-    expect(p.tractor).to_be_truthy()
-    run(st, cmd(), 40)
+    expect(texts(p)).to_contain("Hold is full")
+    p.hold = {}
+    -- slide off the axis: the beam says which way to go
+    p.ship.pos[1] = p.ship.pos[1] + 4
+    local st2, info = tractor.check(p.ship, c)
+    expect(st2).to_be("axis")
+    expect(info.hint).to_contain("OFF AXIS - MOVE")
+    run(st, cmd({ pressed = { "tractor" } }))
+    expect(texts(p)).to_contain("Beam: ")
+    expect(p.tractor).to_be(false)
+    align(st, p, c, 1)
+    run(st, cmd({ pressed = { "tractor" } }))
+    expect(texts(p)).to_contain("Beam lock: pulling up")
+    local tr = p.tractor
+    expect(tr.console).to_be(true)
+    run(st, cmd(), math.floor(tr.total * 30))
+    local pos, scale, f = tractor.pull_pose(p.ship, tr)
+    expect(f).to_be_greater(0.3)
+    expect(scale).to_be_less(1)
+    expect(pos[2]).to_be_greater(c.pos[2])
+    expect(p.hatch).to_be_greater(0)
+    run(st, cmd(), math.floor(tr.total * 60) + 2)
     expect(p.tractor).to_be(false)
     expect(#p.hold + st.mystery.found).to_be(1)
   end)
-  it("tractors from on foot, aiming through the glass dome", function()
+  it("lets go when the operator gets up or the saucer drifts away, and banks hot loot on leaving", function()
+    local st = new_state()
+    local p = st.players[1]
+    local r = game.ruin(1)
+    local c = villa_target(st, p, r)
+    align(st, p, c, 1)
+    run(st, cmd({ pressed = { "tractor" } }))
+    expect(p.tractor).to_be_truthy()
+    run(st, cmd({ pressed = { "use" } }))
+    expect(p.tractor).to_be(false)
+    expect(texts(p)).to_contain("You left the console: the beam let go")
+    align(st, p, c, 1)
+    run(st, cmd({ pressed = { "tractor" } }))
+    expect(p.tractor).to_be_truthy()
+    p.ship.pos = { 0, 500, 0 }
+    run(st, cmd())
+    expect(texts(p)).to_contain("Tractor lock lost")
+    -- a fold collapses the beam
+    align(st, p, c, 1)
+    run(st, cmd({ pressed = { "tractor" } }))
+    p.tractor.size = 2
+    run(st, cmd())
+    expect(texts(p)).to_contain("The beam collapsed in the fold")
+    p.hold = { { name = "a", value = 10, hot = true }, { name = "b", value = 5, hot = false } }
+    p.site = 1
+    p.ship.pos = { 0, 500, 0 }
+    run(st, cmd())
+    expect(p.site).to_be(0)
+    expect(p.banked_value).to_be(10)
+    expect(texts(p)).to_contain("Banked 1 item (10 c)")
+  end)
+  it("fires the Seat's mini beam straight from the seat", function()
     local st = new_state()
     local p = st.players[1]
     local r = game.ruin(1)
     local c
     for _, x in ipairs(tractor.candidates(st, p, 1, r)) do
-      if r.rooms[x.room].class >= 4 and not x.echo then c = x end
+      if x.item.size <= 1 and x.kind == "slot" then c = x end
     end
-    park(st, p, c)
-    p.mode = "walk"
-    p.body = avatar.new(L, L.helm.stand, 0)
-    for _ = 1, 3 do
-      local eye = game.viewpoint(p)
-      p.ship.yaw = saucer.math.atan2(c.pos[1] - eye[1], c.pos[3] - eye[3])
-    end
-    local eye = game.viewpoint(p)
-    local dx, dz = c.pos[1] - eye[1], c.pos[3] - eye[3]
-    p.body.pitch = saucer.math.atan2(c.pos[2] - eye[2], saucer.math.sqrt(dx * dx + dz * dz))
+    align(st, p, c, 2)
+    expect(p.beam_console).to_be(false)
     run(st, cmd({ pressed = { "tractor" } }))
     expect(p.tractor).to_be_truthy()
-    run(st, cmd(), 40)
+    expect(p.tractor.console).to_be(false)
+    run(st, cmd(), math.floor(p.tractor.total * 60) + 2)
     expect(#p.hold).to_be(1)
-  end)
-  it("loses the lock when flying away and banks hot loot on leaving", function()
-    local st = new_state()
-    local p = st.players[1]
-    local r = game.ruin(1)
-    local c = tractor.candidates(st, p, 1, r)[1]
-    park(st, p, c)
-    run(st, cmd({ pressed = { "tractor" } }))
-    p.ship.pos = { 0, 500, 0 }
-    run(st, cmd())
-    expect(texts(p)).to_contain("Tractor lock lost")
-    p.hold = { { name = "a", value = 10, hot = true }, { name = "b", value = 5, hot = false } }
-    p.site = 1
-    run(st, cmd())
-    expect(p.site).to_be(0)
-    expect(p.banked_value).to_be(10)
-    expect(texts(p)).to_contain("Banked 1 item (10 c)")
   end)
   it("collects an Echo, opens the vault with the Key and takes the Curio", function()
     local st = new_state()
@@ -245,10 +307,10 @@ describe("game", function()
     local echo
     for _, c in ipairs(tractor.candidates(st, p, 1, r)) do if c.kind == "echo" then echo = c end end
     expect(echo.echo).to_be(1)
-    p.tractor = { key = echo.key, site = 1, left = 0.01 }
     p.ship.size = 2
     p.mode = "helm"
-    p.ship.pos = { echo.pos[1], echo.pos[2], echo.pos[3] - 2 }
+    p.ship.pos = ap.beam_spot(echo.pos, 2)
+    p.tractor = { key = echo.key, site = 1, t = 1, total = 1, from = echo.pos, size = 2, console = false }
     run(st, cmd())
     local held = p.hold[#p.hold]
     expect(held.name).to_be("Echo I: glyph tablet")

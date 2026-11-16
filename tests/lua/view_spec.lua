@@ -6,6 +6,7 @@ local hud = require("view.hud")
 local assets = require("view.assets")
 local tractor = require("sim.tractor")
 local shipm = require("sim.ship")
+local vec = require("lib.vec")
 
 local function fake_view(opts)
   local v = { calls = {}, width = 480, height = 270, player = 1, index = 1, xr = false }
@@ -121,8 +122,8 @@ describe("render", function()
     p.site = 1
     p.ship.size = 2
     p.mode = "helm"
-    p.ship.pos = { c.pos[1], c.pos[2] + 0.2, c.pos[3] - 2 }
-    p.tractor = { key = c.key, site = 1, left = 0.25 }
+    p.ship.pos = require("sim.autopilot").beam_spot(c.pos, 2)
+    p.tractor = { key = c.key, site = 1, t = 0.25, total = 1, from = c.pos, size = 2, console = false }
     p.ghost, p.ghost_size = 10, 1
     p.help = true
     p.cam = "chase"
@@ -179,12 +180,16 @@ describe("hud", function()
     local st = new_state()
     local p = st.players[1]
     p.ship.size = 2
+    p.mode = "helm"
     p.ship.charge = 10
     p.hold = { { hot = true, value = 1 } }
     st.mystery.solved = true
     local v = fake_view()
-    hud.draw(v, st, p, { item = { name = "Idol", size = 3 } })
-    expect(v.texts).to_contain("needs a bigger saucer")
+    local cand = { pos = { 0, -20, 0 }, item = { name = "Idol", size = 3 }, axis = 0.4 }
+    local status, info = tractor.check(p.ship, cand)
+    hud.draw(v, st, p, { cand = cand, status = status, info = info })
+    expect(v.texts).to_contain("NEEDS A SIZE")
+    expect(v.texts).to_contain("BEAM")
     hud.touch(v)
     expect(v.calls.rect).to_be_greater(5)
     st.tick = 10000
@@ -192,6 +197,93 @@ describe("hud", function()
     local v2 = fake_view()
     hud.draw(v2, st, p, nil)
     expect((v2.texts or ""):find("old", 1, true)).to_be(nil)
+  end)
+end)
+
+describe("the belly beam on screen", function()
+  local ap = require("sim.autopilot")
+  local avatar = require("sim.avatar")
+  local L = avatar.layout()
+  local function long_target(st, p, r)
+    for _, c in ipairs(tractor.candidates(st, p, 1, r)) do
+      if c.kind == "slot" and r.rooms[c.room].class >= 4 then return c end
+    end
+  end
+  local function at_console(st, p, c)
+    p.site, p.ship.size, p.ship.morph = 1, 1, false
+    p.ship.pos = ap.beam_spot(c.pos, 1)
+    p.ship.yaw, p.ship.bank, p.ship.vel = ap.beam_yaw(c, 0), 0, { 0, 0, 0 }
+    p.mode, p.beam_console = "walk", true
+    p.body = avatar.new(L, avatar.station_by_id(L, "tractor").pos, 0)
+    p.body.pitch = L.tractor.pitch
+  end
+  it("shows the cone, the target ring and the console readouts in the Tractor Room", function()
+    local st = new_state(2)
+    local p = st.players[1]
+    local r = game.ruin(1)
+    local c = long_target(st, p, r)
+    c.axis = c.axis or 0.5
+    at_console(st, p, c)
+    p.hold = { { hot = true, value = 1, name = "a" }, { hot = false, value = 1, name = "b" } }
+    local v = fake_view()
+    render.render(v, st, 1)
+    local scan = render.last_scan[1]
+    expect(scan ~= nil).to_be(true)
+    expect(v.texts).to_contain("TRACTOR ROOM")
+    expect(v.texts).to_contain("D")
+    -- the pieces on their own
+    local A = assets.init()
+    local d = render.pose(p.ship)
+    local w = fake_view()
+    expect(render.draw_beam(w, A, p, scan, 10)).to_be(1)
+    expect(render.draw_beam(w, A, p, nil, 10)).to_be(1)
+    expect(render.draw_target(w, A, p, { cand = c, status = "yaw", info = scan.info })).to_be(12 + 18)
+    expect(render.draw_target(w, A, p, nil)).to_be(0)
+    expect(render.status_tint("lock")[2]).to_be(1)
+    expect(render.status_tint("far")[1]).to_be(1)
+    p.hatch = 0.5
+    expect(render.draw_hatch(w, A, p, d)).to_be(7)
+    expect(render.beam_console(w, A, st, p, d)).to_be_greater(12)
+    expect(render.beam_view(p)).to_be(true)
+    expect(render.beam_heading(p)).to_be_near(p.ship.yaw + L.tractor.yaw, 1e-9)
+    -- the hud's scope while lining up, from the helm too
+    local h = fake_view()
+    expect(hud.beam(h, st, p, scan)).to_be(3)
+    p.beam_console, p.mode = false, "helm"
+    local h2 = fake_view()
+    hud.beam(h2, st, p, { cand = c, status = "lock", info = scan.info })
+    expect(h2.texts).to_contain("GO DOWN TO THE TRACTOR ROOM")
+    expect(render.beam_view(p)).to_be(false)
+    p.mode = "walk"
+    expect(hud.beam(fake_view(), st, p, scan)).to_be(0)
+    expect(hud.beam(fake_view(), st, p, nil)).to_be(0)
+  end)
+  it("draws the item rising and shrinking up the beam while the hatch opens", function()
+    local st = new_state(2)
+    local p = st.players[1]
+    local r = game.ruin(1)
+    local c = long_target(st, p, r)
+    at_console(st, p, c)
+    p.tractor = { key = c.key, site = 1, t = 0.5, total = 1, from = c.pos, size = 1, console = true }
+    p.hatch = 1
+    -- the other player watches it from outside
+    local o = st.players[2]
+    o.tractor = { key = "none", site = 1, t = 0.9, total = 1, from = c.pos, size = 1, console = true }
+    o.ship.pos = vec.add(p.ship.pos, { 30, 0, 0 })
+    local v = fake_view()
+    render.render(v, st, 1)
+    expect(v.texts).to_contain("BEAM PULLING")
+    local A = assets.init()
+    local w = fake_view()
+    expect(render.draw_beam(w, A, p, nil, 5)).to_be(2 + 18)
+    expect(render.draw_target(w, A, p, render.last_scan[1])).to_be(0)
+    expect(render.beam_console(w, A, st, p, render.pose(p.ship))).to_be_greater(12)
+    p.tractor.t = 0.9
+    local h = fake_view()
+    expect(hud.beam(h, st, p, nil)).to_be(2)
+    expect(h.texts).to_contain("INTO THE HOLD")
+    p.ship.morph = { total = 1 }
+    expect(render.draw_beam(w, A, p, nil, 5)).to_be(0)
   end)
 end)
 

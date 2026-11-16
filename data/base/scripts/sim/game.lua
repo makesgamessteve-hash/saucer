@@ -290,7 +290,12 @@ local function tractor_step(state, p, cmd, dt)
     local why
     if not cand then why = "Tractor lock lost"
     elseif t.size ~= ship.size or ship.morph then why = "The beam collapsed in the fold"
-    elseif t.console and not p.beam_console then why = "You left the console: the beam let go" end
+    elseif t.console and not p.beam_console then why = "You left the console: the beam let go"
+    else
+      -- the saucer drifted so far that the item fell out of the beam
+      local b, m = tractor.beam_of(ship), tractor.measure(ship, t.from)
+      if m.depth > b.range * tractor.SENSE or m.angle > b.half_angle * tractor.SENSE_ANGLE then why = "Tractor lock lost" end
+    end
     if why then
       p.tractor = false
       msg(state, p, why)

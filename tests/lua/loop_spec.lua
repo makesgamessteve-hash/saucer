@@ -239,16 +239,99 @@ describe("scanner and jammer", function()
       if c.item.size >= 2 then big = c end
     end
     p.mode, p.ship.size, p.site, p.ship.morph = "helm", 2, 1, false
-    p.ship.yaw, p.ship.pitch = 0, 0
-    p.ship.pos = { 0, 0, 0 }
-    local e = game.viewpoint(p)
-    local want = { big.pos[1], big.pos[2], big.pos[3] - 3 }
-    p.ship.pos = vec.sub(want, e)
-    p.body.pitch = 0
-    local eye, yaw, pitch = game.viewpoint(p)
-    expect(tractor.find(st, p, 1, game.ruin(1), eye, yaw, pitch)).to_be_truthy()
+    p.ship.yaw, p.ship.pitch, p.ship.bank, p.ship.vel = 0, 0, 0, { 0, 0, 0 }
+    p.ship.pos = ap.beam_spot(big.pos, 2)
+    expect(tractor.scan(st, p, 1, game.ruin(1)).status).to_be("big")
     game.step(st, { cmd({ pressed = { "tractor" } }) }, 1 / 60)
     expect(texts(p)).to_contain("needs a size")
+  end)
+end)
+
+describe("the tractor beam's alignment rule", function()
+  local tractor = require("sim.tractor")
+  local function ship(size, over)
+    local s = { size = size, pos = { 0, 0, 0 }, yaw = 0, bank = 0, vel = { 0, 0, 0 } }
+    for k, v in pairs(over or {}) do s[k] = v end
+    return s
+  end
+  local function below(s, depth, side)
+    local e = tractor.frame(s)
+    return { e[1] + (side or 0), e[2] - depth, e[3] }
+  end
+  local function check(s, pos, size, axis)
+    return (tractor.check(s, { pos = pos, item = { size = size or 1 }, axis = axis }))
+  end
+  it("fills in defaults for configurations that only know range and class", function()
+    local b = tractor.beam({ height = 2, tractor_range = 9, tractor_class = 2 })
+    expect(b.emitter).to_equal({ 0, -1, 0 })
+    expect(b.range).to_be(9)
+    expect(b.class).to_be(2)
+    expect(b.half_angle).to_be(tractor.DEFAULT.half_angle)
+    expect(tractor.beam_of(ship(1)).console).to_be(true)
+    expect(tractor.beam_of(ship(2)).console).to_be(false)
+  end)
+  it("points the cone down the banked hull from the belly emitter", function()
+    local e, a = tractor.frame(ship(1))
+    expect(e[2]).to_be_less(-5)
+    expect(a).to_equal({ 0, -1, 0 })
+    local _, tilted = tractor.frame(ship(1, { bank = 0.3 }))
+    expect(math.abs(tilted[1])).to_be_greater(0.2)
+    local m = tractor.measure(ship(1), below(ship(1), 10, 2))
+    expect(m.depth).to_be_near(10, 1e-9)
+    expect(m.lateral).to_be_near(2, 1e-9)
+  end)
+  it("checks size, depth, cone, keel, level, stillness and line of sight in that order", function()
+    local v = ship(1)
+    expect(check(ship(2), below(ship(2), 1), 2)).to_be("big")
+    expect(check(v, below(v, 60))).to_be("far")
+    expect(check(v, below(v, 1))).to_be("close")
+    expect(check(v, below(v, -1))).to_be("close")
+    expect(check(v, below(v, 10, 8))).to_be("axis")
+    expect(check(v, below(v, 10), 3, 1.0)).to_be("yaw")
+    expect(check(v, below(v, 10), 3, saucer.math.pi)).to_be("lock") -- either end first
+    expect(check(ship(1, { bank = 0.2 }), below(ship(1, { bank = 0.2 }), 10))).to_be("tilt")
+    expect(check(ship(1, { vel = { 3, 0, 0 } }), below(v, 10))).to_be("drift")
+    expect(check(v, below(v, 10))).to_be("lock")
+    local _, info = tractor.check(v, { pos = below(v, 10, 8), item = { size = 1 } }, saucer.math.pi / 2)
+    expect(info.hint).to_contain("OFF AXIS")
+    for _, side in ipairs({ { 0, 0, 8 }, { 0, 0, -8 }, { 8, 0, 0 }, { -8, 0, 0 } }) do
+      local q = vec.add(below(v, 10), side)
+      local _, i2 = tractor.check(v, { pos = q, item = { size = 1 } })
+      expect(i2.hint).to_contain("MOVE")
+    end
+    local _, i3 = tractor.check(v, { pos = below(v, 10), item = { size = 3 } , axis = -1.0 })
+    expect(i3.hint).to_contain("TURN")
+    expect(tractor.axis_err(saucer.math.pi - 0.1)).to_be_near(-0.1, 1e-9)
+    expect(tractor.axis_err(-saucer.math.pi + 0.1)).to_be_near(0.1, 1e-9)
+  end)
+  it("does not see through derelict walls", function()
+    local st = new_state()
+    local r = game.ruin(1)
+    local w = r.walls[1]
+    local mid = { (w[1][1] + w[2][1]) / 2, 0, (w[1][3] + w[2][3]) / 2 }
+    local s = ship(2)
+    local e = tractor.frame(s)
+    s.pos = { mid[1] - e[1], w[2][2] + 1.5 - e[2], mid[3] - e[3] }
+    local c = { pos = { mid[1], w[1][2] - 0.5, mid[3] }, item = { size = 1 } }
+    local d = tractor.measure(s, c.pos).depth
+    if d <= tractor.beam_of(s).range then expect(check(s, c.pos)).to_be("blocked") end
+    expect(st).to_be_truthy()
+  end)
+  it("pulls in no less than the minimum time, easing up the axis while shrinking", function()
+    local v = ship(1)
+    expect(tractor.pull_time(v, 0)).to_be(tractor.MIN_PULL)
+    expect(tractor.pull_time(v, 70)).to_be_near(10, 1e-9)
+    local tr = { t = 0, total = 2, from = below(v, 10) }
+    local pos, scale, f = tractor.pull_pose(v, tr)
+    expect(pos).to_equal(tr.from)
+    expect(scale).to_be(1)
+    expect(f).to_be(0)
+    tr.t = 2
+    pos, scale = tractor.pull_pose(v, tr)
+    expect(pos).to_equal(tractor.frame(v))
+    expect(scale).to_be_near(tractor.beam_of(v).shrink, 1e-9)
+    expect(tractor.ease(0.5)).to_be(0.5)
+    expect(tractor.ship_half(v)).to_be_greater(1)
   end)
 end)
 
