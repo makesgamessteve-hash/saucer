@@ -511,6 +511,23 @@ function M.grab(t, pl, get, site_idx, ruin, room_id, from, filter, dist)
 end
 
 -- wait (holding still) until cond() or max ticks
+-- Holodeck drivers (add-holodeck-home-life): walk the holo body to a point of
+-- the simulated space, or fly the simulated Seat through every ring in order.
+function M.holo_walk(t, pl, get, x, z, tol, max_ticks)
+  return M.walk(t, pl, function() return { body = get().holo_run.body } end, { x, 0, z }, tol or 0.4, max_ticks)
+end
+
+function M.holo_course(t, pl, get, max_ticks)
+  local holo = require("sim.holo")
+  local p = get()
+  local sc = holo.scene(t.state(), p, p.holo_run)
+  local craft = function() return { ship = get().holo_run.craft } end
+  for _, g in ipairs(sc.gates) do
+    if not M.fly(t, pl, craft, { g[1], g[2], g[3] }, (g.r or 1.5) * 0.5, max_ticks or 900) then return false end
+  end
+  return get().holo_run.done == true
+end
+
 function M.wait_until(t, pl, cond, max_ticks)
   for _ = 1, max_ticks or 600 do
     if cond() then return true end

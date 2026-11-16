@@ -21,7 +21,7 @@ return {
                   { kind = "plane", at = { 0, 0 }, w = S * 1.2, d = S * 1.2, y = 0.02, color = { 0.28, 0.26, 0.34 } } }
     local n = 6 + 2 * ctx.detail
     for k = 0, n - 1 do
-      local a = k * 6.2832 / n
+      local a = (k + 0.5) * 6.2832 / n
       out[#out + 1] = { kind = "pillar", at = { saucer.math.sin(a) * S * 0.7, saucer.math.cos(a) * S * 0.7 }, h = 3 + (k % 2) * 1.5, r = 0.35,
                         color = stone, glow = glow, solid = 0.4 }
     end

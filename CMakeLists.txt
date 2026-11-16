@@ -139,6 +139,9 @@ if(SAUCER_BUILD_TESTS)
   add_test(NAME game_sentries COMMAND ${HL} --seed 42 --ticks 72000 --script tests/game/sentries.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_mystery COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-mystery --quiet
            --seed 42 --ticks 60000 --script tests/game/mystery.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  # milestone 4: holodeck programs, an upgrade, cooking, the bookshelf and the TV (saves at the trader)
+  add_test(NAME game_holodeck COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-holo --quiet
+           --seed 42 --script tests/game/holodeck.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   # true 3D flight: vertical flight and a multi-level derelict traversal
   add_test(NAME game_vertical COMMAND ${HL} --seed 42 --script tests/game/vertical.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_derelict3d COMMAND ${HL} --seed 42 --script tests/game/derelict3d.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
