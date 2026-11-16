@@ -108,8 +108,14 @@ end }, { __index = T })
 T.wait(30)
 local function aim_jam(what)
   T.assert(ap.wait_until(guard, 1, function() return T.state().tick >= get().jam_ready end, 900), "Jammer ready")
-  local e, q = game.viewpoint(get()), dyn(snatcher).pos
-  ap.look(T, 1, get, saucer.math.atan2(q[1] - e[1], q[3] - e[3]), ap.pitch_to(e, q), 120)
+  -- track it: it may still be drifting back to its nest
+  for _ = 1, 8 do
+    local e, q = game.viewpoint(get()), dyn(snatcher).pos
+    if ap.look(T, 1, get, saucer.math.atan2(q[1] - e[1], q[3] - e[3]), ap.pitch_to(e, q), 30) then
+      local e2, q2 = game.viewpoint(get()), dyn(snatcher).pos
+      if require("lib.vec").dist(q, q2) < 0.05 then break end
+    end
+  end
   T.press(1, "jam")
   T.wait(1)
   T.assert(dyn(snatcher).st == "disabled", what .. " (" .. dyn(snatcher).st .. ", " ..
@@ -159,10 +165,13 @@ T.assert(ap.travel(T, 1, get, first.pos, 3, 60 * 200), "flew back to derelict 2"
 ok, route = ap.enter(T, 1, get, ruin, origin, wdef.room, 2)
 T.assert(ok, "into the hall")
 local cp = cache.pos
-T.assert(ap.fly(T, 1, get, { cp[1], cp[2], cp[3] - 3 }, 0.6, 3000, cp), "flew up to the cache")
-T.assert(ap.look(T, 1, get, get().ship.yaw, ap.pitch_to(game.viewpoint(get()), cp), 240), "looking at it")
-T.press(1, "tractor")
-T.wait(45)
+local cache_c
+for _, c in ipairs(require("sim.tractor").candidates(T.state(), get(), site, ruin)) do
+  if c.kind == "cache" then cache_c = c end
+end
+T.assert(cache_c ~= nil and require("lib.vec").dist(cache_c.pos, cp) < 1e-6, "the cache is a beam target")
+T.assert(ap.fly(T, 1, get, { cp[1], cp[2] + 4, cp[3] - 3 }, 0.6, 3000), "flew up near the cache")
+T.assert(ap.beam_up(T, 1, get, cache_c), "hovered over the cache and beamed it up with the Seat's mini beam")
 T.assert(#T.state().caches == 0 and #items.losable(get()) == hot_n, "recovered the cache")
 T.assert(dyn(watcher).st == "dormant", "the Watcher never minded the Seat")
 print(string.format("sentries: hits %d, retreats %d, guard jams %d, tick %d", get().hits or 0, get().retreats or 0, jams,

@@ -368,39 +368,145 @@ function M.leave(t, pl, get, route, away)
   return M.fly(t, pl, get, a, 3, 2400)
 end
 
--- tractor every target of this player in a room that the current saucer can
--- lift (filter(c) optional). Parks `dist` from each item on the line from
--- `from`. -> number picked up
+-- add-tractor-beam drivers ------------------------------------------------
+
+-- hull centre that puts the belly beam right over a target, `depth` below the
+-- emitter (default: a few meters inside the beam's range)
+function M.beam_spot(pos, size, depth)
+  local tractor = require("sim.tractor")
+  local b = tractor.beam(configs.get(size))
+  depth = depth or (b.console and b.min + 4 or b.min + 0.35)
+  local e = b.emitter
+  return { pos[1] - e[1], pos[2] + depth - e[2], pos[3] - e[3] }
+end
+
+-- the heading that lines the keel up with a target: long scrap's axis (the
+-- end nearest the current heading), anything else keeps the heading
+function M.beam_yaw(cand, yaw)
+  if not cand.axis then return yaw end
+  local a = cand.axis
+  if math.abs(saucer.math.wrap(a - yaw)) > saucer.math.pi / 2 then a = saucer.math.wrap(a + saucer.math.pi) end
+  return a
+end
+
+local function settled(get, yaw, spot)
+  local s = get().ship
+  return vec.dist(s.pos, spot) < 0.1 and vec.len(s.vel) < 0.3 and math.abs(s.bank or 0) < 0.02 and math.abs(saucer.math.wrap(yaw - s.yaw)) < 0.05
+end
+
+-- fly (from the helm or the Seat) to hover over a target with the keel lined
+-- up, and wait for the hull to settle level and still. -> true when settled
+function M.hover_over(t, pl, get, cand, depth, max_ticks)
+  local ship = get().ship
+  local spot = M.beam_spot(cand.pos, ship.size, depth)
+  local yaw = M.beam_yaw(cand, ship.yaw)
+  local face = { spot[1] + saucer.math.sin(yaw) * 80, spot[2], spot[3] + saucer.math.cos(yaw) * 80 }
+  if not M.fly(t, pl, get, spot, 0.3, max_ticks or 1500, face) then return false end
+  for _ = 1, 600 do
+    if settled(get, yaw, spot) then return true end
+    local axes = M.steer(get().ship, spot, face)
+    M.hold(t, pl, axes)
+  end
+  return settled(get, yaw, spot)
+end
+
+-- at the beam console: trim the saucer over a new spot (and heading) with the
+-- console's slow thrusters, in the operator's frame. -> true when there
+function M.trim_to(t, pl, get, spot, yaw, max_ticks)
+  local avatar = require("sim.avatar")
+  local L = avatar.layout()
+  for _ = 1, max_ticks or 1800 do
+    local s = get().ship
+    local c = configs.get(s.size)
+    local tspeed = (c.beam and c.beam.trim_speed) or 3
+    local d = vec.sub(spot, s.pos)
+    local diff = saucer.math.wrap(yaw - s.yaw)
+    if vec.len(d) < 0.25 and vec.len(s.vel) < 0.3 and math.abs(diff) < 0.04 then
+      M.hold(t, pl, {})
+      return true
+    end
+    local want = vec.sub(vec.scale(d, 0.9), vec.scale(s.vel, 0.6))
+    local h = s.yaw + L.tractor.yaw
+    M.hold(t, pl, {
+      move_z = vec.clamp(vec.dot(want, vec.fwd(h)) / tspeed, -1, 1),
+      move_x = vec.clamp(vec.dot(want, vec.right(h)) / tspeed, -1, 1),
+      lift = vec.clamp(want[2] / (tspeed * 0.6), -1, 1),
+      turn = vec.clamp(-diff * 3, -1, 1),
+    })
+  end
+  return false
+end
+
+-- go down to the Tractor Room and sit at the beam console (from the helm or on foot)
+function M.to_console(t, pl, get)
+  if get().beam_console then return true end
+  if get().mode == "helm" then
+    t.press(pl, "use")
+    t.wait(1)
+  end
+  if not M.walk_to(t, pl, get, "tractor") then return false end
+  t.press(pl, "use")
+  t.wait(1)
+  return get().beam_console == true
+end
+
+-- get up from the beam console and walk back up to the helm
+function M.back_to_helm(t, pl, get)
+  if get().beam_console then
+    t.press(pl, "use")
+    t.wait(1)
+  end
+  return M.take_helm(t, pl, get)
+end
+
+-- pull the target the saucer hovers over (going to the console if the beam
+-- needs it) and wait until it is aboard. -> true when it is
+function M.pull(t, pl, get, key)
+  local tractor = require("sim.tractor")
+  if tractor.beam_of(get().ship).console and not M.to_console(t, pl, get) then return false end
+  t.press(pl, "tractor")
+  t.wait(1)
+  local tr = get().tractor
+  if not tr or (key and tr.key ~= key) then return false end
+  M.wait_until(t, pl, function() return not get().tractor end, 1200)
+  return true
+end
+
+-- hover over one target and beam it up (the Villa stays at the console). -> ok
+function M.beam_up(t, pl, get, cand, depth)
+  if get().beam_console then
+    local s = get().ship
+    if not M.trim_to(t, pl, get, M.beam_spot(cand.pos, s.size, depth), M.beam_yaw(cand, s.yaw)) then return false end
+  elseif not M.hover_over(t, pl, get, cand, depth) then
+    return false
+  end
+  return M.pull(t, pl, get, cand.key)
+end
+
+-- beam up every target of this player in a room that the current saucer can
+-- lift (filter(c) optional), nearest first; the Villa trims from target to
+-- target at the console, then walks back up to the helm. -> number picked up
+-- (from and dist are kept for older callers; the beam decides where to hover)
 function M.grab(t, pl, get, site_idx, ruin, room_id, from, filter, dist)
   local tractor = require("sim.tractor")
-  local game = require("sim.game")
-  local kit = ruinm.kit_of(ruin.kit)
-  local origin = t.state().sector.sites[site_idx].pos
-  local room = ruin.rooms[room_id]
-  local floor_y = ruinm.room_box(room, kit, origin)[2] + kit.wall
   local got = 0
   for _ = 1, 8 do
     local best
     for _, c in ipairs(tractor.candidates(t.state(), get(), site_idx, ruin)) do
       if (c.room == room_id or (not c.room and filter)) and tractor.can_lift(get().ship, c.item)
           and (not filter or filter(c)) then
-        local e = game.viewpoint(get())
+        local e = get().ship.pos
         local d = (c.pos[1] - e[1]) ^ 2 + (c.pos[3] - e[3]) ^ 2
         if not best or d < best.d then best = { c = c, d = d } end
       end
     end
     if not best then break end
-    local p = best.c.pos
-    local size = get().ship.size
-    local center, yaw, eye = M.stand_for(p, from, size, floor_y, dist or (size == 1 and 12 or 2.0))
-    M.fly(t, pl, get, center, 0.5, 900, p)
-    M.look(t, pl, get, yaw, M.pitch_to(eye, p), 240)
-    local before = #get().hold
-    t.press(pl, "tractor")
-    t.wait(45)
-    if #get().hold <= before then break end
+    local before = #get().hold + t.state().mystery.found
+    if not M.beam_up(t, pl, get, best.c) then break end
+    if #get().hold + t.state().mystery.found <= before then break end
     got = got + 1
   end
+  if get().beam_console then M.back_to_helm(t, pl, get) end
   return got
 end
 

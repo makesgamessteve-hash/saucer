@@ -87,13 +87,13 @@ local key_left = false
 for _, it in ipairs(get().hold) do if it.echo == 3 then key_left = true end end
 T.assert(not key_left, "the Key was used up")
 
--- tractor the Curio
-local cp = { vp[1], vp[2] + 2, vp[3] }
-local eye_up = game.viewpoint(get())[2] - get().ship.pos[2]
-T.assert(ap.fly(T, 1, get, { cp[1], cp[2] - eye_up, cp[3] - 25 }, 0.8, 1500, cp), "up to the Curio")
-ap.look(T, 1, get, get().ship.yaw, ap.pitch_to(game.viewpoint(get()), cp), 120)
-T.press(1, "tractor")
-T.wait(60)
+-- beam up the Curio: hover over it, go down to the Tractor Room, pull
+local tractor = require("sim.tractor")
+local curio_c
+for _, c in ipairs(tractor.candidates(T.state(), get(), 0, nil)) do if c.kind == "curio" then curio_c = c end end
+T.assert(curio_c ~= nil, "the Curio is a beam target")
+T.assert(ap.beam_up(T, 1, get, curio_c), "beamed up the Curio from the Tractor Room")
+T.assert(ap.back_to_helm(T, 1, get), "back at the helm")
 T.assert(T.state().vault.taken, "took the Curio")
 local curio
 for _, it in ipairs(get().hold) do if it.unique then curio = it end end

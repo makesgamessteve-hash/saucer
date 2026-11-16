@@ -46,38 +46,17 @@ local hi
 for i, id in ipairs(vchain) do if id == host.id then hi = i end end
 T.assert(hi ~= nil, "the duct branches off a hall on the way to the vault")
 
--- grab every visible item of this player in room `room`, standing off from it
+-- beam up every item of this player in room `room` (add-tractor-beam): hover
+-- over each, the Villa from its Tractor Room console, the Seat from the seat
 local function grab_room(room)
-  local got = 0
   local door = ap.door_center(ap.door_of(ruin, room.id), ruin.rooms, kit, origin)
-  local floor_y = ruinm.room_box(room, kit, origin)[2] + kit.wall
-  for _ = 1, 6 do
-    local best
-    for _, c in ipairs(tractor.candidates(T.state(), get(), 1, ruin)) do
-      if c.room == room.id and tractor.can_lift(get().ship, c.item) then
-        local e = game.viewpoint(get())
-        local d = (c.pos[1] - e[1]) ^ 2 + (c.pos[3] - e[3]) ^ 2
-        if not best or d < best.d then best = { c = c, d = d } end
-      end
-    end
-    if not best then break end
-    local p = best.c.pos
-    local size = get().ship.size
-    local center, yaw, eye = ap.stand_for(p, door, size, floor_y, size == 1 and 12 or 2.0)
-    ap.fly(T, 1, get, center, 0.5, 900, p)
-    ap.look(T, 1, get, yaw, ap.pitch_to(eye, p), 240)
-    local before = #get().hold + T.state().mystery.found
-    T.press(1, "tractor")
-    T.wait(45)
-    local after = #get().hold + T.state().mystery.found
-    if after <= before then
-      for _, m in ipairs(get().msgs) do print("msg", m.tick, m.text) end
-      local e = game.viewpoint(get())
-      print("eye", e[1], e[2], e[3], "item", p[1], p[2], p[3])
-    end
-    T.assert(after > before, "tractored " .. best.c.item.name)
-    got = got + 1
+  local n = 0
+  for _, c in ipairs(tractor.candidates(T.state(), get(), 1, ruin)) do
+    if c.room == room.id and tractor.can_lift(get().ship, c.item) then n = n + 1 end
   end
+  local got = ap.grab(T, 1, get, 1, ruin, room.id, door)
+  if got < n then for _, m in ipairs(get().msgs) do print("msg", m.tick, m.text) end end
+  T.assert(got == n, "beamed up all " .. n .. " items in room " .. room.id .. " (got " .. got .. ")")
   return got
 end
 
@@ -89,7 +68,8 @@ T.assert(ok, "flew the Villa to the vault (stuck on leg " .. tostring(leg) .. ")
 T.assert(get().site == 1 and get().ship.size == 1, "the Villa is inside the derelict")
 print("tick", T.state().tick, "villa in the vault")
 local got = grab_room(vault)
-T.assert(got >= 1, "the Villa's tractor picked up loot in the vault")
+T.assert(got >= 1, "the Villa's belly beam picked up loot in the vault")
+T.assert(get().mode == "helm" and not get().beam_console, "walked back up to the helm from the Tractor Room")
 T.screenshot("slice_vault.png")
 
 -- 3. back to the hall the duct opens from, fold down to the Seat and squeeze in

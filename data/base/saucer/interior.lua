@@ -32,7 +32,7 @@ return {
   -- (radius `hatch`) right over the emitter; at the console you sit in the
   -- operator's sling seat over the glass and look straight down (`eye`, `yaw`
   -- and `pitch` are hull-local and relative to the hull's heading)
-  tractor = { window = 1.9, hatch = 0.7, eye = { 1.45, -4.0, 0 }, yaw = -1.5708, pitch = -1.15 },
+  tractor = { window = 1.9, hatch = 0.7, eye = { 1.1, -4.0, 0 }, yaw = -1.5708, pitch = -1.2 },
   helm = { seat = { 0, 0.6, 7.2 }, stand = { 0, 0.6, 5.7 }, use_radius = 1.9 },
   -- you wake up in the bedroom, sitting on the edge of the bed (milestone 2)
   spawn = { pos = { 2.4, -3.0, 4.0 }, yaw = -1.5708 },
@@ -161,7 +161,7 @@ return {
     { deck = 3, kind = "beam_seat", box = { 1.2, -0.3, 1.8, 0.3 }, h = 1.0, color = { 0.85, 0.45, 0.20 }, solid = false },
     { deck = 3, kind = "beam_arm",  box = { 1.25, 0.45, 1.85, 0.75 }, h = 0.85, color = { 0.30, 0.32, 0.40 }, side = 1 },
     { deck = 3, kind = "beam_arm",  box = { 1.25, -0.75, 1.85, -0.45 }, h = 0.85, color = { 0.30, 0.32, 0.40 }, side = -1 },
-    { deck = 3, kind = "cargo_tube", circle = { 0, 0, 0.75 }, h = 1.9, color = { 0.55, 0.85, 1.0 } },
+    { deck = 3, kind = "cargo_tube", circle = { 0, 0, 0.7 }, h = 1.9, color = { 0.55, 0.85, 1.0 } },
     { deck = 3, kind = "hold_rack", box = { -1.5, 3.9, 1.5, 4.4 }, h = 1.8, color = { 0.36, 0.38, 0.44 } },
     { deck = 3, kind = "hold_rack", box = { -1.5, -4.4, 1.5, -3.9 }, h = 1.8, color = { 0.36, 0.38, 0.44 } },
   },

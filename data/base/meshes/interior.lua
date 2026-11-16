@@ -157,7 +157,6 @@ function BUILD.beam_seat(out, f, y)
   for _, z in ipairs({ b[2] + 0.06, b[4] - 0.06 }) do
     out[#out + 1] = box(b[3] - 0.13, y + 0.55, z - 0.025, b[3] - 0.11, y + f.h + 0.2, z + 0.025, { 0.95, 0.75, 0.1 })
     out[#out + 1] = props.tube({ b[3] - 0.05, y + f.h + 0.25, z }, { b[3] + 0.25, ceil, z }, 0.035, { 0.6, 0.62, 0.7 }, 6)
-    out[#out + 1] = props.tube({ b[1] + 0.05, y + 0.5, z }, { b[1] + 0.25, ceil, z }, 0.03, { 0.6, 0.62, 0.7 }, 6)
   end
   out[#out + 1] = box(b[1] - 0.1, ceil - 0.08, b[2] - 0.1, b[3] + 0.4, ceil, b[4] + 0.1, { 0.4, 0.42, 0.48 })
   -- a foot bar
