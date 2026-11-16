@@ -87,10 +87,12 @@ local before = #get().hold
 T.assert(ap.to_console(T, 1, get), "back at the console")
 T.assert(ap.beam_up(T, 1, get, long), "beamed up the long scrap")
 T.assert(#get().hold == before + 1 and cand_by(long.key) == nil, "it is in the hold")
-T.assert(ap.wait_until(T, 1, function() return get().hatch < 0.05 end, 240), "the hatch closes again")
+T.assert(ap.wait_until(T, 1, function() return math.abs(get().hatch - game.HATCH_ARMED) < 1e-6 end, 240),
+  "the hatch closes back to the viewing aperture")
 
 -- 5. on to the vault; an off-axis target is refused, then lined up and taken
 T.assert(ap.back_to_helm(T, 1, get), "walked back up to the helm")
+T.assert(get().hatch == 0, "the hatch shut behind us")
 local rest = {}
 for i = 3 * hi + 1, #vroute do rest[#rest + 1] = vroute[i] end
 T.assert(ap.follow(T, 1, get, rest, 1500), "flew on into the vault")

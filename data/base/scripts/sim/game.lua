@@ -214,6 +214,7 @@ local function size_request(state, p, to)
 end
 
 -- add-tractor-beam: sit down at the beam console in the Tractor Room / get up
+M.HATCH_ARMED = 0.7 -- how far the iris opens while the operator sits at the console
 local function console_enter(state, p)
   local L = avatar.layout()
   p.beam_console = true
@@ -464,10 +465,11 @@ local function world_step(state, p, dt)
     msg(state, p, "Configuration: " .. configs.get(ship.size).name)
   end
   if p.ghost > 0 then p.ghost = p.ghost - 1 end
-  -- the belly hatch irises open while the beam pulls (render reads p.hatch)
-  local hw = p.tractor and 1 or 0
+  -- the belly hatch irises open while the beam pulls, and part way while the
+  -- operator sits at the console so they can see down the beam (render reads p.hatch)
+  local hw = p.tractor and 1 or (p.beam_console and M.HATCH_ARMED or 0)
   local hc = p.hatch or 0
-  if hw > hc then p.hatch = math.min(1, hc + 2.5 * dt) else p.hatch = math.max(0, hc - 1.5 * dt) end
+  if hw > hc then p.hatch = math.min(hw, hc + 2.5 * dt) else p.hatch = math.max(hw, hc - 1.5 * dt) end
   home.doors_step(avatar.layout(), p, dt)
   -- milestone 3: docking, the lab bench, shields, Fold Retreat and the Resonant vault
   local docked = trade.docked_at(state, p)

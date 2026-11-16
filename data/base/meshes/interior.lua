@@ -184,19 +184,24 @@ function BUILD.beam_arm(out, f, y)
   out[#out + 1] = P("sphere", { c = { cx, y + f.h + 0.2, cz }, r = 0.045, h = 0.045, seg = 8, rings = 2,
                                 color = f.side > 0 and { 1, 0.75, 0.3 } or { 0.3, 0.9, 1 }, emissive = 1 })
 end
--- the cargo lift tube over the beam hatch: shrunk loot rides it up into the hold
+-- the cargo lift tube over the beam hatch: it hangs from the ceiling and ends
+-- in a flared mouth above head height, so the operator sees down through the
+-- floor window; shrunk loot rides up the beam into it and on into the hold
 function BUILD.cargo_tube(out, f, y)
   local c = f.circle
   local r = c[3]
-  out[#out + 1] = P("cylinder", { c = { c[1], y - 0.5, c[2] }, r = r - 0.05, h = f.h + 0.5, seg = 16, color = f.color,
+  local lo = 1.55
+  out[#out + 1] = P("cylinder", { c = { c[1], y + lo, c[2] }, r = r - 0.05, h = f.h - lo + 0.3, seg = 16, color = f.color,
                                   emissive = 0.25, open = true })
-  for _, h in ipairs({ 0.0, 0.7, 1.4, f.h - 0.12 }) do
+  out[#out + 1] = P("ring", { c = { c[1], y + lo - 0.06, c[2] }, rin = r - 0.06, r = r + 0.18, h = 0.08, seg = 16,
+                              color = { 1.0, 0.75, 0.2 }, emissive = 0.6 })
+  for _, h in ipairs({ lo + 0.02, f.h - 0.12 }) do
     out[#out + 1] = P("ring", { c = { c[1], y + h, c[2] }, rin = r - 0.08, r = r + 0.04, h = 0.12, seg = 16,
                                 color = { 0.42, 0.44, 0.5 } })
   end
   for k = 0, 3 do
     local a = k * sm.tau / 4 + 0.4
-    out[#out + 1] = P("box", { min = { -0.03, 0, r - 0.02 }, max = { 0.03, f.h, r + 0.03 }, yaw = a, pos = { c[1], y, c[2] },
+    out[#out + 1] = P("box", { min = { -0.03, lo, r - 0.02 }, max = { 0.03, f.h, r + 0.03 }, yaw = a, pos = { c[1], y, c[2] },
                                color = { 0.3, 0.9, 1.0 }, emissive = 1 })
   end
 end

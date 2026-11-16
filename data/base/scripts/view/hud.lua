@@ -209,12 +209,14 @@ function M.beam(v, state, p, scan)
   local tractor = require("sim.tractor")
   local b = tractor.beam_of(p.ship)
   local n = 0
+  -- at the console the view looks down the beam: keep the middle clear
+  local y0 = p.beam_console and H // 2 + 58 or H // 2 + 10
   if p.tractor then
     local f = vec.clamp(p.tractor.t / p.tractor.total, 0, 1)
     local t = f < 0.75 and "BEAM PULLING - SHRINKING TO FIT" or "INTO THE HOLD"
-    v:text(W // 2 - #t * 4, H // 2 + 22, t, CYAN)
-    v:rect(W // 2 - 40, H // 2 + 32, 80, 3, { 0.15, 0.15, 0.2, 1 })
-    v:rect(W // 2 - 40, H // 2 + 32, 80 * f, 3, AMBER)
+    v:text(W // 2 - #t * 4, y0 + 12, t, CYAN)
+    v:rect(W // 2 - 40, y0 + 22, 80, 3, { 0.15, 0.15, 0.2, 1 })
+    v:rect(W // 2 - 40, y0 + 22, 80 * f, 3, AMBER)
     return 2
   end
   local watching = p.beam_console or (p.mode == "helm" and not b.console)
@@ -222,11 +224,11 @@ function M.beam(v, state, p, scan)
   local info, st = scan.info, scan.status
   local col = st == "lock" and GREEN or ((st == "big" or st == "blocked") and RED or AMBER)
   local label = string.format("%s [%s]", items.label(scan.cand.item), loot.size_name(scan.cand.item.size))
-  v:text(W // 2 - #label * 4, H // 2 + 10, label, col)
+  v:text(W // 2 - #label * 4, y0, label, col)
   n = n + 1
   local hint = info.hint
   if st == "lock" and b.console and not p.beam_console then hint = "LOCK - GO DOWN TO THE TRACTOR ROOM" end
-  v:text(W // 2 - #hint * 4, H // 2 + 20, hint, col)
+  v:text(W // 2 - #hint * 4, y0 + 10, hint, col)
   n = n + 1
   -- the scope, bottom right
   local cx, cy, R = W - 40, H - 70, 22

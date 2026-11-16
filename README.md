@@ -12,7 +12,8 @@ lethal weapons: the risk is losing the loot you haven't banked yet.
 
 The vertical slice (concept v0.4, [`docs/concept.md`](docs/concept.md)): walk
 the two decks, take the helm, fly the Villa into a derelict's great halls,
-tractor loot through the glass, fold down to the Seat for a duct, come back
+hover over loot, walk down to the Tractor Room and beam it up (it shrinks on
+the way into the hold), fold down to the Seat for a duct, come back
 out, unfold, and leave the site to bank it. Keyboard/mouse, gamepad, touch
 (mobile web) and basic WebXR are supported. The implementation plan is
 [`docs/ROADMAP.md`](docs/ROADMAP.md).
@@ -87,7 +88,8 @@ macOS is not a target for now.
 | Use: take the helm / stand up / furniture / pick a menu row | G / Return | X | Use button | left trigger |
 | Menu up / down (title, bed) | W / S | left stick | left stick | left stick |
 | Fold to the Seat / unfold the Villa | Q / E, wheel, 1–2 | LB / RB | buttons | A / B, or grip + stick (size lever) |
-| Tractor beam | F / left click | A | button | right trigger |
+| Tractor beam: pull (at the beam console, or in the Seat) | F / left click | A | button | right trigger |
+| Beam console: trim position / height / heading | W A S D / Space, Ctrl / mouse, arrows | left stick / triggers / right stick | left stick / slider / drag | left stick / right stick |
 | Scanner / Jammer | V / T | Y / right stick click | SCAN / JAM buttons | X / Y |
 | Run/boost, camera, help | Shift, C, H | LS, Back, Start | buttons | left grip, —, menu |
 
@@ -101,6 +103,21 @@ terminal. At the bed, Use offers sleep until morning, which refills Charge
 and **saves the game**, or loading the last save. Folding on foot forms
 the Seat around wherever you stand and seats you in it. The rooms visibly
 pack away one after another before the hull shrinks.
+
+**The tractor beam** shines straight down from the saucer's belly, so the
+saucer has to be put over the loot first. Hover above it (Villa: 3 to 45 m
+above, inside a 20° cone), level and still, with long scrap (size L and up)
+lying along the keel within 15°. The HUD scope at the bottom right shows
+where the target is under the beam and a hint says what to fix ("OFF AXIS -
+MOVE LEFT 3M", "LONG SCRAP - TURN RIGHT 40 DEG", "TOO HIGH - DESCEND 6M",
+"LEVEL THE HULL", "HOLD STILL"). The Villa's beam is run from the **Tractor
+Room**: stand up from the helm (the saucer holds station), take the stairs
+down beside the engine, and press Use at the beam console. You look down
+through the floor window; the stick, Space/Ctrl and turn trim the saucer
+slowly, F pulls, Use gets up. The item rises up the beam and shrinks to fit
+the hold while the belly hatch opens. Getting up, folding or drifting away
+drops it. The Seat has a small beam of its own: hover just above small
+loot and press F from the seat.
 
 The loop (milestone 3): loot comes in unidentified. Queue it at the **lab
 bench** (it works while you fly, as long as you are the Villa), then dock

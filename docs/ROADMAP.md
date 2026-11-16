@@ -34,7 +34,7 @@ helm into huge derelicts, and fold to the Seat only when a duct demands it.
 **Deliverables.** First-person avatar; two-deck interior with collision and
 code-generated meshes; take/leave the helm; two sizes (Villa, Seat) with
 Charge costs and a red ghost when unfold is blocked; derelict halls sized
-for the Villa; tractor loot through the glass; bank at the trader; basic
+for the Villa; tractor loot through the glass (since v0.8: from the Tractor Room, see 3⅞); bank at the trader; basic
 keyboard/mouse, gamepad, touch and WebXR; `slice.lua` and `interior.lua`.
 
 **Done when.** Those game tests pass (including wasm), the slice replay
@@ -152,6 +152,26 @@ budgeted, built lazily (6 per frame), drawn within 480 m and culled per
 chunk, and far saucers skip their rooms. Tests: `tests/lua/detail_spec.lua`.
 Screenshot tour: `tools/shots/detail.lua`. Known gaps: props, debris and
 bridges have no collision, and the engine rotors only approximate the bank.
+
+## 3⅞. Belly tractor beam — done
+
+**Goal.** Steve: "collect the loot/scrap with some kind of tractor beam that
+also shrinks. This has to be done from a special room at the bottom of the
+saucer. The saucer has to be positioned at the fitting position and
+orientation to make that possible."
+
+**Status (2026-11-16).** Done in OpenSpec change `add-tractor-beam`. A cone
+beam fires straight down from the belly. It takes a target only inside its
+depth range and cone, with long scrap along the keel, the hull level and
+still, and a clear line of sight (`sim/tractor.lua`). The Villa runs it from
+the new **Tractor Room** (a third deck down a stair beside the engine:
+floor window, belly hatch iris, sling seat with console arms, cargo tube,
+hold racks). At the console the controls trim the hovering saucer, F pulls
+and the item rises and shrinks into the hold. The Seat has a mini beam fired
+from the seat. HUD scope and hints, console scope, beam cone, motes, target
+ring and keel line. Tests: `tests/game/tractor.lua` and unit specs.
+Screenshot tour: `tools/shots/tractor.lua`. Known gaps: sentries ignore the
+beam; the Tractor Room has no own sound loop (it reuses the tractor sounds).
 
 ## 4. Presentation and packaging — next
 

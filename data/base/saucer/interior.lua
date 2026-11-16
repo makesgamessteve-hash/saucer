@@ -32,7 +32,7 @@ return {
   -- (radius `hatch`) right over the emitter; at the console you sit in the
   -- operator's sling seat over the glass and look straight down (`eye`, `yaw`
   -- and `pitch` are hull-local and relative to the hull's heading)
-  tractor = { window = 1.9, hatch = 0.7, eye = { 1.1, -4.0, 0 }, yaw = -1.5708, pitch = -1.2 },
+  tractor = { window = 1.9, hatch = 0.7, eye = { 1.1, -4.0, 0 }, yaw = -1.5708, pitch = -1.3 },
   helm = { seat = { 0, 0.6, 7.2 }, stand = { 0, 0.6, 5.7 }, use_radius = 1.9 },
   -- you wake up in the bedroom, sitting on the edge of the bed (milestone 2)
   spawn = { pos = { 2.4, -3.0, 4.0 }, yaw = -1.5708 },

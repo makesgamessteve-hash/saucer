@@ -80,6 +80,11 @@ function M.camera(p, xr)
     local R, H = c.diameter / 2, c.height
     local f = vec.fwd(ship.yaw)
     local back = R * 2.2 + 6
+    if p.beam_console or p.tractor then
+      -- watching the beam: hang back at belly height and look down past the hull
+      return { pos = { ship.pos[1] - f[1] * back, ship.pos[2] + 1, ship.pos[3] - f[3] * back },
+               yaw = ship.yaw, pitch = -0.3, fov = 70, near = 0.1, far = 4000 }
+    end
     return { pos = { ship.pos[1] - f[1] * back, ship.pos[2] + H * 1.2 + 3, ship.pos[3] - f[3] * back },
              yaw = ship.yaw, pitch = ship.pitch - 0.22, fov = 70, near = 0.1, far = 4000 }
   end
@@ -405,10 +410,13 @@ function M.draw_hatch(v, A, o, d)
   if not T or not A.iris_leaf then return 0 end
   local open = o.hatch or 0
   local y = (tractor.beam_of(o.ship).emitter or { 0, -5.75, 0 })[2] - 0.02
+  -- each leaf retracts into the rim: its inner edge slides out, its outer edge stays put
+  local s = type(d.scale) == "number" and d.scale or 1
+  local k_len = math.max(0.02, 1 - open)
   for k = 0, 5 do
     local a = k * sm.tau / 6
     local lp = { sm.sin(a) * open * T.hatch, y, sm.cos(a) * open * T.hatch }
-    v:mesh(A.iris_leaf, { pos = at(d, lp), yaw = d.yaw + a, roll = d.roll, scale = d.scale })
+    v:mesh(A.iris_leaf, { pos = at(d, lp), yaw = d.yaw + a, roll = d.roll, scale = { s, s, s * k_len } })
   end
   v:mesh(A.belly_glass, { pos = d.pos, yaw = d.yaw, roll = d.roll, scale = d.scale, ghost = true, tint = { 0.6, 0.9, 1, 0.22 } })
   return 7
@@ -687,7 +695,12 @@ function M.render(v, state, alpha)
     for _, cand in ipairs(tractor.candidates(state, p, p.site, ruin)) do
       local s = 0.6 + cand.item.size * 0.35
       local pos, k = cand.pos, 1
-      if p.tractor and p.tractor.key == cand.key then pos, k = tractor.pull_pose(p.ship, p.tractor) end
+      if p.tractor and p.tractor.key == cand.key then
+        pos, k = tractor.pull_pose(p.ship, p.tractor)
+        -- a glow round the item riding the beam, so it reads as it shrinks
+        v:billboard(A.tex.beam, pos, (0.6 + cand.item.size * 0.35) * k * 1.8, { palette = A.pal.base,
+                    tint = { 0.8, 1, 0.9, 0.55 } })
+      end
       if cand.echo or cand.kind == "curio" then
         v:billboard(A.tex.echo, pos, (cand.kind == "curio" and 2.4 or 1.6) * k, { palette = A.pal.base })
       else
