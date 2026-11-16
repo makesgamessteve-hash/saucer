@@ -173,7 +173,40 @@ ring and keel line. Tests: `tests/game/tractor.lua` and unit specs.
 Screenshot tour: `tools/shots/tractor.lua`. Known gaps: sentries ignore the
 beam; the Tractor Room has no own sound loop (it reuses the tractor sounds).
 
-## 4. Presentation and packaging — next
+## 4. Holodeck and home life — next
+
+**Goal.** Steve: a holodeck with different programs that can be extended
+and upgraded later, plus cooking, reading and watching TV in the saucer.
+
+**Deliverables.** A Holodeck room on the lower deck with a program library;
+each program is a Lua mod under `data/base/holo/` (relax scenes, a Seat
+flight course, replays of explored derelicts, recreations of decoded alien
+places that feed the mystery). Programs come as loot (data cores the lab
+decodes) or from traders; upgrade modules add room size, detail and
+co-op slots. Cooking at the kitchen from trader and alien ingredients, with
+small buffs. A bookshelf that fills with found books and logs (lore and
+clues). A TV that picks up channels from nearby stations and cities, used
+as a gentle hint system.
+
+**Done when.** A game test loads and runs two holodeck programs, installs
+an upgrade, cooks a meal for a buff, reads a found log and gets a hint from
+the TV; a mod adds a program without engine changes.
+
+## 5. Pocket saucer and station visits — after 4
+
+**Goal.** Steve: travel to a space station, shrink the saucer to the size
+of a big coin, put it in your pocket and explore the station on foot.
+
+**Deliverables.** A fourth configuration, Pocket (coin-sized), allowed only
+while docked; fold, pocket and unpocket (only in open space or a hangar);
+first-person on-foot movement; walkable station areas (market, bar,
+hangars) generated from the station kit; on-foot trading and NPC traders;
+a non-lethal pocket risk (e.g. a pickpocket you can chase down).
+
+**Done when.** A game test docks, pockets the saucer, walks the station,
+trades on foot, unpockets in a hangar and flies away.
+
+## 6. Presentation and packaging — after 5
 
 **Goal.** It looks and ships like the retro-3D game in the concept.
 
@@ -184,19 +217,20 @@ touch polish; a Windows package.
 **Done when.** `artpipe lint` is clean, a Windows zip or installer is
 published, and XR seated + standing has been checked.
 
-## 5. On-foot excursions — post-MVP
+## 7. On-foot excursions — post-MVP
 
 **Goal.** Step out of the saucer into a derelict for crawlspaces and
-hand-locks. Cut from the MVP in v0.4 (was Pocket mode).
+hand-locks. Cut from the MVP in v0.4 (was Pocket mode); builds on the
+Pocket configuration and on-foot movement from milestone 5.
 
-**Deliverables.** Pocket, deploy, recall; Suit Charge; 4-slot hands;
+**Deliverables.** Deploy and recall in derelicts; Suit Charge; 4-slot hands;
 Lifeline failure; hand-locks that open doors for the saucer; on-foot grid
 consoles.
 
 **Done when.** A game test steps out, opens a hand-lock, fails with
 Lifeline, and recovers the dropped cache.
 
-## 6. The wider dark (M2) — later
+## 8. The wider dark (M2) — later
 
 **Goal.** A bigger universe, and local co-op with one saucer each.
 
@@ -209,7 +243,7 @@ Shroud, Override spike; a third kit and procedural music.
 **Done when.** Four local players can share a sector in split screen, each
 in their own saucer, and a party can follow a multi-sector mystery.
 
-## 7. Home among the stars (M3) — later
+## 9. Home among the stars (M3) — later
 
 **Goal.** Networked co-op and a dome that is truly yours.
 
