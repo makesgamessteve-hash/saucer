@@ -238,6 +238,80 @@ M.extra_radar[#M.extra_radar + 1] = function(state, p)
   return out
 end
 
+-- add-holodeck-home-life: leads from clues (books, holodeck memories), teal
+local TEAL = { 0.3, 1, 0.85, 1 }
+M.extra_radar[#M.extra_radar + 1] = function(state, p)
+  local out = {}
+  for _, k in ipairs(saucer.util.sorted_keys(p.leads or {})) do
+    local s = state.sector.sites[tonumber(k)]
+    if s then
+      local c = hud.site_center(state, s)
+      out[#out + 1] = { pos = { c[1], c[2] - 30, c[3] }, color = TEAL }
+    end
+  end
+  return out
+end
+
+-- add-holodeck-home-life: the TV picture (a test card while off, a channel's
+-- colours and moving shapes while someone watches), a steaming pot on the
+-- stove while cooking, and a holo shimmer in the arch while a program runs.
+-- Render-only. -> number of draws
+M.TV_COLORS = { trader_wave = { 0.3, 0.8, 1.0 }, static_noir = { 0.75, 0.75, 0.8 }, sky_garden = { 0.5, 1.0, 0.5 } }
+function M.home_parts(v, A, o, d, tick)
+  local L = avatar.layout()
+  local n = 0
+  local T = L.tv
+  if T then
+    local col = { 0.08, 0.1, 0.14 }
+    if o.tv then col = M.TV_COLORS[o.tv.ch] or { 0.9, 0.6, 0.3 } end
+    local c = T.screen
+    local k = o.tv and 1 or 0.35
+    v:mesh(A.unit, { pos = at(d, { c[1] - 0.06, c[2], c[3] }), yaw = d.yaw, roll = d.roll,
+                     scale = { 0.01 * d.scale, T.h * d.scale, T.w * d.scale }, tint = { col[1] * k, col[2] * k, col[3] * k, 1 } })
+    n = n + 1
+    if o.tv then
+      -- a few drifting shapes: a horizon bar, a sun, a scrolling ticker
+      local t = (tick % 600) / 600
+      v:mesh(A.unit, { pos = at(d, { c[1] - 0.07, c[2] - T.h * 0.12, c[3] }), yaw = d.yaw, roll = d.roll,
+                       scale = { 0.01 * d.scale, T.h * 0.3 * d.scale, T.w * 0.96 * d.scale },
+                       tint = { col[1] * 0.45, col[2] * 0.45, col[3] * 0.45, 1 } })
+      v:mesh(A.unit, { pos = at(d, { c[1] - 0.075, c[2] + T.h * 0.2, c[3] + T.w * (0.35 - 0.7 * t) }), yaw = d.yaw,
+                       roll = d.roll, scale = { 0.01 * d.scale, T.h * 0.22 * d.scale, T.h * 0.22 * d.scale },
+                       tint = { 1, 0.9, 0.6, 1 } })
+      v:mesh(A.unit, { pos = at(d, { c[1] - 0.075, c[2] - T.h * 0.42, c[3] }), yaw = d.yaw, roll = d.roll,
+                       scale = { 0.01 * d.scale, T.h * 0.08 * d.scale, T.w * 0.96 * d.scale }, tint = { 0.05, 0.05, 0.08, 1 } })
+      for j = 0, 4 do
+        local z = c[3] + T.w * (0.45 - ((t * 2 + j * 0.2) % 1) * 0.9)
+        v:mesh(A.unit, { pos = at(d, { c[1] - 0.08, c[2] - T.h * 0.42, z }), yaw = d.yaw, roll = d.roll,
+                         scale = { 0.01 * d.scale, T.h * 0.03 * d.scale, T.w * 0.1 * d.scale }, tint = { 1, 1, 1, 1 } })
+      end
+      n = n + 5
+    end
+  end
+  local S = L.stove
+  if S and o.cooking then
+    local pot = S.pot
+    v:mesh(A.unit, { pos = at(d, { pot[1], pot[2] + 0.12, pot[3] }), yaw = d.yaw, roll = d.roll,
+                     scale = { 0.34 * d.scale, 0.24 * d.scale, 0.34 * d.scale }, tint = { 0.55, 0.57, 0.62, 1 } })
+    for j = 0, 5 do
+      local f = ((tick + j * 17) % 90) / 90
+      v:billboard(A.tex.glow, at(d, { pot[1] + 0.08 * sm.sin(j * 1.7 + f * 4), pot[2] + 0.3 + f * 0.9,
+                                       pot[3] + 0.08 * sm.cos(j * 2.3) }), (0.18 + f * 0.35) * d.scale,
+                  { palette = A.pal.base, tint = { 1, 1, 1, 0.55 * (1 - f) } })
+    end
+    n = n + 7
+  end
+  local H = L.holodeck
+  if H and o.holo_run then
+    local y = L.decks[2].floor
+    v:mesh(A.unit, { pos = at(d, { H.x, y + 1.2, (H.z0 + H.z1) / 2 }), yaw = d.yaw, roll = d.roll,
+                     scale = { 0.02 * d.scale, 2.3 * d.scale, (H.z1 - H.z0) * d.scale }, ghost = true,
+                     tint = { 1, 0.8, 0.3, 0.35 + 0.15 * sm.sin(tick * 0.1) } })
+    n = n + 1
+  end
+  return n
+end
+
 -- live helm readouts (milestone 2): a radar on the desk, Charge/hull/shield
 -- bars on the left wing screen, hold slots and the size ladder on the right
 function M.console(v, A, state, o, d)
@@ -514,6 +588,7 @@ function M.rooms(v, A, o, d, state)
     if state then M.console(v, A, state, o, d) end
     if state and (amounts["3:Tractor room"] or 0) == 0 then M.beam_console(v, A, state, o, d) end
     if (amounts["2:Engine room"] or 0) == 0 then M.engine_parts(v, A, d, state and state.tick or 0) end
+    M.home_parts(v, A, o, d, state and state.tick or 0)
   end
   return drawn
 end
@@ -671,6 +746,13 @@ function M.render(v, state, alpha)
   local p = state.players[v.player]
   if not p then return end
   local A = assets.init()
+  if p.holo_run then
+    -- add-holodeck-home-life: inside a program you only see the simulation
+    require("view.holo").render(v, state, p)
+    if not v.xr then hud.draw(v, state, p, nil) end
+    if v.index == v.player then M.audio(state, p) end
+    return
+  end
   local cam = M.camera(p, v.xr)
   v:camera(cam)
   v:fog({ color = { 0.02, 0.02, 0.06 }, density = M.FOG, clear = { 0.0, 0.0, 0.025 }, light = { 0.35, 0.8, 0.45 },

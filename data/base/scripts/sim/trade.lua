@@ -118,6 +118,51 @@ function M.repair(p)
   return n
 end
 
+-- add-holodeck-home-life: the home shop (home/shop.lua)
+function M.shop() return data.load("home/shop.lua") end
+
+local function shop_name(e)
+  if e.kind == "ingredient" then return string.format("%d %s", e.n or 1, require("sim.kitchen").name(e.id)) end
+  if e.kind == "program" then
+    local pr = require("sim.holo").program(e.id)
+    return "holo program " .. (pr and pr.name or e.id)
+  end
+  if e.kind == "module" then
+    local m = data.load("home/holo_modules.lua")[e.id]
+    return m and m.name or e.id
+  end
+  local b = require("sim.books").def(e.id)
+  return b and b.title or e.id
+end
+M.shop_name = shop_name
+
+-- can p buy shop entry e? -> ok, why
+function M.can_buy(p, e)
+  if e.kind == "program" and require("sim.holo").has(p, e.id) then return false, "owned" end
+  if e.kind == "book" and require("sim.books").has(p, e.id) then return false, "owned" end
+  if e.kind == "module" and #p.hold >= configs.all().hold_slots then return false, "hold full" end
+  if (p.credits or 0) < e.price then return false, "credits" end
+  return true
+end
+
+-- buy(p, e) -> ok, why: pays and delivers (ingredients to the pantry,
+-- programs to the holodeck library, books to the shelf, modules to the hold)
+function M.buy(p, e)
+  local ok, why = M.can_buy(p, e)
+  if not ok then return false, why end
+  p.credits = p.credits - e.price
+  if e.kind == "ingredient" then require("sim.kitchen").stock(p, e.id, e.n or 1)
+  elseif e.kind == "program" then require("sim.holo").unlock(p, e.id)
+  elseif e.kind == "book" then require("sim.books").add(p, e.id)
+  else
+    local it = items.stamp(p, require("sim.finds").item({ kind = e.kind, id = e.id }), 1, nil)
+    it.hot = false
+    p.hold[#p.hold + 1] = it
+  end
+  p.bought = (p.bought or 0) + 1
+  return true
+end
+
 -- trade terminal rows: sell each hold item (Echoes are not for sale), buy
 -- Charge and hull repair. Every transaction saves the game at once.
 function M.rows(state, p, ctx)
@@ -143,6 +188,18 @@ function M.rows(state, p, ctx)
     else
       rows[#rows + 1] = { text = items.label(it) .. " - Not for sale", enabled = false }
     end
+  end
+  for _, e in ipairs(M.shop()) do
+    local ok, why = M.can_buy(p, e)
+    local entry = e
+    rows[#rows + 1] = { text = string.format("Buy %s - %d c%s", shop_name(e), e.price, why == "owned" and " (owned)" or ""),
+      enabled = ok, act = function(st, pl)
+        if M.buy(pl, entry) then
+          local saved = require("sim.save").write(st)
+          ctx.msg(st, pl, string.format("Bought %s%s", shop_name(entry), saved and " (saved)" or ""))
+          ctx.fx(st, pl, "bank")
+        end
+      end }
   end
   local rc, hc = M.refill_cost(p), M.repair_cost(p)
   rows[#rows + 1] = { text = string.format("Refill Charge - %d c", rc), enabled = rc > 0 and (p.credits or 0) > 0,

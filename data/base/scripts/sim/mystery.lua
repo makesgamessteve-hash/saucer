@@ -23,6 +23,7 @@ function M.generate(universe_seed, mode, nsites)
   local cause = rng:pick(causes)
   local vars = { civ = rng:pick(civs).name, object = rng:pick(names.objects), place = rng:pick(names.places) }
   local m = { mode = mode or "on", cause = cause.id, title = cause.title, echoes = {}, solved = false, found = 0,
+              vars = vars, -- add-holodeck-home-life: books and holodeck memories use the names
               curio = cause.curio or ("Resonant " .. vars.object), vault_revealed = false, vault_open = false }
   for i, text in ipairs(cause.echoes) do
     local role = M.ROLES[i] or "key"

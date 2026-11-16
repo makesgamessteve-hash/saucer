@@ -54,9 +54,9 @@ return {
   { deck = 2, kind = "engine_ring", at = { 0, -1.8 } },
   { deck = 2, kind = "pipes",      at = { 0, -2.0 } },
   { deck = 2, kind = "tank",       at = { -7.3, -4.4 } },
-  { deck = 2, kind = "tank",       at = { 7.1, -4.7 } },
+  { deck = 2, kind = "tank",       at = { 2.9, -6.9 } },
   { deck = 2, kind = "tank",       at = { -6.2, -5.9 } },
   { deck = 2, kind = "battery_bars", at = { -4.58, -5.0 } },
-  { deck = 2, kind = "monitor",    at = { 5.3, -1.55 } },
+  { deck = 2, kind = "monitor",    at = { 0.0, 0.66 } },
   { deck = 2, kind = "grating",    at = { 0, -6.5 }, box = { -6.0, -8.0, 6.0, -6.4 } },
 }

@@ -285,6 +285,124 @@ function BUILD.terminal(out, f, y)
   out[#out + 1] = box(b[1], y + 0.005, b[4] + 0.1, b[3], y + 0.02, b[4] + 1.0, { 0.85, 0.65, 0.2 })
 end
 
+
+-- add-holodeck-home-life: the Holodeck's partition (dark, a lit grid on the
+-- room side), the arch round its opening, the control panel and the TV
+local HOLO = { 0.95, 0.75, 0.25 }
+function BUILD.holo_wall(out, f, y)
+  local b = f.box
+  out[#out + 1] = box(b[1], y, b[2], b[3], y + f.h, b[4], f.color)
+  -- grid on the inner (+x) face
+  local x = b[3] + 0.005
+  for k = 0, math.floor((b[4] - b[2]) / 0.8) do
+    local z = b[2] + k * 0.8
+    if z <= b[4] then out[#out + 1] = box(x, y, z - 0.02, x + 0.01, y + f.h, z + 0.02, HOLO, { emissive = 0.9 }) end
+  end
+  for k = 1, 4 do
+    local yy = y + k * 0.8
+    out[#out + 1] = box(x, yy - 0.02, b[2], x + 0.01, yy + 0.02, b[4], HOLO, { emissive = 0.9 })
+  end
+  -- a plain trim on the engine room side
+  out[#out + 1] = box(b[1] - 0.01, y, b[2], b[1], y + 0.15, b[4], { 0.35, 0.35, 0.4 })
+end
+function BUILD.holo_arch(out, f, y)
+  local b = f.box
+  local h = f.h
+  -- two posts and a lintel, lit edges
+  out[#out + 1] = box(b[1], y, b[2], b[3], y + h, b[2] + 0.12, darker(f.color, 0.55))
+  out[#out + 1] = box(b[1], y, b[4] - 0.12, b[3], y + h, b[4], darker(f.color, 0.55))
+  out[#out + 1] = box(b[1], y + h - 0.16, b[2], b[3], y + h, b[4], darker(f.color, 0.55))
+  out[#out + 1] = box(b[1] - 0.01, y, b[2] + 0.1, b[3] + 0.01, y + h - 0.14, b[2] + 0.13, f.color, { emissive = 1 })
+  out[#out + 1] = box(b[1] - 0.01, y, b[4] - 0.13, b[3] + 0.01, y + h - 0.14, b[4] - 0.1, f.color, { emissive = 1 })
+  out[#out + 1] = box(b[1] - 0.01, y + h - 0.17, b[2] + 0.1, b[3] + 0.01, y + h - 0.14, b[4] - 0.1, f.color, { emissive = 1 })
+  -- a threshold plate
+  out[#out + 1] = box(b[1] - 0.15, y + 0.005, b[2] + 0.12, b[3] + 0.15, y + 0.025, b[4] - 0.12, { 0.3, 0.3, 0.34 })
+end
+function BUILD.holo_panel(out, f, y)
+  local b = f.box
+  out[#out + 1] = box(b[1], y + 0.75, b[2], b[3], y + f.h, b[4], f.color)
+  out[#out + 1] = box(b[1] + 0.05, y, b[2] + 0.15, b[3], y + 0.75, b[4] - 0.15, darker(f.color, 0.7))
+  -- the program screen (faces -x) and a row of program keys
+  out[#out + 1] = box(b[1] - 0.01, y + 0.95, b[2] + 0.06, b[1], y + f.h - 0.08, b[4] - 0.06, { 0.1, 0.08, 0.02 },
+                      { emissive = 0.3 })
+  for k = 0, 3 do
+    local z = b[2] + 0.12 + k * (b[4] - b[2] - 0.24) / 3
+    out[#out + 1] = box(b[1] - 0.02, y + 1.0 + (k % 2) * 0.12, z - 0.04, b[1] - 0.01, y + 1.36 - (k % 2) * 0.1, z + 0.04,
+                        k == 1 and { 0.4, 1, 0.6 } or HOLO, { emissive = 1 })
+  end
+  for k = 0, 4 do
+    local z = b[2] + 0.1 + k * (b[4] - b[2] - 0.2) / 4
+    out[#out + 1] = box(b[1] - 0.04, y + 0.8, z - 0.05, b[1], y + 0.88, z + 0.05, k % 2 == 0 and HOLO or { 0.5, 0.8, 1 },
+                        { emissive = 0.8 })
+  end
+end
+function BUILD.tv(out, f, y)
+  local b = f.box
+  -- low stand with two shelves
+  out[#out + 1] = box(b[1], y, b[2], b[3], y + f.h, b[4], f.color)
+  out[#out + 1] = box(b[1] - 0.01, y + 0.08, b[2] + 0.1, b[1], y + f.h - 0.08, b[4] - 0.1, darker(f.color, 0.6))
+  -- the screen above it, facing the sofa (-x); its picture is drawn by view/render.lua
+  local cz, hw = (b[2] + b[4]) / 2, 1.08
+  local x = (b[1] + b[3]) / 2
+  out[#out + 1] = box(x - 0.05, y + f.h + 0.12, cz - hw, x + 0.04, y + f.h + 1.32, cz + hw, { 0.06, 0.06, 0.08 })
+  out[#out + 1] = box(x - 0.02, y + f.h, cz - 0.1, x + 0.02, y + f.h + 0.12, cz + 0.1, { 0.2, 0.2, 0.22 })
+  -- a speaker bar and a little console box on the stand
+  out[#out + 1] = box(b[1] + 0.05, y + f.h, cz - 0.7, b[1] + 0.18, y + f.h + 0.1, cz + 0.7, { 0.15, 0.15, 0.17 })
+  out[#out + 1] = box(b[1] + 0.05, y + f.h, cz + 0.8, b[1] + 0.3, y + f.h + 0.08, cz + 1.0, { 0.85, 0.85, 0.9 })
+end
+
+-- the holodeck room itself: black floor and ceiling with a lit grid, the
+-- grid carried up the curved hull wall between the partition ends
+local function holo_room(out, L)
+  local H = L.holodeck
+  if not H then return end
+  local d2 = L.decks[2]
+  local R = d2.radius
+  local x0, z0, x1, z1 = H.room[1], H.room[2], H.room[3], H.room[4]
+  local y, yc = d2.floor, d2.ceiling
+  out[#out + 1] = box(x0, y + 0.004, z0, x1, y + 0.012, z1, { 0.03, 0.03, 0.05 })
+  out[#out + 1] = box(x0, yc - 0.012, z0, x1, yc - 0.004, z1, { 0.03, 0.03, 0.05 })
+  for k = 0, math.floor((x1 - x0) / 0.8) do
+    local x = x0 + k * 0.8
+    local w = sm.sqrt(math.max(0, R * R - x * x))
+    local a, c = math.max(z0, -w), math.min(z1, w)
+    if c > a then
+      out[#out + 1] = box(x - 0.02, y + 0.012, a, x + 0.02, y + 0.02, c, HOLO, { emissive = 0.9 })
+      out[#out + 1] = box(x - 0.02, yc - 0.02, a, x + 0.02, yc - 0.012, c, HOLO, { emissive = 0.6 })
+    end
+  end
+  for k = 0, math.floor((z1 - z0) / 0.8) do
+    local z = z0 + k * 0.8
+    local w = sm.sqrt(math.max(0, R * R - z * z))
+    local a, c = x0, math.min(x1, w)
+    if c > a then
+      out[#out + 1] = box(a, y + 0.012, z - 0.02, c, y + 0.02, z + 0.02, HOLO, { emissive = 0.9 })
+      out[#out + 1] = box(a, yc - 0.02, z - 0.02, c, yc - 0.012, z + 0.02, HOLO, { emissive = 0.6 })
+    end
+  end
+  -- the curved wall: a dark lining with vertical grid lines and three rings
+  local a0, a1 = sm.atan2(x0, z1), sm.atan2(x0, z0)
+  if a1 < a0 then a1 = a1 + sm.tau end
+  local n = math.floor((a1 - a0) * R / 0.8)
+  for k = 0, n do
+    local a = a0 + (a1 - a0) * k / n
+    local r = R - 0.05
+    out[#out + 1] = P("box", { min = { -0.42, 0, -0.03 }, max = { 0.42, yc - y, 0.0 }, color = { 0.03, 0.03, 0.05 },
+                               pos = { sm.sin(a) * r, y, sm.cos(a) * r }, yaw = a })
+    out[#out + 1] = P("box", { min = { -0.02, 0, -0.05 }, max = { 0.02, yc - y, -0.03 }, color = HOLO, emissive = 0.9,
+                               pos = { sm.sin(a) * r, y, sm.cos(a) * r }, yaw = a })
+    for j = 1, 3 do
+      out[#out + 1] = P("box", { min = { -0.42, j * 0.8 - 0.02, -0.05 }, max = { 0.42, j * 0.8 + 0.02, -0.03 }, color = HOLO,
+                                 emissive = 0.9, pos = { sm.sin(a) * r, y, sm.cos(a) * r }, yaw = a })
+    end
+  end
+  -- emitter studs at the grid crossings on the ceiling
+  for _, c in ipairs({ { 5.6, -4.8 }, { 7.2, -2.4 }, { 5.6, -0.8 }, { 6.4, -2.4 } }) do
+    out[#out + 1] = P("cylinder", { c = { c[1], yc - 0.08, c[2] }, r = 0.12, h = 0.07, seg = 8, color = { 1, 0.9, 0.6 },
+                                    emissive = 1 })
+  end
+end
+
 local function floor_strips(out, L)
   local d1 = L.decks[1]
   local st = L.stairs
@@ -461,7 +579,7 @@ end
 local function lights(out, L, only)
   local d1, d2 = L.decks[1], L.decks[2]
   -- lower deck ceiling panels
-  for _, p in ipairs(only == 1 and {} or { { 4, 4 }, { -4, 4 }, { 0, -1.8 }, { 5, -3 }, { -5, -3 } }) do
+  for _, p in ipairs(only == 1 and {} or { { 4, 4 }, { -4, 4 }, { 0, -1.8 }, { 2.3, -3.6 }, { -5, -3 } }) do
     out[#out + 1] = box(p[1] - 0.6, d2.ceiling - 0.04, p[2] - 0.6, p[1] + 0.6, d2.ceiling, p[2] + 0.6,
                         { 1.0, 0.9, 0.7 }, { emissive = 1 })
   end
@@ -623,6 +741,8 @@ local function group(L, gid)
   elseif gid == "1:Stairs" then
     stairs(out, L)
     stair_rails(out, L)
+  elseif gid == "2:Holodeck" then
+    holo_room(out, L)
   end
   decor(out, L, gid)
   for _, f in ipairs(L.furniture) do
@@ -679,6 +799,7 @@ return function(params, rng)
   lights(out, L)
   dome_frame(out, L)
   lower_trim(out, L)
+  holo_room(out, L)
   decor(out, L)
   return { parts = out }
 end

@@ -357,6 +357,7 @@ describe("autopilot drivers", function()
     t.press(1, "use")
     t.wait(1)
     expect(ap.pick(t, 1, get, "no such row")).to_be(false)
+    expect(ap.pick(t, 1, get, "Close")).to_be(true)
     expect(ap.take_helm(t, 1, get)).to_be(true)
     local r, o = game.ruin(1), st.sector.sites[1].pos
     local hall

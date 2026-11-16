@@ -49,9 +49,19 @@ function M.ladder(v, p, x, y)
 end
 
 -- where the player is and what Use would do right now
-function M.status(p)
+function M.status(p, state)
   local L = avatar.layout()
   if p.mode == "wake" then return "BEDROOM", nil end
+  -- add-holodeck-home-life
+  if p.holo_run then
+    local holo = require("sim.holo")
+    local host = state and holo.host(state, p)
+    local pr = host and host.holo_run and holo.program(host.holo_run.id)
+    return "HOLODECK: " .. (pr and pr.name:upper() or "PROGRAM"), state and holo.hint(state, p) or nil
+  end
+  if p.tv then return "LIVING ROOM - TV", "USE: NEXT CHANNEL  MOVE: GET UP" end
+  if p.reading then return "BOOKSHELF", "USE: TURN THE PAGE  MOVE: CLOSE THE BOOK" end
+  if p.cooking then return "KITCHEN", nil end
   if p.mode == "walk" and p.beam_console then return "TRACTOR ROOM", "F: PULL  STICK: TRIM  USE: GET UP" end
   if p.mode == "walk" then
     local room = avatar.room(L, p.body):upper()
@@ -130,6 +140,14 @@ function M.panel(v, state, p)
   local W, H = v.width, v.height
   local rows = panel.rows(state, p)
   local title = panel.title(state, p)
+  -- long lists (the trade terminal) show a window of rows around the selection
+  local all, first = rows, 1
+  local maxr = math.max(4, (H - 60) // 11)
+  if #all > maxr then
+    first = vec.clamp(p.panel.sel - maxr // 2, 1, #all - maxr + 1)
+    rows = {}
+    for i = first, first + maxr - 1 do rows[#rows + 1] = all[i] end
+  end
   local w = 8
   for _, r in ipairs(rows) do w = math.max(w, #r.text + 4) end
   w = math.min(math.max(w, #title + 4) * 8, W - 16)
@@ -142,8 +160,12 @@ function M.panel(v, state, p)
   local top = is_title and 0 or 12
   v:rect(x - 4, y - 4, w + 8, #rows * 11 + top + 12, { 0, 0.02, 0.06, 0.82 })
   if not is_title then v:text(x, y, title, AMBER) end
+  if first > 1 or first + #rows - 1 < #all then
+    local more = string.format("%d-%d/%d", first, first + #rows - 1, #all)
+    v:text(x + w - #more * 8, y, more, DIM)
+  end
   for i, r in ipairs(rows) do
-    local sel = i == p.panel.sel
+    local sel = i + first - 1 == p.panel.sel
     local col = r.enabled == false and DIM or (sel and GREEN or WHITE)
     if sel then v:rect(x - 2, y + top + (i - 1) * 11 - 1, w + 4, 10, { 0.2, 0.5, 0.3, 0.5 }) end
     v:text(x, y + top + (i - 1) * 11, (sel and "> " or "  ") .. r.text, col)
@@ -183,7 +205,7 @@ function M.lab_status(state, p)
   local what = it and items.label(it) or "?"
   local pct = math.floor((1 - job.left / job.total) * 100)
   local paused = not require("sim.lab").running(p)
-  return string.format("LAB %s %d%%%s%s", job.kind == "decode" and "DECODE" or "ID", pct,
+  return string.format("LAB %s %d%%%s%s", job.kind == "identify" and "ID" or "DECODE", pct,
     paused and " (PAUSED)" or "", #q > 1 and (" +" .. (#q - 1)) or ""), what
 end
 
@@ -295,11 +317,12 @@ function M.draw(v, state, p, target)
   if p.mode == "helm" then M.altitude(v, p) end
   -- crosshair, where you are and what Use does
   v:text(W // 2 - 4, H // 2 - 4, "+", p.tractor and AMBER or WHITE)
-  local where, hint = M.status(p)
+  local where, hint = M.status(p, state)
   v:text(8, 46, where, CYAN)
   if hint then v:text(W // 2 - #hint * 4, H // 2 + 40, hint, AMBER) end
   -- navigation
   local site, d = M.nav(state, p)
+  if p.holo_run then site = nil end
   if site then
     local c = M.site_center(state, site)
     v:text(W // 2 - 60, 6, string.format("%s SITE %d %dm", M.bearing(p, c), site.id, vec.dist(c, p.ship.pos) // 1), CYAN)
@@ -328,6 +351,7 @@ function M.draw(v, state, p, target)
       y = y - 10
     end
   end
+  M.home(v, state, p)
   local fs = M.fold_status(p)
   if fs then v:text(W // 2 - #fs * 4, H // 2 - 30, fs, CYAN) end
   if p.slept_tick and state.tick - p.slept_tick < 120 then
@@ -344,6 +368,70 @@ function M.draw(v, state, p, target)
     local h = HINTS[mode] or HINTS.kbm
     v:text(6, H - 24 - 10 * #p.msgs, h:sub(1, (W - 12) // 8), DIM)
   end
+end
+
+-- add-holodeck-home-life overlays: active buffs, the open book, the TV's
+-- caption, the stove's progress and the holodeck's course readout. -> draws
+local PAPER, INK = { 0.93, 0.88, 0.76, 0.96 }, { 0.18, 0.14, 0.1, 1 }
+function M.home(v, state, p)
+  local W, H = v.width, v.height
+  local n = 0
+  local bl = require("sim.buffs").list(state, p)
+  for i, b in ipairs(bl) do
+    local t = string.format("%s %d:%02d", b.name:upper(), b.left // 60, (b.left % 60) // 1)
+    v:text(W - 4 - #t * 8, 16 + i * 10, t, GREEN)
+    n = n + 1
+  end
+  if p.reading then
+    local books = require("sim.books")
+    local r = books.resolve(state, p.reading.id)
+    local page = r.pages[p.reading.page] or {}
+    local bw, bh = 30 * 8 + 24, 14 * 10 + 30
+    local x, y = W // 2 - bw // 2, H // 2 - bh // 2 - 10
+    v:rect(x - 3, y - 3, bw + 6, bh + 6, { 0.35, 0.2, 0.12, 0.95 })
+    v:rect(x, y, bw, bh, PAPER)
+    v:rect(x + bw // 2, y + 4, 1, bh - 8, { 0.7, 0.62, 0.5, 1 })
+    v:text(x + 12, y + 8, r.title:sub(1, 30), { 0.45, 0.2, 0.1, 1 })
+    for i, line in ipairs(page) do v:text(x + 12, y + 16 + i * 10, line:sub(1, 30), INK) end
+    local pg = string.format("PAGE %d/%d%s", p.reading.page, #r.pages, r.kind == "clue" and "  CLUE" or "")
+    v:text(x + bw - 12 - #pg * 8, y + bh - 12, pg, { 0.45, 0.35, 0.25, 1 })
+    n = n + 1
+  end
+  if p.tv then
+    local tv = require("sim.tv")
+    local ch = tv.current(state, p)
+    if ch then
+      local show, hint = tv.show(state, p, ch)
+      local lines = require("sim.books").wrap(hint, (W - 40) // 8)
+      local bh = 16 + #lines * 10
+      local y = H - 40 - bh
+      v:rect(10, y, W - 20, bh, { 0, 0, 0, 0.6 })
+      v:text(16, y + 4, string.format("%s - %s", ch.name:upper(), show:upper()), CYAN)
+      for i, l in ipairs(lines) do v:text(16, y + 4 + i * 10, l, WHITE) end
+      n = n + 1
+    end
+  end
+  if p.cooking then
+    local r = require("sim.kitchen").recipe(p.cooking.recipe)
+    local f = vec.clamp(1 - p.cooking.left / p.cooking.total, 0, 1)
+    local t = "COOKING " .. (r and r.name:upper() or "")
+    v:text(W // 2 - #t * 4, H // 2 + 30, t, AMBER)
+    v:rect(W // 2 - 50, H // 2 + 42, 100, 4, { 0.15, 0.15, 0.2, 1 })
+    v:rect(W // 2 - 50, H // 2 + 42, 100 * f, 4, AMBER)
+    n = n + 1
+  end
+  if p.holo_run and p.holo_run.craft then
+    local holo = require("sim.holo")
+    local run = p.holo_run
+    local sc = holo.scene(state, p, run)
+    local best = holo.ensure(p).best[run.id]
+    local t = string.format("RING %d/%d  %.1f S%s", math.min(run.gate, #sc.gates), #sc.gates, run.t,
+      best and string.format("  BEST %.1f", best) or "")
+    if run.done then t = string.format("COURSE CLEAR %.1f S  USE: END", run.t) end
+    v:text(W // 2 - #t * 4, 30, t, run.done and GREEN or AMBER)
+    n = n + 1
+  end
+  return n
 end
 
 function M.touch(v)

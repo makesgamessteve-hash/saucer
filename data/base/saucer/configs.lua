@@ -8,7 +8,7 @@ return {
   { id = "villa", name = "Villa", class = 4, diameter = 26.0, height = 12.0,
     speed = 40.0, accel = 1.6, turn = 1.0, hull = 1.00, shield = 1.00, tractor_class = 4, tractor_range = 45.0,
     enter_cost = 0, interior = true, pilot_eye = { 0, 1.95, 7.2 },
-    rooms = { "dome", "kitchen", "living", "helm", "bedroom", "bathroom", "engine", "tractor" },
+    rooms = { "dome", "kitchen", "living", "helm", "bedroom", "bathroom", "engine", "tractor", "holodeck" },
     -- add-tractor-beam: the belly beam. A cone straight down the hull's down
     -- axis from the emitter; run from the Tractor Room's console (console = true)
     beam = { emitter = { 0, -5.75, 0 }, half_angle = 0.35, min = 3.0, pull_speed = 7.0, shrink = 0.12,

@@ -21,6 +21,13 @@ local sentry = require("sim.sentry")
 local hull = require("sim.hull")
 local clock = require("sim.clock")
 local data = require("lib.data")
+-- add-holodeck-home-life
+local holo = require("sim.holo")
+local kitchen = require("sim.kitchen")
+local books = require("sim.books")
+local tv = require("sim.tv")
+local finds = require("sim.finds")
+local buffs = require("sim.buffs")
 local M = {}
 
 M.SITE_PAD = 30
@@ -79,15 +86,22 @@ function M.new_player(index, pos, yaw)
     scan_ready = 0, jam_ready = 0, scan_until = 0, jam_flash = 0,
     site = 0, tractor = false, ghost = 0, cam = "first", help = false, panel = false,
     beam_console = false, hatch = 0,
+    -- add-holodeck-home-life: what a running program, the TV, an open book
+    -- or the stove are doing right now (transient), and the home itself
+    holo_run = false, tv = false, reading = false, cooking = false,
+    buffs = {}, trails = {}, leads = {},
     msgs = {}, fx = {},
   }
+  holo.ensure(p)
+  kitchen.ensure(p)
+  books.ensure(p)
   home.wake(p)
   return p
 end
 
 function M.init(state, ctx)
   local seed = ctx.seed
-  state.version = 5   -- v5: true 3D sector and derelicts (add-true-3d-flight)
+  state.version = 6   -- v6: holodeck and home life (add-holodeck-home-life)
   state.seed = seed
   state.tick = 0
   state.sector = sector.generate(seed)
@@ -122,6 +136,13 @@ function M.viewpoint(p)
     local L = avatar.layout()
     local e = avatar.rot(ship.yaw, L.wake.eye)
     return { ship.pos[1] + e[1], ship.pos[2] + e[2], ship.pos[3] + e[3] }, ship.yaw + L.wake.yaw, L.wake.pitch
+  end
+  if p.holo_run then return holo.viewpoint(nil, p) end
+  local L0 = avatar.layout()
+  local seat = (p.mode == "walk") and ((p.tv and L0.sofa) or (p.reading and L0.shelf) or (p.cooking and L0.stove))
+  if seat then
+    local e = avatar.rot(ship.yaw, seat.eye)
+    return { ship.pos[1] + e[1], ship.pos[2] + e[2], ship.pos[3] + e[3] }, ship.yaw + seat.yaw, seat.pitch
   end
   if p.mode == "walk" and p.beam_console then
     -- in the Tractor Room's sling seat, out over the floor window
@@ -200,6 +221,8 @@ local function size_request(state, p, to)
   local blocked = function(pos, r, hh, margin) return M.blocked(state, p, pos, r, hh, margin) end
   local ok, why, where = shipm.request(ship, to, blocked, eye, yaw)
   if ok then
+    if p.holo_run then holo.exit(state, p, ctx_fns, "The program ends as the rooms pack away.") end
+    p.tv, p.reading = false, false
     if p.mode == "walk" then ship.pitch = p.body.pitch end
     p.mode = "helm"
     p.tractor = false
@@ -237,6 +260,20 @@ end
 local function use(state, p)
   local L = avatar.layout()
   local ship = p.ship
+  -- add-holodeck-home-life: inside a program, on the sofa, in a book, at the stove
+  if p.holo_run then
+    holo.use(state, p, ctx_fns)
+    return
+  end
+  if p.tv then
+    tv.next(state, p, ctx_fns)
+    return
+  end
+  if p.reading then
+    books.turn(state, p)
+    return
+  end
+  if p.cooking then return end
   if p.beam_console then
     console_leave(state, p)
     msg(state, p, "You get up from the beam console. The saucer holds station.")
@@ -267,17 +304,23 @@ local STILL = { axis = function() return 0 end, held = function() return false e
 
 local function bank(state, p)
   local n, v = 0, 0
+  local unpack = {}
   for _, it in ipairs(p.hold) do
     if it.hot then
       it.hot = false
       n = n + 1
       v = v + it.value
+      if it.home then unpack[#unpack + 1] = it end
     end
   end
   if n > 0 then
     p.banked_value = p.banked_value + v
     msg(state, p, string.format("Banked %d item%s (%d c)", n, n == 1 and "" or "s", v))
     fx(state, p, "bank")
+  end
+  -- add-holodeck-home-life: books onto the shelf, ingredients into the pantry
+  for _, it in ipairs(unpack) do
+    if finds.unpack(state, p, it, ctx_fns) then items.remove(p, it.uid) end
   end
 end
 
@@ -345,6 +388,7 @@ end
 -- a tractored target lands in the hold
 function M.pick_up(state, p, cand, site_idx)
   local civ = site_idx ~= 0 and civ_of(state.sector.sites[site_idx]) or nil
+  if site_idx ~= 0 then M.record_trail(state, p, site_idx, cand.pos) end
   if cand.kind == "echo" then
     p.looted[cand.key] = true
     mystery.found(state.mystery, cand.echo, p.index)
@@ -372,6 +416,14 @@ function M.pick_up(state, p, cand, site_idx)
     end
     if #c.items == 0 then table.remove(state.caches, cand.index) end
     msg(state, p, string.format("Recovered %d item%s from your cache", got, got == 1 and "" or "s"))
+    fx(state, p, "pickup")
+  elseif cand.kind == "find" then
+    -- add-holodeck-home-life: a data core, a module, a book or an ingredient crate
+    p.looted[cand.key] = true
+    local it = items.stamp(p, cand.item, 1, civ and civ.id)
+    it.hot = true
+    p.hold[#p.hold + 1] = it
+    msg(state, p, "Got " .. items.label(it))
     fx(state, p, "pickup")
   elseif cand.kind == "curio" then
     state.vault.taken = true
@@ -406,8 +458,8 @@ local function scan(state, p)
     return
   end
   p.ship.charge = p.ship.charge - t.charge
-  p.scan_ready = state.tick + math.floor(t.cooldown * 60)
-  p.scan_until = state.tick + math.floor(t.reveal * 60)
+  p.scan_ready = state.tick + math.floor(t.cooldown * buffs.factor(state, p, "scan_cooldown") * 60)
+  p.scan_until = state.tick + math.floor(t.reveal * buffs.factor(state, p, "scan_reveal") * 60)
   local site = p.site
   if site == 0 then
     local best, bd
@@ -436,7 +488,7 @@ local function jam(state, p)
     return
   end
   p.ship.charge = p.ship.charge - t.charge
-  p.jam_ready = state.tick + math.floor(t.cooldown * 60)
+  p.jam_ready = state.tick + math.floor(t.cooldown * buffs.factor(state, p, "jam_cooldown") * 60)
   p.jam_flash = state.tick + 20
   local eye, yaw, pitch = M.viewpoint(p)
   local n = 0
@@ -461,6 +513,7 @@ local function world_step(state, p, dt)
     if site == 0 then bank(state, p) else msg(state, p, "Entering derelict site " .. site) end
     p.site = site
   end
+  if site ~= 0 then M.record_trail(state, p, site) end
   if shipm.update(ship, dt, site == 0 and home.regen_factor(state, p)) == "done" then
     msg(state, p, "Configuration: " .. configs.get(ship.size).name)
   end
@@ -480,7 +533,8 @@ local function world_step(state, p, dt)
   end
   p.docked = docked or false
   lab.step(state, p, dt, ctx_fns)
-  hull.regen(ship, dt)
+  kitchen.step(state, p, dt, ctx_fns)
+  hull.regen(ship, dt * buffs.factor(state, p, "hull_regen"))
   if ship.hull <= 0 then
     local from = p.site
     local cache = hull.retreat(state, p, trader_pos(state, p))
@@ -524,6 +578,27 @@ function M.step_player(state, p, cmd, dt)
     return
   end
   if p.mode == "wake" then home.get_up(state, p, ctx_fns) end
+  -- add-holodeck-home-life: inside a holodeck program the stick moves you
+  -- through the simulated space (or flies the simulated Seat); the saucer
+  -- holds station meanwhile. On the sofa, in a book or at the stove you sit still.
+  if p.holo_run then
+    if cmd:pressed("use") then use(state, p) end
+    if p.holo_run then holo.step(state, p, cmd, dt, ctx_fns) end
+    flight.step(ship, STILL, dt, mover(state, p))
+    world_step(state, p, dt)
+    return
+  end
+  if p.tv or p.reading or p.cooking then
+    if cmd:pressed("use") then use(state, p) end
+    local moving = math.abs(cmd:axis("move_x")) > 0.5 or math.abs(cmd:axis("move_z")) > 0.5
+    if moving and not p.cooking then
+      if p.tv then msg(state, p, "You get up from the sofa.") end
+      p.tv, p.reading = false, false
+    end
+    flight.step(ship, STILL, dt, mover(state, p))
+    world_step(state, p, dt)
+    return
+  end
   if cmd:pressed("use") then use(state, p) end
   if cmd:pressed("scan") then scan(state, p) end
   if cmd:pressed("jam") then jam(state, p) end
@@ -551,6 +626,35 @@ function M.step_player(state, p, cmd, dt)
   end
   world_step(state, p, dt)
   tractor_step(state, p, cmd, dt)
+end
+
+-- add-holodeck-home-life: every second inside a derelict the saucer's
+-- position joins that site's trail (the holodeck replays it); pick-ups are marked
+M.TRAIL_EVERY = 60
+M.TRAIL_MAX = 240
+local function q1(x) return math.floor(x * 10 + 0.5) / 10 end
+function M.record_trail(state, p, site, mark)
+  p.trails = p.trails or {}
+  local key = tostring(site)
+  local t = p.trails[key]
+  if not t then
+    t = { pts = {}, marks = {} }
+    p.trails[key] = t
+  end
+  local pos = p.ship.pos
+  if mark then
+    t.marks[#t.marks + 1] = { q1(mark[1]), q1(mark[2]), q1(mark[3]) }
+    return t
+  end
+  if state.tick % M.TRAIL_EVERY ~= 0 and #t.pts > 0 then return t end
+  t.pts[#t.pts + 1] = { q1(pos[1]), q1(pos[2]), q1(pos[3]) }
+  if #t.pts > M.TRAIL_MAX then
+    -- keep the whole route at half the resolution
+    local half = {}
+    for i = 1, #t.pts, 2 do half[#half + 1] = t.pts[i] end
+    t.pts = half
+  end
+  return t
 end
 
 function M.step(state, cmds, dt)

@@ -43,6 +43,10 @@ T.assert(said("Fold engine: Charge"), "engine console reads out Charge")
 -- kitchen: cook a meal, Charge recharges faster for a while
 T.assert(ap.walk_to(T, 1, get, "kitchen"), "walked up to the kitchen")
 use()
+T.assert(get().panel and get().panel.kind == "kitchen", "the stove opens the galley")
+T.assert(ap.pick(T, 1, get, "Cook Quick snack"), "picked a quick snack")
+T.assert(get().cooking, "cooking at the stove")
+T.wait(200)
 T.assert(said("quick meal") and home.fed(T.state(), get()), "cooked a meal, well fed")
 T.assert(home.regen_factor(T.state(), get()) > 1, "faster regen while fed")
 

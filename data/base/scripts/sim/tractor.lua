@@ -155,6 +155,8 @@ function M.candidates(state, p, site_idx, ruin)
         out[#out + 1] = c
       end
     end
+    -- add-holodeck-home-life: data cores, modules, books and ingredients in vaults
+    for _, c in ipairs(require("sim.finds").candidates(state, p, site_idx, ruin)) do out[#out + 1] = c end
     local echo = mystery.echo_at(state.mystery, site_idx)
     if echo then
       for _, r in ipairs(ruin.rooms) do

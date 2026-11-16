@@ -50,11 +50,28 @@ return {
       label = "USE: SLEEP / LOAD" },
     { id = "shower",  kind = "shower",  deck = 2, pos = { -3.9, -3.0, 3.4 }, radius = 1.0, room = "Bathroom",
       label = "USE: SHOWER" },
-    { id = "engine",  kind = "engine",  deck = 2, pos = { 3.8, -3.0, -2.4 }, radius = 1.1, room = "Engine room",
+    { id = "engine",  kind = "engine",  deck = 2, pos = { 0.0, -3.0, -0.3 }, radius = 1.0, room = "Engine room",
       label = "USE: ENGINE CONSOLE" },
     { id = "tractor", kind = "tractor", deck = 3, pos = { 2.6, -5.2, 0.0 }, radius = 1.2, room = "Tractor room",
       label = "USE: BEAM CONSOLE" },
+    -- add-holodeck-home-life: the holodeck's control panel beside its arch,
+    -- the TV (watched from the sofa) and the living room bookshelf
+    { id = "holodeck", kind = "holodeck", deck = 2, pos = { 3.2, -3.0, -3.15 }, radius = 1.0, room = "Engine room",
+      label = "USE: HOLODECK" },
+    { id = "tv",       kind = "tv",       deck = 1, pos = { -6.55, 0.6, -0.2 }, radius = 1.2, room = "Living room",
+      label = "USE: WATCH TV" },
+    { id = "books",    kind = "books",    deck = 1, pos = { -7.0, 0.6, -3.45 }, radius = 1.0, room = "Living room",
+      label = "USE: BOOKSHELF" },
   },
+  -- add-holodeck-home-life: where you sit or stand while doing things at home
+  -- (hull-local eye, yaw relative to the hull). The holodeck's arch spans
+  -- z0..z1 in its wall at x; `inside` is where you stand when a program ends.
+  sofa = { eye = { -7.15, 1.72, -0.2 }, yaw = 1.5708, pitch = -0.06 },
+  shelf = { eye = { -7.0, 2.2, -3.3 }, yaw = 3.1416, pitch = -0.12 },
+  stove = { eye = { 6.3, 2.2, -1.2 }, yaw = 2.2, pitch = -0.55, pot = { 7.45, 1.62, -2.0 } },
+  holodeck = { x = 4.0, z0 = -2.7, z1 = -1.3, inside = { 5.0, -3.0, -2.0 }, inside_yaw = -1.5708,
+               room = { 4.1, -6.9, 8.6, 0.7 } },
+  tv = { screen = { -3.025, 1.87, -0.2 }, w = 2.0, h = 1.1 },
   -- sliding doors on the lower-deck partitions: open on their own when a body
   -- comes within `reach`, solid while less than `solid_below` open
   doors = {
@@ -75,7 +92,9 @@ return {
       belly_mid = { 0.2, -5.2, -2.2 }, belly_side = { 2.6, -5.2, -1.6 }, tractor = { 2.6, -5.2, 0.0 },
       lab_in = { -4.7, 0.6, -3.6 }, trade_in = { 5.4, 0.6, -3.6 }, kitchen_in = { 6.2, 0.6, -2.6 },
       lab = { -4.7, 0.6, -5.85 }, trade = { 5.4, 0.6, -5.85 }, kitchen = { 6.2, 0.6, 0.0 },
-      bed = { 2.4, -3.0, 4.0 }, shower = { -3.9, -3.0, 3.4 }, engine = { 3.8, -3.0, -2.4 }, living = { -3.2, 0.6, 1.5 },
+      bed = { 2.4, -3.0, 4.0 }, shower = { -3.9, -3.0, 3.4 }, engine = { 0.0, -3.0, -0.3 }, living = { -3.2, 0.6, 1.5 },
+      holodeck = { 3.2, -3.0, -3.15 }, holo_arch = { 3.3, -3.0, -2.0 }, holo_in = { 5.2, -3.0, -2.0 },
+      living_s = { -6.4, 0.6, 1.5 }, tv = { -6.55, 0.6, -0.2 }, books = { -7.0, 0.6, -3.45 },
     },
     links = {
       { "helm", "dome" }, { "dome", "aft" }, { "dome", "living" }, { "aft", "stair_top_in" },
@@ -83,11 +102,13 @@ return {
       { "stair_low", "stair_foot" }, { "stair_foot", "engine_w" }, { "engine_w", "engine_e" },
       { "engine_e", "bed_door_s" }, { "bed_door_s", "bed_door_n" }, { "bed_door_n", "bed" },
       { "engine_w", "bath_door_s" }, { "bath_door_s", "bath_door_n" }, { "bath_door_n", "shower" },
-      { "engine_e", "engine" }, { "aft", "lab_in" }, { "lab_in", "lab" }, { "aft", "trade_in" },
+      { "bed_door_s", "engine" }, { "bath_door_s", "engine" }, { "aft", "lab_in" }, { "lab_in", "lab" }, { "aft", "trade_in" },
       { "stair_top_in", "trade_in" }, { "trade_in", "trade" }, { "aft", "kitchen_in" }, { "kitchen_in", "kitchen" },
       { "bath_door_s", "bed_door_s" },
       { "engine_w", "belly_top" }, { "belly_top", "belly_in" }, { "belly_in", "belly_low" }, { "belly_low", "belly_mid" },
       { "belly_mid", "belly_side" }, { "belly_side", "tractor" },
+      { "engine_e", "holodeck" }, { "holodeck", "holo_arch" }, { "holo_arch", "holo_in" },
+      { "living", "living_s" }, { "living_s", "tv" }, { "lab_in", "books" },
     },
   },
   rooms = {
@@ -99,6 +120,7 @@ return {
     { deck = 2, name = "Stairs",      box = { -3.0, -6.0, 3.5, -4.4 } },
     { deck = 2, name = "Bedroom",     box = { 0.1, 0.9, 10, 10 } },
     { deck = 2, name = "Bathroom",    box = { -10, 0.9, -0.1, 10 } },
+    { deck = 2, name = "Holodeck",    box = { 4.0, -10, 10, 0.7 } },
     { deck = 2, name = "Engine room", box = { -10, -10, 10, 0.9 } },
     { deck = 3, name = "Tractor room", box = { -10, -10, 10, 10 } },
   },
@@ -150,8 +172,16 @@ return {
     { deck = 2, kind = "tub",      box = { -5.4, 5.4, -2.6, 6.8 }, h = 0.6, color = { 0.95, 0.95, 0.98 } },
     -- engine room
     { deck = 2, kind = "engine",   circle = { 0, -1.8, 1.1 }, h = 3.3, color = { 0.3, 0.9, 1.0 } },
-    { deck = 2, kind = "console",  box = { 4.4, -3.2, 6.2, -1.6 }, h = 1.2, color = { 0.30, 0.32, 0.40 } },
+    { deck = 2, kind = "console",  box = { -1.0, 0.12, 1.0, 0.68 }, h = 1.2, color = { 0.30, 0.32, 0.40 } },
     { deck = 2, kind = "box",      box = { -6.2, -5.6, -4.6, -4.4 }, h = 1.6, color = { 0.45, 0.40, 0.30 } },
+    -- add-holodeck-home-life: the Holodeck behind its arch (starboard aft): the
+    -- partition with the arch opening, the arch frame, the control panel
+    { deck = 2, kind = "holo_wall", box = { 3.9, -7.4, 4.1, -2.7 }, h = 3.3, color = { 0.16, 0.16, 0.2 } },
+    { deck = 2, kind = "holo_wall", box = { 3.9, -1.3, 4.1, 0.7 }, h = 3.3, color = { 0.16, 0.16, 0.2 } },
+    { deck = 2, kind = "holo_arch", box = { 3.85, -2.75, 4.15, -1.25 }, h = 2.6, color = { 0.95, 0.75, 0.25 }, solid = false },
+    { deck = 2, kind = "holo_panel", box = { 3.62, -3.55, 3.9, -2.8 }, h = 1.5, color = { 0.24, 0.24, 0.3 } },
+    -- living room: the TV on its low stand, facing the sofa across the table
+    { deck = 1, kind = "tv",       box = { -3.25, -1.3, -2.8, 0.9 }, h = 0.55, color = { 0.30, 0.22, 0.16 } },
     -- add-tractor-beam: rails round the belly stairwell (engine room, port side)
     { deck = 2, kind = "rail", box = { -7.3, -3.1, -3.9, -3.0 }, h = 1.0, color = { 0.6, 0.62, 0.7 } },
     { deck = 2, kind = "rail", box = { -7.3, -1.7, -3.9, -1.6 }, h = 1.0, color = { 0.6, 0.62, 0.7 } },

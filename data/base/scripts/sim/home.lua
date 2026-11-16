@@ -8,6 +8,7 @@ local configs = require("sim.config")
 local panel = require("sim.panel")
 local save = require("sim.save")
 local clock = require("sim.clock")
+local buffs = require("sim.buffs")
 local M = {}
 
 M.FED_TICKS = 5 * 60 * 60      -- a meal: faster Charge regeneration for five sim minutes
@@ -72,17 +73,21 @@ function M.solids(L, p)
   return out
 end
 
-function M.fed(state, p) return (p.fed_until or 0) > state.tick end
+function M.fed(state, p) return (p.fed_until or 0) > state.tick or buffs.active(state, p, "fed") end
 
--- Charge regeneration factor from home comforts
+-- Charge regeneration factor from home comforts (add-holodeck-home-life:
+-- every active buff that touches charge_regen, see home/buffs.lua)
 function M.regen_factor(state, p)
-  return M.fed(state, p) and M.FED_FACTOR or 1
+  local f = buffs.factor(state, p, "charge_regen")
+  if (p.fed_until or 0) > state.tick and not buffs.active(state, p, "fed") then f = f * M.FED_FACTOR end
+  return f
 end
 
-M.USE.kitchen = function(state, p, _, ctx)
-  p.fed_until = state.tick + M.FED_TICKS
-  say(ctx, state, p, "You cook a quick meal. Well fed: Charge recharges faster for a while.", "pickup")
-end
+-- add-holodeck-home-life: the kitchen cooks recipes from the pantry
+M.USE.kitchen = function(_, p) panel.open(p, "kitchen") end
+M.USE.books = function(_, p) panel.open(p, "books") end
+M.USE.tv = function(_, p) panel.open(p, "tv") end
+M.USE.holodeck = function(_, p) panel.open(p, "holodeck") end
 
 M.USE.shower = function(state, p, _, ctx)
   p.showers = (p.showers or 0) + 1
@@ -178,6 +183,22 @@ function M.register_panels(game, ctx)
   panel.register("trade", {
     title = "TRADE TERMINAL",
     rows = function(state, p) return require("sim.trade").rows(state, p, ctx) end,
+  })
+  panel.register("kitchen", {
+    title = "KITCHEN",
+    rows = function(state, p) return require("sim.kitchen").rows(state, p, ctx) end,
+  })
+  panel.register("books", {
+    title = "BOOKSHELF",
+    rows = function(state, p) return require("sim.books").rows(state, p, ctx) end,
+  })
+  panel.register("tv", {
+    title = "TV",
+    rows = function(state, p) return require("sim.tv").rows(state, p, ctx) end,
+  })
+  panel.register("holodeck", {
+    title = "HOLODECK",
+    rows = function(state, p) return require("sim.holo").rows(state, p, ctx) end,
   })
   panel.register("bed", {
     title = "BED",

@@ -33,7 +33,7 @@ local got = ap.grab(T, 1, get, 1, ruin, vault.id, door)
 T.assert(got >= 2, "picked up the vault's loot and the Echo (" .. got .. ")")
 local loot, echo = {}, nil
 for _, it in ipairs(get().hold) do
-  if it.echo then echo = it else loot[#loot + 1] = it end
+  if it.echo then echo = it elseif not it.home then loot[#loot + 1] = it end
 end
 T.assert(echo ~= nil and echo.echo == 1, "Echo I is in the hold")
 T.assert(#loot >= 1, "and some loot")
@@ -119,7 +119,7 @@ T.assert(after > before + 0.4 and after <= 1.5, "demand recovered while sleeping
 local saved_tick = T.state().tick
 -- change things (queue the rest of the hold at the lab), then load the save back at the bed
 local queued = 0
-for _, it in ipairs(get().hold) do if not it.ident and not it.echo then queued = queued + 1 end end
+for _, it in ipairs(get().hold) do if not it.ident and not it.echo and not it.home then queued = queued + 1 end end
 T.assert(ap.walk_to(T, 1, get, "lab"), "back to the lab")
 T.press(1, "use")
 T.wait(1)

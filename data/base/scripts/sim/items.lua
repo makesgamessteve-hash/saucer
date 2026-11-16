@@ -37,10 +37,16 @@ end
 
 function M.is_echo(item) return item.echo ~= nil end
 
-function M.sellable(item) return not item.echo and not item.unique end
+function M.sellable(item)
+  -- add-holodeck-home-life: books and ingredient crates go home, they are not sold
+  return not item.echo and not item.unique and not (item.home and (item.value or 0) <= 0)
+end
 
 -- what the HUD and panels call it
 function M.label(item)
+  if item.home and item.home.kind == "program" then
+    return item.ident and ("Data core: " .. (item.home.title or item.home.id)) or "Data core (undecoded)"
+  end
   if item.echo or item.unique or item.ident or not item.category then return item.name end
   local cat = item.category:sub(1, 1):upper() .. item.category:sub(2)
   return string.format("Unknown %s %s T%d", civ_name(item.civ), cat, item.tier or 1)

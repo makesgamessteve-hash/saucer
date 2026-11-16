@@ -13,7 +13,7 @@ M.FORMAT = 2 -- 2: true 3D layouts; format-1 positions point into the old flat w
 -- per-player fields that are transient UI and never saved
 M.SKIP = { msgs = true, fx = true, panel = true, tractor = true, ghost = true, ghost_size = true, ghost_pos = true,
            help = true, latched_by = true, jam_flash = true, scan_until = true, docked = true,
-           beam_console = true, hatch = true }
+           beam_console = true, hatch = true, holo_run = true, tv = true, reading = true, cooking = true }
 -- world diffs copied as-is when present (filled by later systems)
 M.WORLD_KEYS = { "traders", "nests", "caches", "vault", "clock" }
 

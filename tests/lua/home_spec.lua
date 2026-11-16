@@ -122,6 +122,14 @@ describe("home", function()
     for _, id in ipairs({ "kitchen", "shower", "engine", "lab", "trade" }) do
       stand(p, id)
       run(st, cmd({ pressed = { "use" } }))
+      if id == "kitchen" then
+        -- the stove opens the galley panel; the first recipe is a quick snack
+        expect(p.panel.kind).to_be("kitchen")
+        run(st, cmd({ pressed = { "use" } }))
+        expect(p.cooking.recipe).to_be("snack")
+        run(st, cmd(), 200)
+        expect(p.cooking).to_be(false)
+      end
       all[#all + 1] = texts(p)
     end
     local t = table.concat(all, "|")
@@ -132,7 +140,7 @@ describe("home", function()
     expect(t).to_contain("No trader in range")
     expect(p.showers).to_be(1)
     expect(home.regen_factor(st, p)).to_be(home.FED_FACTOR)
-    st.tick = p.fed_until
+    st.tick = st.tick + 5 * 3600 + 1
     expect(home.regen_factor(st, p)).to_be(1)
   end)
   it("sleeps (refill and save) only outside derelicts", function()
