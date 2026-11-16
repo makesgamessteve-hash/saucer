@@ -133,6 +133,26 @@ tour: `tools/shots/true3d.lua`. Known gaps: XR has no bank and no
 head-steered flight path, the hull never truly pitches, and the trader
 station has no collision.
 
+## 3¾. Detail pass — done
+
+**Goal.** Steve: "add details to the saucer and to the alien structures".
+
+**Status (2026-11-16).** Done in OpenSpec change `add-detail-pass`. The
+Villa has decor in every room (kitchen appliances, cushions, shelves,
+plants, bed dressing, a bathroom with basin, mirror and towels, lab jars),
+railings with balusters, lit stair nosings, dome struts, trim and ceiling
+ribs. The engine room has tanks, pipes and two spinning rotors and pistons.
+The hull has seams, lights, antennas, a dish and glowing thrusters.
+Derelicts get seeded, visual-only detail per kit (`view/detail.lua`): wall
+panels, pipes, lit strips, glyphs, beams, cables, torn sections, floating
+debris and props. Towers get window grids, ledges and roof gardens,
+trusses get bracing and solar wings, spines get ribs and nozzles, and
+cities get sky bridges. Each kit has its own texture. Detail meshes are
+budgeted, built lazily (6 per frame), drawn within 480 m and culled per
+chunk, and far saucers skip their rooms. Tests: `tests/lua/detail_spec.lua`.
+Screenshot tour: `tools/shots/detail.lua`. Known gaps: props, debris and
+bridges have no collision, and the engine rotors only approximate the bank.
+
 ## 4. Presentation and packaging — next
 
 **Goal.** It looks and ships like the retro-3D game in the concept.

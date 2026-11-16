@@ -33,7 +33,8 @@ return {
   min_levels = 3,
   solids = { kind = "tower", min = 24, max = 36, w = { 3, 6 }, h = { 12, 48 } },
   debris = 4,
-  color = { 0.56, 0.62, 0.70 },
+  color = { 0.80, 0.84, 0.90 },  -- multiplies the kit wall texture (add-detail-pass)
+  uv = 0.125,                 -- texture repeats per meter on walls
   solid_color = { 0.36, 0.40, 0.50 },
   window_color = { 1.0, 0.82, 0.45 },
 }

@@ -426,6 +426,8 @@ local function draw_saucer(v, A, o, own_eyes, state, xr, cam)
 end
 
 M.FOG = 0.0009
+M.DETAIL_DIST = 480   -- add-detail-pass: chunks nearer than this also draw their detail mesh
+M.DETAIL_BUILDS = 6   -- at most this many detail meshes are built per frame (no hitches)
 M.LOD_DIST = 1100     -- beyond this a site is drawn as its coarse silhouette
 M.CULL_DIST = 3200    -- beyond this (fog) nothing of a site is drawn
 M.VIEW_HALF = 1.15    -- radians: half of the widest view angle plus slack
@@ -444,16 +446,29 @@ function M.visible(cam, c, r, xr)
 end
 
 function M.draw_ruins(v, A, state, cam, xr)
-  local st = { chunks = 0, culled = 0, lod = 0 }
+  local st = { chunks = 0, culled = 0, lod = 0, detail = 0, built = 0 }
+  local function draw_detail(set, ch)
+    if vec.dist(ch.center, cam.pos) - ch.radius > M.DETAIL_DIST then return end
+    if ch.detail == nil then
+      if st.built >= M.DETAIL_BUILDS then return end
+      st.built = st.built + 1
+    end
+    local m = assets.chunk_detail(set, ch)
+    if m then
+      v:mesh(m, { palette = A.pal.base })
+      st.detail = st.detail + 1
+    end
+  end
   for i, site in ipairs(state.sector.sites) do
     local r = game.ruin(i)
     if r then
       local set = assets.ruin_chunks(r, site.pos)
+      local tex = assets.kit_texture(A, set.kit)
       local lod = set.lod
       local far = vec.dist(lod.center, cam.pos) - lod.radius > M.LOD_DIST
       if far then
         if M.visible(cam, lod.center, lod.radius, xr) then
-          v:mesh(lod.mesh, { tex = A.tex.hull, palette = A.pal.base })
+          v:mesh(lod.mesh, { tex = tex, palette = A.pal.base })
           st.lod = st.lod + 1
         else
           st.culled = st.culled + #set.chunks
@@ -461,12 +476,14 @@ function M.draw_ruins(v, A, state, cam, xr)
       else
         for _, ch in ipairs(set.chunks) do
           if M.visible(cam, ch.center, ch.radius, xr) then
-            v:mesh(ch.mesh, { tex = A.tex.hull, palette = A.pal.base })
+            v:mesh(ch.mesh, { tex = tex, palette = A.pal.base })
             st.chunks = st.chunks + 1
+            draw_detail(set, ch)
           else
             st.culled = st.culled + 1
           end
         end
+        if set.links and M.visible(cam, set.links.center, set.links.radius, xr) then draw_detail(set, set.links) end
       end
     end
   end

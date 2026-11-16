@@ -4,6 +4,7 @@
 local kit = require("lib.meshkit")
 local configs = require("sim.config")
 local ruinm = require("sim.ruin")
+local detail = require("view.detail")
 local M = {}
 
 local cache = { saucer = {}, ruin = {} }
@@ -24,6 +25,10 @@ function M.init()
     echo = M.texture("authored/sprites/echo.png"),
     beam = M.texture("authored/sprites/beam.png"),
     glow = M.texture("authored/sprites/glow.png"),
+    -- add-detail-pass: one wall material per derelict kit
+    kit_starship = M.texture("generated/textures/kit_starship.png"),
+    kit_station = M.texture("generated/textures/kit_station.png"),
+    kit_city = M.texture("generated/textures/kit_city.png"),
   }
   cache.stars = saucer.mesh.build({ parts = { { kind = "stars", count = 1400, r = 900, size = 2.2, seed = 7 } } })
   cache.station = kit.build("station", {}, 11)
@@ -213,8 +218,9 @@ function M.room_decor(ruin, r, k, origin)
   return parts
 end
 
--- exterior solid: plain block plus lit window bands (towers) or tip beacons
-function M.solid_parts(s, k)
+-- exterior solid: plain block plus lit window bands (towers) or tip beacons.
+-- A tower hanging under the city points its mast down (hanging = true).
+function M.solid_parts(s, k, hanging)
   local mn, mx = s[1], s[2]
   local parts = { { kind = "box", min = mn, max = mx, color = k.solid_color or k.color, uv = 0.25 } }
   if s.kind == "tower" then
@@ -229,11 +235,13 @@ function M.solid_parts(s, k)
       end
       y = y + 6
     end
-    local c = { (mn[1] + mx[1]) / 2, mx[2], (mn[3] + mx[3]) / 2 }
-    parts[#parts + 1] = { kind = "box", min = { c[1] - 0.25, c[2], c[3] - 0.25 }, max = { c[1] + 0.25, c[2] + 9, c[3] + 0.25 },
-                          color = { 0.5, 0.5, 0.55 } }
-    parts[#parts + 1] = { kind = "box", min = { c[1] - 0.8, c[2] + 9, c[3] - 0.8 }, max = { c[1] + 0.8, c[2] + 10.6, c[3] + 0.8 },
-                          color = { 1, 0.3, 0.25 }, emissive = 1 }
+    local c = { (mn[1] + mx[1]) / 2, hanging and mn[2] or mx[2], (mn[3] + mx[3]) / 2 }
+    local d = hanging and -1 or 1
+    parts[#parts + 1] = { kind = "box", min = { c[1] - 0.25, math.min(c[2], c[2] + 9 * d), c[3] - 0.25 },
+                          max = { c[1] + 0.25, math.max(c[2], c[2] + 9 * d), c[3] + 0.25 }, color = { 0.5, 0.5, 0.55 } }
+    parts[#parts + 1] = { kind = "box", min = { c[1] - 0.8, math.min(c[2] + 9 * d, c[2] + 10.6 * d), c[3] - 0.8 },
+                          max = { c[1] + 0.8, math.max(c[2] + 9 * d, c[2] + 10.6 * d), c[3] + 0.8 }, color = { 1, 0.3, 0.25 },
+                          emissive = 1 }
   else
     local c = { (mn[1] + mx[1]) / 2, mx[2], (mn[3] + mx[3]) / 2 }
     parts[#parts + 1] = { kind = "box", min = { c[1] - 0.6, c[2], c[3] - 0.6 }, max = { c[1] + 0.6, c[2] + 1.2, c[3] + 0.6 },
@@ -266,7 +274,7 @@ function M.ruin_chunks(ruin, origin)
   local function add(list, b, color, uv)
     list[#list + 1] = { kind = "box", min = b[1], max = b[2], color = color, uv = uv }
   end
-  for _, b in ipairs(ruin.walls) do add(by_room[b.room or 1], b, k.color, 0.25) end
+  for _, b in ipairs(ruin.walls) do add(by_room[b.room or 1], b, k.color, k.uv or 0.25) end
   for _, b in ipairs(ruin.debris) do add(by_room[b.room or 1], b, { 0.55, 0.45, 0.32 }, 0.5) end
   local out = { chunks = {} }
   local coarse = {}
@@ -278,16 +286,43 @@ function M.ruin_chunks(ruin, origin)
     local mn, mx = ruinm.room_box(r, k, origin)
     coarse[#coarse + 1] = { kind = "box", min = mn, max = mx, color = k.color, uv = 0.25 }
   end
-  for _, s in ipairs(ruin.solids or {}) do
-    local parts = M.solid_parts(s, k)
+  for i, s in ipairs(ruin.solids or {}) do
+    local parts = M.solid_parts(s, k, detail.hanging(ruin, s, k, origin))
     local c, rad = sphere_of(parts)
-    out.chunks[#out.chunks + 1] = { mesh = saucer.mesh.build({ parts = parts }), center = c, radius = rad, solid = true }
+    out.chunks[#out.chunks + 1] = { mesh = saucer.mesh.build({ parts = parts }), center = c, radius = rad, solid = i }
     coarse[#coarse + 1] = { kind = "box", min = s[1], max = s[2], color = k.solid_color or k.color, uv = 0.25 }
   end
   local c, rad = sphere_of(coarse)
   out.lod = { mesh = saucer.mesh.build({ parts = coarse }), center = c, radius = rad }
+  -- add-detail-pass: per-chunk detail meshes are built on demand (first time
+  -- the camera comes near, see M.chunk_detail); city sky bridges get a chunk
+  out.ruin, out.origin, out.kit = ruin, origin, k
+  if k.id == "city" then out.links = { center = c, radius = rad, links = true } end
   cache.chunks[ruin.hash] = out
   return out
+end
+
+-- the detail parts of one chunk of a chunk set (a room, a solid or the links)
+function M.detail_parts(set, ch)
+  if ch.links then return (detail.links(set.ruin, set.kit)) end
+  if ch.solid then return (detail.solid(set.ruin, set.ruin.solids[ch.solid], ch.solid, set.kit, set.origin)) end
+  return (detail.room(set.ruin, set.ruin.rooms[ch.room], set.kit, set.origin))
+end
+
+-- the chunk's detail mesh, built the first time it is asked for (false when
+-- the chunk has no detail). Not sim state: only the renderer calls this.
+function M.chunk_detail(set, ch)
+  if ch.detail == nil then
+    local parts = M.detail_parts(set, ch)
+    ch.detail = #parts > 0 and saucer.mesh.build({ parts = parts }) or false
+    ch.detail_parts = #parts
+  end
+  return ch.detail
+end
+
+-- the kit's wall material (falls back to the shared hull plating)
+function M.kit_texture(A, k)
+  return A.tex["kit_" .. (k and k.id or "")] or A.tex.hull
 end
 
 -- one mesh for a whole derelict (kept for mods and tools; the game draws chunks)

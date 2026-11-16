@@ -36,6 +36,7 @@ return {
   min_levels = 2,          -- and put big rooms on at least two floor levels
   solids = { kind = "spine", min = 2, max = 5, w = { 2, 4 }, h = { 3, 10 } },
   debris = 3,
-  color = { 0.62, 0.66, 0.74 },
+  color = { 0.80, 0.86, 0.92 },  -- multiplies the kit wall texture (add-detail-pass)
+  uv = 0.25,                 -- texture repeats per meter on walls
   solid_color = { 0.48, 0.5, 0.58 },
 }

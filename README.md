@@ -27,6 +27,9 @@ out, unfold, and leave the site to bank it. Keyboard/mouse, gamepad, touch
 | ![The lab bench identifies and decodes](docs/shots/lab_bench.png) | ![Selling at the trade terminal](docs/shots/trade_terminal.png) |
 | ![A Watcher locks on, Scanner cones shown](docs/shots/watcher_locked.png) | ![A Snatcher siphons from the Seat](docs/shots/snatcher_latch.png) |
 | ![The Resonant vault](docs/shots/resonant_vault.png) | ![The vault opens: the Curio](docs/shots/vault_curio.png) |
+| ![Detail pass: kitchen props under the dome frame](docs/shots/detail_02_kitchen.png) | ![Detail pass: engine room machinery](docs/shots/detail_03_engine_room.png) |
+| ![Detail pass: a starship hall with panels, pipes and lit strips](docs/shots/detail_07c_derelict_hall_chase.png) | ![Detail pass: a station hall with hazard frames and glyphs](docs/shots/detail_08b_station_hall.png) |
+| ![Detail pass: city towers with window grids](docs/shots/detail_09_city_towers.png) | ![Detail pass: a city plaza with paths, planters and a fountain](docs/shots/detail_10_city_plaza.png) |
 
 [Play in browser](https://makesgamessteve-hash.github.io/saucer/) — the live
 web build on GitHub Pages, rebuilt on every push to `main`.

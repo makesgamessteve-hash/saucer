@@ -32,6 +32,7 @@ return {
   min_levels = 2,
   solids = { kind = "truss", min = 4, max = 8, w = { 1, 3 }, h = { 6, 20 } },
   debris = 5,
-  color = { 0.70, 0.62, 0.52 },
+  color = { 0.84, 0.86, 0.90 },  -- multiplies the kit wall texture (add-detail-pass)
+  uv = 0.125,                 -- texture repeats per meter on walls
   solid_color = { 0.55, 0.5, 0.44 },
 }

@@ -83,4 +83,73 @@ if want("06") then
   T.screenshot(D .. "06_saucer_exterior.png")
   T.press(1, "camera")
 end
+-- 7. for real: fly the Villa into the tutorial derelict's second great hall
+if want("07") then
+  local hall
+  for _, r in ipairs(r1.rooms) do if r.kind == "hall" and not hall then hall = r end end
+  hall = hall or r1.rooms[1]
+  place(vec.add(ruinm.entrance(r1, o1), { 0, 0, -120 }), 0, 0)
+  local ok = ap.enter(T, 1, get, r1, o1, hall.id)
+  print("entered hall", hall.id, ok)
+  T.wait(30)
+  shot("07_derelict_hall")
+  T.press(1, "camera")
+  ap.look(T, 1, get, get().ship.yaw - 0.6, -0.35, 240)
+  shot("07c_derelict_hall_chase")
+  T.press(1, "camera")
+  ap.look(T, 1, get, get().ship.yaw + 1.2, 0.15, 240)
+  shot("07b_derelict_hall_wall")
+end
+local function quiet() for _, p in ipairs(T.state().players) do p.msgs = {} end end
+-- 8. staged: next to a station truss (lattice, solar wing) and inside a
+-- station hall (pipes, crates, machinery, hazard frames), chase camera
+if want("08") then
+  local r2, o2 = game.ruin(2), st.sector.sites[2].pos
+  local k2 = ruinm.kit_of(r2.kit)
+  local tr = r2.solids[1]
+  for _, s2 in ipairs(r2.solids) do
+    if (s2[2][1] - s2[1][1]) + (s2[2][3] - s2[1][3]) > (tr[2][1] - tr[1][1]) + (tr[2][3] - tr[1][3]) then tr = s2 end
+  end
+  local tc = { (tr[1][1] + tr[2][1]) / 2, (tr[1][2] + tr[2][2]) / 2, (tr[1][3] + tr[2][3]) / 2 }
+  place({ tc[1] + 55, tc[2] - 6, tc[3] - 25 }, -1.1, 0)
+  look_at({ tc[1], tc[2] + 8, tc[3] })
+  T.press(1, "camera")
+  quiet()
+  shot("08_station_truss")
+  T.press(1, "camera")
+  local hall
+  for _, r in ipairs(r2.rooms) do if r.class >= 4 and r.kind ~= "shaft" and not hall then hall = r end end
+  local mn, mx = ruinm.room_box(hall, k2, o2)
+  place({ (mn[1] + mx[1]) / 2, mn[2] + 8, mn[3] + 37 }, 0, 0)
+  look_at({ (mn[1] + mx[1]) / 2, mn[2] + 9, mx[3] - 4 })
+  T.press(1, "camera")
+  quiet()
+  shot("08b_station_hall")
+  T.press(1, "camera")
+end
+-- 9. staged: the city (site 3) up close: towers, window grids, bridges, roofs (chase camera)
+if want("09") then
+  local c, b = center_of(3)
+  place({ b[2][1] + 50, b[2][2] - 30, c[3] }, -1.5708, 0)
+  look_at({ c[1], b[2][2] - 40, c[3] })
+  T.press(1, "camera")
+  quiet()
+  shot("09_city_towers")
+  T.press(1, "camera")
+end
+-- 10. staged: inside a city plaza (planters, fountains, obelisks, overgrowth; chase camera)
+if want("10") then
+  local r3, o3 = game.ruin(3), st.sector.sites[3].pos
+  local k3 = ruinm.kit_of(r3.kit)
+  local plaza
+  for _, r in ipairs(r3.rooms) do if r.class >= 4 and r.kind ~= "shaft" and not plaza then plaza = r end end
+  local mn, mx = ruinm.room_box(plaza, k3, o3)
+  place({ (mn[1] + mx[1]) / 2 - 8, mn[2] + 16, mn[3] + 14 }, 0, 0)
+  ap.resize(T, 1, get, 2) -- the Seat's chase camera fits inside the plaza
+  T.press(1, "camera")
+  look_at({ (mn[1] + mx[1]) / 2, mn[2] + 2, (mn[3] + mx[3]) / 2 + 10 })
+  quiet()
+  shot("10_city_plaza")
+  T.press(1, "camera")
+end
 print("detail tour done at tick", T.state().tick)

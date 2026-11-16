@@ -73,6 +73,7 @@ GENERATED = [
         "region": "kit_station",
         "cutout": None,
         "gain": 1.3,
+        "saturation": 0.25,  # full-strength rust read as wood from a distance
         "prompt_id": "2026-11-16-kit-station-01",
     },
     {
@@ -124,6 +125,8 @@ def build_generated(palette):
         img = img.resize(g["size"], Image.Resampling.BOX)
         if g.get("gain"):
             img = ImageEnhance.Brightness(img.convert("RGB")).enhance(g["gain"])
+        if g.get("saturation") is not None:
+            img = ImageEnhance.Color(img.convert("RGB")).enhance(g["saturation"])
         lo, hi = REGIONS[g["region"]]
         idx, colors = quantize(img, hi - lo + 1, g["cutout"])
         for i, c in enumerate(colors):
