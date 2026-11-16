@@ -50,8 +50,8 @@ return {
         api.lead(site)
         local new = api.shelve("memory")
         local v = m.vars or {}
-        api.msg(string.format("The %s remember the %s: the next voice of the %s waits at site %d.", v.civ or "builders",
-          v.place or "garden", v.object or "relic", site))
+        api.msg(string.format("The %s remember %s: the next voice of the %s waits at site %d.", v.civ or "builders",
+          v.place or "the garden", v.object or "relic", site))
         if new then api.msg("The memory's transcript is on your bookshelf.") end
         api.p.holo.memories = (api.p.holo.memories or 0) + 1
         api.fx("echo")

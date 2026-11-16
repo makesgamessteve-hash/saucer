@@ -33,6 +33,7 @@ local HELP = {
   "At the console the stick trims, Space/Ctrl up/down, Use gets up",
   "Scanner V (reveals sentries 10 s), Jammer T (disables 12 s)",
   "Lab bench: identify and decode; trade terminal when docked",
+  "Home: holodeck (engine room), stove, bookshelf, TV (sofa)",
   "Camera C, mystery mode M, help H/F1",
   "Gamepad, touch and WebXR work too.",
 }
@@ -60,7 +61,7 @@ function M.status(p, state)
     return "HOLODECK: " .. (pr and pr.name:upper() or "PROGRAM"), state and holo.hint(state, p) or nil
   end
   if p.tv then return "LIVING ROOM - TV", "USE: NEXT CHANNEL  MOVE: GET UP" end
-  if p.reading then return "BOOKSHELF", "USE: TURN THE PAGE  MOVE: CLOSE THE BOOK" end
+  if p.reading then return "BOOKSHELF", nil end
   if p.cooking then return "KITCHEN", nil end
   if p.mode == "walk" and p.beam_console then return "TRACTOR ROOM", "F: PULL  STICK: TRIM  USE: GET UP" end
   if p.mode == "walk" then
@@ -395,13 +396,15 @@ function M.home(v, state, p)
     for i, line in ipairs(page) do v:text(x + 12, y + 16 + i * 10, line:sub(1, 30), INK) end
     local pg = string.format("PAGE %d/%d%s", p.reading.page, #r.pages, r.kind == "clue" and "  CLUE" or "")
     v:text(x + bw - 12 - #pg * 8, y + bh - 12, pg, { 0.45, 0.35, 0.25, 1 })
+    local h = "USE: NEXT PAGE  MOVE: CLOSE THE BOOK"
+    v:text(W // 2 - #h * 4, y + bh + 8, h, AMBER)
     n = n + 1
   end
   if p.tv then
     local tv = require("sim.tv")
     local ch = tv.current(state, p)
     if ch then
-      local show, hint = tv.show(state, p, ch)
+      local show, hint = tv.now(state, p, ch)
       local lines = require("sim.books").wrap(hint, (W - 40) // 8)
       local bh = 16 + #lines * 10
       local y = H - 40 - bh

@@ -86,7 +86,7 @@ end
 function M.vars(state, b)
   local m = state.mystery
   local v = m.vars or {}
-  local out = { civ = v.civ or "Velari", object = v.object or "relic", place = v.place or "garden" }
+  local out = { civ = v.civ or "Velari", object = v.object or "relic", place = v.place or "the garden" }
   if b and b.clue == "sentries" then
     out.site, out.count = guarded_site(state)
   else
@@ -112,12 +112,12 @@ function M.resolve(state, id)
   end
   if id == "memory" then
     local v = M.vars(state)
-    local text = string.format("The %s remember the %s. Their %s still sings: its next voice waits at site %d.",
+    local text = string.format("The %s remember %s. Their %s still sings: its next voice waits at site %d.",
       v.civ, v.place, v.object, v.site)
     local lines = M.wrap(text)
     table.insert(lines, 1, "")
     table.insert(lines, 1, "Recorded on the holodeck:")
-    return { title = "Memory of the " .. v.place, kind = "clue", pages = { lines } }
+    return { title = "Memory of " .. v.place, kind = "clue", pages = { lines } }
   end
   local b = M.def(id)
   if not b then return { title = id, kind = "lore", pages = { { "(the pages are blank)" } } } end

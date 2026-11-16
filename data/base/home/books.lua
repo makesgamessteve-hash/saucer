@@ -17,7 +17,7 @@ return {
   } },
   { id = "velari_log", title = "Velari captain's log", kind = "clue", clue = "echo", pages = {
     { "Day 212. The {object} sings", "again. Nobody sleeps.", "", "The {civ} archivists say it",
-      "remembers the {place}." },
+      "remembers {place}." },
     { "Day 213. We left part of it", "behind. Whatever hums out", "there, it waits at site {site}.", "",
       "Bring a lab. Bring patience." },
   } },

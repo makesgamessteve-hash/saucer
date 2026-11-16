@@ -20,12 +20,11 @@ return {
   { deck = 1, kind = "fridge_dressing", at = { 6.7, 3.3 } },
   { deck = 1, kind = "pot_plant",  at = { 7.55, 2.85 }, top = 0.95 },
   -- living room (-x): cushions and a throw on the sofa, floor lamp, side
-  -- table, bookshelf, a holo projector on the coffee table, a big leafy plant
+  -- table, bookshelf and a big leafy plant (the coffee table stays clear for the TV)
   { deck = 1, kind = "cushions",   at = { -7.6, -0.25 } },
   { deck = 1, kind = "floor_lamp", at = { -8.4, -3.5 } },
   { deck = 1, kind = "side_table", at = { -7.5, 3.15 } },
   { deck = 1, kind = "bookshelf",  at = { -7.6, -4.15 }, seed = 3 },
-  { deck = 1, kind = "holo",       at = { -5.0, -0.2 }, top = 0.45 },
   { deck = 1, kind = "bush",       at = { -8.6, 2.2 } },
   { deck = 1, kind = "armchair_throw", at = { -5.0, 3.3 } },
   -- helm: a row of buttons along the desk edge and switch banks on the wings

@@ -84,7 +84,7 @@ M.TOPICS.sentries = function(state, p)
 end
 M.TOPICS.lab = function(state, p)
   for _, it in ipairs(p.hold) do
-    if not it.ident and not it.echo then return "Tip: your lab bench identifies salvage while you fly." end
+    if not it.ident and not it.echo and not it.home then return "Tip: your lab bench identifies salvage while you fly." end
   end
   return nil
 end
@@ -114,6 +114,12 @@ M.TOPICS.finds = function(state, p)
 end
 
 -- what channel ch shows right now -> show title, hint text
+-- what is on now: the show and hint tuned in, until the sim minute turns over
+function M.now(state, p, ch)
+  if p.tv and p.tv.k == minute(state) and p.tv.ch == ch.id and p.tv.show then return p.tv.show, p.tv.hint end
+  return M.show(state, p, ch)
+end
+
 function M.show(state, p, ch)
   local k = minute(state)
   local show = ch.shows[k % #ch.shows + 1]
@@ -133,7 +139,7 @@ function M.tune(state, p, idx, ctx)
   local ch = list[idx]
   if not ch then return false end
   local show, hint = M.show(state, p, ch)
-  p.tv = { ch = ch.id, idx = idx, since = state.tick }
+  p.tv = { ch = ch.id, idx = idx, since = state.tick, k = minute(state), show = show, hint = hint }
   p.panel = false
   p.tv_hints = (p.tv_hints or 0) + 1
   p.last_hint = hint

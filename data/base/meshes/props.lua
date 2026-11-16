@@ -396,9 +396,9 @@ function B.pipes(out, d, y)
   local ceil = y + 3.05
   local PIPE, FL = { 0.55, 0.5, 0.4 }, { 0.75, 0.6, 0.25 }
   local runs = {
-    { { 1.0, ceil, -1.8 }, { 8.3, ceil, -1.8 }, drop = true },
+    { { 1.0, ceil, -1.8 }, { 3.6, ceil, -0.5 }, drop = true }, -- the holodeck is aft of x = 4
     { { -1.0, ceil, -1.8 }, { -8.3, ceil, -1.8 }, drop = true },
-    { { 0.7, ceil - 0.3, -2.6 }, { 5.6, ceil - 0.3, -6.4 }, drop = true },
+    { { 0.7, ceil - 0.3, -2.6 }, { 3.6, ceil - 0.3, -3.9 }, drop = true },
     { { -0.7, ceil - 0.3, -2.6 }, { -5.0, ceil - 0.3, -6.9 }, drop = true },
     { { 0.0, ceil - 0.15, -0.7 }, { 0.0, ceil - 0.15, 0.6 } },
   }

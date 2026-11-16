@@ -221,8 +221,6 @@ local function size_request(state, p, to)
   local blocked = function(pos, r, hh, margin) return M.blocked(state, p, pos, r, hh, margin) end
   local ok, why, where = shipm.request(ship, to, blocked, eye, yaw)
   if ok then
-    if p.holo_run then holo.exit(state, p, ctx_fns, "The program ends as the rooms pack away.") end
-    p.tv, p.reading = false, false
     if p.mode == "walk" then ship.pitch = p.body.pitch end
     p.mode = "helm"
     p.tractor = false
