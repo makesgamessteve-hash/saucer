@@ -19,10 +19,20 @@ return {
   decks = {
     { id = "dome",  name = "Dome deck",  floor = 0.6,  radius = 10.0, ceiling = 6.2 },
     { id = "lower", name = "Lower deck", floor = -3.0, radius = 8.8,  ceiling = 0.3 },
+    -- add-tractor-beam: the belly pod under the lower deck, right above the emitter
+    { id = "belly", name = "Tractor deck", floor = -5.2, radius = 4.9, ceiling = -3.3 },
   },
   dome = { radius = 10.6, height = 5.6 },
   -- straight stair along x: the low end opens onto the lower deck, the high end onto the dome deck
   stairs = { low = -3.0, high = 3.5, z0 = -6.0, z1 = -4.4, steps = 12 },
+  -- add-tractor-beam: a steep ship's stair from the engine room down into the
+  -- belly (low = x of the bottom end, high = x of the top end; it runs inward)
+  belly_stairs = { low = -3.9, high = -7.3, z0 = -3.0, z1 = -1.7, steps = 9, lo = 3, hi = 2 },
+  -- the Tractor Room: a floor window (radius `window`) round the beam hatch
+  -- (radius `hatch`) right over the emitter; at the console you sit in the
+  -- operator's sling seat over the glass and look straight down (`eye`, `yaw`
+  -- and `pitch` are hull-local and relative to the hull's heading)
+  tractor = { window = 1.9, hatch = 0.7, eye = { 1.45, -4.0, 0 }, yaw = -1.5708, pitch = -1.15 },
   helm = { seat = { 0, 0.6, 7.2 }, stand = { 0, 0.6, 5.7 }, use_radius = 1.9 },
   -- you wake up in the bedroom, sitting on the edge of the bed (milestone 2)
   spawn = { pos = { 2.4, -3.0, 4.0 }, yaw = -1.5708 },
@@ -42,6 +52,8 @@ return {
       label = "USE: SHOWER" },
     { id = "engine",  kind = "engine",  deck = 2, pos = { 3.8, -3.0, -2.4 }, radius = 1.1, room = "Engine room",
       label = "USE: ENGINE CONSOLE" },
+    { id = "tractor", kind = "tractor", deck = 3, pos = { 2.6, -5.2, 0.0 }, radius = 1.2, room = "Tractor room",
+      label = "USE: BEAM CONSOLE" },
   },
   -- sliding doors on the lower-deck partitions: open on their own when a body
   -- comes within `reach`, solid while less than `solid_below` open
@@ -59,6 +71,8 @@ return {
       stair_foot = { -3.6, -3.0, -5.2 }, engine_w = { -3.6, -3.0, -3.6 }, engine_e = { 2.7, -3.0, -3.6 },
       bed_door_s = { 2.7, -3.0, -0.4 }, bed_door_n = { 2.7, -3.0, 1.6 }, bath_door_s = { -2.7, -3.0, -0.4 },
       bath_door_n = { -2.7, -3.0, 1.6 },
+      belly_top = { -7.6, -3.0, -3.5 }, belly_in = { -7.6, -3.0, -2.35 }, belly_low = { -3.6, -5.2, -2.35 },
+      belly_mid = { 0.2, -5.2, -2.2 }, belly_side = { 2.6, -5.2, -1.6 }, tractor = { 2.6, -5.2, 0.0 },
       lab_in = { -4.7, 0.6, -3.6 }, trade_in = { 5.4, 0.6, -3.6 }, kitchen_in = { 6.2, 0.6, -2.6 },
       lab = { -4.7, 0.6, -5.85 }, trade = { 5.4, 0.6, -5.85 }, kitchen = { 6.2, 0.6, 0.0 },
       bed = { 2.4, -3.0, 4.0 }, shower = { -3.9, -3.0, 3.4 }, engine = { 3.8, -3.0, -2.4 }, living = { -3.2, 0.6, 1.5 },
@@ -72,6 +86,8 @@ return {
       { "engine_e", "engine" }, { "aft", "lab_in" }, { "lab_in", "lab" }, { "aft", "trade_in" },
       { "stair_top_in", "trade_in" }, { "trade_in", "trade" }, { "aft", "kitchen_in" }, { "kitchen_in", "kitchen" },
       { "bath_door_s", "bed_door_s" },
+      { "engine_w", "belly_top" }, { "belly_top", "belly_in" }, { "belly_in", "belly_low" }, { "belly_low", "belly_mid" },
+      { "belly_mid", "belly_side" }, { "belly_side", "tractor" },
     },
   },
   rooms = {
@@ -84,6 +100,7 @@ return {
     { deck = 2, name = "Bedroom",     box = { 0.1, 0.9, 10, 10 } },
     { deck = 2, name = "Bathroom",    box = { -10, 0.9, -0.1, 10 } },
     { deck = 2, name = "Engine room", box = { -10, -10, 10, 0.9 } },
+    { deck = 3, name = "Tractor room", box = { -10, -10, 10, 10 } },
   },
   furniture = {
     -- dome deck: helm. A low desk well below the pilot's eye line, with two
@@ -134,6 +151,18 @@ return {
     -- engine room
     { deck = 2, kind = "engine",   circle = { 0, -1.8, 1.1 }, h = 3.3, color = { 0.3, 0.9, 1.0 } },
     { deck = 2, kind = "console",  box = { 4.4, -3.2, 6.2, -1.6 }, h = 1.2, color = { 0.30, 0.32, 0.40 } },
-    { deck = 2, kind = "box",      box = { -6.6, -3.4, -4.6, -1.4 }, h = 1.6, color = { 0.45, 0.40, 0.30 } },
+    { deck = 2, kind = "box",      box = { -6.2, -5.6, -4.6, -4.4 }, h = 1.6, color = { 0.45, 0.40, 0.30 } },
+    -- add-tractor-beam: rails round the belly stairwell (engine room, port side)
+    { deck = 2, kind = "rail", box = { -7.3, -3.1, -3.9, -3.0 }, h = 1.0, color = { 0.6, 0.62, 0.7 } },
+    { deck = 2, kind = "rail", box = { -7.3, -1.7, -3.9, -1.6 }, h = 1.0, color = { 0.6, 0.62, 0.7 } },
+    { deck = 2, kind = "rail", box = { -4.0, -3.1, -3.9, -1.6 }, h = 1.0, color = { 0.6, 0.62, 0.7 } },
+    -- the Tractor Room: the operator's sling seat out over the glass between two
+    -- console arms, the cargo lift tube over the hatch, and the hold racks
+    { deck = 3, kind = "beam_seat", box = { 1.2, -0.3, 1.8, 0.3 }, h = 1.0, color = { 0.85, 0.45, 0.20 }, solid = false },
+    { deck = 3, kind = "beam_arm",  box = { 1.25, 0.45, 1.85, 0.75 }, h = 0.85, color = { 0.30, 0.32, 0.40 }, side = 1 },
+    { deck = 3, kind = "beam_arm",  box = { 1.25, -0.75, 1.85, -0.45 }, h = 0.85, color = { 0.30, 0.32, 0.40 }, side = -1 },
+    { deck = 3, kind = "cargo_tube", circle = { 0, 0, 0.75 }, h = 1.9, color = { 0.55, 0.85, 1.0 } },
+    { deck = 3, kind = "hold_rack", box = { -1.5, 3.9, 1.5, 4.4 }, h = 1.8, color = { 0.36, 0.38, 0.44 } },
+    { deck = 3, kind = "hold_rack", box = { -1.5, -4.4, 1.5, -3.9 }, h = 1.8, color = { 0.36, 0.38, 0.44 } },
   },
 }

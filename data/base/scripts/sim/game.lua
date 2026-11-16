@@ -78,6 +78,7 @@ function M.new_player(index, pos, yaw)
     hold = {}, credits = 0, banked_value = 0, looted = {}, lab = lab.new(), next_uid = 0, last_trader = 1,
     scan_ready = 0, jam_ready = 0, scan_until = 0, jam_flash = 0,
     site = 0, tractor = false, ghost = 0, cam = "first", help = false, panel = false,
+    beam_console = false, hatch = 0,
     msgs = {}, fx = {},
   }
   home.wake(p)
@@ -121,6 +122,12 @@ function M.viewpoint(p)
     local L = avatar.layout()
     local e = avatar.rot(ship.yaw, L.wake.eye)
     return { ship.pos[1] + e[1], ship.pos[2] + e[2], ship.pos[3] + e[3] }, ship.yaw + L.wake.yaw, L.wake.pitch
+  end
+  if p.mode == "walk" and p.beam_console then
+    -- in the Tractor Room's sling seat, out over the floor window
+    local L = avatar.layout()
+    local e = avatar.rot(ship.yaw, L.tractor.eye)
+    return { ship.pos[1] + e[1], ship.pos[2] + e[2], ship.pos[3] + e[3] }, ship.yaw + L.tractor.yaw, p.body.pitch
   end
   if p.mode == "walk" then
     local L = avatar.layout()
@@ -196,6 +203,7 @@ local function size_request(state, p, to)
     if p.mode == "walk" then ship.pitch = p.body.pitch end
     p.mode = "helm"
     p.tractor = false
+    p.beam_console = false
     fx(state, p, to > from and "shrink" or "grow")
     saucer.events.emit({ type = "size_change", player = p.index, from = from, to = to })
   elseif REASONS[why] then
@@ -205,10 +213,34 @@ local function size_request(state, p, to)
   end
 end
 
+-- add-tractor-beam: sit down at the beam console in the Tractor Room / get up
+local function console_enter(state, p)
+  local L = avatar.layout()
+  p.beam_console = true
+  p.body.pitch = L.tractor.pitch
+  msg(state, p, "Beam console: look down through the glass. Stick trims, F pulls, Use gets up.")
+end
+home.USE.tractor = function(state, p) console_enter(state, p) end
+
+local function console_leave(state, p)
+  p.beam_console = false
+  p.body.pitch = 0
+  if p.tractor and p.tractor.console then
+    p.tractor = false
+    msg(state, p, "You left the console: the beam let go")
+    fx(state, p, "denied")
+  end
+end
+
 -- the Use button: take the helm, or stand up from it
 local function use(state, p)
   local L = avatar.layout()
   local ship = p.ship
+  if p.beam_console then
+    console_leave(state, p)
+    msg(state, p, "You get up from the beam console. The saucer holds station.")
+    return
+  end
   if p.mode == "helm" then
     if not configs.get(ship.size).interior or ship.morph then
       msg(state, p, "No room to stand up in the " .. configs.get(ship.size).name)
@@ -248,42 +280,58 @@ local function bank(state, p)
   end
 end
 
+-- add-tractor-beam: the belly beam (sim/tractor.lua has the alignment rule)
 local function tractor_step(state, p, cmd, dt)
   local ship = p.ship
   if p.tractor then
     local t = p.tractor
     local ruin = t.site ~= 0 and rt.ruins[t.site] or nil
-    local cand
-    for _, c in ipairs(tractor.candidates(state, p, t.site, ruin)) do
-      if c.key == t.key then cand = c end
-    end
-    local c = configs.get(ship.size)
-    local eye = M.viewpoint(p)
-    if not cand or vec.dist(cand.pos, eye) > c.tractor_range * 1.25 or not tractor.can_lift(ship, cand.item) then
+    local cand = tractor.by_key(state, p, t.site, ruin, t.key)
+    local why
+    if not cand then why = "Tractor lock lost"
+    elseif t.size ~= ship.size or ship.morph then why = "The beam collapsed in the fold"
+    elseif t.console and not p.beam_console then why = "You left the console: the beam let go" end
+    if why then
       p.tractor = false
-      msg(state, p, "Tractor lock lost")
+      msg(state, p, why)
+      fx(state, p, "denied")
       return
     end
-    t.left = t.left - dt
-    if t.left <= 1e-9 then
+    t.t = t.t + dt
+    if t.t >= t.total - 1e-9 then
       p.tractor = false
       M.pick_up(state, p, cand, t.site)
     end
     return
   end
   if not cmd:pressed("tractor") then return end
-  local cand = tractor.find(state, p, p.site, rt.ruins[p.site], M.viewpoint(p))
-  if not cand then
-    msg(state, p, "Nothing in tractor range")
+  local b = tractor.beam_of(ship)
+  if b.console and not p.beam_console then
+    if p.mode == "helm" then
+      msg(state, p, "The beam runs from the Tractor Room below the lower deck. Line up, then go down: hover-hold keeps you here.")
+    else
+      msg(state, p, "Use the beam console in the Tractor Room (stairs down beside the engine).")
+    end
     fx(state, p, "denied")
-  elseif not tractor.can_lift(ship, cand.item) then
-    msg(state, p, items.label(cand.item) .. " needs a size " .. loot.size_name(cand.item.size) .. " tractor")
+    return
+  end
+  local _, heading = M.viewpoint(p)
+  local sc = tractor.scan(state, p, p.site, rt.ruins[p.site], heading)
+  if not sc then
+    msg(state, p, "Nothing under the beam")
     fx(state, p, "denied")
-  elseif cand.kind ~= "cache" and #p.hold >= configs.all().hold_slots then
+  elseif sc.status ~= "lock" then
+    msg(state, p, "Beam: " .. sc.info.hint:lower())
+    fx(state, p, "denied")
+  elseif sc.cand.kind ~= "cache" and #p.hold >= configs.all().hold_slots then
     msg(state, p, "Hold is full")
     fx(state, p, "denied")
   else
-    p.tractor = { key = cand.key, site = p.site, left = tractor.LOCK_TIME }
+    local cand = sc.cand
+    p.tractor = { key = cand.key, site = p.site, t = 0, total = tractor.pull_time(ship, sc.info.depth),
+                  from = vec.copy(cand.pos), size = ship.size, console = b.console, item_size = cand.item.size,
+                  kind = cand.kind }
+    msg(state, p, "Beam lock: pulling up " .. items.label(cand.item))
     fx(state, p, "tractor")
   end
 end
@@ -411,6 +459,10 @@ local function world_step(state, p, dt)
     msg(state, p, "Configuration: " .. configs.get(ship.size).name)
   end
   if p.ghost > 0 then p.ghost = p.ghost - 1 end
+  -- the belly hatch irises open while the beam pulls (render reads p.hatch)
+  local hw = p.tractor and 1 or 0
+  local hc = p.hatch or 0
+  if hw > hc then p.hatch = math.min(1, hc + 2.5 * dt) else p.hatch = math.max(0, hc - 1.5 * dt) end
   home.doors_step(avatar.layout(), p, dt)
   -- milestone 3: docking, the lab bench, shields, Fold Retreat and the Resonant vault
   local docked = trade.docked_at(state, p)
@@ -477,6 +529,12 @@ function M.step_player(state, p, cmd, dt)
     ship.vel = { 0, 0, 0 }
   elseif p.mode == "helm" then
     flight.step(ship, cmd, dt, mover(state, p))
+  elseif p.beam_console then
+    -- at the beam console: trim thrusters in the operator's frame, look to aim the view
+    local L = avatar.layout()
+    flight.trim(ship, { move_x = cmd:axis("move_x"), move_z = cmd:axis("move_z"), lift = cmd:axis("lift"),
+                        turn = cmd:axis("turn") }, ship.yaw + L.tractor.yaw, dt, mover(state, p))
+    p.body.pitch = vec.clamp(p.body.pitch + cmd:axis("look") * L.look * dt, -L.pitch_limit, L.pitch_limit)
   else
     -- nobody at the helm: the saucer brakes to a stop and holds station
     flight.step(ship, STILL, dt, mover(state, p))

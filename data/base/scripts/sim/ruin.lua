@@ -367,8 +367,9 @@ function M.slots(rng, rooms, kit, origin, seed)
       }
     end
     if r.kind == "vault" then
-      -- off-centre so wall-centre crates never hide it
-      r.echo_pos = { (mn[1] + mx[1]) / 2 + (mx[1] - mn[1]) / 4, mn[2] + kit.wall + 0.8, mx[3] - kit.wall - 1.2 }
+      -- off-centre so wall-centre crates never hide it, and (add-tractor-beam)
+      -- a quarter of the hall in from two walls, so the Villa can hover over it
+      r.echo_pos = { (mn[1] + mx[1]) / 2 + (mx[1] - mn[1]) / 4, mn[2] + kit.wall + 0.8, (mn[3] + mx[3]) / 2 + (mx[3] - mn[3]) / 4 }
     end
   end
   return out

@@ -306,6 +306,172 @@ function M.console(v, A, state, o, d)
   return n
 end
 
+-- add-tractor-beam ---------------------------------------------------------
+-- The belly beam: a see-through cone from the emitter down the hull's (banked)
+-- down axis, brighter while it pulls, with motes rising up it; the target
+-- marked by a ring (green = lock), long scrap with its axis and the keel line;
+-- the item itself rising and shrinking into the hatch; the hatch iris; and
+-- the Tractor Room's live readouts. All render-side, read from the sim state.
+M.BEAM_TINT = {
+  idle = { 0.4, 0.85, 1, 0.08 }, lock = { 0.4, 1, 0.6, 0.18 }, pull = { 0.55, 1, 0.9, 0.28 },
+  core = { 0.85, 1, 1, 0.3 }, mote = { 0.6, 1, 0.9, 0.85 },
+}
+M.STATUS_TINT = {
+  lock = { 0.4, 1, 0.5, 1 }, big = { 1, 0.3, 0.25, 1 }, blocked = { 1, 0.3, 0.25, 1 },
+}
+function M.status_tint(st) return M.STATUS_TINT[st] or { 1, 0.75, 0.25, 1 } end
+
+-- does this player watch their beam right now (beam console, or in the Seat)?
+function M.beam_view(p)
+  if p.beam_console then return true end
+  return p.mode == "helm" and not tractor.beam_of(p.ship).console
+end
+
+-- the heading a player reads the beam in (the console faces inward)
+function M.beam_heading(p)
+  local _, yaw = game.viewpoint(p)
+  return yaw
+end
+
+local function tan(a) return sm.sin(a) / sm.cos(a) end
+
+-- the cone (and, while pulling, its core and rising motes) -> meshes + sprites drawn
+function M.draw_beam(v, A, o, scan, tick)
+  local ship = o.ship
+  if ship.morph then return 0 end
+  local b = tractor.beam_of(ship)
+  local e, a = tractor.frame(ship)
+  local len, tint
+  if o.tractor then
+    len = math.max(1.5, vec.dot(vec.sub(o.tractor.from, e), a) + 1.0)
+    tint = M.BEAM_TINT.pull
+  elseif scan then
+    len = vec.clamp(scan.info.depth + 1.5, b.min + 1, b.range)
+    tint = scan.status == "lock" and M.BEAM_TINT.lock or M.BEAM_TINT.idle
+  else
+    len, tint = b.range, M.BEAM_TINT.idle
+  end
+  local r = len * tan(b.half_angle)
+  local roll = ship.bank or 0
+  v:mesh(A.beam_cone, { pos = e, yaw = ship.yaw, roll = roll, scale = { r, len, r }, ghost = true, tint = tint })
+  local n = 1
+  if o.tractor then
+    v:mesh(A.beam_cone, { pos = e, yaw = ship.yaw, roll = roll, scale = { r * 0.3, len, r * 0.3 }, ghost = true,
+                          tint = M.BEAM_TINT.core })
+    n = n + 1
+    local f, rt = vec.fwd(ship.yaw), vec.right(ship.yaw)
+    for k = 0, 17 do
+      local ph = (tick * 0.025 + k / 18) % 1
+      local dd = len * (1 - ph)
+      local ang = k * 2.39996 + tick * 0.06
+      local rr = dd * tan(b.half_angle) * 0.7 * (((k * 37) % 10) / 10)
+      local side = vec.add(vec.scale(rt, sm.cos(ang) * rr), vec.scale(f, sm.sin(ang) * rr))
+      local q = vec.add(vec.add(e, vec.scale(a, dd)), side)
+      v:billboard(A.tex.beam, q, 0.25 + 0.3 * (1 - ph), { palette = A.pal.base, tint = M.BEAM_TINT.mote })
+      n = n + 1
+    end
+  end
+  return n
+end
+
+-- the target marker: a ring of sprites round it, long scrap's axis and the keel line
+function M.draw_target(v, A, o, scan)
+  if not scan or o.tractor then return 0 end
+  local c, tint = scan.cand, M.status_tint(scan.status)
+  local R = 0.9 + c.item.size * 0.45
+  local n = 0
+  for k = 0, 11 do
+    local a = k * sm.tau / 12
+    v:billboard(A.tex.beam, { c.pos[1] + sm.sin(a) * R, c.pos[2] - 0.4, c.pos[3] + sm.cos(a) * R }, 0.35,
+                { palette = A.pal.base, tint = tint })
+    n = n + 1
+  end
+  if c.axis then
+    local fa, fk = vec.fwd(c.axis), vec.fwd(o.ship.yaw)
+    for k = -4, 4 do
+      v:billboard(A.tex.beam, vec.add(c.pos, vec.scale(fa, k * 0.9)), 0.3, { palette = A.pal.base, tint = { 1, 0.75, 0.25, 1 } })
+      v:billboard(A.tex.beam, vec.add({ c.pos[1], c.pos[2] + 0.3, c.pos[3] }, vec.scale(fk, k * 0.9)), 0.22,
+                  { palette = A.pal.base, tint = { 0.4, 0.9, 1, 0.9 } })
+      n = n + 2
+    end
+  end
+  return n
+end
+
+-- the hatch iris in the belly (opens while the beam pulls) and the floor window
+function M.draw_hatch(v, A, o, d)
+  local L = avatar.layout()
+  local T = L.tractor
+  if not T or not A.iris_leaf then return 0 end
+  local open = o.hatch or 0
+  local y = (tractor.beam_of(o.ship).emitter or { 0, -5.75, 0 })[2] - 0.02
+  for k = 0, 5 do
+    local a = k * sm.tau / 6
+    local lp = { sm.sin(a) * open * T.hatch, y, sm.cos(a) * open * T.hatch }
+    v:mesh(A.iris_leaf, { pos = at(d, lp), yaw = d.yaw + a, roll = d.roll, scale = d.scale })
+  end
+  v:mesh(A.belly_glass, { pos = d.pos, yaw = d.yaw, roll = d.roll, scale = d.scale, ghost = true, tint = { 0.6, 0.9, 1, 0.22 } })
+  return 7
+end
+
+-- the Tractor Room's readouts: the scope on the starboard arm (cone at the
+-- target's depth, the target's offset as a dot), the pull bar on the port arm
+-- and a lit cubby on the hold racks for every hold slot in use
+function M.beam_console(v, A, state, o, d)
+  local L = avatar.layout()
+  local fl = L.decks[3] and L.decks[3].floor
+  if not fl then return 0 end
+  local arm_l, arm_r
+  local racks = {}
+  for _, f in ipairs(L.furniture) do
+    if f.kind == "beam_arm" then if f.side > 0 then arm_l = f else arm_r = f end end
+    if f.kind == "hold_rack" then racks[#racks + 1] = f end
+  end
+  local n = 0
+  local scan = o.index and state.players[o.index] == o and M.last_scan[o.index] or nil
+  if arm_l then
+    local b = arm_l.box
+    local cx, cz, top = (b[1] + b[3]) / 2, (b[2] + b[4]) / 2, fl + arm_l.h + 0.02
+    local col = scan and M.status_tint(scan.status) or { 0.3, 0.6, 0.8, 1 }
+    for k = 0, 11 do
+      local a = k * sm.tau / 12
+      blip(v, A, d, { cx + sm.sin(a) * 0.12, top, cz + sm.cos(a) * 0.12 }, { 0.015, 0.006, 0.015 }, col)
+      n = n + 1
+    end
+    if scan then
+      local info = scan.info
+      local lim = math.max(0.5, info.max_lateral)
+      local rel = avatar.rot(-o.ship.yaw, info.off)
+      local x, z = vec.clamp(rel[1] / lim, -1.4, 1.4) * 0.12, vec.clamp(rel[3] / lim, -1.4, 1.4) * 0.12
+      blip(v, A, d, { cx + x, top + 0.01, cz + z }, { 0.03, 0.01, 0.03 }, col)
+      n = n + 1
+    end
+  end
+  if arm_r and o.tractor then
+    local b = arm_r.box
+    local f = vec.clamp(o.tractor.t / o.tractor.total, 0, 1)
+    local w = (b[3] - b[1] - 0.16) * f
+    blip(v, A, d, { b[1] + 0.08 + w / 2, fl + arm_r.h + 0.02, (b[2] + b[4]) / 2 }, { math.max(0.01, w), 0.006, 0.05 },
+         { 1, 0.75, 0.3, 1 })
+    n = n + 1
+  end
+  local all = configs.all()
+  for i = 1, all.hold_slots do
+    local it = o.hold[i]
+    local rack = racks[(i - 1) // 6 + 1]
+    if it and rack then
+      local j = (i - 1) % 6
+      local b = rack.box
+      local x = b[1] + ((j % 3) + 0.5) * (b[3] - b[1]) / 3
+      local y = fl + 0.35 + (j // 3) * 0.6
+      blip(v, A, d, { x, y, (b[2] + b[4]) / 2 }, { 0.5, 0.3, 0.3 }, it.hot and { 1, 0.7, 0.25, 1 } or { 0.4, 1, 0.5, 1 })
+      n = n + 1
+    end
+  end
+  return n
+end
+M.last_scan = {}
+
 -- the Villa's rooms, each folding on its own (sim/fold.lua) plus the doors
 function M.rooms(v, A, o, d, state)
   local L = avatar.layout()
@@ -338,6 +504,7 @@ function M.rooms(v, A, o, d, state)
                                      scale = d.scale }) end
     end
     if state then M.console(v, A, state, o, d) end
+    if state and (amounts["3:Tractor room"] or 0) == 0 then M.beam_console(v, A, state, o, d) end
     if (amounts["2:Engine room"] or 0) == 0 then M.engine_parts(v, A, d, state and state.tick or 0) end
   end
   return drawn
@@ -410,6 +577,7 @@ local function draw_saucer(v, A, o, own_eyes, state, xr, cam)
     v:mesh(A.glass, { pos = d.pos, yaw = d.yaw, roll = d.roll, scale = d.scale, ghost = true, tint = { 0.55, 0.8, 1, 0.3 } })
   elseif c.interior then
     M.rooms(v, A, o, d, state)
+    if not o.ship.morph then M.draw_hatch(v, A, o, d) end
     v:mesh(A.glass, { pos = d.pos, yaw = d.yaw, roll = d.roll, scale = d.scale, ghost = true, tint = { 0.55, 0.8, 1, 0.3 } })
     if o.mode == "walk" and not own_eyes and not o.ship.morph then
       local L = avatar.layout()
@@ -509,17 +677,25 @@ function M.render(v, state, alpha)
   M.draw_ruins(v, A, state, cam, v.xr)
   v:mesh(A.station, { pos = state.sector.trader.pos, yaw = state.tick * 0.002 })
   M.draw_sentries(v, A, state, p)
+  -- what this player's beam sees (the HUD, the beam console and the cone use it)
+  local scan = tractor.scan(state, p, p.site, p.site ~= 0 and game.ruin(p.site) or nil, M.beam_heading(p))
+  M.last_scan[p.index] = scan
   -- this player's loot instances, Echoes, nests, caches and the vault's Curio
   local spin = (state.tick % 360) * sm.tau / 360
   do
     local ruin = p.site ~= 0 and game.ruin(p.site) or nil
     for _, cand in ipairs(tractor.candidates(state, p, p.site, ruin)) do
       local s = 0.6 + cand.item.size * 0.35
+      local pos, k = cand.pos, 1
+      if p.tractor and p.tractor.key == cand.key then pos, k = tractor.pull_pose(p.ship, p.tractor) end
       if cand.echo or cand.kind == "curio" then
-        v:billboard(A.tex.echo, cand.pos, cand.kind == "curio" and 2.4 or 1.6, { palette = A.pal.base })
+        v:billboard(A.tex.echo, pos, (cand.kind == "curio" and 2.4 or 1.6) * k, { palette = A.pal.base })
       else
-        v:billboard(A.tex.loot, cand.pos, s, { palette = A.pal.base })
-        v:mesh(A.cache_mesh, { pos = { cand.pos[1], cand.pos[2] - s * 0.7, cand.pos[3] }, yaw = spin, scale = s * 0.6 })
+        v:billboard(A.tex.loot, pos, s * k, { palette = A.pal.base })
+        -- long scrap lies still along its own axis, stretched; the rest slowly turns
+        local sc = s * 0.6 * k
+        v:mesh(A.cache_mesh, { pos = { pos[1], pos[2] - s * k * 0.7, pos[3] }, yaw = cand.axis or spin,
+                               scale = cand.axis and { sc * 0.7, sc * 0.8, sc * 2.4 } or sc })
       end
     end
   end
@@ -527,19 +703,16 @@ function M.render(v, state, alpha)
   for j, o in ipairs(state.players) do
     draw_saucer(v, A, o, j == v.player and (p.cam ~= "chase" or v.xr), state, v.xr, cam)
   end
-  -- tractor beam: a dotted line of sprites from just below the eyes
-  local target
-  local eye, yaw, pitch = game.viewpoint(p)
-  target = tractor.find(state, p, p.site, p.site ~= 0 and game.ruin(p.site) or nil, eye, yaw, pitch)
-  if p.tractor and target then
-    local from = { eye[1], eye[2] - 0.6, eye[3] }
-    for k = 1, 10 do
-      local t = k / 11
-      local q = vec.add(from, vec.scale(vec.sub(target.pos, from), t))
-      v:billboard(A.tex.beam, q, 0.5, { palette = A.pal.base, tint = { 1, 0.9, 0.4, 0.8 } })
+  -- the belly beams: everyone's while it pulls, your own while you watch it
+  for _, o in ipairs(state.players) do
+    if o == p then
+      if p.tractor or M.beam_view(p) then M.draw_beam(v, A, p, scan, state.tick) end
+      if M.beam_view(p) or p.mode == "helm" then M.draw_target(v, A, p, scan) end
+    elseif o.tractor then
+      M.draw_beam(v, A, o, nil, state.tick)
     end
   end
-  if not v.xr then hud.draw(v, state, p, target) end
+  if not v.xr then hud.draw(v, state, p, scan) end
   if v.index == v.player then M.audio(state, p) end
 end
 

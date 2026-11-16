@@ -24,22 +24,60 @@ function M.rot(yaw, v)
   return { v[1] * c + v[3] * s, v[2], -v[1] * s + v[3] * c }
 end
 
-local function in_stairs(L, x, z)
+-- every stair flight: the main stair (lower deck <-> dome deck) and, when the
+-- layout has one, the belly stair (Tractor Room <-> lower deck). `low`/`high`
+-- are the x of the flight's bottom and top ends (either order); lo/hi are decks.
+function M.flights(L)
+  local out = {}
   local st = L.stairs
-  return x >= st.low and x <= st.high and z >= st.z0 and z <= st.z1
+  out[1] = { low = st.low, high = st.high, z0 = st.z0, z1 = st.z1, steps = st.steps, lo = st.lo or 2, hi = st.hi or 1 }
+  local b = L.belly_stairs
+  if b and L.decks[b.lo] then
+    out[2] = { low = b.low, high = b.high, z0 = b.z0, z1 = b.z1, steps = b.steps, lo = b.lo, hi = b.hi }
+  end
+  return out
+end
+
+local function in_flight(f, x, z)
+  local x0, x1 = math.min(f.low, f.high), math.max(f.low, f.high)
+  return x >= x0 and x <= x1 and z >= f.z0 and z <= f.z1
+end
+
+-- the flight under (x, z) for a body at height y (nil when y is nowhere near it)
+local function flight_at(L, x, z, y)
+  for _, f in ipairs(M.flights(L)) do
+    if in_flight(f, x, z) and (y == nil or (y >= L.decks[f.lo].floor - L.step and y <= L.decks[f.hi].floor + L.step)) then
+      return f
+    end
+  end
+  return nil
+end
+M.flight_at = flight_at
+
+local function in_stairs(L, x, z)
+  return in_flight(M.flights(L)[1], x, z)
 end
 M.in_stairs = in_stairs
 
-local function mid(L) return (L.decks[1].floor + L.decks[2].floor) / 2 end
+-- the deck whose floor is nearest to height y
+local function nearest_deck(L, y)
+  local best, bd
+  for d, deck in ipairs(L.decks) do
+    local dd = math.abs(deck.floor - y)
+    if not bd or dd < bd then best, bd = d, dd end
+  end
+  return best
+end
 
 -- floor height and deck index under (x, z) for a body currently at height y
 function M.floor_at(L, x, z, y)
-  if in_stairs(L, x, z) then
-    local st, lo, hi = L.stairs, L.decks[2].floor, L.decks[1].floor
-    local f = lo + (hi - lo) * (x - st.low) / (st.high - st.low)
-    return f, f > mid(L) and 1 or 2
+  local f = flight_at(L, x, z, y)
+  if f then
+    local lo, hi = L.decks[f.lo].floor, L.decks[f.hi].floor
+    local h = lo + (hi - lo) * (x - f.low) / (f.high - f.low)
+    return h, h > (lo + hi) / 2 and f.hi or f.lo
   end
-  local d = y > mid(L) and 1 or 2
+  local d = nearest_deck(L, y)
   return L.decks[d].floor, d
 end
 
@@ -56,11 +94,12 @@ local function box_hit(b, x, z, r)
 end
 
 -- is a body of the layout's radius at (x, z) on deck d blocked? `extra` is an
--- optional list of { deck =, box = } solids (closed doors).
-function M.blocked(L, d, x, z, extra)
+-- optional list of { deck =, box = } solids (closed doors). A body on a stair
+-- flight (`on_flight`) is inside the stairwell, not bounded by the deck edge.
+function M.blocked(L, d, x, z, extra, on_flight)
   local r = L.body_radius
   local edge = L.decks[d].radius - r
-  if x * x + z * z > edge * edge then return true end
+  if not on_flight and x * x + z * z > edge * edge then return true end
   for _, e in ipairs(extra or {}) do
     if e.deck == d and box_hit(e.box, x, z, r) then return true end
   end
@@ -85,7 +124,8 @@ local function try(L, body, x, z, extra)
   local f, d = M.floor_at(L, x, z, y)
   if math.abs(f - y) > L.step then return false end
   local _, cur = M.floor_at(L, body.pos[1], body.pos[3], y)
-  if M.blocked(L, cur, x, z, extra) or M.blocked(L, d, x, z, extra) then return false end
+  local on = flight_at(L, x, z, y) ~= nil
+  if M.blocked(L, cur, x, z, extra, on) or M.blocked(L, d, x, z, extra, on) then return false end
   body.pos = { x, f, z }
   return true
 end
@@ -191,7 +231,7 @@ function M.nav_nearest(L, body)
   local best, bd
   for _, name in ipairs(M.sorted_keys(L.nav.nodes)) do
     local q = L.nav.nodes[name]
-    local qd = q[2] > (L.decks[1].floor + L.decks[2].floor) / 2 and 1 or 2
+    local qd = nearest_deck(L, q[2])
     local dx, dz = body.pos[1] - q[1], body.pos[3] - q[3]
     local dd = dx * dx + dz * dz
     if qd == d and (not bd or dd < bd) then best, bd = name, dd end

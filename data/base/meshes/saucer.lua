@@ -17,12 +17,18 @@ local function villa_hull()
     -- open shell: no internal caps, so the lower deck is not cut by discs
     P("lathe", { seg = 32, color = HULL, uv = 0.5, open = true, points = {
       2.7, -5.6, 7.5, -4.9, 11.6, -2.6, 13.0, -0.9, 12.9, -0.3, 12.0, 0.3, 10.8, 0.62 } }),
-    P("cylinder", { c = { 0, -5.75, 0 }, r = 2.8, h = 0.15, seg = 16, color = { 0.3, 0.9, 1.0 }, emissive = 0.9 }),
+    -- add-tractor-beam: the beam emitter ring round the Tractor Room's floor
+    -- window (the window and the hatch iris sit inside it)
+    P("ring", { c = { 0, -5.75, 0 }, rin = 1.98, r = 2.8, h = 0.15, seg = 24, color = { 0.3, 0.9, 1.0 }, emissive = 0.9 }),
+    P("ring", { c = { 0, -5.8, 0 }, rin = 1.9, r = 2.05, h = 0.06, seg = 24, color = RIM }),
     P("ring", { c = { 0, -1.0, 0 }, rin = 12.8, r = 13.3, h = 0.6, seg = 32, color = RIM }),
   }
   local light = { P("box", { min = { -0.35, -0.95, 13.25 }, max = { 0.35, -0.55, 13.4 }, color = { 1.0, 0.75, 0.3 },
                              emissive = 1 }) }
   parts = kit.merge(parts, kit.radial_array(light, 16))
+  -- eight focusing lenses on the emitter ring
+  local lens = { P("box", { min = { -0.16, -5.86, 2.25 }, max = { 0.16, -5.75, 2.6 }, color = { 0.85, 1.0, 1.0 }, emissive = 1 }) }
+  parts = kit.merge(parts, kit.radial_array(lens, 8, 0.39))
   local strut = { P("cone", { c = { 0, -6.6, 6.0 }, r = 0.5, r1 = 0.25, h = 1.6, seg = 6, color = RIM }) }
   parts = kit.merge(parts, kit.radial_array(strut, 3, 0.5))
   return kit.merge(parts, M.villa_detail())

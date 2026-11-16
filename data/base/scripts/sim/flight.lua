@@ -59,6 +59,30 @@ function M.step(ship, cmd, dt, move)
   return blocked
 end
 
+-- add-tractor-beam: fine positioning from the Tractor Room's console. Slow
+-- thrusters in the operator's frame (heading: where they face), a slow yaw
+-- trim, and the bank settles level. -> blocked count from the mover
+function M.trim(ship, input, heading, dt, move)
+  local c = configs.get(ship.size)
+  local b = c.beam or {}
+  local speed, turn_rate = b.trim_speed or 3.0, b.trim_turn or 0.35
+  ship.yaw = saucer.math.wrap(ship.yaw - (input.turn or 0) * turn_rate * dt)
+  local f, r = vec.fwd(heading), vec.right(heading)
+  local mx, mz, my = input.move_x or 0, input.move_z or 0, input.lift or 0
+  local want = { (f[1] * mz + r[1] * mx) * speed, my * speed * 0.6, (f[3] * mz + r[3] * mx) * speed }
+  local k = math.min(1, c.accel * 2 * dt)
+  for i = 1, 3 do ship.vel[i] = ship.vel[i] + (want[i] - ship.vel[i]) * k end
+  local bk = ship.bank or 0
+  ship.bank = bk - bk * math.min(1, M.BANK_RATE * dt)
+  local delta = vec.scale(ship.vel, dt)
+  local np, blocked = move(ship, delta)
+  for i = 1, 3 do
+    if math.abs((np[i] - ship.pos[i]) - delta[i]) > 1e-6 then ship.vel[i] = 0 end
+  end
+  ship.pos = np
+  return blocked
+end
+
 -- altitude band readout for the helm: the vertical offset of `pos` from the ship
 function M.elevation(ship, pos)
   return pos[2] - ship.pos[2]

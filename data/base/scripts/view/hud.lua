@@ -14,9 +14,9 @@ local WHITE, DIM, GREEN, RED, AMBER, CYAN = { 1, 1, 1, 1 }, { 0.6, 0.65, 0.75, 1
 M.MSG_TICKS = 300
 
 local HINTS = {
-  kbm = "WASD fly MOUSE aim SPACE/CTRL up/down G helm Q/E fold F beam V scan T jam H help",
+  kbm = "WASD fly MOUSE aim SPACE/CTRL up/down G use Q/E fold F beam (Tractor Room) V scan T jam H help",
   pad = "LS move RS aim RT/LT up/down X use LB/RB fold A beam Y scan RS-click jam",
-  touch = "Stick move  drag aim  UP/DN climb/dive  USE helm  buttons fold/tractor/scan/jam",
+  touch = "Stick move  drag aim  UP/DN climb/dive  USE helm/console  buttons fold/tractor/scan/jam",
   xr = "L stick fly  R stick up/down + turn  L trigger use  lever fold  R trigger beam",
 }
 M.HINTS = HINTS
@@ -28,7 +28,9 @@ local HELP = {
   "At the helm: you fly where you look (mouse up/down climbs/dives)",
   "Up/down: Space/Ctrl (or R/Z), boost Shift",
   "Fold Q (to the Seat) / unfold E, or 1-2",
-  "Tractor F or left click (helm or under the dome)",
+  "Beam: hover over loot, go down to the Tractor Room (stairs by",
+  "the engine), Use the console, F pulls. Long scrap: line up the keel",
+  "At the console the stick trims, Space/Ctrl up/down, Use gets up",
   "Scanner V (reveals sentries 10 s), Jammer T (disables 12 s)",
   "Lab bench: identify and decode; trade terminal when docked",
   "Camera C, mystery mode M, help H/F1",
@@ -50,6 +52,7 @@ end
 function M.status(p)
   local L = avatar.layout()
   if p.mode == "wake" then return "BEDROOM", nil end
+  if p.mode == "walk" and p.beam_console then return "TRACTOR ROOM", "F: PULL  STICK: TRIM  USE: GET UP" end
   if p.mode == "walk" then
     local room = avatar.room(L, p.body):upper()
     if avatar.near_helm(L, p.body) then return room, "USE: TAKE THE HELM" end
@@ -58,7 +61,7 @@ function M.status(p)
     return room, nil
   end
   if configs.get(p.ship.size).interior then return "AT THE HELM", "USE: STAND UP" end
-  return "SEAT", "E: UNFOLD THE VILLA"
+  return "SEAT", "F: MINI BEAM  E: UNFOLD THE VILLA"
 end
 
 function M.bearing(p, target)
@@ -197,6 +200,55 @@ function M.alarm(state, p)
   return worst
 end
 
+-- add-tractor-beam: the beam scope. A circle is the cone's footprint at the
+-- target's depth, the dot is the target (seen the way you face: up = ahead),
+-- with the rule that fails first spelled out (or LOCK). At the Villa's helm
+-- it also tells you to go down to the Tractor Room. -> lines drawn
+function M.beam(v, state, p, scan)
+  local W, H = v.width, v.height
+  local tractor = require("sim.tractor")
+  local b = tractor.beam_of(p.ship)
+  local n = 0
+  if p.tractor then
+    local f = vec.clamp(p.tractor.t / p.tractor.total, 0, 1)
+    local t = f < 0.75 and "BEAM PULLING - SHRINKING TO FIT" or "INTO THE HOLD"
+    v:text(W // 2 - #t * 4, H // 2 + 22, t, CYAN)
+    v:rect(W // 2 - 40, H // 2 + 32, 80, 3, { 0.15, 0.15, 0.2, 1 })
+    v:rect(W // 2 - 40, H // 2 + 32, 80 * f, 3, AMBER)
+    return 2
+  end
+  local watching = p.beam_console or (p.mode == "helm" and not b.console)
+  if not scan or not (watching or p.mode == "helm") then return 0 end
+  local info, st = scan.info, scan.status
+  local col = st == "lock" and GREEN or ((st == "big" or st == "blocked") and RED or AMBER)
+  local label = string.format("%s [%s]", items.label(scan.cand.item), loot.size_name(scan.cand.item.size))
+  v:text(W // 2 - #label * 4, H // 2 + 10, label, col)
+  n = n + 1
+  local hint = info.hint
+  if st == "lock" and b.console and not p.beam_console then hint = "LOCK - GO DOWN TO THE TRACTOR ROOM" end
+  v:text(W // 2 - #hint * 4, H // 2 + 20, hint, col)
+  n = n + 1
+  -- the scope, bottom right
+  local cx, cy, R = W - 40, H - 70, 22
+  v:rect(cx - R - 6, cy - R - 14, 2 * R + 12, 2 * R + 34, { 0, 0.02, 0.06, 0.6 })
+  v:text(cx - 16, cy - R - 12, "BEAM", DIM)
+  for k = 0, 23 do
+    local a = k * saucer.math.tau / 24
+    v:rect(cx + saucer.math.sin(a) * R, cy + saucer.math.cos(a) * R, 1, 1, col)
+  end
+  v:rect(cx - 3, cy, 7, 1, DIM)
+  v:rect(cx, cy - 3, 1, 7, DIM)
+  local _, heading = require("sim.game").viewpoint(p)
+  local lim = math.max(0.5, info.max_lateral)
+  local fx = vec.dot(info.off, vec.right(heading)) / lim
+  local fz = vec.dot(info.off, vec.fwd(heading)) / lim
+  local dx, dy = vec.clamp(fx, -1.3, 1.3) * R, -vec.clamp(fz, -1.3, 1.3) * R
+  v:rect(cx + dx - 2, cy + dy - 2, 5, 5, col)
+  v:text(cx - R - 2, cy + R + 4, string.format("D%d", info.depth // 1), DIM)
+  if info.yaw_err then v:text(cx + 2, cy + R + 4, string.format("%dD", math.abs(info.yaw_err * 57.2958) // 1), DIM) end
+  return n + 1
+end
+
 function M.draw(v, state, p, target)
   local W, H = v.width, v.height
   local ship = p.ship
@@ -255,17 +307,8 @@ function M.draw(v, state, p, target)
     v:text(W // 2 - 40, 6, "IN DERELICT " .. p.site, AMBER)
     if (p.scan_until or 0) > state.tick then v:text(W // 2 - 40, 16, "SCANNING", CYAN) end
   end
-  -- tractor
-  if target then
-    local ok = target.item.size <= c.tractor_class
-    local t = string.format("%s [%s]", items.label(target.item), loot.size_name(target.item.size))
-    v:text(W // 2 - #t * 4, H // 2 + 10, t, ok and GREEN or RED)
-    if not ok then v:text(W // 2 - 60, H // 2 + 20, "needs a bigger saucer", RED) end
-  end
-  if p.tractor then
-    local f = 1 - p.tractor.left / 0.5
-    v:rect(W // 2 - 20, H // 2 + 30, 40 * f, 3, AMBER)
-  end
+  -- the belly beam's alignment indicator (add-tractor-beam)
+  M.beam(v, state, p, target)
   -- mystery
   local m = state.mystery
   if m.mode == "off" then

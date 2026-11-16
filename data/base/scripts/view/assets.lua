@@ -47,6 +47,16 @@ function M.init()
   -- the Villa's walkable interior and its glass dome (hull-local, see saucer/interior.lua)
   cache.interior = kit.build("interior", { part = "rooms" }, 1)
   cache.glass = kit.build("interior", { part = "glass" }, 1)
+  -- add-tractor-beam: the Tractor Room's floor window, the beam cone (apex at
+  -- the origin, opening downward, unit height and radius) and an iris leaf
+  cache.belly_glass = kit.build("interior", { part = "belly_glass" }, 1)
+  cache.beam_cone = saucer.mesh.build({ parts = {
+    { kind = "cone", c = { 0, -1, 0 }, r = 1, r1 = 0.02, h = 1, seg = 20, color = { 1, 1, 1 }, emissive = 1, open = true },
+  } })
+  cache.iris_leaf = saucer.mesh.build({ parts = {
+    { kind = "box", min = { -0.4, 0, 0 }, max = { 0.4, 0.05, 0.74 }, color = { 0.55, 0.57, 0.64 } },
+    { kind = "box", min = { -0.3, -0.005, 0.6 }, max = { 0.3, 0.0, 0.66 }, color = { 0.95, 0.75, 0.1 }, emissive = 0.5 },
+  } })
   cache.person = kit.build("person", {}, 1)
   -- milestone 2: one mesh per fold group so rooms can pack away one by one,
   -- the sliding door leaves, and a white unit cube for live console readouts
