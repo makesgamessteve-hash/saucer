@@ -81,7 +81,8 @@ function M.far(seed, sid, info)
     if info and info.heart and i == 1 then d, cy = 1100, 0 end
     local pos = { (saucer.math.sin(a) * d - ext[1] / 2) // 1, cy - ext[2] // 2, (saucer.math.cos(a) * d - ext[3] / 2) // 1 }
     sites[i] = { id = i, pos = pos, seed = saucer.seed_child(seed, "site", sid * 100 + i), kit = kit, civ = ci,
-                 heart = (info and info.heart and i == 1) or nil }
+                 heart = (info and info.heart and i == 1) or nil, tutorial = false,
+                 danger = info and info.danger or 2 }
   end
   local tp = { rng:int(-200, 200), rng:int(-60, 60), rng:int(-200, 200) }
   return { id = sid, sites = sites, trader = { pos = tp }, arrival = { tp[1] + 60, tp[2] + 20, tp[3] - 260 } }

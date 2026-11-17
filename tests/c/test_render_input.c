@@ -308,6 +308,7 @@ TEST(split_keyboard_and_coop_layout) {
   sx_input_build(&in, 7, cmds, &n);
   CHECK((cmds[0].buttons & (1u << use)) && !(cmds[1].buttons & (1u << use)) && cmds[1].axes[0] > 0);
   CHECK(sx_input_split_keyboard(&in, 2) && !sx_input_split_keyboard(&in, 3));
+  CHECK_STR(sx_input_device_mode(&in, 2), "keys2");
   /* two players side by side, or stacked */
   sx_viewport_layout_split(2, 100, 50, 1, rects);
   CHECK(rects[0][2] == 50 && rects[1][0] == 50 && rects[1][3] == 50);

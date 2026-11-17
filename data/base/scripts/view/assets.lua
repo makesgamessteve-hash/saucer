@@ -76,6 +76,39 @@ function M.init()
   cache.nest = kit.build("sentry", { kind = "nest" }, 1)
   cache.vault = kit.build("sentry", { kind = "vault", open = 0 }, 1)
   cache.vault_open = kit.build("sentry", { kind = "vault", open = 1 }, 1)
+  -- add-wider-dark: the Clamp (a squat grabber with four claws), the Lockdown
+  -- node, a door seal (a unit slab scaled to the door), a decoy, a gift
+  -- capsule and the Heart's core
+  local claws = { { kind = "sphere", c = { 0, 0, 0 }, r = 1.3, h = 1.3, seg = 10, rings = 3, color = { 0.42, 0.36, 0.3 } },
+                  { kind = "ring", c = { 0, -0.2, 0 }, rin = 1.0, r = 1.55, h = 0.3, seg = 14, color = { 0.9, 0.5, 0.1 },
+                    emissive = 0.7 } }
+  for k = 0, 3 do
+    local a = k * saucer.math.tau / 4
+    local x, z = math.sin(a) * 1.4, math.cos(a) * 1.4
+    claws[#claws + 1] = { kind = "box", min = { x - 0.18, -1.8, z - 0.18 }, max = { x + 0.18, -0.2, z + 0.18 },
+                          color = { 0.6, 0.55, 0.5 } }
+  end
+  cache.clamp = saucer.mesh.build({ parts = claws })
+  cache.lockdown = saucer.mesh.build({ parts = {
+    { kind = "cylinder", c = { 0, -1, 0 }, r = 0.7, h = 2, seg = 8, color = { 0.35, 0.36, 0.42 } },
+    { kind = "ring", c = { 0, 0.3, 0 }, rin = 0.75, r = 1.05, h = 0.25, seg = 12, color = { 1, 0.25, 0.2 }, emissive = 0.8 },
+    { kind = "sphere", c = { 0, 1.1, 0 }, r = 0.35, h = 0.35, seg = 8, rings = 2, color = { 1, 0.3, 0.2 }, emissive = 1 },
+  } })
+  cache.seal = saucer.mesh.build({ parts = {
+    { kind = "box", min = { 0, 0, 0 }, max = { 1, 1, 1 }, color = { 1, 0.3, 0.2 }, emissive = 0.8 },
+  } })
+  cache.decoy = saucer.mesh.build({ parts = {
+    { kind = "sphere", c = { 0, 0, 0 }, r = 0.6, h = 0.25, seg = 10, rings = 2, color = { 0.7, 0.75, 0.85 } },
+    { kind = "ring", c = { 0, -0.05, 0 }, rin = 0.5, r = 0.9, h = 0.1, seg = 12, color = { 0.4, 0.9, 1 }, emissive = 1 },
+  } })
+  cache.gift = saucer.mesh.build({ parts = {
+    { kind = "box", min = { -0.6, -0.6, -0.6 }, max = { 0.6, 0.6, 0.6 }, color = { 0.85, 0.3, 0.55 } },
+    { kind = "box", min = { -0.65, -0.12, -0.65 }, max = { 0.65, 0.12, 0.65 }, color = { 1, 0.85, 0.3 }, emissive = 0.6 },
+  } })
+  cache.heart_core = saucer.mesh.build({ parts = {
+    { kind = "sphere", c = { 0, 0, 0 }, r = 3.2, h = 3.2, seg = 14, rings = 5, color = { 0.95, 0.25, 0.45 }, emissive = 0.9 },
+    { kind = "ring", c = { 0, 0, 0 }, rin = 4.2, r = 5.0, h = 0.3, seg = 24, color = { 1, 0.75, 0.4 }, emissive = 1 },
+  } })
   for i, c in ipairs(configs.all()) do
     local hull = kit.build("saucer", { diameter = c.diameter, height = c.height, part = "hull", config = c.id }, 1)
     local dome = kit.build("saucer", { diameter = c.diameter, height = c.height, part = "dome", config = c.id }, 1)
@@ -317,7 +350,14 @@ end
 function M.solid_parts(s, k, hanging)
   local mn, mx = s[1], s[2]
   local parts = { { kind = "box", min = mn, max = mx, color = k.solid_color or k.color, uv = 0.25 } }
-  if s.kind == "tower" then
+  if s.kind == "pod" then
+    -- add-wider-dark: a brood pod swells out of its block, a lit seam round its middle
+    local c = { (mn[1] + mx[1]) / 2, (mn[2] + mx[2]) / 2, (mn[3] + mx[3]) / 2 }
+    local r = math.min(mx[1] - mn[1], mx[2] - mn[2], mx[3] - mn[3]) * 0.62
+    parts[#parts + 1] = { kind = "sphere", c = c, r = r, h = r, seg = 10, rings = 3, color = k.solid_color or k.color }
+    parts[#parts + 1] = { kind = "ring", c = c, rin = r * 0.98, r = r * 1.08, h = 0.25, seg = 12,
+                          color = { 1.0, 0.62, 0.2 }, emissive = 0.9 }
+  elseif s.kind == "tower" then
     -- lit floors every 6 m, a dark gap every fourth floor, and a beacon on top
     local win = k.window_color or { 1.0, 0.85, 0.5 }
     local y, n = mn[2] + 3, 0
@@ -427,7 +467,8 @@ end
 
 -- the kit's wall material (falls back to the shared hull plating)
 function M.kit_texture(A, k)
-  return A.tex["kit_" .. (k and k.id or "")] or A.tex.hull
+  -- add-wider-dark: a kit may borrow another kit's material (tinted by its colours)
+  return A.tex["kit_" .. (k and (k.texture or k.id) or "")] or A.tex.hull
 end
 
 -- add-presentation-packaging: a decal quad (cache.decal is a unit square in
@@ -460,7 +501,7 @@ end
 
 -- add-presentation-packaging: the kit's floor material (nil: none)
 function M.floor_texture(A, k)
-  return A.tex["floor_" .. (k and k.id or "")]
+  return A.tex["floor_" .. (k and (k.floor_texture or k.texture or k.id) or "")]
 end
 
 -- one mesh for a whole derelict (kept for mods and tools; the game draws chunks)

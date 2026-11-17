@@ -291,6 +291,10 @@ function M.rows(state, p, ctx)
         pl.panel = false
       end }
   end
+  -- add-wider-dark: inside the open Heart, the vote comes first
+  if require("sim.heart").can_vote(state, p) then
+    table.insert(rows, 2, { text = "Vote on an ending at the Heart", act = function(_, pl) require("sim.panel").open(pl, "heart") end })
+  end
   rows[#rows + 1] = { text = "Party: docking, visits, gifts", act = function(_, pl) require("sim.panel").open(pl, "party") end }
   rows[#rows + 1] = { text = "Xenoarchive", act = function(_, pl) require("sim.panel").open(pl, "archive") end }
   rows[#rows + 1] = { text = "Close", act = function(_, pl) pl.panel = false end }

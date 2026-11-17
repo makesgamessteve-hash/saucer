@@ -53,6 +53,7 @@ enum { SX_AUDIO_PLAY = 0, SX_AUDIO_SET = 1, SX_AUDIO_STOP = 2 };
 typedef struct sx_audio_req {
   char path[128];
   float volume, pan;
+  float pitch; /* add-wider-dark: playback rate (1 = as recorded); music notes */
   int handle;
   int op, loop;
 } sx_audio_req;

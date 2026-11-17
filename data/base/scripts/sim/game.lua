@@ -220,7 +220,7 @@ function M.init(state, ctx)
   state.locks, state.grids = {}, {} -- add-on-foot-excursions: turned hand-locks, grids shut down
   M.rebuild(state)
   state.sentries = {}
-  for i = 1, #state.sector.sites do state.sentries[i] = sentry.new_state(rt.sentries[i]) end
+  for i = 1, #state.sector.sites do state.sentries[i] = sentry.new_state(rt.sentries[i], state) end
   local site1 = state.sector.sites[1]
   local door = ruinm.entrance(rt.ruins[1], site1.pos)
   local n = ctx.players or 1

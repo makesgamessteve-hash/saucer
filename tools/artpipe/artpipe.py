@@ -377,7 +377,36 @@ def build_sounds():
     for name, (dur, fn, loop) in pass_sounds().items():
         synth(os.path.join(s, name), dur, fn, loop=loop)
         out.append("authored/sounds/" + name)
+    # add-wider-dark: procedural music. One note per instrument at C4 (the bass
+    # at C2); view/music.lua pitches them to each civilization's scale.
+    for name, (dur, fn) in music_notes().items():
+        synth(os.path.join(s, name), dur, fn)
+        out.append("authored/sounds/" + name)
     return out
+
+
+def music_notes():
+    c4, c2 = 261.63, 65.41
+    tau = 2 * math.pi
+
+    def pluck(t):
+        return 0.5 * math.exp(-t * 5.0) * (math.sin(tau * c4 * t) + 0.35 * math.sin(tau * 2 * c4 * t)
+                                           + 0.12 * math.sin(tau * 3 * c4 * t))
+
+    def bell(t):
+        return 0.4 * math.exp(-t * 2.2) * (math.sin(tau * c4 * t) + 0.5 * math.sin(tau * 2.76 * c4 * t)
+                                           + 0.25 * math.sin(tau * 5.4 * c4 * t))
+
+    def pad(t):
+        swell = min(1.0, t / 0.5)
+        return 0.28 * swell * (math.sin(tau * c4 * t) + 0.5 * math.sin(tau * c4 * 1.003 * t)
+                               + 0.3 * math.sin(tau * c4 * 2 * t)) * (0.85 + 0.15 * math.sin(tau * 4 * t))
+
+    def bass(t):
+        return 0.55 * math.exp(-t * 2.5) * (math.sin(tau * c2 * t) + 0.3 * math.sin(tau * 2 * c2 * t))
+
+    return {"note_pluck.wav": (1.0, pluck), "note_bell.wav": (1.8, bell), "note_pad.wav": (2.4, pad),
+            "note_bass.wav": (1.2, bass)}
 
 
 def _noise(n, seed, smooth):

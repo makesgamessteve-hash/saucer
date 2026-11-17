@@ -364,6 +364,7 @@ const char *sx_input_device_mode(const sx_input *in, int player) {
   d = in->players[player - 1].last_device;
   if (d == SX_DEV_TOUCH) return "touch";
   if (d == SX_DEV_XR) return "xr";
+  if (d == SX_DEV_KEYS2) return "keys2";
   if (d >= SX_DEV_PAD0) return "pad";
   return "kbm";
 }

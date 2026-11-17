@@ -14,8 +14,9 @@ local WHITE, DIM, GREEN, RED, AMBER, CYAN = { 1, 1, 1, 1 }, { 0.6, 0.65, 0.75, 1
 M.MSG_TICKS = 300
 
 local HINTS = {
-  kbm = "WASD fly MOUSE aim SPACE/CTRL up/down G use Q/E fold F beam (Tractor Room) V scan T jam H help",
-  pad = "LS move RS aim RT/LT up/down X use LB/RB fold A beam Y scan RS-click jam",
+  kbm = "WASD fly MOUSE aim SPACE/CTRL up/down G use Q/E fold F beam (Tractor Room) V scan T jam TAB map H help",
+  pad = "LS move RS aim RT/LT up/down X use LB/RB fold A beam Y scan RS-click jam DPAD map/decoy/shroud",
+  keys2 = "IJKL move ARROWS aim O/U up/down ENTER use ,/. fold RSHIFT beam ; scan \\ map",
   touch = "Stick move  drag aim  UP/DN climb/dive  USE helm/console  buttons fold/tractor/scan/jam",
   xr = "L stick fly  R stick up/down + turn  L trigger use  lever fold  R trigger beam",
 }
@@ -38,6 +39,10 @@ local HELP = {
   "Station: G trades/talks/grabs a thief, E or 1-2 in a hangar",
   "Derelict: Seat near a deck, 3 (or Q) steps out; E deploys it",
   "On foot: Ctrl crouch, Space hop, G grabs / turns a hand-lock",
+  "Map TAB: fold jumps (the party agrees), party, Xenoarchive",
+  "Decoy B, Shroud X (hover still), Override spike N (on foot)",
+  "Clamped? hold Boost to shake it off, or Jam it",
+  "Co-op: gamepad A or F2 (right-hand keys) joins a player",
   "Camera C, mystery mode M, help H/F1",
   "Gamepad, touch and WebXR work too.",
 }
@@ -173,6 +178,12 @@ function M.panel(v, state, p)
     v:text(W // 2 - 6 * 8 * 3 // 2, y - 46, "SAUCER", AMBER, 3)
     v:text(W // 2 - 13 * 8 // 2, y - 18, "a cozy salvage", DIM)
   end
+  -- add-wider-dark: the sector map sits left of its rows when there is room
+  if p.panel.kind == "map" and W >= 360 then
+    local mw = math.min(W // 3, 200)
+    require("view.map").draw(v, state, 6, 40, mw, math.min(H - 80, 160), p)
+    x = math.max(x, mw + 16)
+  end
   local top = is_title and 0 or 12
   v:rect(x - 4, y - 4, w + 8, #rows * 11 + top + 12, { 0, 0.02, 0.06, 0.82 })
   if not is_title then v:text(x, y, title, AMBER) end
@@ -188,7 +199,7 @@ function M.panel(v, state, p)
   end
   local mode = saucer.input.device_mode(v.player)
   local nav = mode == "pad" and "STICK UP/DOWN  X: PICK" or (mode == "touch" and "STICK UP/DOWN  USE: PICK" or
-    "W/S: CHOOSE  G/ENTER: PICK")
+    (mode == "keys2" and "I/K: CHOOSE  ENTER: PICK" or "W/S: CHOOSE  G/ENTER: PICK"))
   v:text(W // 2 - #nav * 4, y + top + 10 + #rows * 11, nav, DIM)
   return #rows
 end
@@ -325,6 +336,18 @@ function M.draw(v, state, p, target)
     local a = alarm == "LOCKED" and "! SENTRY LOCKED - JAM (T) OR RUN !" or "! SENTRY ALERT !"
     v:text(W // 2 - #a * 4, H // 2 - 44, a, alarm == "LOCKED" and RED or AMBER)
   end
+  -- add-wider-dark: Clamp, Shroud, decoys, the sector and a fold jump in progress
+  if p.clamped_by then
+    local a = string.format("CLAMPED - HOLD BOOST %.1f/%.0f OR JAM", p.shake or 0, require("sim.sentry").tune().clamp.shake_time)
+    v:text(W // 2 - #a * 4, H // 2 - 56, a, RED)
+  end
+  if p.shroud then
+    local moving = vec.len(ship.vel or { 0, 0, 0 }) > require("sim.sentry").tune().shroud.still
+    v:text(128, 26, moving and "SHROUD (MOVING)" or "SHROUD", moving and AMBER or CYAN)
+  end
+  if (p.decoys or 0) > 0 then v:text(8, 66, string.format("DECOYS %d", p.decoys), DIM) end
+  if p.visiting then v:text(W // 2 - 64, 36, string.format("VISITING P%d'S DOME", p.visiting), GREEN) end
+  M.jump(v, state, p)
   if p.latched_by then
     local f = math.min(1, (p.latched_by.t or 0) / 3)
     v:text(W // 2 - 72, H // 2 - 70, "SNATCHER SIPHONING", RED)
@@ -387,6 +410,32 @@ function M.draw(v, state, p, target)
     local h = HINTS[mode] or HINTS.kbm
     v:text(6, H - 24 - 10 * #p.msgs, h:sub(1, (W - 12) // 8), DIM)
   end
+end
+
+-- add-wider-dark: the sector you are in and a party jump being voted on
+function M.jump(v, state, p)
+  local W = v.width
+  local galaxy = require("sim.galaxy")
+  local g = galaxy.generate(state.seed)
+  local here = g.sectors[state.sector_id or 1]
+  if here then
+    local t = here.name:upper()
+    v:text(W - 4 - #t * 8, 16, t, here.heart and { 1, 0.45, 0.65, 1 } or DIM)
+  end
+  local m = state.mystery
+  if require("sim.heart").can_vote(state, p) and not m.votes[tostring(p.index)] and state.tick % 60 < 45 then
+    local t = "THE HEART IS OPEN - TAB TO VOTE"
+    v:text(W // 2 - #t * 4, 56, t, { 1, 0.45, 0.65, 1 })
+  end
+  local j = state.jump
+  if not j then return end
+  local n = 0
+  for _ in pairs(j.yes) do n = n + 1 end
+  local t
+  if j.spool >= 0 then t = string.format("FOLD CORE SPOOLING %.1f", j.spool)
+  elseif not j.yes[tostring(p.index)] then t = string.format("P%d: JUMP TO %s? TAB TO AGREE", j.by, g.sectors[j.to].name:upper())
+  else t = string.format("JUMP TO %s %d/%d", g.sectors[j.to].name:upper(), n, #state.players) end
+  v:text(W // 2 - #t * 4, 46, t, j.spool >= 0 and CYAN or AMBER)
 end
 
 -- add-holodeck-home-life overlays: active buffs, the open book, the TV's

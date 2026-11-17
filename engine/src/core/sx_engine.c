@@ -582,7 +582,9 @@ int sx_run_headless(const sx_options *o) {
   while (!e->failed && e->tick < limit) {
     if (o->script[0] && e->test_done) break;
     sx_engine_tick(e);
-    if (e->tick % 2 == 0) sx_engine_render(e, 1.0);
+    /* headless renders still run the view code (it must not touch the sim);
+     * with three or four split views every sixth tick is plenty */
+    if (e->tick % (sx_engine_sim_players(e) > 2 ? 6 : 2) == 0) sx_engine_render(e, 1.0);
     e->naudio = 0; /* null audio */
   }
   if (o->script[0] && !e->test_done && !e->failed) fail(e, "test script did not finish before the tick limit");

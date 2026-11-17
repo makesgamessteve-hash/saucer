@@ -2,14 +2,13 @@
 -- The Heart site (concept §5.6; OpenSpec add-wider-dark): the last site of
 -- the mystery, in the Heart sector at the far end of the galaxy's spine. Its
 -- core is the middle of its vault hall. Bringing the Heart Key there opens
--- the Heart; every player inside the site then votes on an ending at the
--- core (a panel opens for them there). When everyone present has voted the
+-- the Heart; every player inside the site then votes on an ending (from
+-- the sector map, which offers the vote while they are inside). When everyone present has voted the
 -- ending is applied to the universe (sim/mystery.lua M.effect) and everyone
 -- present gets the centerpiece.
 local vec = require("lib.vec")
 local mystery = require("sim.mystery")
 local items = require("sim.items")
-local panel = require("sim.panel")
 local M = {}
 
 M.CORE_RANGE = 45
@@ -77,17 +76,22 @@ function M.step(state, ctx)
         mystery.open_heart(m, p.index)
         for _, o in ipairs(state.players) do
           ctx.msg(state, o, string.format("P%d set the Heart Key in its lock. The Heart opens.", p.index))
-          ctx.msg(state, o, "Everyone inside the Heart site: vote on an ending at the core")
+          ctx.msg(state, o, "Everyone inside the Heart site: open your map (Tab) and vote on an ending")
           ctx.fx(state, o, "echo")
         end
       end
-      if m.heart_open and not m.votes[tostring(p.index)] and not p.panel then panel.open(p, "heart") end
     end
   end
   if m.heart_open then
     local id = mystery.tally(m, M.present(state))
     if id then M.resolve(state, id, ctx) end
   end
+end
+
+-- may p vote right now? (the Heart is open and p is inside its site)
+function M.can_vote(state, p)
+  local m = state.mystery
+  return m.heart_open and not m.ending and (state.sector_id or 1) == m.heart_sector and p.site == M.site(state) or false
 end
 
 function M.resolve(state, id, ctx)
@@ -126,7 +130,7 @@ function M.rows(state, p)
   local n, total = 0, #M.present(state)
   for _ in pairs(m.votes) do n = n + 1 end
   rows[#rows + 1] = { text = string.format("Votes: %d of %d present", n, total), enabled = false }
-  rows[#rows + 1] = { text = "Close (vote later at the core)", act = function(_, pl) pl.panel = false end }
+  rows[#rows + 1] = { text = "Close (vote later from the map)", act = function(_, pl) pl.panel = false end }
   return rows
 end
 

@@ -6,6 +6,9 @@
 -- Same grammar as the other kits (sim/ruin.lua); only the numbers differ.
 return {
   id = "hive",
+  -- no material of its own yet: the organic city wall and floor, tinted amber
+  texture = "city",
+  floor_texture = "station",
   cell = 4.0,
   wall = 0.6,
   big = 4,

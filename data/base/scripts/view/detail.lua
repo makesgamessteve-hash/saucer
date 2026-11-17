@@ -37,6 +37,12 @@ M.STYLES = {
     glyph = { 0.55, 1.0, 0.7 }, hazard = { 0.9, 0.8, 0.5 }, crate = { 0.5, 0.48, 0.42 }, torn = 25, float = 6,
     cables = 1, furniture = "plaza", overgrowth = 75, green = { 0.22, 0.55, 0.26 },
   },
+  -- add-wider-dark: the hive, resin and brood pods
+  hive = {
+    metal = { 0.62, 0.48, 0.28 }, dark = { 0.24, 0.16, 0.08 }, pipe = { 0.7, 0.52, 0.22 }, accent = { 1.0, 0.65, 0.15 },
+    glyph = { 1.0, 0.75, 0.3 }, hazard = { 1.0, 0.5, 0.1 }, crate = { 0.55, 0.4, 0.2 }, torn = 20, float = 4,
+    cables = 2, furniture = "pods", overgrowth = 55, green = { 0.75, 0.5, 0.15 },
+  },
 }
 
 function M.style(k)
