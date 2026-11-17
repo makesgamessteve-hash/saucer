@@ -14,9 +14,11 @@ M.FORMAT = 2 -- 2: true 3D layouts; format-1 positions point into the old flat w
 M.SKIP = { msgs = true, fx = true, panel = true, tractor = true, ghost = true, ghost_size = true, ghost_pos = true,
            help = true, latched_by = true, jam_flash = true, scan_until = true, docked = true,
            beam_console = true, hatch = true, holo_run = true, tv = true, reading = true, cooking = true,
-           lifeline = true }
+           lifeline = true, spike = true, visiting = true, vbody = true, shake = true, clamped_by = true }
 -- world diffs copied as-is when present (filled by later systems)
-M.WORLD_KEYS = { "traders", "nests", "caches", "vault", "clock", "locks", "grids" }
+M.WORLD_KEYS = { "traders", "nests", "caches", "vault", "clock", "locks", "grids",
+                 -- add-wider-dark: the sector you are in, the ones you left, overrides, decoys, gifts
+                 "sector_id", "visited", "overrides", "decoys", "gifts" }
 
 local function copy(v)
   if type(v) ~= "table" then return v end
@@ -85,6 +87,11 @@ function M.apply(state, rec, game)
   for _, k in ipairs(M.WORLD_KEYS) do
     if rec.world[k] ~= nil then state[k] = copy(rec.world[k]) end
   end
+  -- add-wider-dark: the save may be in a far sector (and may hold more players)
+  if #rec.players > n then
+    for i = n + 1, math.min(#rec.players, 4) do state.players[i] = game.new_player(i, { 0, 0, 0 }, 0) end
+    n = math.min(#rec.players, 4)
+  end
   for i = 1, n do
     local r = rec.players[i]
     if r then
@@ -95,7 +102,11 @@ function M.apply(state, rec, game)
       state.players[i] = p
     end
   end
-  game.rebuild(state)
+  if (state.sector_id or 1) ~= 1 then
+    game.load_sector(state, state.sector_id)
+  else
+    game.rebuild(state)
+  end
   return true
 end
 

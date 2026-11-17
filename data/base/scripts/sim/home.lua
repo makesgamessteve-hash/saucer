@@ -48,14 +48,20 @@ function M.door_center(door)
   return (b[1] + b[3]) / 2, (b[2] + b[4]) / 2
 end
 
-function M.doors_step(L, p, dt)
+-- add-wider-dark: guests walking your dome (bodies) open doors too
+function M.doors_step(L, p, dt, guests)
   p.doors = p.doors or M.new_doors(L)
+  local bodies = {}
+  if p.mode == "walk" and not p.visiting then bodies[1] = p.body end
+  for _, b in ipairs(guests or {}) do bodies[#bodies + 1] = b end
   for i, door in ipairs(L.doors or {}) do
     local want = 0
-    if p.mode == "walk" and avatar.deck_of(L, p.body) == door.deck then
-      local cx, cz = M.door_center(door)
-      local dx, dz = p.body.pos[1] - cx, p.body.pos[3] - cz
-      if dx * dx + dz * dz <= door.reach * door.reach then want = 1 end
+    for _, b in ipairs(bodies) do
+      if avatar.deck_of(L, b) == door.deck then
+        local cx, cz = M.door_center(door)
+        local dx, dz = b.pos[1] - cx, b.pos[3] - cz
+        if dx * dx + dz * dz <= door.reach * door.reach then want = 1 end
+      end
     end
     local cur = p.doors[i] or 0
     local step = L.door_speed * dt

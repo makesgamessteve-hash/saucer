@@ -1472,7 +1472,7 @@ static sx_audio_req *audio_req(sx_engine *e) {
   return a;
 }
 
-/* saucer.audio.play(path, {volume=, pan=, loop=}) -> handle (nil when the
+/* saucer.audio.play(path, {volume=, pan=, loop=, pitch=}) -> handle (nil when the
  * frame's queue is full) */
 static int l_audio_play(lua_State *L) {
   sx_engine *e = get_engine(L);
@@ -1481,9 +1481,13 @@ static int l_audio_play(lua_State *L) {
   if (!a) return 0;
   strncpy(a->path, p, sizeof a->path - 1);
   a->volume = 1.0f;
+  a->pitch = 1.0f;
   if (lua_istable(L, 2)) {
     a->volume = field_num(L, 2, "volume", 1.0f);
     a->pan = field_num(L, 2, "pan", 0.0f);
+    a->pitch = field_num(L, 2, "pitch", 1.0f);
+    if (a->pitch < 0.05f) a->pitch = 0.05f;
+    if (a->pitch > 8.0f) a->pitch = 8.0f;
     lua_getfield(L, 2, "loop");
     a->loop = lua_toboolean(L, -1);
     lua_pop(L, 1);

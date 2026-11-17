@@ -40,6 +40,8 @@ typedef struct sx_options {
   int restore_every_tick;
   int width, height;
   int coop;
+  int split_keyboard; /* add-wider-dark: P2 on the right half of the keyboard */
+  int split_horizontal; /* two players: stacked instead of side by side */
   int quiet;
   int test_mode; /* debug checks: render mutation guard, saucer.test */
   int show_help;
@@ -51,6 +53,7 @@ enum { SX_AUDIO_PLAY = 0, SX_AUDIO_SET = 1, SX_AUDIO_STOP = 2 };
 typedef struct sx_audio_req {
   char path[128];
   float volume, pan;
+  float pitch; /* add-wider-dark: playback rate (1 = as recorded); music notes */
   int handle;
   int op, loop;
 } sx_audio_req;
@@ -130,6 +133,7 @@ int sx_engine_tick(sx_engine *e);
 /* Step with explicit frames (n = player count). */
 int sx_engine_step(sx_engine *e, const sx_cmd *cmds, int n);
 void sx_engine_render(sx_engine *e, double alpha);
+int sx_engine_sim_players(sx_engine *e);
 uint64_t sx_engine_state_hash(sx_engine *e);
 /* Fixed-step scheduler: accumulate elapsed seconds and return ticks to run. */
 int sx_ticks_for_frame(double *accumulator, double elapsed);

@@ -26,7 +26,12 @@ local function new_state(n)
   return st
 end
 local function run(st, c, n)
-  for _ = 1, n or 1 do game.step(st, { c or cmd(), c or cmd(), c or cmd(), c or cmd() }, 1 / 60) end
+  -- one frame per player in the game (a frame for an empty slot would join it)
+  for _ = 1, n or 1 do
+    local cs = {}
+    for i = 1, #st.players do cs[i] = c or cmd() end
+    game.step(st, cs, 1 / 60)
+  end
 end
 local function texts(p)
   local t = {}

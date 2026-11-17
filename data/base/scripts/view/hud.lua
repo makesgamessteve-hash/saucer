@@ -14,8 +14,9 @@ local WHITE, DIM, GREEN, RED, AMBER, CYAN = { 1, 1, 1, 1 }, { 0.6, 0.65, 0.75, 1
 M.MSG_TICKS = 300
 
 local HINTS = {
-  kbm = "WASD fly MOUSE aim SPACE/CTRL up/down G use Q/E fold F beam (Tractor Room) V scan T jam H help",
-  pad = "LS move RS aim RT/LT up/down X use LB/RB fold A beam Y scan RS-click jam",
+  kbm = "WASD fly MOUSE aim SPACE/CTRL up/down G use Q/E fold F beam (Tractor Room) V scan T jam TAB map H help",
+  pad = "LS move RS aim RT/LT up/down X use LB/RB fold A beam Y scan RS-click jam DPAD map/decoy/shroud",
+  keys2 = "IJKL move ARROWS aim O/U up/down ENTER use ,/. fold RSHIFT beam ; scan \\ map",
   touch = "Stick move  drag aim  UP/DN climb/dive  USE helm/console  buttons fold/tractor/scan/jam",
   xr = "L stick fly  R stick up/down + turn  L trigger use  lever fold  R trigger beam",
 }
@@ -38,6 +39,10 @@ local HELP = {
   "Station: G trades/talks/grabs a thief, E or 1-2 in a hangar",
   "Derelict: Seat near a deck, 3 (or Q) steps out; E deploys it",
   "On foot: Ctrl crouch, Space hop, G grabs / turns a hand-lock",
+  "Map TAB: fold jumps (the party agrees), party, Xenoarchive",
+  "Decoy B, Shroud X (hover still), Override spike N (on foot)",
+  "Clamped? hold Boost to shake it off, or Jam it",
+  "Co-op: gamepad A or F2 (right-hand keys) joins a player",
   "Camera C, mystery mode M, help H/F1",
   "Gamepad, touch and WebXR work too.",
 }
@@ -173,6 +178,13 @@ function M.panel(v, state, p)
     v:text(W // 2 - 6 * 8 * 3 // 2, y - 46, "SAUCER", AMBER, 3)
     v:text(W // 2 - 13 * 8 // 2, y - 18, "a cozy salvage", DIM)
   end
+  -- add-wider-dark: the sector map sits left of its rows when there is room
+  if p.panel.kind == "map" and W >= 360 then
+    local mw = math.min(W // 3, 200)
+    require("view.map").draw(v, state, 6, 40, mw, math.min(H - 80, 160), p)
+    x = math.max(x, mw + 16)
+    w = math.min(w, W - 8 - x)
+  end
   local top = is_title and 0 or 12
   v:rect(x - 4, y - 4, w + 8, #rows * 11 + top + 12, { 0, 0.02, 0.06, 0.82 })
   if not is_title then v:text(x, y, title, AMBER) end
@@ -184,11 +196,11 @@ function M.panel(v, state, p)
     local sel = i + first - 1 == p.panel.sel
     local col = r.enabled == false and DIM or (sel and GREEN or WHITE)
     if sel then v:rect(x - 2, y + top + (i - 1) * 11 - 1, w + 4, 10, { 0.2, 0.5, 0.3, 0.5 }) end
-    v:text(x, y + top + (i - 1) * 11, (sel and "> " or "  ") .. r.text, col)
+    v:text(x, y + top + (i - 1) * 11, ((sel and "> " or "  ") .. r.text):sub(1, w // 8), col)
   end
   local mode = saucer.input.device_mode(v.player)
   local nav = mode == "pad" and "STICK UP/DOWN  X: PICK" or (mode == "touch" and "STICK UP/DOWN  USE: PICK" or
-    "W/S: CHOOSE  G/ENTER: PICK")
+    (mode == "keys2" and "I/K: CHOOSE  ENTER: PICK" or "W/S: CHOOSE  G/ENTER: PICK"))
   v:text(W // 2 - #nav * 4, y + top + 10 + #rows * 11, nav, DIM)
   return #rows
 end
@@ -291,6 +303,9 @@ end
 
 function M.draw(v, state, p, target)
   local W, H = v.width, v.height
+  -- add-wider-dark: a four-way split-screen quarter keeps only the essentials
+  local compact = H < 200
+  local function fit(t) return t:sub(1, (W - 8) // 8) end
   local ship = p.ship
   local c = configs.get(ship.size)
   if p.mode == "wake" then
@@ -310,7 +325,9 @@ function M.draw(v, state, p, target)
   -- hold
   local hot = 0
   for _, it in ipairs(p.hold) do if it.hot then hot = hot + 1 end end
-  v:text(8, 36, string.format("HOLD %d/%d HOT %d BANK %dc", #p.hold, configs.all().hold_slots, hot, p.banked_value), DIM)
+  if not compact then
+    v:text(8, 36, string.format("HOLD %d/%d HOT %d BANK %dc", #p.hold, configs.all().hold_slots, hot, p.banked_value), DIM)
+  end
   -- hull, shield and credits (milestone 3)
   local sh, hu = (ship.shield or 100) / 100, (ship.hull or 100) / 100
   v:rect(128, 6, 60, 4, { 0.15, 0.15, 0.2, 1 })
@@ -319,52 +336,80 @@ function M.draw(v, state, p, target)
   v:rect(128, 12, 60 * math.max(0, hu), 4, hu > 0.3 and GREEN or RED)
   v:text(128, 19, string.format("%dc", p.credits or 0), AMBER)
   local ls = M.lab_status(state, p)
-  if ls then v:text(8, 56, ls, DIM) end
+  if ls and not compact then v:text(8, 56, ls, DIM) end
   local alarm = M.alarm(state, p)
   if alarm then
     local a = alarm == "LOCKED" and "! SENTRY LOCKED - JAM (T) OR RUN !" or "! SENTRY ALERT !"
-    v:text(W // 2 - #a * 4, H // 2 - 44, a, alarm == "LOCKED" and RED or AMBER)
+    if W < 400 then a = alarm == "LOCKED" and "! LOCKED - JAM OR RUN !" or a end
+    v:text(math.max(2, W // 2 - #a * 4), H // 2 - (compact and 20 or 44), a, alarm == "LOCKED" and RED or AMBER)
   end
+  -- add-wider-dark: Clamp, Shroud, decoys, the sector and a fold jump in progress
+  if p.clamped_by then
+    local a = string.format(W < 400 and "CLAMPED - BOOST %.1f/%.0f" or "CLAMPED - HOLD BOOST %.1f/%.0f OR JAM",
+      p.shake or 0, require("sim.sentry").tune().clamp.shake_time)
+    v:text(math.max(2, W // 2 - #a * 4), H // 2 - (compact and 30 or 56), a, RED)
+  end
+  if p.shroud then
+    local moving = vec.len(ship.vel or { 0, 0, 0 }) > require("sim.sentry").tune().shroud.still
+    v:text(128, 26, moving and "SHROUD (MOVING)" or "SHROUD", moving and AMBER or CYAN)
+  end
+  if (p.decoys or 0) > 0 and not compact then v:text(8, 66, string.format("DECOYS %d", p.decoys), DIM) end
+  if p.visiting then v:text(W // 2 - 64, 36, string.format("VISITING P%d'S DOME", p.visiting), GREEN) end
+  M.jump(v, state, p, compact)
   if p.latched_by then
     local f = math.min(1, (p.latched_by.t or 0) / 3)
     v:text(W // 2 - 72, H // 2 - 70, "SNATCHER SIPHONING", RED)
     v:rect(W // 2 - 40, H // 2 - 60, 80 * f, 3, RED)
   end
-  if p.mode == "helm" then M.altitude(v, p) end
+  if p.mode == "helm" and not compact then M.altitude(v, p) end
   -- crosshair, where you are and what Use does
   v:text(W // 2 - 4, H // 2 - 4, "+", p.tractor and AMBER or WHITE)
   local where, hint = M.status(p, state)
   v:text(8, 46, where, CYAN)
-  if hint then v:text(W // 2 - #hint * 4, H // 2 + 40, hint, AMBER) end
+  if hint then
+    hint = fit(hint)
+    v:text(W // 2 - #hint * 4, H // 2 + (compact and 24 or 40), hint, AMBER)
+  end
   -- navigation
   local site, d = M.nav(state, p)
   if p.holo_run or p.mode == "foot" then site = nil end
   if p.mode == "foot" and p.station then M.station(v, state, p) end
   if p.mode == "foot" and p.excursion then M.excursion(v, state, p) end
+  -- add-wider-dark: in a narrow split-screen view these go right-aligned
+  -- under the size box instead of across the top
+  local function nav(dx, y, t, col)
+    if compact then
+      if y == 0 then v:text(W - 4 - #t * 8, 36, t, col) end
+    elseif W < 400 then v:text(W - 4 - #t * 8, 56 + y, t, col) else v:text(W // 2 - dx, 6 + y, t, col) end
+  end
   if site then
     local c = M.site_center(state, site)
-    v:text(W // 2 - 60, 6, string.format("%s SITE %d %dm", M.bearing(p, c), site.id, vec.dist(c, p.ship.pos) // 1), CYAN)
-    v:text(W // 2 - 60, 16, M.elevation_cue(p, c), CYAN)
-    if p.docked then v:text(W // 2 - 60, 26, "DOCKED AT THE TRADER", GREEN) end
+    nav(60, 0, string.format("%s SITE %d %dm", M.bearing(p, c), site.id, vec.dist(c, p.ship.pos) // 1), CYAN)
+    nav(60, 10, M.elevation_cue(p, c), CYAN)
+    if p.docked then nav(60, 20, W < 400 and "DOCKED" or "DOCKED AT THE TRADER", GREEN) end
   elseif p.site ~= 0 then
-    v:text(W // 2 - 40, 6, "IN DERELICT " .. p.site, AMBER)
-    if (p.scan_until or 0) > state.tick then v:text(W // 2 - 40, 16, "SCANNING", CYAN) end
+    nav(40, 0, "IN DERELICT " .. p.site, AMBER)
+    if (p.scan_until or 0) > state.tick then nav(40, 10, "SCANNING", CYAN) end
   end
   -- the belly beam's alignment indicator (add-tractor-beam)
-  M.beam(v, state, p, target)
+  if not compact then M.beam(v, state, p, target) end
   -- mystery
   local m = state.mystery
-  if m.mode == "off" then
+  if compact then -- no room
+  elseif m.mode == "off" then
     v:text(W - 72, 6, "SANDBOX", DIM)
   else
     local t = string.format("%s %d/%d", m.title:upper(), m.found, #m.echoes)
-    v:text(W - 4 - #t * 8, 6, t, m.solved and GREEN or AMBER)
+    -- add-wider-dark: a split-screen view is too narrow for the top row
+    v:text(W - 4 - #t * 8, W < 400 and 86 or 6, t, m.solved and GREEN or AMBER)
   end
   -- messages
   local y = H - 12
+  local shown = 0
   for i = #p.msgs, 1, -1 do
     local msg = p.msgs[i]
-    if state.tick - msg.tick < M.MSG_TICKS then
+    if state.tick - msg.tick < M.MSG_TICKS and not (compact and shown >= 2) then
+      shown = shown + 1
       v:text(6, y, msg.text:sub(1, (W - 12) // 8), WHITE)
       y = y - 10
     end
@@ -386,6 +431,44 @@ function M.draw(v, state, p, target)
   if state.tick < 600 then
     local h = HINTS[mode] or HINTS.kbm
     v:text(6, H - 24 - 10 * #p.msgs, h:sub(1, (W - 12) // 8), DIM)
+  end
+end
+
+-- add-wider-dark: the sector you are in and a party jump being voted on
+function M.jump(v, state, p, compact)
+  local W, H = v.width, v.height
+  local narrow = W < 400
+  local galaxy = require("sim.galaxy")
+  local g = galaxy.generate(state.seed)
+  local here = g.sectors[state.sector_id or 1]
+  if here and not compact then
+    local t = here.name:upper()
+    v:text(W - 4 - #t * 8, narrow and 96 or 16, t, here.heart and { 1, 0.45, 0.65, 1 } or DIM)
+  end
+  local m = state.mystery
+  if require("sim.heart").can_vote(state, p) and not m.votes[tostring(p.index)] and state.tick % 60 < 45 then
+    local t = narrow and "HEART OPEN - TAB TO VOTE" or "THE HEART IS OPEN - TAB TO VOTE"
+    v:text(W // 2 - #t * 4, compact and H // 2 + 12 or narrow and H // 2 - 80 or 56, t, { 1, 0.45, 0.65, 1 })
+  end
+  local j = state.jump
+  if not j then return end
+  local n = 0
+  for _ in pairs(j.yes) do n = n + 1 end
+  local t
+  if j.spool >= 0 then t = string.format("FOLD CORE SPOOLING %.1f", j.spool)
+  elseif not j.yes[tostring(p.index)] then
+    t = string.format(narrow and "P%d: %s? TAB AGREES" or "P%d: JUMP TO %s? TAB TO AGREE", j.by, g.sectors[j.to].name:upper())
+  else t = string.format("JUMP TO %s %d/%d", g.sectors[j.to].name:upper(), n, #state.players) end
+  v:text(math.max(2, W // 2 - #t * 4), compact and H // 2 - 16 or narrow and H // 2 - 30 or 46, t, j.spool >= 0 and CYAN or AMBER)
+  -- the spool: a widening fold ring and a tint that builds toward the jump
+  if j.spool >= 0 then
+    local k = 1 - j.spool / require("sim.galaxy").tune().spool
+    v:rect(0, 0, W, H, { 0.3, 0.6, 1, 0.25 * k })
+    local R = 12 + k * math.min(W, H) * 0.45
+    for a = 0, 47 do
+      local ang = a * saucer.math.tau / 48 + k * 2
+      v:rect(W // 2 + saucer.math.sin(ang) * R - 1, H // 2 + saucer.math.cos(ang) * R * 0.8 - 1, 3, 3, CYAN)
+    end
   end
 end
 

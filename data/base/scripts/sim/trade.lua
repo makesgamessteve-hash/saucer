@@ -44,8 +44,10 @@ function M.affix_sum(item)
   return s
 end
 
--- offer(state, trader, item) -> credits (integer), or nil when not for sale
-function M.offer(state, trader_idx, item)
+-- offer(state, trader, item[, p]) -> credits (integer), or nil when not for sale.
+-- add-wider-dark: with p, reputation and Xenoarchive blueprints raise it; a
+-- "restore" ending of the mystery raises the cause civ's relics for everyone
+function M.offer(state, trader_idx, item, p)
   if not items.sellable(item) then return nil end
   local e = econ()
   local t = items.type_of(item.type)
@@ -55,6 +57,11 @@ function M.offer(state, trader_idx, item)
   local rar = e.civ_rarity[item.civ or ""] or 1
   local ratio = item.ident and e.sell_ratio.identified or e.sell_ratio.unidentified
   local v = base * tier * (1 + aff) * rar * M.demand(state, trader_idx, M.key(item)) * ratio
+  if p then v = v * require("sim.requests").price_factor(state, p, trader_idx, item) end
+  local m = state.mystery
+  if m and m.ending and item.civ and items.civ_name(item.civ) == m.vars.civ then
+    v = v * require("sim.mystery").effect(m, "civ_price")
+  end
   return math.floor(v + 0.5)
 end
 
@@ -72,7 +79,7 @@ end
 function M.sell(state, p, trader_idx, uid)
   local it = items.find(p, uid)
   if not it then return false, "gone" end
-  local price = M.offer(state, trader_idx, it)
+  local price = M.offer(state, trader_idx, it, p)
   if not price then return false, "not for sale" end
   items.remove(p, uid)
   p.credits = (p.credits or 0) + price
@@ -174,7 +181,7 @@ function M.rows(state, p, ctx)
   local rows = { { text = string.format("Credits: %d c", p.credits or 0), enabled = false } }
   for _, it in ipairs(p.hold) do
     local uid = it.uid
-    local price = M.offer(state, tr, it)
+    local price = M.offer(state, tr, it, p)
     if price then
       rows[#rows + 1] = { text = string.format("Sell %s - %d c", items.label(it), price),
         act = function(st, pl)
@@ -189,6 +196,8 @@ function M.rows(state, p, ctx)
       rows[#rows + 1] = { text = items.label(it) .. " - Not for sale", enabled = false }
     end
   end
+  -- add-wider-dark: the trader's requests, reputation and Fold Core upgrades
+  for _, r in ipairs(require("sim.requests").rows(state, p, tr, ctx)) do rows[#rows + 1] = r end
   for _, e in ipairs(M.shop()) do
     local ok, why = M.can_buy(p, e)
     local entry = e

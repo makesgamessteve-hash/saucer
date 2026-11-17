@@ -65,7 +65,7 @@ M.TOPICS.demand = function(state, p)
   local trade = require("sim.trade")
   local best, bd
   for _, cat in ipairs({ "curio", "module", "material", "tool" }) do
-    for _, civ in ipairs(data.load("civs/civs.lua")) do
+    for _, civ in ipairs(require("sim.civs").fixed()) do
       local d = trade.demand(state, p.last_trader or 1, cat .. ":" .. civ.id)
       if not bd or d > bd + 1e-9 then best, bd = cat .. "s from " .. civ.name .. " sites", d end
     end

@@ -175,6 +175,21 @@ int sx_render_fallback_font(sx_render *r) {
   return sx_render_texture_from_indices(r, "<font>", 128, 64, px);
 }
 
+/* add-wider-dark: two players side by side (vertical split line) */
+void sx_viewport_layout_split(int count, int w, int h, int vertical, int out[][4]) {
+  int i;
+  if (count == 2 && vertical) {
+    for (i = 0; i < 2; i++) {
+      out[i][0] = i == 0 ? 0 : w / 2;
+      out[i][1] = 0;
+      out[i][2] = i == 0 ? w / 2 : w - w / 2;
+      out[i][3] = h;
+    }
+    return;
+  }
+  sx_viewport_layout(count, w, h, out);
+}
+
 void sx_viewport_layout(int count, int w, int h, int out[][4]) {
   int i;
   if (count <= 1) {
@@ -203,7 +218,8 @@ void sx_render_begin_frame(sx_render *r, int nviews) {
   int i, rects[SX_MAX_VIEWPORTS][4];
   if (nviews < 1) nviews = 1;
   if (nviews > SX_MAX_VIEWPORTS) nviews = SX_MAX_VIEWPORTS;
-  sx_viewport_layout(nviews, r->settings.width, r->settings.height, rects);
+  sx_viewport_layout_split(nviews, r->settings.width, r->settings.height, !r->xr && !r->settings.split_horizontal,
+                           rects);
   r->nviews = nviews;
   r->frame++;
   for (i = 0; i < nviews; i++) {

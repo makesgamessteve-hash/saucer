@@ -144,10 +144,11 @@ TEST(replay_roundtrip_and_errors) {
   sx_replay_add_frame(&r, &c); /* all-zero: skipped */
   sx_replay_add_hash(&r, 60, 0x1234);
   r.end_tick = 61;
+  r.slots = 4; /* add-wider-dark: co-op frame slots */
   CHECK(r.nframes == 1);
   CHECK(sx_replay_save(&r, TMP "/r.srep"));
   CHECK(sx_replay_load(&q, TMP "/r.srep", err, sizeof err));
-  CHECK(q.seed == 42 && q.players == 2 && q.end_tick == 61 && q.nframes == 1 && q.nhashes == 1);
+  CHECK(q.seed == 42 && q.players == 2 && q.end_tick == 61 && q.nframes == 1 && q.nhashes == 1 && q.slots == 4);
   sx_replay_frames_for(&q, 3, out, 2);
   CHECK(out[0].buttons == 5 && out[0].axes[0] == -100 && out[1].buttons == 0);
   CHECK(sx_replay_check_hash(&q, 10, 1, &exp));

@@ -56,6 +56,10 @@ int sx_replay_save(const sx_replay *r, const char *path) {
   n = snprintf(line, sizeof line, "SREP 1\nengine %s\nseed %llu\nmods %016llx\nplayers %d\n", r->version,
                (unsigned long long)r->seed, (unsigned long long)r->modset_hash, r->players);
   sx_buf_put(&b, line, (size_t)n);
+  if (r->slots > r->players) {
+    n = snprintf(line, sizeof line, "slots %d\n", r->slots);
+    sx_buf_put(&b, line, (size_t)n);
+  }
   /* interleave frames and hashes in tick order */
   while (fi < r->nframes || hi < r->nhashes) {
     if (hi >= r->nhashes || (fi < r->nframes && r->frames[fi].cmd.tick <= r->hashes[hi].tick)) {
@@ -108,6 +112,8 @@ int sx_replay_parse(sx_replay *r, const char *text, char *err, int errlen) {
       r->modset_hash = strtoull(line + 5, NULL, 16);
     } else if (strncmp(line, "players ", 8) == 0) {
       r->players = atoi(line + 8);
+    } else if (strncmp(line, "slots ", 6) == 0) {
+      r->slots = atoi(line + 6);
     } else if (line[0] == 't' && line[1] == ' ') {
       sx_cmd c;
       long long tick;

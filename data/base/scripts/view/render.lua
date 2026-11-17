@@ -26,6 +26,9 @@ M.SOUNDS = sound.SOUNDS
 M.STATE_TINT = {
   dormant = { 0.3, 0.9, 0.5, 0.7 }, alert = { 1, 0.85, 0.2, 0.95 }, locked = { 1, 0.25, 0.2, 1 },
   latched = { 1, 0.25, 0.2, 1 }, flee = { 1, 0.55, 0.2, 0.9 }, disabled = { 0.35, 0.5, 1, 0.8 },
+  -- add-wider-dark
+  chase = { 1, 0.55, 0.15, 1 }, clamped = { 1, 0.2, 0.2, 1 }, sealed = { 1, 0.2, 0.2, 1 }, rest = { 0.6, 0.6, 0.7, 0.8 },
+  off = { 0.25, 0.25, 0.3, 0.5 }, decoyed = { 0.4, 0.9, 1, 0.9 },
 }
 
 function M.draw_sentries(v, A, state, p)
@@ -52,18 +55,58 @@ function M.draw_sentries(v, A, state, p)
               end
             end
           end
+        elseif def.kind == "clamp" then
+          -- add-wider-dark: the Clamp, its claws spinning up when it gives chase
+          local pos = dyn.pos or def.pos
+          local spin = (dyn.st == "chase" or dyn.st == "clamped") and state.tick * 0.2 or state.tick * 0.02
+          v:mesh(A.clamp, { pos = pos, yaw = spin })
+          v:billboard(A.tex.beam, { pos[1], pos[2] + 1.6, pos[3] }, show and 1.6 or 0.8,
+            { palette = A.pal.base, tint = tint })
+        elseif def.kind == "lockdown" then
+          v:mesh(A.lockdown, { pos = def.pos, yaw = state.tick * 0.01 })
+          v:billboard(A.tex.beam, { def.pos[1], def.pos[2] + 1.1, def.pos[3] }, show and 1.4 or 0.7,
+            { palette = A.pal.base, tint = tint })
+          -- sealed doors: a glowing slab across each
+          for _, bi in ipairs(dyn.sealed or {}) do
+            local b = def.boxes[bi]
+            if b then v:mesh(A.seal, { pos = b[1], scale = vec.sub(b[2], b[1]), ghost = true }) end
+          end
         else
           local pos = dyn.pos or def.pos
           v:mesh(A.snatcher, { pos = pos, yaw = state.tick * 0.05 })
           v:billboard(A.tex.beam, { pos[1], pos[2] + 0.55, pos[3] }, show and 1.4 or 0.5,
             { palette = A.pal.base, tint = tint })
-          v:mesh(A.nest, { pos = def.nest })
+          if def.nest then v:mesh(A.nest, { pos = def.nest }) end
         end
       end
     end
   end
   for _, b in ipairs(state.bolts or {}) do
     v:billboard(A.tex.beam, b.pos, 0.9, { palette = A.pal.base, tint = { 0.5, 0.8, 1, 1 } })
+  end
+  -- add-wider-dark: thrown decoys blink, gifts tumble, the Heart's core beats
+  for _, d in ipairs(state.decoys or {}) do
+    v:mesh(A.decoy, { pos = d.pos, yaw = state.tick * 0.15 })
+    if state.tick % 20 < 10 then
+      v:billboard(A.tex.glow or A.tex.beam, d.pos, 2.2, { palette = A.pal.base, tint = { 0.4, 0.9, 1, 0.8 } })
+    end
+  end
+  for _, gft in ipairs(state.gifts or {}) do
+    v:mesh(A.gift, { pos = gft.pos, yaw = state.tick * 0.03, pitch = 0.3 })
+    if gft.to == 0 or gft.to == p.index then
+      v:billboard(A.tex.glow or A.tex.beam, gft.pos, 2.0, { palette = A.pal.base, tint = { 1, 0.6, 0.85, 0.7 } })
+    end
+  end
+  local heart = require("sim.heart")
+  local hm = state.mystery
+  if hm and hm.heart_sector and (state.sector_id or 1) == hm.heart_sector then
+    local core = heart.core(state)
+    if core then
+      local beat = 1 + 0.12 * math.sin(state.tick * (hm.heart_open and 0.25 or 0.08))
+      v:mesh(A.heart_core, { pos = core, yaw = state.tick * 0.01, scale = beat })
+      v:billboard(A.tex.glow or A.tex.beam, core, hm.heart_open and 10 or 6,
+        { palette = A.pal.base, tint = hm.ending and { 0.6, 1, 0.8, 0.8 } or { 1, 0.4, 0.6, 0.8 } })
+    end
   end
   local m = state.mystery
   if m and m.vault_revealed and state.vault then
@@ -154,7 +197,10 @@ end
 function M.morph_scale(ship) return M.pose(ship).scale end
 
 function M.audio(state, p, first)
-  return sound.update(state, p, first ~= false and p.index == 1)
+  local n = sound.update(state, p, first ~= false and p.index == 1)
+  -- add-wider-dark: the civilizations' music (the first player's view leads)
+  if first ~= false and p.index == 1 then n = n + require("view.music").update(state, p) end
+  return n
 end
 
 -- hull-local point -> world, for a drawn pose
@@ -668,6 +714,14 @@ local function draw_saucer(v, A, o, own_eyes, state, xr, cam)
       local w = at(d, o.body.pos)
       v:mesh(A.person, { pos = w, yaw = o.ship.yaw + o.body.yaw })
     end
+    -- add-wider-dark: guests from docked saucers walking this dome
+    if not o.ship.morph then
+      for _, g in ipairs(state.players) do
+        if g.visiting == o.index and g.vbody and g.index ~= v.player then
+          v:mesh(A.person, { pos = at(d, g.vbody.pos), yaw = o.ship.yaw + g.vbody.yaw })
+        end
+      end
+    end
   else
     v:mesh(m.dome, { pos = d.pos, yaw = d.yaw, roll = d.roll, scale = d.scale, ghost = true, tint = { 0.55, 0.8, 1, 0.3 } })
   end
@@ -773,7 +827,11 @@ end
 
 function M.render(v, state, alpha)
   local p = state.players[v.player]
-  if not p then return end
+  if not p then
+    -- add-wider-dark: the spare quarter of a three-player split shows the map
+    if v.player == 0 and not v.xr then require("view.map").spare(v, state) end
+    return
+  end
   local A = assets.init()
   if p.mode == "foot" and p.station then
     -- add-pocket-station-visits: on foot you see the station's inside

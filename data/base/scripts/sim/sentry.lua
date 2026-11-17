@@ -14,16 +14,40 @@ local ruinm = require("sim.ruin")
 local configs = require("sim.config")
 local items = require("sim.items")
 local hull = require("sim.hull")
+local adv = require("sim.advsentry")
 local sm = saucer.math
 local M = {}
 
 function M.tune() return data.load("sentries/sentries.lua") end
 
+-- add-wider-dark: the tuning with the mystery ending's universe changes
+-- applied (a sealed Heart makes sentries drowsy, a taken one makes them keen)
+local tuned = {}
+function M.tuned(state)
+  local t = M.tune()
+  local m = state and state.mystery
+  local wr = require("sim.mystery").effect(m, "watcher_range")
+  local ss = require("sim.mystery").effect(m, "snatcher_sense")
+  if wr == 1 and ss == 1 then return t end
+  local key = wr .. ":" .. ss
+  if tuned.key == key and tuned.base == t then return tuned.t end
+  local c = {}
+  for k, v in pairs(t) do c[k] = v end
+  c.watcher, c.snatcher = {}, {}
+  for k, v in pairs(t.watcher) do c.watcher[k] = v end
+  for k, v in pairs(t.snatcher) do c.snatcher[k] = v end
+  c.watcher.range = t.watcher.range * wr
+  c.watcher.foot_range = (t.watcher.foot_range or 45) * wr
+  c.snatcher.sense = t.snatcher.sense * ss
+  tuned.key, tuned.base, tuned.t = key, t, c
+  return c
+end
+
 -- layout(site, ruin, civ) -> list of sentry definitions (derived data).
 -- The tutorial derelict (site 1) is unguarded.
 function M.layout(site, ruin, civ)
   local out = {}
-  if site.id == 1 or not ruin then return out end
+  if site.tutorial or (site.tutorial == nil and site.id == 1) or not ruin then return out end
   local kit = ruinm.kit_of(ruin.kit)
   local t = M.tune()
   local big = kit.big or 4
@@ -84,17 +108,23 @@ function M.layout(site, ruin, civ)
                         patrol = { a, b }, nest = nest, nest_room = deepest.id, leash = { lo, hi } }
     end
   end
+  -- add-wider-dark: deeper sectors add Clamps and a Lockdown node
+  if (site.danger or 1) >= 2 then adv.layout(out, site, ruin, kit, t) end
   return out
 end
 
-function M.new_state(defs)
+function M.new_state(defs, state)
   local out = {}
   for i, d in ipairs(defs) do
-    if d.kind == "watcher" then
+    if d.kind == "clamp" or d.kind == "lockdown" then
+      out[i] = adv.new_state(d)
+    elseif d.kind == "watcher" then
       out[i] = { st = "dormant", t = 0, lost = 0, fire = 0, target = 0, yaw = d.yaw, pitch = d.pitch }
     else
       out[i] = { st = "dormant", t = 0, lost = 0, target = 0, pos = vec.copy(d.pos), wp = 2, carry = false }
     end
+    -- add-wider-dark: an Override spike shut it down for good
+    if state and adv.overridden(state, d) then out[i].st = "off" end
   end
   return out
 end
@@ -113,6 +143,7 @@ M.on_foot = on_foot
 function M.watcher_sees(def, dyn, p, tick, t)
   local ship = p.ship
   if p.site ~= def.site then return false end
+  if adv.shrouded(p, t) then return false end
   if on_foot(p) then
     -- whatever its size band, a turret sees a person on foot (closer in)
     local dir = dir_of(dyn.yaw, dyn.pitch or def.pitch)
@@ -132,11 +163,22 @@ local function sweep_yaw(def, tick, t)
 end
 
 local function step_watcher(state, def, dyn, dt, ctx, t)
+  if dyn.st == "off" then return end
   if dyn.st == "disabled" then
     dyn.t = dyn.t - dt
     if dyn.t <= 0 then dyn.st, dyn.t, dyn.lost = "dormant", 0, 0 end
     return
   end
+  -- add-wider-dark: a Decoy flare in sight takes all of its attention
+  local dec = t.decoy and adv.decoy_for(state, def, def.pos, t)
+  if dec then
+    local d = vec.sub(dec.pos, def.pos)
+    dyn.yaw = sm.atan2(d[1], d[3])
+    dyn.pitch = sm.atan2(d[2], sm.sqrt(d[1] * d[1] + d[3] * d[3]))
+    dyn.st, dyn.target, dyn.t, dyn.lost = "decoyed", 0, 0, 0
+    return
+  end
+  if dyn.st == "decoyed" then dyn.st = "dormant" end
   local target = dyn.target > 0 and state.players[dyn.target] or nil
   if dyn.st == "locked" and target then
     -- true 3D: a locked turret tracks its target in yaw and pitch
@@ -232,6 +274,16 @@ end
 
 local function step_snatcher(state, def, dyn, dt, ctx, t)
   local s = t.snatcher
+  if dyn.st == "off" then return end
+  if dyn.st ~= "disabled" and dyn.st ~= "flee" and dyn.st ~= "latched" and t.decoy then
+    local dec = adv.decoy_for(state, def, dyn.pos, t)
+    if dec then
+      dyn.st, dyn.target = "decoyed", 0
+      dyn.pos = move_to(dyn.pos, dec.pos, s.chase_speed, dt)
+      return
+    end
+    if dyn.st == "decoyed" then dyn.st = "dormant" end
+  end
   if dyn.st == "disabled" then
     dyn.t = dyn.t - dt
     if dyn.t <= 0 then dyn.st, dyn.t, dyn.lost = dyn.carry and "flee" or "dormant", 0, 0 end
@@ -331,9 +383,12 @@ function M.grid_down(state, site_idx)
   local t = M.tune()
   local n = 0
   for _, dyn in ipairs(state.sentries[site_idx] or {}) do
-    if dyn.st == "latched" and dyn.target > 0 and state.players[dyn.target] then state.players[dyn.target].latched_by = nil end
-    dyn.st, dyn.t, dyn.target, dyn.lost = "disabled", t.disabled_time, 0, 0
-    n = n + 1
+    if dyn.st ~= "off" then
+      if dyn.st == "latched" and dyn.target > 0 and state.players[dyn.target] then state.players[dyn.target].latched_by = nil end
+      if dyn.st == "clamped" then adv.release(state, dyn) end
+      dyn.st, dyn.t, dyn.target, dyn.lost = "disabled", t.disabled_time, 0, 0
+      n = n + 1
+    end
   end
   return n
 end
@@ -354,16 +409,24 @@ end
 
 -- one tick for every sentry of a site, then the bolts
 function M.step(state, site_idx, defs, dt, ctx)
-  local t = M.tune()
+  local t = M.tuned(state)
   local dyns = state.sentries[site_idx]
   if not dyns then return end
   if state.grids and state.grids[tostring(site_idx)] then
-    for _, dyn in ipairs(dyns) do dyn.st, dyn.t = "disabled", t.disabled_time end
+    for i, dyn in ipairs(dyns) do
+      if dyn.st ~= "off" then
+        if dyn.st == "clamped" then adv.release(state, dyn) end
+        if defs[i] and defs[i].kind == "lockdown" and #(dyn.sealed or {}) > 0 then ctx.seal(defs[i], dyn, false) end
+        dyn.st, dyn.t = "disabled", t.disabled_time
+      end
+    end
     return
   end
   for i, def in ipairs(defs) do
     local dyn = dyns[i]
     if def.kind == "watcher" then step_watcher(state, def, dyn, dt, ctx, t)
+    elseif def.kind == "clamp" then adv.step_clamp(state, def, dyn, dt, ctx, t)
+    elseif def.kind == "lockdown" then adv.step_lockdown(state, def, dyn, dt, ctx, t, ctx.seal)
     else step_snatcher(state, def, dyn, dt, ctx, t) end
   end
 end
@@ -420,7 +483,12 @@ function M.jam(state, site_idx, defs, eye, dir, p)
     local l = vec.len(d)
     local ok = l <= (t.jammer.near or 0) or l <= t.jammer.range and ( vec.dot(d, dir) / (l * vec.len(dir)) >= sm.cos(t.jammer.half_angle))
     if p and dyn.st == "latched" and dyn.target == p.index then ok = true end
-    if ok and dyn.st == "disabled" then
+    if p and dyn.st == "clamped" and dyn.target == p.index then ok = true end
+    if dyn.st == "off" then ok = false end
+    if ok and (def.kind == "clamp" or def.kind == "lockdown") and dyn.st ~= "disabled" then
+      adv.jammed(state, def, dyn, t, M.seal_fn)
+      n = n + 1
+    elseif ok and dyn.st == "disabled" then
       dyn.t = t.disabled_time -- a fresh pulse restarts the reboot timer
       n = n + 1
     elseif ok then
@@ -436,9 +504,14 @@ end
 
 -- for the scanner readout
 function M.summary(defs)
-  local w, s = 0, 0
-  for _, d in ipairs(defs) do if d.kind == "watcher" then w = w + 1 else s = s + 1 end end
-  return w, s
+  local w, s, c, l = 0, 0, 0, 0
+  for _, d in ipairs(defs) do
+    if d.kind == "watcher" then w = w + 1
+    elseif d.kind == "clamp" then c = c + 1
+    elseif d.kind == "lockdown" then l = l + 1
+    else s = s + 1 end
+  end
+  return w, s, c, l
 end
 
 return M

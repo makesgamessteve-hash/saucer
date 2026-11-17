@@ -158,6 +158,12 @@ if(SAUCER_BUILD_TESTS)
            --restore-every-tick WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_excursion_seed7 COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-excursion7
            --quiet --seed 7 --ticks 40000 --script tests/game/excursion.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  # milestone 8: four local players, party fold jumps, the multi-sector mystery to an ending
+  add_test(NAME game_widerdark COMMAND ${HL} --seed 42 --coop --viewports 4 --ticks 90000 --script tests/game/widerdark.lua
+           WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  # the inputs-only co-op session behind tests/replays/coop_seed42.srep
+  add_test(NAME game_coop_replay COMMAND ${HL} --seed 42 --coop --viewports 4 --script tests/game/coop_replay.lua
+           WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   # true 3D flight: vertical flight and a multi-level derelict traversal
   add_test(NAME game_vertical COMMAND ${HL} --seed 42 --script tests/game/vertical.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_derelict3d COMMAND ${HL} --seed 42 --script tests/game/derelict3d.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})

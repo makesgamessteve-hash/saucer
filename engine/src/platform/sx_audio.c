@@ -124,6 +124,7 @@ void sx_audio_flush(sx_engine *e) {
     s = SDL_CreateAudioStream(&c->spec, &A.dev_spec);
     if (!s) continue;
     SDL_SetAudioStreamGain(s, r->volume);
+    if (r->pitch > 0.0f && r->pitch != 1.0f) SDL_SetAudioStreamFrequencyRatio(s, r->pitch);
     SDL_PutAudioStreamData(s, c->data, (int)c->len);
     if (r->loop) SDL_PutAudioStreamData(s, c->data, (int)c->len);
     else SDL_FlushAudioStream(s);

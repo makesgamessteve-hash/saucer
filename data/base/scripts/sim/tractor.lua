@@ -134,7 +134,7 @@ end
 
 local function civ_id(state, site_idx)
   local site = state.sector.sites[site_idx]
-  local civ = site and data.load("civs/civs.lua")[site.civ]
+  local civ = site and require("sim.civs").of(state, site)
   return civ and civ.id or nil
 end
 
@@ -157,7 +157,7 @@ function M.candidates(state, p, site_idx, ruin)
     end
     -- add-holodeck-home-life: data cores, modules, books and ingredients in vaults
     for _, c in ipairs(require("sim.finds").candidates(state, p, site_idx, ruin)) do out[#out + 1] = c end
-    local echo = mystery.echo_at(state.mystery, site_idx)
+    local echo = mystery.echo_at(state.mystery, site_idx, state.sector_id)
     if echo then
       for _, r in ipairs(ruin.rooms) do
         if r.echo_pos then
@@ -179,6 +179,8 @@ function M.candidates(state, p, site_idx, ruin)
                  type = "cache", ident = true } }
     end
   end
+  -- add-wider-dark: gifts ejected for you (or anyone) by the others
+  for _, c in ipairs(require("sim.coop").candidates(state, p, site_idx)) do out[#out + 1] = c end
   local v = state.vault
   if site_idx == 0 and v and state.mystery.vault_open and not v.taken then
     out[#out + 1] = { key = "vault:curio", kind = "curio", pos = { v.pos[1], v.pos[2] + 2, v.pos[3] },

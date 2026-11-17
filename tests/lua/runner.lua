@@ -58,9 +58,18 @@ function before_each(fn) hooks[#hooks + 1] = fn end
 
 function it(name, fn)
   local full = table.concat(stack, " > ") .. " > " .. name
-  local ok, err = pcall(function()
+  -- runtime errors carry the spec line they came through (expect failures already do)
+  local ok, err = xpcall(function()
     for _, h in ipairs(hooks) do h() end
     fn()
+  end, function(e)
+    local where = ""
+    for lvl = 2, 30 do
+      local info = debug.getinfo(lvl, "Sl")
+      if not info then break end
+      if info.short_src:find("_spec.lua", 1, true) then where = " (at " .. info.short_src .. ":" .. info.currentline .. ")" break end
+    end
+    return tostring(e) .. where
   end)
   if ok then
     results.pass = results.pass + 1

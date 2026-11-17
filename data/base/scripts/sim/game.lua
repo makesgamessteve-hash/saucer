@@ -33,24 +33,35 @@ local buffs = require("sim.buffs")
 local visit = require("sim.visit")
 -- add-on-foot-excursions
 local excursion = require("sim.excursion")
+-- add-wider-dark
+local civs = require("sim.civs")
+local galaxy = require("sim.galaxy")
+local archive = require("sim.archive")
+local requests = require("sim.requests")
+local coop = require("sim.coop")
+local adv = require("sim.advsentry")
+local heart = require("sim.heart")
 local M = {}
 
 M.SITE_PAD = 30
 M.MAX_MSGS = 4
 M.MAX_FX = 8
 
-local rt = { ruins = {}, bounds = {}, sentries = {}, shutters = {} } -- derived, rebuilt on restore
+local rt = { ruins = {}, bounds = {}, sentries = {}, shutters = {}, seals = {} } -- derived, rebuilt on restore
 
 function M.ruin(i) return rt.ruins[i] end
 function M.site_bounds(i) return rt.bounds[i] end
 function M.sentries(i) return rt.sentries[i] or {} end
 
-local function civ_of(site) return data.load("civs/civs.lua")[site.civ] end
+-- add-wider-dark: civs come from the universe's generated list (sim/civs.lua)
+local function civ_of(site) return civs.get(civs.current() or 0, site.civ) end
 M.civ_of = civ_of
 
 function M.rebuild(state)
+  M.state_ref = state
   saucer.physics.clear()
-  rt.ruins, rt.bounds, rt.sentries, rt.shutters = {}, {}, {}, {}
+  civs.use(state.seed)
+  rt.ruins, rt.bounds, rt.sentries, rt.shutters, rt.seals = {}, {}, {}, {}, {}
   for i, site in ipairs(state.sector.sites) do
     local r = ruinm.generate(site.seed, site.kit, civ_of(site), site.pos, nil, site.first)
     rt.ruins[i] = r
@@ -66,6 +77,60 @@ function M.rebuild(state)
       if not excursion.lock_open(state, i, sh.id) then rt.shutters[i][sh.id] = saucer.physics.add_box(sh.min, sh.max, 1) end
     end
   end
+  -- add-wider-dark: doors a Lockdown node holds sealed right now
+  for i, list in pairs(state.sentries or {}) do
+    for k, dyn in ipairs(list) do
+      local def = rt.sentries[i] and rt.sentries[i][k]
+      if def and def.kind == "lockdown" and dyn.sealed and #dyn.sealed > 0 then
+        local keep = dyn.sealed
+        dyn.sealed = {}
+        M.seal(def, dyn, true, keep)
+      end
+    end
+  end
+end
+
+-- add-wider-dark: a Lockdown node seals (on) or opens its hall's big doors.
+-- Doors with a hull in the way stay open. dyn.sealed lists the sealed ones.
+function M.seal(def, dyn, on, only)
+  local key = def.site .. ":" .. def.id
+  local live = rt.seals[key] or {}
+  rt.seals[key] = live
+  if on then
+    local list = only or {}
+    if not only then for k = 1, #def.boxes do list[#list + 1] = k end end
+    for _, k in ipairs(list) do
+      local b = def.boxes[k]
+      local free = M.state_ref == nil or not M.box_has_hull(M.state_ref, b)
+      if b and free and not live[k] then
+        live[k] = saucer.physics.add_box(b[1], b[2], 1)
+        dyn.sealed[#dyn.sealed + 1] = k
+      end
+    end
+  else
+    for k, box in pairs(live) do
+      saucer.physics.remove(box)
+      live[k] = nil
+    end
+    dyn.sealed = {}
+  end
+end
+
+-- live seal barriers of a Lockdown node (tests and the view)
+function M.sealed_count(def)
+  local n = 0
+  for _ in pairs(rt.seals[def.site .. ":" .. def.id] or {}) do n = n + 1 end
+  return n
+end
+
+function M.box_has_hull(state, b)
+  for _, p in ipairs(state.players) do
+    local r, hh = shipm.dims(p.ship)
+    local pos = p.ship.pos
+    if pos[1] + r >= b[1][1] and pos[1] - r <= b[2][1] and pos[2] + hh >= b[1][2] and pos[2] - hh <= b[2][2]
+        and pos[3] + r >= b[1][3] and pos[3] - r <= b[2][3] then return true end
+  end
+  return false
 end
 
 -- a hand-lock turned: its shutter stops being solid
@@ -92,7 +157,8 @@ local function fx(state, p, sound)
   while #list > M.MAX_FX do table.remove(list, 1) end
 end
 
-local ctx_fns = { msg = msg, fx = fx }
+local ctx_fns = { msg = msg, fx = fx, seal = function(def, dyn, on) M.seal(def, dyn, on) end }
+sentry.seal_fn = ctx_fns.seal
 M.ctx = ctx_fns
 
 -- A player is a person (body) living in their own saucer (ship). mode is
@@ -116,6 +182,10 @@ function M.new_player(index, pos, yaw)
     msgs = {}, fx = {},
     -- add-on-foot-excursions: the suit (the only meter on foot) and 4 hand slots
     excursion = false, suit = 100, hands = {},
+    -- add-wider-dark: Fold Core tier, tools, reputation, Xenoarchive, per
+    -- sector memories, a dome visit
+    fold_tier = 1, decoys = sentry.tune().decoy.start, shroud = false, shake = 0, spike = false,
+    rep = {}, archive = {}, met = {}, archive_rewards = {}, away = {}, visiting = false,
   }
   holo.ensure(p)
   kitchen.ensure(p)
@@ -125,12 +195,26 @@ function M.new_player(index, pos, yaw)
 end
 
 function M.init(state, ctx)
+  M.state_ref = state
   local seed = ctx.seed
-  state.version = 8   -- v8: on-foot excursions (add-on-foot-excursions); v7: station visits
+  state.version = 9   -- v9: the wider dark (add-wider-dark); v8: on-foot excursions; v7: station visits
   state.seed = seed
   state.tick = 0
+  civs.use(seed)
+  state.sector_id = 1
   state.sector = sector.generate(seed)
-  state.mystery = mystery.generate(seed, "on", #state.sector.sites)
+  local g = galaxy.generate(seed)
+  state.mystery = mystery.generate(seed, "on", #state.sector.sites, g)
+  -- the Witness's translation gate is the civ of the site it waits in
+  for _, e in ipairs(state.mystery.echoes) do
+    if e.gate then
+      local fs = sector.generate(seed, e.sector, g.sectors[e.sector])
+      local c = fs.sites[e.site] and civs.get(seed, fs.sites[e.site].civ)
+      e.gate_civ = c and c.id or nil
+    end
+  end
+  state.visited, state.overrides, state.decoys, state.gifts, state.docks = {}, {}, {}, {}, {}
+  state.jump = false
   state.players = {}
   -- milestone 3 world state: trader demand, Snatcher nests, Fold Retreat
   -- caches, the Resonant vault and the sim clock (all saved), plus the live
@@ -143,7 +227,7 @@ function M.init(state, ctx)
   state.locks, state.grids = {}, {} -- add-on-foot-excursions: turned hand-locks, grids shut down
   M.rebuild(state)
   state.sentries = {}
-  for i = 1, #state.sector.sites do state.sentries[i] = sentry.new_state(rt.sentries[i]) end
+  for i = 1, #state.sector.sites do state.sentries[i] = sentry.new_state(rt.sentries[i], state) end
   local site1 = state.sector.sites[1]
   local door = ruinm.entrance(rt.ruins[1], site1.pos)
   local n = ctx.players or 1
@@ -152,11 +236,63 @@ function M.init(state, ctx)
     state.players[i] = M.new_player(i, { x, door[2], door[3] - 120 }, 0)
   end
   for i = 1, n do msg(state, state.players[i], "You wake up in your saucer. Press Use to get up.") end
+  requests.ensure(state)
+end
+
+-- add-wider-dark: (re)generate sector `sid` into state.sector and its
+-- derived data; sentries start fresh (as after a load)
+function M.load_sector(state, sid)
+  local g = galaxy.generate(state.seed)
+  state.sector_id = sid
+  state.sector = sector.generate(state.seed, sid, g.sectors[sid])
+  state.bolts = {}
+  state.sentries = {}
+  M.rebuild(state)
+  for i = 1, #state.sector.sites do state.sentries[i] = sentry.new_state(rt.sentries[i], state) end
+  requests.ensure(state)
+end
+
+-- the party's fold jump lands: stash this sector, bring up the next one and
+-- set every saucer down in formation at its arrival point
+function M.enter_sector(state, to)
+  coop.undock_all(state, ctx_fns)
+  galaxy.stash(state)
+  local g = galaxy.generate(state.seed)
+  local info = g.sectors[to]
+  local next_sector = sector.generate(state.seed, to, info)
+  local fresh = { traders = trade.new_traders(next_sector), nests = {}, caches = {}, locks = {}, grids = {},
+                  vault = to == 1 and { pos = vec.copy(next_sector.vault.pos), taken = false } or false,
+                  decoys = {}, gifts = {}, lockdowns = {} }
+  galaxy.unstash(state, to, fresh)
+  M.load_sector(state, to)
+  local n = #state.players
+  for i, p in ipairs(state.players) do
+    local ship = p.ship
+    ship.charge = math.max(0, ship.charge - galaxy.core(p).charge)
+    ship.pos = galaxy.formation(state.sector, i, n)
+    local d = vec.sub(state.sector.trader.pos, ship.pos)
+    ship.yaw = saucer.math.atan2(d[1], d[3])
+    ship.vel, ship.bank = { 0, 0, 0 }, 0
+    p.site, p.docked, p.tractor, p.last_trader = 0, false, false, 1
+    p.latched_by, p.clamped_by, p.shake = nil, nil, 0
+    p.sectors = p.sectors or {}
+    p.sectors[tostring(to)] = true
+    local names = {}
+    for _, ci in ipairs(info.civs) do names[#names + 1] = civs.get(state.seed, ci).name end
+    msg(state, p, string.format("Fold jump complete: %s, danger %d (%s)", info.name, info.danger, table.concat(names, ", ")))
+    if info.heart and mystery.active(state.mystery) then msg(state, p, "The Heart site looms ahead. Its core waits for the Heart Key.") end
+    fx(state, p, "grow")
+  end
+  saucer.events.emit({ type = "fold_jump", to = to })
 end
 
 -- where this player's eyes are (world) and where they look: the tractor and
 -- the camera both start here. On foot that is the body under the dome.
-function M.viewpoint(p)
+function M.viewpoint(p, state)
+  if p.visiting and p.vbody then
+    state = state or M.state_ref
+    if state and state.players[p.visiting] then return coop.viewpoint(state, p) end
+  end
   local ship = p.ship
   if p.mode == "wake" then
     local L = avatar.layout()
@@ -244,6 +380,12 @@ local REASONS = {
 local function size_request(state, p, to)
   local ship = p.ship
   local from = ship.size
+  -- add-wider-dark: a Clamp on the hull blocks every reconfiguration
+  if p.clamped_by then
+    msg(state, p, "Clamped: hold Boost to shake it off, or Jam it")
+    fx(state, p, "denied")
+    return
+  end
   -- add-pocket-station-visits: the coin size steps you out into the station
   local tc = configs.get(to)
   if tc and tc.pocket then
@@ -429,9 +571,16 @@ function M.pick_up(state, p, cand, site_idx)
     it.hot = false -- Echoes are never lost
     p.hold[#p.hold + 1] = it
     local e = state.mystery.echoes[cand.echo]
-    msg(state, p, string.format("Got %s. Decode it at your lab bench.", it.name))
+    if e.role == "heart_key" then
+      msg(state, p, string.format("Got %s. Carry it to the core of the Heart.", it.name))
+    else
+      msg(state, p, string.format("Got %s. Decode it at your lab bench.", it.name))
+    end
     if e.role == "key" then msg(state, p, "A key fragment: it should open the Resonant vault") end
     fx(state, p, "echo")
+  elseif cand.kind == "gift" then
+    coop.receive(state, p, cand.index, ctx_fns)
+    fx(state, p, "pickup")
   elseif cand.kind == "nest" then
     local n = table.remove(state.nests, cand.index)
     n.item.hot = true
@@ -502,9 +651,11 @@ local function scan(state, p)
     end
     site = best
   end
-  local w, sn = sentry.summary(rt.sentries[site] or {})
-  msg(state, p, string.format("Scan: site %d, danger %d, %d Watcher%s, %d Snatcher%s", site, site == 1 and 1 or 2, w,
-    w == 1 and "" or "s", sn, sn == 1 and "" or "s"))
+  local w, sn, cl, ld = sentry.summary(rt.sentries[site] or {})
+  local danger = (state.sector_id or 1) == 1 and (site == 1 and 1 or 2) or (state.sector.sites[site].danger or 2) + 1
+  msg(state, p, string.format("Scan: site %d, danger %d, %d Watcher%s, %d Snatcher%s%s", site, danger, w,
+    w == 1 and "" or "s", sn, sn == 1 and "" or "s",
+    (cl + ld > 0) and string.format(", %d Clamp%s, %d Lockdown", cl, cl == 1 and "" or "s", ld) or ""))
   fx(state, p, "scan")
 end
 
@@ -532,6 +683,15 @@ local function jam(state, p)
   local eye, yaw, pitch = M.viewpoint(p)
   local n = 0
   if p.site ~= 0 then n = sentry.jam(state, p.site, rt.sentries[p.site], eye, vec.aim(yaw, pitch), p) end
+  if p.clamped_by then
+    -- the Jammer always reaches a Clamp on your own hull
+    local list, defs = state.sentries[p.clamped_by.site], rt.sentries[p.clamped_by.site]
+    local dyn, def = list and list[p.clamped_by.id], defs and defs[p.clamped_by.id]
+    if dyn and def then
+      adv.jammed(state, def, dyn, sentry.tune(), ctx_fns.seal)
+      n = n + 1
+    end
+  end
   msg(state, p, n > 0 and string.format("Jammer: %d sentr%s disabled for 12 s", n, n == 1 and "y" or "ies")
     or "Jammer pulse: nothing in range")
   fx(state, p, "jam")
@@ -552,6 +712,10 @@ local function world_step(state, p, dt)
     if p.site ~= 0 then excursion.left_site(state, p, p.site, ctx_fns) end
     if site == 0 then bank(state, p) else msg(state, p, "Entering derelict site " .. site) end
     p.site = site
+    -- add-wider-dark: entering a site files its civ in your Xenoarchive
+    if site ~= 0 and archive.meet(p, civ_of(state.sector.sites[site])) then
+      msg(state, p, "New civilization: the " .. civ_of(state.sector.sites[site]).name .. " (Xenoarchive)")
+    end
   end
   if site ~= 0 then M.record_trail(state, p, site) end
   if shipm.update(ship, dt, site == 0 and home.regen_factor(state, p)) == "done" then
@@ -563,7 +727,16 @@ local function world_step(state, p, dt)
   local hw = p.tractor and 1 or (p.beam_console and M.HATCH_ARMED or 0)
   local hc = p.hatch or 0
   if hw > hc then p.hatch = math.min(hw, hc + 2.5 * dt) else p.hatch = math.max(hw, hc - 1.5 * dt) end
-  home.doors_step(avatar.layout(), p, dt)
+  home.doors_step(avatar.layout(), p, dt, coop.guests(state, p))
+  -- add-wider-dark: the Shroud drains Charge while it is up
+  if p.shroud then
+    if p.mode == "foot" or ship.charge <= 0 then
+      p.shroud = false
+      msg(state, p, "Shroud down")
+    else
+      ship.charge = math.max(0, ship.charge - sentry.tune().shroud.drain * dt)
+    end
+  end
   -- milestone 3: docking, the lab bench, shields, Fold Retreat and the Resonant vault
   local docked = trade.docked_at(state, p)
   if docked and not p.docked then
@@ -587,7 +760,7 @@ local function world_step(state, p, dt)
     fx(state, p, "grow")
   end
   local m = state.mystery
-  if p.site == 0 and m.vault_revealed and not m.vault_open and vec.dist(ship.pos, state.vault.pos) < 80 then
+  if p.site == 0 and m.vault_revealed and not m.vault_open and state.vault and vec.dist(ship.pos, state.vault.pos) < 80 then
     for _, it in ipairs(p.hold) do
       if it.echo and m.echoes[it.echo].role == "key" then
         items.remove(p, it.uid)
@@ -600,8 +773,90 @@ local function world_step(state, p, dt)
   end
 end
 
+-- add-wider-dark: launch a Decoy flare ahead of you (inside a site)
+function M.decoy(state, p)
+  local t = sentry.tune().decoy
+  if p.site == 0 then
+    msg(state, p, "No sentries to fool out here")
+    fx(state, p, "denied")
+    return false
+  end
+  if (p.decoys or 0) <= 0 then
+    msg(state, p, "No Decoy flares left (traders sell them)")
+    fx(state, p, "denied")
+    return false
+  end
+  local eye, yaw, pitch = M.viewpoint(p, state)
+  local dir = vec.aim(yaw, pitch)
+  local reach = t.ahead
+  local hit = saucer.physics.raycast(eye, vec.scale(dir, reach), 1, 1)
+  if hit then reach = math.max(0.5, reach * hit.t - 0.5) end
+  p.decoys = p.decoys - 1
+  state.decoys = state.decoys or {}
+  state.decoys[#state.decoys + 1] = { site = p.site, pos = vec.add(eye, vec.scale(dir, reach)), life = t.life, by = p.index }
+  msg(state, p, string.format("Decoy flare out: sentries track it for %d s (%d left)", t.life // 1, p.decoys))
+  fx(state, p, "scan")
+  return true
+end
+
+-- add-wider-dark: the Shroud (saucer utility) on or off
+function M.shroud(state, p)
+  if p.mode == "foot" then
+    msg(state, p, "The Shroud is a saucer utility")
+    fx(state, p, "denied")
+    return false
+  end
+  p.shroud = not p.shroud
+  msg(state, p, p.shroud and "Shroud up: hover still and Watchers can't see you (drains Charge)" or "Shroud down")
+  fx(state, p, p.shroud and "scan" or "click")
+  return p.shroud
+end
+
+-- add-wider-dark: hold the Override spike in a Disabled sentry (or a Lockdown node)
+function M.spike_step(state, p, cmd, dt)
+  local t = sentry.tune().spike
+  if not cmd:held("spike") then
+    p.spike = false
+    return
+  end
+  local idx = adv.spike_target(state, p, sentry.tune())
+  if not idx then
+    if cmd:pressed("spike") then
+      msg(state, p, "Override spike: get within 3 m of a Disabled sentry or a Lockdown node")
+      fx(state, p, "denied")
+    end
+    p.spike = false
+    return
+  end
+  if not p.spike or p.spike.idx ~= idx or p.spike.site ~= p.site then
+    p.spike = { site = p.site, idx = idx, t = 0 }
+    msg(state, p, "Override spike in: hold for 3 s")
+  end
+  p.spike.t = p.spike.t + dt
+  if p.spike.t < t.time then return end
+  local def, dyn = rt.sentries[p.site][idx], state.sentries[p.site][idx]
+  if def.kind == "lockdown" and #(dyn.sealed or {}) > 0 then M.seal(def, dyn, false) end
+  if dyn.st == "clamped" then adv.release(state, dyn) end
+  dyn.st, dyn.t, dyn.target = "off", 0, 0
+  state.overrides = state.overrides or {}
+  state.overrides[adv.key(def)] = state.tick
+  p.spike = false
+  local core = items.stamp(p, adv.core_item(), 2, nil)
+  core.hot = true
+  if #(p.hands or {}) < 4 then p.hands[#p.hands + 1] = core else p.hold[#p.hold + 1] = core end
+  msg(state, p, "Override complete: the " .. def.kind .. " is shut down for good. Sentry core in hand.")
+  fx(state, p, "bank")
+end
+
 function M.step_player(state, p, cmd, dt)
   local ship = p.ship
+  -- add-wider-dark: the sector map, shaking off a Clamp
+  if cmd:held("boost") and p.clamped_by then p.shake = (p.shake or 0) + dt end
+  if cmd:pressed("map") and p.mode ~= "wake" then
+    local k = p.panel and p.panel.kind
+    if k == "map" or k == "party" or k == "archive" then p.panel = false
+    elseif not p.panel then panel.open(p, "map") end
+  end
   if cmd:pressed("camera") then p.cam = p.cam == "first" and "chase" or "first" end
   if cmd:pressed("menu") then p.help = not p.help end
   if cmd:pressed("mystery_mode") then
@@ -619,6 +874,13 @@ function M.step_player(state, p, cmd, dt)
     return
   end
   if p.mode == "wake" then home.get_up(state, p, ctx_fns) end
+  -- add-wider-dark: a guest walking a docked friend's dome
+  if p.visiting then
+    coop.step_visit(state, p, cmd, dt, ctx_fns)
+    flight.step(ship, STILL, dt, mover(state, p))
+    world_step(state, p, dt)
+    return
+  end
   -- add-pocket-station-visits: on foot in a station the saucer is a coin in
   -- your pocket; walking, trading and the pickpocket live in sim/visit.lua
   if p.mode == "foot" and p.station then
@@ -631,6 +893,8 @@ function M.step_player(state, p, cmd, dt)
   if p.mode == "foot" and p.excursion then
     if cmd:pressed("scan") then scan(state, p) end
     if cmd:pressed("jam") then jam(state, p) end
+    if cmd:pressed("decoy") then M.decoy(state, p) end
+    M.spike_step(state, p, cmd, dt)
     excursion.step(state, p, cmd, dt, ctx_fns)
     world_step(state, p, dt)
     return
@@ -659,6 +923,8 @@ function M.step_player(state, p, cmd, dt)
   if cmd:pressed("use") then use(state, p) end
   if cmd:pressed("scan") then scan(state, p) end
   if cmd:pressed("jam") then jam(state, p) end
+  if cmd:pressed("decoy") then M.decoy(state, p) end
+  if cmd:pressed("shroud") then M.shroud(state, p) end
   if cmd:pressed("shrink") then size_request(state, p, ship.size + 1)
   elseif cmd:pressed("grow") then size_request(state, p, ship.size - 1) end
   for i, k in ipairs(SIZE_KEYS) do
@@ -717,7 +983,13 @@ function M.record_trail(state, p, site, mark)
 end
 
 function M.step(state, cmds, dt)
+  M.state_ref = state
   state.tick = state.tick + 1
+  -- add-wider-dark: a player slot that is not in the game yet joins on its
+  -- first button press (slots fill in order)
+  for i = #state.players + 1, math.min(#cmds, 4) do
+    if cmds[i] and coop.wants_join(cmds[i]) then coop.join(state, i, ctx_fns) else break end
+  end
   for i = 1, #state.players do
     local p = state.players[i]
     if p and cmds[i] then M.step_player(state, p, cmds[i], dt) end
@@ -725,10 +997,26 @@ function M.step(state, cmds, dt)
   -- sentries act once per tick for everyone, then their stun bolts fly
   for i = 1, #state.sector.sites do sentry.step(state, i, rt.sentries[i], dt, ctx_fns) end
   sentry.step_bolts(state, dt)
+  -- add-wider-dark: decoys burn out; docks, the Heart and the party's fold jump
+  local keep = {}
+  for _, d in ipairs(state.decoys or {}) do
+    d.life = d.life - dt
+    if d.life > 0 then keep[#keep + 1] = d end
+  end
+  state.decoys = keep
+  coop.step(state, ctx_fns)
+  heart.step(state, ctx_fns)
+  galaxy.step(state, dt, ctx_fns, M.enter_sector)
 end
 
 home.register_panels(M, ctx_fns)
 visit.register_panels(ctx_fns)
+-- add-wider-dark panels
+panel.register("map", { title = "SECTOR MAP", rows = function(state, p) return galaxy.rows(state, p, ctx_fns) end })
+panel.register("party", { title = "PARTY", rows = function(state, p) return coop.rows(state, p, ctx_fns) end })
+panel.register("archive", { title = "XENOARCHIVE", rows = function(state, p) return archive.rows(state, p) end })
+panel.register("heart", { title = "THE HEART", rows = function(state, p) return heart.rows(state, p) end })
+panel.register("gift_table", { title = "GIFT TABLE", rows = function(state, p) return coop.gift_rows(state, p, ctx_fns) end })
 
 function M.on_event(ev, state)
   -- base keeps no extra bookkeeping; mods listen for "size_change"/"loot"

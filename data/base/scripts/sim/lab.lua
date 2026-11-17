@@ -28,6 +28,11 @@ function M.enqueue(state, p, uid)
   if queued(p, uid) then return false, "queued" end
   if it.echo then
     if not mystery.decodable(state.mystery, it.echo) then return false, "nothing to decode" end
+    -- add-wider-dark: the Witness only translates with 25% of its civ archived
+    local e = state.mystery.echoes[it.echo]
+    if e.gate and e.gate_civ and require("sim.archive").best(state, e.gate_civ) < e.gate then
+      return false, "translation"
+    end
     local s = econ().decode_seconds
     p.lab.queue[#p.lab.queue + 1] = { uid = uid, kind = "decode", left = s, total = s }
     return true
@@ -76,11 +81,21 @@ function M.step(state, p, dt, ctx)
     local q = it.quirk and (" (quirk: " .. it.quirk .. ")") or ""
     ctx.msg(state, p, "Identified: " .. it.name .. q)
     ctx.fx(state, p, "bank")
+    require("sim.archive").record(state, p, it, ctx)
   else
     local text = mystery.decode(state.mystery, it.echo)
-    if text then require("sim.books").add(p, "echo:" .. it.echo) end
+    -- add-wider-dark: every player's journal gets the decoded text
+    if text then
+      for _, o in ipairs(state.players) do
+        require("sim.books").add(o, "echo:" .. it.echo)
+        if o ~= p then ctx.msg(state, o, "P" .. p.index .. " decoded an Echo: it is on your bookshelf") end
+      end
+    end
     ctx.msg(state, p, text or "The Echo is silent")
-    local res = mystery.resonant_sites(state.mystery)
+    if text and state.mystery.echoes[it.echo].role == "witness" then
+      ctx.msg(state, p, "The Witness names the Heart sector: the Heart Key waits in the sector before it (see your map)")
+    end
+    local res = mystery.resonant_sites(state.mystery, state.sector_id)
     if #res > 0 then ctx.msg(state, p, "A Resonant signal: site " .. res[#res] .. " is marked on your radar") end
     if state.mystery.vault_revealed and it.echo and state.mystery.echoes[it.echo].role == "where" then
       ctx.msg(state, p, "The star chart shows the Resonant vault in open space")
@@ -131,7 +146,13 @@ function M.pick(state, p, uid, ctx)
     local it = items.find(p, uid)
     ctx.msg(state, p, ((it.echo or M.is_core(it)) and "Decoding " or "Identifying ") .. items.label(it) .. " at the lab bench")
   else
-    ctx.msg(state, p, why == "charge" and "Not enough Charge to run the lab" or ("Lab: " .. why))
+    local text = why == "charge" and "Not enough Charge to run the lab" or ("Lab: " .. why)
+    if why == "translation" then
+      local e = state.mystery.echoes[items.find(p, uid).echo]
+      local c = require("sim.civs").by_id(state.seed, e.gate_civ)
+      text = string.format("The Witness won't translate: your Xenoarchive needs %d%% of the %s", e.gate, c and c.name or "?")
+    end
+    ctx.msg(state, p, text)
     ctx.fx(state, p, "denied")
   end
   return ok
