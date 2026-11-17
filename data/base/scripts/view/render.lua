@@ -104,7 +104,7 @@ function M.draw_sentries(v, A, state, p)
     if core then
       local beat = 1 + 0.12 * math.sin(state.tick * (hm.heart_open and 0.25 or 0.08))
       v:mesh(A.heart_core, { pos = core, yaw = state.tick * 0.01, scale = beat })
-      v:billboard(A.tex.glow or A.tex.beam, core, hm.heart_open and 16 or 9,
+      v:billboard(A.tex.glow or A.tex.beam, core, hm.heart_open and 10 or 6,
         { palette = A.pal.base, tint = hm.ending and { 0.6, 1, 0.8, 0.8 } or { 1, 0.4, 0.6, 0.8 } })
     end
   end

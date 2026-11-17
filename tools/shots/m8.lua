@@ -17,16 +17,19 @@ local civs = require("sim.civs")
 local heart = require("sim.heart")
 local items = require("sim.items")
 local configs = require("sim.config")
+local ruinm = require("sim.ruin")
+local vec = require("lib.vec")
 local D = "shots_m8/"
 local function P(i) return function() return T.state().players[i] end end
 local function shot(name) T.wait(2) T.screenshot(D .. name .. ".png") T.wait(1) end
 local function full(i) P(i)().ship.charge = configs.all().max_charge end
 local g = galaxy.generate(T.state().seed)
--- turn saucer i (at the helm) until it faces saucer j
+-- turn saucer i (at the helm) until it faces a point (or saucer j)
 local function face(i, j)
   local function err()
-    local a, b = P(i)().ship, P(j)().ship
-    local want = saucer.math.atan2(b.pos[1] - a.pos[1], b.pos[3] - a.pos[3])
+    local a = P(i)().ship
+    local to = type(j) == "table" and j or P(j)().ship.pos
+    local want = saucer.math.atan2(to[1] - a.pos[1], to[3] - a.pos[3])
     return (want - a.yaw + math.pi) % (2 * math.pi) - math.pi
   end
   local sgn = 1
@@ -95,8 +98,21 @@ local ruin, origin = game.ruin(site), T.state().sector.sites[site].pos
 local clamp
 for _, d in ipairs(game.sentries(site)) do if d.kind == "clamp" then clamp = clamp or d end end
 ap.take_helm(T, 1, P(1))
-ap.travel(T, 1, P(1), ap.route(ruin, origin, clamp.room, 2)[1].pos, 4, 60 * 150)
+-- stand off outside the hive, level with its middle, and look at it
+local lo, hi3 = { math.huge, math.huge, math.huge }, { -math.huge, -math.huge, -math.huge }
+local kit = ruinm.kit_of(ruin.kit)
+for _, r in ipairs(ruin.rooms) do
+  local mn, mx = ruinm.room_box(r, kit, origin)
+  for k = 1, 3 do lo[k], hi3[k] = math.min(lo[k], mn[k]), math.max(hi3[k], mx[k]) end
+end
+local mid = { (lo[1] + hi3[1]) / 2, (lo[2] + hi3[2]) / 2, (lo[3] + hi3[3]) / 2 }
+local reach = math.max(hi3[1] - lo[1], hi3[3] - lo[3]) * 0.9 + 40
+local here = P(1)().ship.pos
+local dir = vec.norm({ here[1] - mid[1], 0, here[3] - mid[3] })
+ap.travel(T, 1, P(1), { mid[1] + dir[1] * reach, mid[2], mid[3] + dir[3] * reach }, 6, 60 * 150)
+face(1, mid)
 shot("05_hive_kit")
+ap.travel(T, 1, P(1), ap.route(ruin, origin, clamp.room, 2)[1].pos, 4, 60 * 150)
 full(1)
 ap.resize(T, 1, P(1), 2)
 T.press(1, "decoy")
@@ -121,6 +137,8 @@ game.enter_sector(T.state(), g.spine[4])
 T.wait(30)
 local hi = heart.site(T.state())
 local core, _, croom = heart.core(T.state())
+-- (staged) the Heart's sentries sleep, so the shot is of the core, not a Clamp
+for _, dyn in ipairs(T.state().sentries[hi] or {}) do dyn.st = "off" end
 ruin, origin = game.ruin(hi), T.state().sector.sites[hi].pos
 for _, pi in ipairs({ 2, 1 }) do
   local get = P(pi)
@@ -142,7 +160,12 @@ for _, pi in ipairs({ 2, 1 }) do
   ap.follow(T, pi, get, route, 1500)
 end
 ap.wait_until(T, 2, function() return T.state().mystery.heart_open end, 600)
-T.wait(60)
+-- P2 backs off from the core and turns to look at it
+local back = vec.norm(vec.sub(P(2)().ship.pos, core))
+if vec.len(vec.sub(P(2)().ship.pos, core)) < 6 then back = { 0, 0, 1 } end
+ap.travel(T, 2, P(2), { core[1] + back[1] * 16, core[2] + 1, core[3] + back[3] * 16 }, 1.5, 900)
+face(2, core)
+T.wait(30)
 shot("07_heart_site")
 
 -- 7. two more players join at the Heart: four saucers, four views
