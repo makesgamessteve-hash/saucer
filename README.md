@@ -284,6 +284,56 @@ the galaxy. The music is generated from each civ's scale and the moment
 | ![The Xenoarchive](docs/shots/m8_xenoarchive.png) | ![A hive ruin, the third kit](docs/shots/m8_hive_kit.png) |
 | ![A Clamp and a decoy flare](docs/shots/m8_clamp_decoy.png) | ![The Heart opens to the Key](docs/shots/m8_heart_site.png) |
 
+**Home among the stars** (milestone 9). **Network co-op**: two to four
+machines play one universe in lockstep, each player in their own saucer and
+window (or headset). On the desktop one player hosts and the others join
+over UDP:
+
+```sh
+saucer --host                       # waits on UDP port 47800 for one guest
+saucer --host 47800 --net-players 4 # waits for three guests
+saucer --join 192.168.1.20          # or --join host.example.org:47800
+#   --net-delay N  lockstep input delay in ticks (1-12, default 3; raise it on slow links)
+```
+
+The host forwards UDP port 47800 (or the port it picked) if guests come over
+the internet. The window title shows the session status. Everyone must run
+the same version with the same mods (a guest with a different set is
+refused and told why); a machine that leaves is dropped after 8 s and the
+others play on. Every 60 ticks the machines compare state hashes and stop
+with "DESYNC at tick N" if they ever differ. In the **browser**, press
+**Online co-op** on the start page (or open `saucer.html?net=1`): the host
+picks Host and copies the offer code to the guest by any chat, the guest
+pastes it and sends the answer code back, and the game starts over a WebRTC
+data channel (no server of ours in between; STUN only). A browser and a
+desktop cannot play together yet. A player in a WebXR headset can host or
+join; their headset shows their own saucer.
+
+**The dome is yours**: traders sell furniture (lamps, rugs, an aquarium, a
+telescope, a hammock, a singing crystal and more) that the **Home planner**
+by the helm walk places anywhere on both decks; six **display slots** show
+off identified finds; four **garden** beds behind the stairwell grow alien
+seeds (water them) into kitchen ingredients. Furniture, displays and plants
+add up to **Comfort** (Bare, Homely, Cosy, Beloved), and each point speeds
+up Charge regeneration by 2%. Docked guests walk your decorated dome and can
+admire what you display. The deepest derelicts (danger 3) keep a **Warden**:
+it patrols its great halls, hunts what it sees with stun bolts and wakes
+every Snatcher of the site; decoy it, Shroud, or Jam it and spike it. On
+foot, **X** fires the **grapple** and holding **N** with no sentry in reach
+runs the **cutter** through a sealed shutter or a Lockdown seal. The
+**mod browser** (title card or bed) lists every mod with its description and
+why it did not load, and switches mods on or off from the next start.
+**Hardcore** (title card, or `--hardcore`) is opt-in for a whole universe:
+a Fold Retreat loses all cargo for good, the Lifeline loses what you held,
+and there is no loading from the bed.
+
+| | |
+|---|---|
+| ![Two network windows side by side: host and guest in one universe](docs/shots/m9_network_two_windows.png) | ![A decorated dome](docs/shots/m9_decorated_dome.png) |
+| ![The garden at four stages](docs/shots/m9_garden.png) | ![Finds on the display slots](docs/shots/m9_display_slots.png) |
+| ![The mod browser](docs/shots/m9_mod_browser.png) | ![Hardcore on the title card](docs/shots/m9_hardcore.png) |
+| ![The Warden hunting in its great hall](docs/shots/m9_warden.png) | |
+
 ## Useful options
 
 ```
@@ -291,6 +341,8 @@ the galaxy. The music is generated from each civ's scale and the moment
 --local-players N  --viewports N  --coop
 --split-keyboard      (with --coop: the right half of the keyboard is player 2; F2 does it in game)
 --split horizontal    (two players stacked instead of side by side)
+--host [PORT]  --join HOST[:PORT]  --net-players N  --net-delay N   (network co-op)
+--hardcore            (a new game starts in Hardcore)
 --record FILE.srep  --play FILE.srep  --restore-every-tick
 --screenshot FILE.png --screenshot-tick N     (exits after the capture)
 --windowed            (with --script: run a scripted tour in a real window, e.g. tools/shots/m3.lua)
@@ -342,7 +394,17 @@ that never ends fails instead of hanging CI.
   shutter and beams up the strongroom's loot (also with
   `--restore-every-tick` and on seed 7);
   `boot.lua` covers touch, XR and rendering; `coop.lua` runs two players;
-  `mods.lua` loads the fixture mods (one adds a holodeck program).
+  `mods.lua` loads the fixture mods (one adds a holodeck program);
+  `netplay.lua` runs as two processes on loopback (`tools/net_loopback.cmake`:
+  a host and a guest in a WebXR session decorate the dome, dock and visit,
+  and must end on the same final hash after at least ten hash checks; also on
+  seed 7 with a longer delay), `netdesync.lua` checks that a forced
+  divergence is reported on both sides, and `modbrowser.lua` switches a mod
+  off and on across two starts (`tools/mod_browser.cmake`).
+- **Network**: `tests/c/test_net.c` runs the lockstep protocol over a lossy
+  in-memory transport (two and four players, desyncs, rejects, timeouts);
+  `tests/web/net_web.test.js` runs the web transport headless under node with
+  a fake RTCPeerConnection pair (offer and answer codes, the data channel).
 - **Replays** (`tests/replays/*.srep`): recorded command frames with a state
   hash every 60 ticks; they must reproduce bit-for-bit on Linux, Windows and
   wasm. Re-record after an intended sim change with
@@ -364,7 +426,9 @@ Every mod is a folder with a `mod.lua` manifest (`id`, `version`, `api = 1`,
 `depends`, `load_after`, `entry`, `license_code`, `license_assets`). Files in
 later mods override files at the same path in earlier ones, scripts run in a
 sandbox with an instruction budget, and `on_render` gets a read-only state.
-See `tests/fixtures/mods/bigger_tractor` for a small example.
+See `tests/fixtures/mods/bigger_tractor` for a small example. A `description`
+in `mod.lua` shows in the in-game **mod browser**, which writes the folders
+you switch off to `<user-dir>/mods.txt` (used when `--mods` is not given).
 
 Notes for modders: index-map textures are 8-bit grayscale PNGs whose values
 are palette indices (index 0 is transparent); palettes are PNG strips with
