@@ -1,4 +1,5 @@
-/* Audio: WAV clips loaded through the VFS, one SDL audio stream per voice,
+/* Audio: WAV clips loaded through the VFS, one SDL audio stream per voice
+ * (one-shots, or loops topped up every frame until stopped by handle),
  * mixed by SDL. Audio is presentation only and never feeds the sim.
  * SPDX-License-Identifier: MIT */
 #include <SDL3/SDL.h>
@@ -18,12 +19,18 @@ typedef struct clip {
   int failed;
 } clip;
 
+typedef struct voice {
+  SDL_AudioStream *s;
+  clip *c;
+  int handle, loop;
+} voice;
+
 static struct {
   SDL_AudioDeviceID dev;
   SDL_AudioSpec dev_spec;
   clip clips[MAX_CLIPS];
   int nclips;
-  SDL_AudioStream *voices[MAX_VOICES];
+  voice voices[MAX_VOICES];
 } A;
 
 int sx_audio_init(void) {
@@ -40,7 +47,7 @@ int sx_audio_init(void) {
 void sx_audio_shutdown(void) {
   int i;
   for (i = 0; i < MAX_VOICES; i++)
-    if (A.voices[i]) SDL_DestroyAudioStream(A.voices[i]);
+    if (A.voices[i].s) SDL_DestroyAudioStream(A.voices[i].s);
   for (i = 0; i < A.nclips; i++) SDL_free(A.clips[i].data);
   if (A.dev) SDL_CloseAudioDevice(A.dev);
   memset(&A, 0, sizeof A);
@@ -68,33 +75,63 @@ static clip *get_clip(sx_engine *e, const char *path) {
   return c;
 }
 
+static void drop_voice(voice *v) {
+  if (v->s) SDL_DestroyAudioStream(v->s);
+  memset(v, 0, sizeof *v);
+}
+
+static voice *find_voice(int handle) {
+  int k;
+  for (k = 0; k < MAX_VOICES; k++)
+    if (A.voices[k].s && A.voices[k].handle == handle) return &A.voices[k];
+  return NULL;
+}
+
 void sx_audio_flush(sx_engine *e) {
   int i, k;
   if (!A.dev) {
     e->naudio = 0;
     return;
   }
-  /* reap finished voices */
+  /* reap finished one-shots; top up loops so they never run dry */
   for (k = 0; k < MAX_VOICES; k++) {
-    if (A.voices[k] && SDL_GetAudioStreamQueued(A.voices[k]) == 0) {
-      SDL_DestroyAudioStream(A.voices[k]);
-      A.voices[k] = NULL;
+    voice *v = &A.voices[k];
+    if (!v->s) continue;
+    if (v->loop) {
+      if (SDL_GetAudioStreamQueued(v->s) < (int)v->c->len) SDL_PutAudioStreamData(v->s, v->c->data, (int)v->c->len);
+    } else if (SDL_GetAudioStreamQueued(v->s) == 0) {
+      drop_voice(v);
     }
   }
   for (i = 0; i < e->naudio; i++) {
-    clip *c = get_clip(e, e->audio[i].path);
+    const sx_audio_req *r = &e->audio[i];
+    clip *c;
     SDL_AudioStream *s;
-    if (!c) continue;
-    for (k = 0; k < MAX_VOICES && A.voices[k]; k++) {
+    voice *v;
+    if (r->op == SX_AUDIO_SET) {
+      if ((v = find_voice(r->handle)) != NULL) SDL_SetAudioStreamGain(v->s, r->volume);
+      continue;
     }
-    if (k == MAX_VOICES) break;
+    if (r->op == SX_AUDIO_STOP) {
+      if ((v = find_voice(r->handle)) != NULL) drop_voice(v);
+      continue;
+    }
+    c = get_clip(e, r->path);
+    if (!c) continue;
+    for (k = 0; k < MAX_VOICES && A.voices[k].s; k++) {
+    }
+    if (k == MAX_VOICES) continue;
     s = SDL_CreateAudioStream(&c->spec, &A.dev_spec);
     if (!s) continue;
-    SDL_SetAudioStreamGain(s, e->audio[i].volume);
+    SDL_SetAudioStreamGain(s, r->volume);
     SDL_PutAudioStreamData(s, c->data, (int)c->len);
-    SDL_FlushAudioStream(s);
+    if (r->loop) SDL_PutAudioStreamData(s, c->data, (int)c->len);
+    else SDL_FlushAudioStream(s);
     SDL_BindAudioStream(A.dev, s);
-    A.voices[k] = s;
+    A.voices[k].s = s;
+    A.voices[k].c = c;
+    A.voices[k].handle = r->handle;
+    A.voices[k].loop = r->loop;
   }
   e->naudio = 0;
 }

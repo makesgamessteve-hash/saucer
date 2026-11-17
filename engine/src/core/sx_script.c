@@ -1384,28 +1384,65 @@ static int l_xr_haptic(lua_State *L) {
 }
 
 /* ---------- saucer.audio ---------- */
+static sx_audio_req *audio_req(sx_engine *e) {
+  sx_audio_req *a;
+  if (e->naudio >= (int)(sizeof e->audio / sizeof e->audio[0])) return NULL;
+  a = &e->audio[e->naudio++];
+  memset(a, 0, sizeof *a);
+  return a;
+}
+
+/* saucer.audio.play(path, {volume=, pan=, loop=}) -> handle (nil when the
+ * frame's queue is full) */
 static int l_audio_play(lua_State *L) {
   sx_engine *e = get_engine(L);
   const char *p = luaL_checkstring(L, 1);
-  sx_audio_req *a;
-  if (e->naudio >= (int)(sizeof e->audio / sizeof e->audio[0])) return 0;
-  a = &e->audio[e->naudio++];
-  memset(a, 0, sizeof *a);
+  sx_audio_req *a = audio_req(e);
+  if (!a) return 0;
   strncpy(a->path, p, sizeof a->path - 1);
   a->volume = 1.0f;
   if (lua_istable(L, 2)) {
     a->volume = field_num(L, 2, "volume", 1.0f);
     a->pan = field_num(L, 2, "pan", 0.0f);
+    lua_getfield(L, 2, "loop");
+    a->loop = lua_toboolean(L, -1);
+    lua_pop(L, 1);
   }
+  a->op = SX_AUDIO_PLAY;
   a->handle = ++e->audio_next_handle;
   e->audio_played_total++;
+  if (a->loop && e->audio_nloops < (int)(sizeof e->audio_loops / sizeof e->audio_loops[0]))
+    e->audio_loops[e->audio_nloops++] = a->handle;
   lua_pushinteger(L, a->handle);
   return 1;
 }
 
+/* saucer.audio.set(handle, {volume=}) -> true when queued */
+static int l_audio_set(lua_State *L) {
+  sx_engine *e = get_engine(L);
+  int h = (int)luaL_checkinteger(L, 1);
+  sx_audio_req *a = audio_req(e);
+  if (!a) return 0;
+  a->op = SX_AUDIO_SET;
+  a->handle = h;
+  a->volume = lua_istable(L, 2) ? field_num(L, 2, "volume", 1.0f) : (float)luaL_optnumber(L, 2, 1.0);
+  lua_pushboolean(L, 1);
+  return 1;
+}
+
+/* saucer.audio.stop(handle) -> true when queued */
 static int l_audio_stop(lua_State *L) {
-  (void)luaL_checkinteger(L, 1);
-  return 0;
+  sx_engine *e = get_engine(L);
+  int h = (int)luaL_checkinteger(L, 1), i;
+  sx_audio_req *a;
+  for (i = 0; i < e->audio_nloops; i++)
+    if (e->audio_loops[i] == h) e->audio_loops[i--] = e->audio_loops[--e->audio_nloops];
+  a = audio_req(e);
+  if (!a) return 0;
+  a->op = SX_AUDIO_STOP;
+  a->handle = h;
+  lua_pushboolean(L, 1);
+  return 1;
 }
 
 /* ---------- saucer.save ---------- */
@@ -1576,6 +1613,11 @@ static int l_test_screenshot(lua_State *L) {
   strncpy(e->shot_path, luaL_checkstring(L, 1), sizeof e->shot_path - 1);
   e->shot_pending = 1;
   return 0;
+}
+
+static int l_test_audio_loops(lua_State *L) {
+  lua_pushinteger(L, get_engine(L)->audio_nloops);
+  return 1;
 }
 
 static int l_test_audio_count(lua_State *L) {
@@ -1775,7 +1817,8 @@ static void build_saucer_api(lua_State *L, sx_engine *e) {
   static const luaL_Reg xr_f[] = {
       {"available", l_xr_available}, {"session", l_xr_session}, {"comfort", l_xr_comfort}, {"haptic", l_xr_haptic},
       {NULL, NULL}};
-  static const luaL_Reg audio_f[] = {{"play", l_audio_play}, {"stop", l_audio_stop}, {NULL, NULL}};
+  static const luaL_Reg audio_f[] = {
+      {"play", l_audio_play}, {"set", l_audio_set}, {"stop", l_audio_stop}, {NULL, NULL}};
   static const luaL_Reg save_f[] = {{"write", l_save_write}, {"read", l_save_read}, {NULL, NULL}};
   static const luaL_Reg time_f[] = {{"tick", l_time_tick}, {"sim_seconds", l_time_seconds}, {NULL, NULL}};
   static const luaL_Reg mods_f[] = {{"list", l_mods_list}, {NULL, NULL}};
@@ -1785,6 +1828,7 @@ static void build_saucer_api(lua_State *L, sx_engine *e) {
                                     {"wait", l_test_wait},             {"press", l_test_press},
                                     {"axis", l_test_axis},             {"assert", l_test_assert},
                                     {"screenshot", l_test_screenshot}, {"audio_count", l_test_audio_count},
+                                    {"audio_loops", l_test_audio_loops},
                                     {"touch", l_test_set_touch},       {"xr", l_test_set_xr},
                                     {"viewports", l_test_viewports},   {NULL, NULL}};
   struct {

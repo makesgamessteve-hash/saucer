@@ -338,12 +338,12 @@ def build_palette(palette):
     return "authored/palettes/base.png"
 
 
-def synth(path, dur, fn, rate=22050):
+def synth(path, dur, fn, rate=22050, loop=False):
     n = int(dur * rate)
     frames = bytearray()
     for i in range(n):
         t = i / rate
-        env = min(1.0, t / 0.01) * max(0.0, 1.0 - t / dur)
+        env = 1.0 if loop else min(1.0, t / 0.01) * max(0.0, 1.0 - t / dur)
         v = max(-1.0, min(1.0, fn(t) * env))
         frames += struct.pack("<h", int(v * 30000))
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -370,7 +370,119 @@ def build_sounds():
     for name, (dur, fn) in sounds.items():
         synth(os.path.join(s, name), dur, fn)
         out.append("authored/sounds/" + name)
+    # add-presentation-packaging: the audio pass. One-shots for events that had
+    # no sound yet, and seamless loops (whole cycles only, noise cross-faded
+    # into its own start) for the engine, the beam, the holodeck, the station
+    # and derelict halls.
+    for name, (dur, fn, loop) in pass_sounds().items():
+        synth(os.path.join(s, name), dur, fn, loop=loop)
+        out.append("authored/sounds/" + name)
     return out
+
+
+def _noise(n, seed, smooth):
+    """deterministic one-pole low-passed white noise, n samples in -1..1"""
+    x, y, out = seed & 0x7FFFFFFF, 0.0, []
+    for _ in range(n):
+        x = (1103515245 * x + 12345) & 0x7FFFFFFF
+        y += (x / 0x3FFFFFFF - 1.0 - y) * smooth
+        out.append(y)
+    peak = max(1e-6, max(abs(v) for v in out))
+    return [v / peak for v in out]
+
+
+def _loop_noise(dur, seed, smooth, rate=22050):
+    """noise that loops: the last 10% fades into the first"""
+    n = int(dur * rate)
+    fade = n // 10
+    raw = _noise(n + fade, seed, smooth)
+    out = raw[:n]
+    for i in range(fade):
+        k = i / fade
+        out[i] = raw[i] * k + raw[n + i] * (1 - k)
+    return out
+
+
+def pass_sounds(rate=22050):
+    tau = 2 * math.pi
+    sin = math.sin
+    sq = lambda f, t: 1.0 if sin(tau * f * t) > 0 else -1.0
+    hum_n = _loop_noise(2.0, 11, 0.02)
+    station_n = _loop_noise(4.0, 23, 0.08)
+    derelict_n = _loop_noise(4.0, 37, 0.01)
+    door_n = _noise(int(0.45 * rate), 5, 0.25)
+    hit_n = _noise(int(0.4 * rate), 9, 0.6)
+    at = lambda arr: (lambda t: arr[min(len(arr) - 1, int(t * rate))])
+    hn, sn, dn, don, hin = at(hum_n), at(station_n), at(derelict_n), at(door_n), at(hit_n)
+
+    def engine_hum(t):  # 2 s: 55 Hz body, 110/165 Hz harmonics, 0.5 Hz throb, a breath of noise
+        throb = 0.8 + 0.2 * sin(tau * 0.5 * t)
+        return throb * (0.32 * sin(tau * 55 * t) + 0.14 * sin(tau * 110 * t) + 0.06 * sin(tau * 165 * t)) + 0.08 * hn(t)
+
+    def beam_loop(t):  # 1 s: shimmering 300/450 Hz with a 6 Hz tremolo and a 3 Hz rising chirp
+        trem = 0.6 + 0.4 * sin(tau * 6 * t)
+        chirp = sin(tau * (600 * t + 150 * ((t * 3) % 1) ** 2 / 3))
+        return trem * (0.25 * sin(tau * 300 * t) + 0.12 * sin(tau * 450 * t)) + 0.05 * chirp
+
+    def holo_loop(t):  # 4 s: a soft pad (A2, C#3, E3 in 0.25 Hz steps) breathing at 0.25 Hz
+        swell = 0.6 + 0.4 * sin(tau * 0.25 * t)
+        return swell * 0.12 * (sin(tau * 110 * t) + sin(tau * 138.5 * t) + sin(tau * 165 * t) + 0.5 * sin(tau * 220 * t))
+
+    def station_loop(t):  # 4 s: crowd murmur (noise in 1 Hz swells) and two distant clanks
+        murmur = 0.22 * sn(t) * (0.7 + 0.3 * sin(tau * 1.0 * t))
+        clank = 0.0
+        for c, f in ((0.7, 740), (2.6, 523)):
+            d = t - c
+            if 0 <= d < 0.35:
+                clank += 0.18 * sin(tau * f * d) * math.exp(-d * 14)
+        return murmur + clank + 0.05 * sin(tau * 60 * t)
+
+    def derelict_loop(t):  # 4 s: deep drone (41.25 Hz), slow wind, a creak at 1.9 s
+        creak = 0.0
+        d = t - 1.9
+        if 0 <= d < 0.6:
+            creak = 0.12 * sin(tau * (180 + 120 * d) * d) * sin(math.pi * d / 0.6)
+        return 0.25 * sin(tau * 41.25 * t) * (0.8 + 0.2 * sin(tau * 0.5 * t)) + 0.18 * dn(t) + creak
+
+    def door(t):  # pneumatic slide: filtered noise swell and a falling tone
+        return 0.45 * don(t) * sin(math.pi * min(1, t / 0.45)) + 0.15 * sin(tau * (420 - 380 * t) * t)
+
+    def scan(t):  # rising ping and its echo
+        return 0.4 * sin(tau * (600 + 900 * t) * t) * math.exp(-t * 3) + 0.2 * sin(tau * 1200 * t) * math.exp(-abs(t - 0.4) * 12)
+
+    def jam(t):  # buzzy detuned squares
+        return 0.18 * (sq(97, t) + sq(103, t)) * (0.6 + 0.4 * sq(8, t))
+
+    def alert(t):  # two-tone beep
+        return 0.35 * sin(tau * (880 if t < 0.2 else 660) * t) * (1 if (t % 0.25) < 0.18 else 0)
+
+    def locked(t):  # fast alarm warble
+        return 0.3 * sq(700 + 250 * sin(tau * 9 * t), t)
+
+    def hit(t):  # zap: noise burst and a falling sine
+        return 0.5 * hin(t) * math.exp(-t * 9) + 0.3 * sin(tau * (900 - 1500 * t) * t) * math.exp(-t * 6)
+
+    def click(t):  # menu tick
+        return 0.4 * sin(tau * 1500 * t) * math.exp(-t * 60)
+
+    def coin(t):  # the saucer pocketed / taken out: two bright chimes
+        return 0.3 * (sin(tau * 1318.5 * t) + (sin(tau * 1975.5 * t) if t > 0.08 else 0)) * math.exp(-t * 6)
+
+    return {
+        "engine_hum.wav": (2.0, engine_hum, True),
+        "beam_loop.wav": (1.0, beam_loop, True),
+        "holo_loop.wav": (4.0, holo_loop, True),
+        "station_loop.wav": (4.0, station_loop, True),
+        "derelict_loop.wav": (4.0, derelict_loop, True),
+        "door.wav": (0.45, door, False),
+        "scan.wav": (0.8, scan, False),
+        "jam.wav": (0.6, jam, False),
+        "alert.wav": (0.5, alert, False),
+        "locked.wav": (0.7, locked, False),
+        "hit.wav": (0.4, hit, False),
+        "click.wav": (0.06, click, False),
+        "coin.wav": (0.5, coin, False),
+    }
 
 
 def write_meta(rel, fields):

@@ -45,10 +45,14 @@ typedef struct sx_options {
   int show_help;
 } sx_options;
 
+/* op: play a clip (loop = 1 repeats it until stopped), set a playing
+ * handle's volume, or stop a handle (add-presentation-packaging) */
+enum { SX_AUDIO_PLAY = 0, SX_AUDIO_SET = 1, SX_AUDIO_STOP = 2 };
 typedef struct sx_audio_req {
   char path[128];
   float volume, pan;
   int handle;
+  int op, loop;
 } sx_audio_req;
 
 typedef struct sx_mod_rt {
@@ -105,6 +109,7 @@ typedef struct sx_engine {
   sx_audio_req audio[32];
   int naudio, audio_next_handle;
   int audio_played_total;
+  int audio_loops[16], audio_nloops; /* looping handles started and not yet stopped */
   /* screenshots requested by scripts */
   char shot_path[512];
   int shot_pending;

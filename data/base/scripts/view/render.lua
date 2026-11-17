@@ -15,12 +15,9 @@ local panelm = require("sim.panel")
 local sm = saucer.math
 local M = {}
 
-local heard = {} -- per player: last fx tick played (render-side only)
-M.SOUNDS = {
-  shrink = "authored/sounds/shrink.wav", grow = "authored/sounds/grow.wav", tractor = "authored/sounds/tractor.wav",
-  pickup = "authored/sounds/pickup.wav", denied = "authored/sounds/denied.wav", bank = "authored/sounds/bank.wav",
-  echo = "authored/sounds/echo.wav",
-}
+-- add-presentation-packaging: sounds live in view/audio.lua (kept here for mods)
+local sound = require("view.audio")
+M.SOUNDS = sound.SOUNDS
 
 -- milestone 3: sentry state lights (Dormant green, Alert yellow, Locked red,
 -- Disabled blue), Watcher cones while a Scanner pulse lasts, stun bolts,
@@ -153,13 +150,8 @@ end
 -- kept for mods: visual hull scale relative to the drawn config
 function M.morph_scale(ship) return M.pose(ship).scale end
 
-function M.audio(state, p)
-  local last = heard[p.index] or -1
-  if state.tick < last then last = -1 end
-  for _, f in ipairs(p.fx) do
-    if f.tick > last and M.SOUNDS[f.sound] then saucer.audio.play(M.SOUNDS[f.sound], { volume = 0.8 }) end
-  end
-  heard[p.index] = state.tick
+function M.audio(state, p, first)
+  return sound.update(state, p, first ~= false and p.index == 1)
 end
 
 -- hull-local point -> world, for a drawn pose
