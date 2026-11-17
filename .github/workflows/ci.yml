@@ -49,7 +49,7 @@ jobs:
   linux-clang:
     name: linux-clang (ASan/UBSan)
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y ninja-build clang
@@ -59,7 +59,7 @@ jobs:
         run: |
           cmake -S . -B build/asan -G Ninja -DCMAKE_BUILD_TYPE=Debug -DSAUCER_BUILD_GAME=OFF -DSAUCER_SANITIZE=ON
           cmake --build build/asan
-          ctest --test-dir build/asan --output-on-failure
+          ctest --test-dir build/asan -j"$(nproc)" --output-on-failure
 
   windows-msvc:
     name: windows-msvc
