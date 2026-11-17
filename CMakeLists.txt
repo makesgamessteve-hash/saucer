@@ -178,6 +178,18 @@ if(SAUCER_BUILD_TESTS)
            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_mods COMMAND ${HL} --seed 42 --mods-dir tests/fixtures/mods --script tests/game/mods.lua
            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  # milestone 9: two machines on loopback (a host and an XR guest) play one universe in
+  # lockstep, decorate a dome and visit it; a deliberate desync must be caught
+  if(NOT EMSCRIPTEN)
+    set(NETL ${CMAKE_COMMAND} -DHL=$<TARGET_FILE:saucer_headless> -DROOT=${CMAKE_SOURCE_DIR})
+    add_test(NAME game_netplay COMMAND ${NETL} -DUSER=${USERDIR}-net -DPORT=47831 -DSCRIPT=tests/game/netplay.lua
+             -P ${CMAKE_SOURCE_DIR}/tools/net_loopback.cmake WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+    add_test(NAME game_netplay_seed7 COMMAND ${NETL} -DUSER=${USERDIR}-net7 -DPORT=47832 -DSEED=7 -DDELAY=5
+             -DSCRIPT=tests/game/netplay.lua -P ${CMAKE_SOURCE_DIR}/tools/net_loopback.cmake
+             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+    add_test(NAME game_net_desync COMMAND ${NETL} -DUSER=${USERDIR}-netd -DPORT=47833 -DSCRIPT=tests/game/netdesync.lua
+             -DEXPECT=desync -P ${CMAKE_SOURCE_DIR}/tools/net_loopback.cmake WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  endif()
   add_test(NAME headless_run COMMAND ${HL} --seed 1 --ticks 600 --test WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   file(GLOB REPLAYS tests/replays/*.srep)
   foreach(r ${REPLAYS})

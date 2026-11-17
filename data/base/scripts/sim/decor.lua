@@ -411,7 +411,6 @@ end
 function M.garden_rows(state, p, ctx)
   local D = M.ensure(p)
   local L = avatar.layout()
-  M.grow(state, p)
   local stages = M.defs().stages
   local rows = {}
   for i = 1, #L.garden do

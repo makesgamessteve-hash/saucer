@@ -550,7 +550,8 @@ static int net_tick(sx_engine *e) {
     fail(e, "network: the host plays a different seed");
     return 0;
   }
-  if (n->state == SX_NET_RUNNING && n->local_slot && n->upto[n->local_slot - 1] < e->tick + n->delay) {
+  if ((n->state == SX_NET_RUNNING || n->state == SX_NET_CLOSED || n->abandoned) && n->local_slot &&
+      n->upto[n->local_slot - 1] < e->tick + n->delay) {
     sx_cmd local;
     sample_devices(e, cmds, &cnt);
     if (cnt) local = cmds[0];
