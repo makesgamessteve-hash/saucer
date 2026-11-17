@@ -19,6 +19,20 @@ local function said(s)
   return false
 end
 
+-- Crossing open space is ~15k of the ~55k ticks and tests nothing the
+-- derelict, vault and beam steps do not: under luacov (20-40x slower) it was
+-- what pushed this script to the 40 minute CI limit. Hop to `rest` metres from
+-- the target and fly the last stretch for real.
+local function hop(target, rest)
+  local p = get().ship
+  local d = vec.dist(p.pos, target)
+  if d > rest then
+    local k = rest / d
+    p.pos = { target[1] + (p.pos[1] - target[1]) * k, target[2] + (p.pos[2] - target[2]) * k,
+              target[3] + (p.pos[3] - target[3]) * k }
+  end
+end
+
 -- fetch the Echo waiting at a site (the Seat for guarded derelicts)
 local function fetch(site, size)
   local ruin, origin = game.ruin(site), T.state().sector.sites[site].pos
@@ -29,7 +43,9 @@ local function fetch(site, size)
   T.assert(ap.take_helm(T, 1, get), "at the helm")
   -- cross open space in the Villa (fast), reconfigure at the entry
   T.assert(ap.resize(T, 1, get, 1), "the Villa for the trip")
-  T.assert(ap.travel(T, 1, get, ap.route(ruin, origin, room, size)[1].pos, 4, 60 * 150), "flew to site " .. site)
+  local entry = ap.route(ruin, origin, room, size)[1].pos
+  hop(entry, 300)
+  T.assert(ap.travel(T, 1, get, entry, 4, 60 * 150), "flew to site " .. site)
   local ok, route = ap.enter(T, 1, get, ruin, origin, room, size)
   T.assert(ok, "flew into site " .. site .. "'s Echo room (at " .. vec.dist(get().ship.pos, route[1].pos) .. " m from the entry, size " .. get().ship.size .. ", room " .. room .. ")")
   local door = ap.door_center(ap.door_of(ruin, room), ruin.rooms, ruinm.kit_of(ruin.kit), origin)
@@ -79,7 +95,9 @@ T.assert(not mystery.decodable(m(), 3), "the Key is not decoded, it is carried")
 -- the Resonant vault opens to the Key
 local vp = T.state().vault.pos
 T.assert(ap.resize(T, 1, get, 1), "the Villa for the trip")
-T.assert(ap.travel(T, 1, get, { vp[1], vp[2] + 2, vp[3] - 40 }, 4, 60 * 120), "flew to the Resonant vault")
+local vault_approach = { vp[1], vp[2] + 2, vp[3] - 40 }
+hop(vault_approach, 300)
+T.assert(ap.travel(T, 1, get, vault_approach, 4, 60 * 120), "flew to the Resonant vault")
 T.assert(ap.wait_until(T, 1, function() return m().vault_open end, 120), "the vault opened")
 T.assert(m().solved, "the chain is solved")
 T.assert(said("Resonant vault opens"), "vault message")
