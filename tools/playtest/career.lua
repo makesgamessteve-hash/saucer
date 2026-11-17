@@ -16,12 +16,19 @@ local function career(pl, pol)
   while not BOT.B.time_up() do
     if BOT.agree_if_asked(pl) then visited[S().sector_id] = true end
     if pol.mystery then BOT.mystery_step(pl) end
+    -- co-op twin vault: the partner holds an anchor open
+    if #S().players > 1 and not pol.follower and BOT.twin_take(pl) then ev(pl, "twin", "taken") end
     if BOT.B.time_up() then break end
     local list = BOT.site_order(pl)
     if pol.pick then list = pol.pick(list) end
     if #list == 0 and pol.follower then
       -- co-op follower: wait for the partner to propose the next fold jump
       local tw = BOT.tick()
+      if not pol.twin_tried or pol.twin_tried ~= S().sector_id then
+        pol.twin_tried = S().sector_id
+        BOT.twin_hold(pl)
+      end
+      if not get().ready_fold then BOT.ready_fold(pl, true) end
       BOT.B.wait(60 * 5)
       pol.waited = (pol.waited or 0) + (BOT.tick() - tw)
       if (pol.waited // 3600) ~= ((pol.waited - 300) // 3600) then ev(pl, "waiting_partner", string.format("%d ticks so far", pol.waited)) end

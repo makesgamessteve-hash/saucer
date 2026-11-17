@@ -18,6 +18,9 @@ local sentry = require("sim.sentry")
 local galaxy = require("sim.galaxy")
 local panel = require("sim.panel")
 local vec = require("lib.vec")
+local upgrades = require("sim.upgrades")
+local trade = require("sim.trade")
+local twin = require("sim.twin")
 
 local LIMIT = CFG.limit or 108000
 local NET = saucer.net and saucer.net.status and saucer.net.status() or nil
@@ -228,23 +231,28 @@ local function sealed(site, c)
   -- (the generic dive leaves strongrooms alone; run08 flies into them)
   return s and s.strong and true or false
 end
-local function open_filter(site, want)
-  return function(c) return not sealed(site, c) and (not want or want(c)) end
+-- twin vault parts (anchor, vault) are only for the co-op twin routine below
+local function twin_part(c) return c.kind == "anchor" or c.kind == "twin" end
+local function open_filter(site, want, twin_ok)
+  return function(c)
+    if twin_part(c) and (not twin_ok or c.sealed) then return false end
+    return not sealed(site, c) and (not want or want(c))
+  end
 end
 
-local function cands(pl, site)
+local function cands(pl, site, twin_ok)
   local p = P(pl)()
   local out = {}
   for _, c in ipairs(tractor.candidates(S(), p, site, game.ruin(site))) do
-    if not sealed(site, c) then out[#out + 1] = c end
+    if not sealed(site, c) and (not twin_part(c) or (twin_ok and not c.sealed)) then out[#out + 1] = c end
   end
   return out
 end
 
 -- rooms with something this player could take, by room id
-local function rooms_with_loot(pl, site, want)
+local function rooms_with_loot(pl, site, want, twin_ok)
   local by = {}
-  for _, c in ipairs(cands(pl, site)) do
+  for _, c in ipairs(cands(pl, site, twin_ok)) do
     if c.room and (not want or want(c)) then
       by[c.room] = by[c.room] or { n = 0, big = 0, value = 0, echo = false }
       local r = by[c.room]
@@ -288,7 +296,7 @@ local function out_of(ruin, origin, a, min_size)
   return out
 end
 
-local function hold_free(pl) return configs.all().hold_slots - #P(pl)().hold end
+local function hold_free(pl) return upgrades.hold_slots(P(pl)()) - #P(pl)().hold end
 
 -- the bot watches for a Fold Retreat while it flies a dive
 local function retreats(pl)
@@ -366,7 +374,7 @@ local function dive(pl, site, opts)
   local st = S()
   local ruin, origin = game.ruin(site), st.sector.sites[site].pos
   local guarded = #game.sentries(site) > 0
-  local rooms = rooms_with_loot(pl, site, opts.want)
+  local rooms = rooms_with_loot(pl, site, opts.want, opts.twin)
   local villa_rooms, seat_rooms = {}, {}
   for id, r in pairs(rooms) do
     local seat = needs_seat(ruin, origin, id)
@@ -422,7 +430,7 @@ local function dive(pl, site, opts)
       do
         local before = #get().hold
         local tg = tick()
-        local n = ap.grab(B, pl, get, site, ruin, room, nil, open_filter(site, opts.want))
+        local n = ap.grab(B, pl, get, site, ruin, room, nil, open_filter(site, opts.want, opts.twin))
         ev(pl, "grab", string.format("site %d room %d n %d ticks %d", site, room, n, tick() - tg))
         got = got + n
         ev(pl, "room", string.format("site %d room %d size %d got %d hold %d", site, room, get().ship.size, n, #get().hold))
@@ -445,6 +453,11 @@ local function dive(pl, site, opts)
       if get().ship.size == 2 then visit(seat_rooms, 2) end
     end
   end)
+  if opts.hold_until and retreats(pl) == r0 then
+    -- co-op twin vault: hover by the anchor (claim released so the partner can come in)
+    claims[pl] = nil
+    opts.hold_until()
+  end
   if retreats(pl) > r0 then
     ev(pl, "retreat", string.format("site %d hull gave out, hold %d", site, #get().hold))
   elseif cur ~= 0 then
@@ -505,6 +518,7 @@ local function trader_idx_pos(pl)
 end
 
 -- dock, deliver requests, sell, buy what the style wants, refill, repair
+local story_logged = {}
 local function trade_run(pl, policy)
   policy = policy or {}
   local get = P(pl)
@@ -527,11 +541,21 @@ local function trade_run(pl, policy)
     if not pick_enabled(pl, "Request: ") or #get().hold >= before then break end
     delivered = delivered + 1
   end
+  -- co-op party requests: everyone brings part of the order
+  for _ = 1, 3 do
+    local before = #get().hold
+    if not pick_enabled(pl, "Party request: ", " - bring ") or #get().hold >= before then break end
+    delivered = delivered + 1
+    ev(pl, "party_request", "delivered")
+  end
   for _ = 1, 14 do
     local p = get()
     local sellable
     for _, it in ipairs(p.hold) do
-      if items.sellable(it) and not it.home and not (policy.keep and policy.keep(it)) then sellable = it break end
+      -- the bot heeds the story-item sale warning (data cores, modules, programs)
+      local story = trade.story_warning(it)
+      if story and not story_logged[pl] then story_logged[pl] = true ev(pl, "sell_warning", items.label(it)) end
+      if items.sellable(it) and not it.home and not story and not (policy.keep and policy.keep(it)) then sellable = it break end
     end
     if not sellable then break end
     local before = #p.hold
@@ -540,6 +564,20 @@ local function trade_run(pl, policy)
     sold = sold + 1
   end
   if policy.fold and pick_enabled(pl, "Fold Core tier") then ev(pl, "fold_upgrade", "tier " .. (get().fold_tier or 1)) end
+  -- saucer upgrades, cheapest first, keeping a reserve for refills and tow bills
+  if policy.upgrades ~= false then
+    for _ = 1, 4 do
+      local best
+      for _, d in ipairs(upgrades.list()) do
+        local ok, _, price = upgrades.can_buy(get(), d)
+        if ok and get().credits - price >= (policy.reserve or 150) and (not best or price < best.price) then
+          best = { id = d.id, name = d.name, price = price }
+        end
+      end
+      if not best or not pick_enabled(pl, "Upgrade " .. best.name) then break end
+      ev(pl, "upgrade", string.format("%s %d c level %d", best.id, best.price, upgrades.level(get(), best.id)))
+    end
+  end
   for _, b in ipairs(policy.buy or {}) do
     if get().credits >= (b.min or 0) and pick_enabled(pl, "Buy " .. b.name) then ev(pl, "bought", b.name) end
   end
@@ -580,6 +618,65 @@ local function agree_if_asked(pl)
   return true
 end
 
+-- co-op twin vaults (add-playtest-recs): a site of this sector whose twin vault is still shut
+local function twin_site()
+  local st = S()
+  if not twin.on(st) then return nil end
+  for i = 1, #st.sector.sites do
+    local L = twin.layout(game.ruin(i))
+    local e = st.twins and st.twins[twin.key(i)]
+    if L and not (e and e.done) then return i, L end
+  end
+  return nil
+end
+
+-- the holder: beam the shutter anchor and hover by it until the partner has the vault (or gives up)
+local function twin_hold(pl, max_wait)
+  local site = twin_site()
+  if not site then return false end
+  local get = P(pl)
+  ev(pl, "twin_hold", "site " .. site)
+  local t0 = tick()
+  dive(pl, site, { twin = true, want = function(c) return c.kind == "anchor" end,
+    hold_until = function()
+      if twin.holder(S(), site) ~= get() then ev(pl, "twin_hold_fail", "site " .. site) return end
+      ev(pl, "twin_holding", "site " .. site)
+      ap.wait_until(B, pl, function()
+        local e = S().twins and S().twins[twin.key(site)]
+        return (e and e.done) or twin.holder(S(), site) ~= get()
+      end, max_wait or 60 * 240)
+    end })
+  local e = S().twins and S().twins[twin.key(site)]
+  ev(pl, "twin_hold_end", string.format("site %d done %s ticks %d", site, tostring(e and e.done), tick() - t0))
+  return e and e.done
+end
+
+-- the beamer: a partner holds an anchor open -> go and beam the vault
+local function twin_take(pl)
+  local site = twin_site()
+  if not site then return false end
+  local h = twin.holder(S(), site)
+  if not h or h == P(pl)() then return false end
+  local got = dive(pl, site, { twin = true, want = function(c) return c.kind == "twin" end })
+  ev(pl, "twin_take", string.format("site %d got %d twins %d", site, got, P(pl)().twins or 0))
+  if got > 0 then shot("twin_vault") end
+  return got > 0
+end
+
+-- co-op: say "I'm ready to fold" from the party panel
+local function ready_fold(pl, on)
+  local get = P(pl)
+  if (get().ready_fold == true) == (on ~= false) then return true end
+  ensure_helm(pl)
+  B.press(pl, "map")
+  local ok = ap.pick(B, pl, get, "Party")
+  ok = ok and pick_enabled(pl, on == false and "Not ready to fold" or "I'm ready to fold")
+  if get().panel then ap.pick(B, pl, get, "Close") end
+  if get().panel then ap.pick(B, pl, get, "Close") end
+  ev(pl, "ready_fold", tostring(get().ready_fold))
+  return ok
+end
+
 -- fold jump: open the map and pick the sector by name (co-op: wait for the others)
 local function jump(pl, to)
   local get = P(pl)
@@ -596,6 +693,12 @@ local function jump(pl, to)
   if tick() - tw > 60 then ev(pl, "charge_wait", string.format("%d ticks before the jump", tick() - tw)) end
   B.press(pl, "map")
   local ok = ap.pick(B, pl, get, g.sectors[to].name)
+  if ok and get().panel and get().panel.kind == "fold_warn" then
+    local lines = galaxy.warning(S(), get(), to)
+    ev(pl, "fold_warn", string.format("danger %d lines %d: %s", g.sectors[to].danger, #lines, table.concat(lines, " | ")))
+    shot("fold_warn")
+    ok = ap.pick(B, pl, get, "Fold anyway")
+  end
   if get().panel then ap.pick(B, pl, get, "Close") end
   if not ok then ev(pl, "fail", "map pick " .. g.sectors[to].name) return false end
   local done = ap.wait_until(B, pl, function() return S().sector_id == to end, 60 * (#S().players > 1 and 400 or 60))
@@ -669,6 +772,7 @@ end
 return {
   T = T, B = B, S = S, P = P, ev = ev, shot = shot, spawn = spawn, run_all = run_all, dive = dive, lab = lab,
   trade_run = trade_run, sleep = sleep, jump = jump, site_order = site_order, mystery_step = mystery_step,
+  twin_hold = twin_hold, twin_take = twin_take, twin_site = twin_site, ready_fold = ready_fold,
   ensure_helm = ensure_helm, rooms_with_loot = rooms_with_loot, hold_free = hold_free, tick = tick, LIMIT = LIMIT,
   sealed = sealed, open_filter = open_filter, NET = NET, DELAY = DELAY, unstick = unstick, pick_enabled = pick_enabled, agree_if_asked = agree_if_asked, dump_panel = dump_panel, station = station, travel = travel,
 }
