@@ -709,6 +709,30 @@ local function door(L, id)
   return { parts = {} }
 end
 
+-- add-presentation-packaging: surface materials. Parts get a mat tag (and a
+-- texture scale) after they are built; the renderer draws each material as
+-- its own mesh with a Grok Imagine detail texture multiplied by the part's
+-- colour. Lit trim (emissive) and parts that already have a mat stay as they are.
+local MAT_OF = {
+  table = "wood", wardrobe = "wood", stool = "wood", books = "wood", plant = "wood", hold_rack = "metal",
+  sofa = "fabric", armchair = "fabric", chair = "fabric", rug = "fabric", bed = "fabric", beam_seat = "fabric",
+  counter = "tile", fridge = "tile", shower = "tile", tub = "tile",
+  engine = "metal", console = "metal", helm_desk = "metal", helm_wing = "metal", lab_bench = "metal",
+  terminal = "metal", beam_arm = "metal", cargo_tube = "metal", rail = "metal", tv = "metal",
+  wall = "panel", box = "panel",
+}
+local MAT_UV = { wood = 0.8, fabric = 1.0, tile = 1.25, floor = 0.35, metal = 0.6, panel = 0.45 }
+local function tag(out, n0, mat)
+  if not mat then return end
+  for i = n0 + 1, #out do
+    local p = out[i]
+    if not p.mat and not p.emissive then
+      p.mat = mat
+      p.uv = MAT_UV[mat]
+    end
+  end
+end
+
 -- parts for one fold group (see sim/fold.lua), relative to the group's anchor
 local function group(L, gid)
   local fold = require("sim.fold")
@@ -720,13 +744,17 @@ local function group(L, gid)
   local out = {}
   if gid == "1:deck" then
     floor_strips(out, L)
+    tag(out, 0, "floor")
     lights(out, L, 1)
     dome_frame(out, L)
   elseif gid == "2:deck" then
     local d2 = L.decks[2]
     lower_floor(out, L)
+    tag(out, 0, "floor")
+    local n0 = #out
     out[#out + 1] = P("cylinder", { c = { 0, d2.floor, 0 }, r = d2.radius + 0.2, h = d2.ceiling - d2.floor, seg = 24,
                                     color = { 0.78, 0.76, 0.70 }, open = true })
+    tag(out, n0, "panel")
     for i = 0, 11 do
       local a = sm.tau * (i + 0.5) / 12
       local r = d2.radius + 0.04
@@ -738,8 +766,10 @@ local function group(L, gid)
   elseif gid == "3:deck" then
     belly_room(out, L)
     belly_stairs(out, L)
+    tag(out, 0, "metal")
   elseif gid == "1:Stairs" then
     stairs(out, L)
+    tag(out, 0, "wood")
     stair_rails(out, L)
   elseif gid == "2:Holodeck" then
     holo_room(out, L)
@@ -748,7 +778,11 @@ local function group(L, gid)
   for _, f in ipairs(L.furniture) do
     local cx, cz
     if f.circle then cx, cz = f.circle[1], f.circle[2] else cx, cz = (f.box[1] + f.box[3]) / 2, (f.box[2] + f.box[4]) / 2 end
-    if fold.group_of(L, f.deck, cx, cz) == gid then (BUILD[f.kind] or BUILD.box)(out, f, L.decks[f.deck].floor) end
+    if fold.group_of(L, f.deck, cx, cz) == gid then
+      local n0 = #out
+      ;(BUILD[f.kind] or BUILD.box)(out, f, L.decks[f.deck].floor)
+      tag(out, n0, f.mat or MAT_OF[f.kind])
+    end
   end
   local a = g.anchor
   return { parts = kit.transform(out, { pos = { -a[1], -a[2], -a[3] } }) }

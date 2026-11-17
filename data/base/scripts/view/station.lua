@@ -13,6 +13,7 @@ local sg = require("sim.stationgen")
 local visit = require("sim.visit")
 local configs = require("sim.config")
 local vec = require("lib.vec")
+local assets = require("view.assets")
 local sm = saucer.math
 local M = {}
 
@@ -30,6 +31,9 @@ local WALL_TINT = { market = { 1.0, 0.9, 0.75 }, bar = { 0.62, 0.45, 0.66 }, han
 local FLOOR_TINT = { market = { 0.55, 0.45, 0.35 }, bar = { 0.4, 0.24, 0.22 }, hangar = { 0.36, 0.38, 0.42 },
                      corridor = { 0.45, 0.45, 0.5 } }
 local HAZARD = { 1.0, 0.72, 0.1 }
+-- add-presentation-packaging: the floor tints were picked for the old plain
+-- texture; the tread-plate art is darker, so floors are lifted by this much
+local ART_FLOOR = 2.0
 
 local function box(x0, y0, z0, x1, y1, z1, color, extra)
   local p = { kind = "box", min = { math.min(x0, x1), math.min(y0, y1), math.min(z0, z1) },
@@ -138,8 +142,8 @@ function M.shell_parts(L)
     local b = a.box
     local wt = WALL_TINT[a.kind] or { 1, 1, 1 }
     local tint = { wall_c[1] * wt[1], wall_c[2] * wt[2], wall_c[3] * wt[3] }
-    parts[#parts + 1] = box(b[1], -0.25, b[2], b[3], 0, b[4], FLOOR_TINT[a.kind] or FLOOR, { uv = 0.25 })
-    parts[#parts + 1] = box(b[1], a.h, b[2], b[3], a.h + 0.3, b[4], shade(tint, 0.7), { uv = uv })
+    parts[#parts + 1] = box(b[1], -0.25, b[2], b[3], 0, b[4], FLOOR_TINT[a.kind] or FLOOR, { uv = 0.25, mat = "floor" })
+    parts[#parts + 1] = box(b[1], a.h, b[2], b[3], a.h + 0.3, b[4], shade(tint, 0.7), { uv = uv, mat = "ceiling" })
   end
   for _, s in ipairs(M.wall_segments(L)) do
     local mn, mx = seg_box(s, 0, s.h, sg.WALL)
@@ -424,7 +428,23 @@ function M.meshes(L)
   if hit then return hit end
   local shell = M.shell_parts(L)
   local det = M.detail_parts(L)
+  -- add-presentation-packaging: floors and walls get their own textures
+  local floors, walls, ceilings = {}, {}, {}
+  local kc = sg.kit().color
+  for _, q in ipairs(shell) do
+    if q.mat == "floor" then
+      floors[#floors + 1] = { kind = q.kind, min = q.min, max = q.max, uv = 0.3, color = vec.scale(q.color, ART_FLOOR) }
+    elseif q.mat == "ceiling" then
+      ceilings[#ceilings + 1] = { kind = q.kind, min = q.min, max = q.max, uv = 0.25, color = { 0.45, 0.45, 0.5 } }
+    else
+      -- the hall art has its own colours: keep the area tint, drop the kit's rust
+      local c = { q.color[1] / kc[1], q.color[2] / kc[2], q.color[3] / kc[3] }
+      walls[#walls + 1] = { kind = q.kind, min = q.min, max = q.max, uv = 0.1, color = vec.scale(c, 0.9) }
+    end
+  end
   hit = { shell = saucer.mesh.build({ parts = shell }), detail = saucer.mesh.build({ parts = det }),
+          floor = saucer.mesh.build({ parts = floors }), walls = saucer.mesh.build({ parts = walls }),
+          ceiling = saucer.mesh.build({ parts = ceilings }),
           nshell = #shell, ndetail = #det }
   cache[L.hash] = hit
   return hit
@@ -469,8 +489,78 @@ function M.morph_pose(state, p, L, hand)
   return nil
 end
 
-function M.draw_folk(v, A, state, p, L)
+-- add-presentation-packaging: shop signs over the stalls (Grok Imagine
+-- decals) and a crowd of sprite folk browsing the market and standing about
+-- the bar and concourse. Render-only, placed from the layout hash.
+M.SIGN_OF = { scrap = "sign_scrap", chandler = "sign_scrap", curio = "sign_gems", archive = "sign_gems",
+              outfit = "sign_gems", grocer = "sign_food" }
+M.FOLK_SPRITES = { "folk_1", "folk_2", "folk_3", "folk_4" }
+M.CROWD = { market = 6, bar = 3, corridor = 2, hangar = 1 }
+
+M.decal = assets.decal
+
+function M.signs(v, A, L)
   local n = 0
+  for _, s in ipairs(L.stalls) do
+    local tex = A.tex[M.SIGN_OF[s.vendor] or ""]
+    if tex then
+      local dir = s.yaw == 0 and 1 or -1
+      M.decal(v, A, tex, A.pal.sprites, { s.keeper[1], 3.35, s.keeper[2] - dir * 0.6 }, s.yaw, 1.6, 1.6)
+      n = n + 1
+    end
+  end
+  if L.bar and A.tex.sign_bar then
+    local b = L.bar
+    local back = { -sm.sin(b.yaw), sm.cos(b.yaw) }
+    M.decal(v, A, A.tex.sign_bar, A.pal.sprites, { b.keeper[1] - back[1] * 1.2, 3.1, b.keeper[2] - back[2] * 1.2 },
+            b.yaw, 1.5, 1.5)
+    n = n + 1
+  end
+  return n
+end
+
+-- deterministic crowd spots for a layout -> list of { pos = {x, z}, sprite, phase }
+local crowds = {} -- by layout hash (render-side only, never in the state)
+function M.crowd(L)
+  if crowds[L.hash] then return crowds[L.hash] end
+  local out = {}
+  local seed = 0
+  for i = 1, #(L.hash or "") do seed = (seed * 31 + L.hash:byte(i)) % 2147483647 end
+  local rng = saucer.rng.new(seed + 1)
+  for _, a in ipairs(L.areas) do
+    local b = a.box
+    local want, tries = M.CROWD[a.kind] or 0, 0
+    while want > 0 and tries < 40 do
+      tries = tries + 1
+      local x = b[1] + 1.5 + rng:float() * math.max(0, b[3] - b[1] - 3)
+      local z = b[2] + 1.5 + rng:float() * math.max(0, b[4] - b[2] - 3)
+      if sg.free(L, x, z, 0.6) then
+        want = want - 1
+        out[#out + 1] = { pos = { x, z }, sprite = M.FOLK_SPRITES[rng:int(1, #M.FOLK_SPRITES)], phase = rng:float() * 6.28,
+                          area = a.kind }
+      end
+    end
+  end
+  crowds[L.hash] = out
+  return out
+end
+
+function M.draw_crowd(v, A, state, L)
+  local n = 0
+  for _, c in ipairs(M.crowd(L)) do
+    local tex = A.tex[c.sprite]
+    if tex then
+      local sway = 0.15 * sm.sin(state.tick * 0.01 + c.phase)
+      v:billboard(tex, { c.pos[1] + sway, 0.92 + 0.02 * sm.sin(state.tick * 0.05 + c.phase), c.pos[2] }, 0.92,
+                  { palette = A.pal.sprites, height = 1.84, tint = { 0.85, 0.85, 0.85, 1 } })
+      n = n + 1
+    end
+  end
+  return n
+end
+
+function M.draw_folk(v, A, state, p, L)
+  local n = M.signs(v, A, L) + M.draw_crowd(v, A, state, L)
   local tick = state.tick
   local function npc(sp, x, z, yaw, y)
     local m = A.npc[sp] or A.npc[1]
@@ -533,8 +623,13 @@ function M.render(v, state, p)
     v:billboard(A.tex.nebula, { c[1] + dir[1] * 900, 120, c[2] + dir[3] * 900 }, 700,
                 { palette = A.pal.base, tint = { 0.8, 0.7, 1, 0.9 } })
   end
-  local tex = assets.kit_texture(A, sg.kit())
-  v:mesh(ms.shell, { tex = tex, palette = A.pal.base })
+  if A.tex.station_hall and ms.walls then
+    v:mesh(ms.walls, { tex = A.tex.station_hall, palette = A.pal.kits })
+    v:mesh(ms.floor, { tex = A.tex.floor_station, palette = A.pal.kits })
+    v:mesh(ms.ceiling, { tex = A.tex.mat_metal, palette = A.pal.interior })
+  else
+    v:mesh(ms.shell, { tex = assets.kit_texture(A, sg.kit()), palette = A.pal.base })
+  end
   v:mesh(ms.detail, { palette = A.pal.base })
   local n = 4
   -- the force fields across the hangar mouths

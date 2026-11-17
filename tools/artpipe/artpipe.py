@@ -90,6 +90,50 @@ GENERATED = [
 ]
 
 
+# add-presentation-packaging (milestone 6): the art pass. Each extra palette
+# file holds one 256-colour palette; entries in it get consecutive index
+# ranges ("colors" each). Options: crop (box or "cell": (col, row, n)), size
+# (w, h) or fit (max w, max h, trimmed to the subject's bounding box), gain,
+# saturation, contrast, mean (rescale so the mean luminance hits this; for
+# detail textures multiplied by vertex colours), cutout (luminance below ->
+# transparent), key (an RGB chroma key colour and its distance), flip (top row
+# last, for decals whose v runs bottom-up).
+MAT = dict(colors=40, size=(64, 64), saturation=0.25, contrast=0.55, mean=0.86)
+ART = {
+    "authored/palettes/interior.png": [
+        dict(MAT, id="mat_wood", saturation=0.45, mean=0.9),
+        dict(MAT, id="mat_fabric", contrast=1.6, size=(32, 32)),
+        dict(MAT, id="mat_tile", crop=(0, 0, 512, 512), contrast=0.9, size=(32, 32)),
+        dict(MAT, id="mat_floor", crop=(0, 0, 512, 512), contrast=1.0),
+        dict(MAT, id="mat_metal", saturation=0.1, contrast=0.7),
+        dict(MAT, id="mat_panel", crop=(0, 0, 512, 512), contrast=0.8, colors=35),
+    ],
+    "authored/palettes/kits.png": [
+        dict(id="floor_starship", colors=63, size=(64, 64), crop=(0, 0, 512, 512), gain=1.9, contrast=0.7),
+        dict(id="floor_station", colors=63, size=(64, 64), gain=1.35, saturation=0.6),
+        dict(id="floor_city", colors=63, size=(64, 64), crop=(0, 0, 512, 512), gain=1.05),
+        dict(id="station_hall", colors=63, size=(128, 128), contrast=0.6, saturation=0.7),
+    ],
+    "authored/palettes/sky.png": [
+        dict(id="nebula_b", colors=100, size=(128, 128), cutout=18),
+        dict(id="planet", colors=80, fit=(96, 96), cutout=12),
+        dict(id="galaxy", colors=75, fit=(96, 96), cutout=14),
+    ],
+    "authored/palettes/sprites.png": [
+        dict(id="folk_1", src="folk_sheet", crop=("cell", 0, 0, 2), colors=30, fit=(40, 80), key=((255, 0, 255), 230)),
+        dict(id="folk_2", src="folk_sheet", crop=("cell", 1, 0, 2), colors=30, fit=(40, 80), key=((255, 0, 255), 230)),
+        dict(id="folk_3", src="folk_sheet", crop=("cell", 0, 1, 2), colors=30, fit=(40, 80), key=((255, 0, 255), 230)),
+        dict(id="folk_4", src="folk_sheet", crop=("cell", 1, 1, 2), colors=30, fit=(40, 80), key=((255, 0, 255), 230)),
+        dict(id="sign_food", src="signs", crop=("cell", 0, 0, 2), colors=16, fit=(48, 48), cutout=20, flip=True),
+        dict(id="sign_scrap", src="signs", crop=("cell", 1, 0, 2), colors=16, fit=(48, 48), cutout=20, flip=True),
+        dict(id="sign_gems", src="signs", crop=("cell", 0, 1, 2), colors=16, fit=(48, 48), cutout=20, flip=True),
+        dict(id="sign_bar", src="signs", crop=("cell", 1, 1, 2), colors=16, fit=(48, 48), cutout=20, flip=True),
+        dict(id="glyphs", colors=8, size=(128, 128), cutout=40),
+        dict(id="title_emblem", colors=47, fit=(128, 128), cutout=14),
+    ],
+}
+
+
 def lua_str(s):
     return '"' + s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n") + '"'
 
@@ -138,6 +182,98 @@ def build_generated(palette):
         out.save(path, optimize=True)
         metas.append(g)
     return metas
+
+
+def _trim(img, mask):
+    """bounding box of the opaque pixels of mask (a list of bools) in img"""
+    w, h = img.size
+    xs = [i % w for i, m in enumerate(mask) if m]
+    ys = [i // w for i, m in enumerate(mask) if m]
+    if not xs:
+        return (0, 0, w, h)
+    return (min(xs), min(ys), max(xs) + 1, max(ys) + 1)
+
+
+def build_art(entry):
+    """one art-pass entry -> (index list, colours, size); colours are RGB"""
+    src = os.path.join(ROOT, "art", "src", "generated", entry.get("src", entry["id"]) + "_src.jpg")
+    img = Image.open(src).convert("RGB")
+    crop = entry.get("crop")
+    if crop and crop[0] == "cell":
+        _, cx, cy, n = crop
+        cw, ch = img.size[0] // n, img.size[1] // n
+        img = img.crop((cx * cw, cy * ch, (cx + 1) * cw, (cy + 1) * ch))
+    elif crop:
+        img = img.crop(crop)
+
+    def opaque(im):
+        px = list(im.getdata())
+        out = [True] * len(px)
+        if entry.get("cutout") is not None:
+            out = [o and (r * 299 + g * 587 + b * 114) // 1000 >= entry["cutout"] for o, (r, g, b) in zip(out, px)]
+        if entry.get("key"):
+            (kr, kg, kb), dist = entry["key"]
+            out = [o and abs(r - kr) + abs(g - kg) + abs(b - kb) > dist and not (r > 140 and b > 140 and g < 110)
+                   for o, (r, g, b) in zip(out, px)]
+        return out
+
+    if entry.get("fit"):
+        small = img.resize((img.size[0] // 4, img.size[1] // 4), Image.Resampling.BOX)
+        x0, y0, x1, y1 = _trim(small, opaque(small))
+        pad = 1
+        img = img.crop((max(0, (x0 - pad) * 4), max(0, (y0 - pad) * 4), min(img.size[0], (x1 + pad) * 4),
+                        min(img.size[1], (y1 + pad) * 4)))
+        mw, mh = entry["fit"]
+        k = min(mw / img.size[0], mh / img.size[1])
+        size = (max(1, round(img.size[0] * k)), max(1, round(img.size[1] * k)))
+    else:
+        size = entry["size"]
+    img = img.resize(size, Image.Resampling.BOX)
+    if entry.get("gain"):
+        img = ImageEnhance.Brightness(img).enhance(entry["gain"])
+    if entry.get("saturation") is not None:
+        img = ImageEnhance.Color(img).enhance(entry["saturation"])
+    if entry.get("contrast") is not None:
+        img = ImageEnhance.Contrast(img).enhance(entry["contrast"])
+    if entry.get("mean"):
+        lum = [(r * 299 + g * 587 + b * 114) / 255000 for r, g, b in img.getdata()]
+        m = sum(lum) / len(lum)
+        img = ImageEnhance.Brightness(img).enhance(entry["mean"] / max(m, 1e-3))
+    mask = opaque(img)
+    if entry.get("flip"):
+        img = img.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
+        w = size[0]
+        mask = [mask[(size[1] - 1 - i // w) * w + i % w] for i in range(len(mask))]
+    q = img.quantize(colors=entry["colors"], method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
+    pal = q.getpalette()[: 3 * entry["colors"]]
+    pal += [0] * (3 * entry["colors"] - len(pal))
+    idx = [i if m else -1 for i, m in zip(q.getdata(), mask)]
+    colors = [tuple(pal[3 * i: 3 * i + 3]) for i in range(entry["colors"])]
+    return idx, colors, size
+
+
+def build_art_pass():
+    """-> list of (texture rel path, entry, palette rel path)"""
+    out = []
+    for pal_rel, entries in ART.items():
+        palette = [(0, 0, 0, 0)] + [(0, 0, 0, 255)] * 255
+        lo = 1
+        for e in entries:
+            idx, colors, size = build_art(e)
+            if lo + len(colors) - 1 > 255:
+                raise SystemExit("artpipe: palette %s is full at %s" % (pal_rel, e["id"]))
+            for i, c in enumerate(colors):
+                palette[lo + i] = c + (255,)
+            img = Image.new("L", size)
+            img.putdata([0 if i < 0 else lo + i for i in idx])
+            rel = "generated/textures/%s.png" % e["id"]
+            img.save(os.path.join(BASE, rel), optimize=True)
+            out.append((rel, e, pal_rel))
+            lo += len(colors)
+        im = Image.new("RGBA", (256, 1))
+        im.putdata(palette)
+        im.save(os.path.join(BASE, pal_rel), optimize=True)
+    return out
 
 
 def sprite(size, fn):
@@ -254,6 +390,7 @@ def build():
     sprites = build_sprites(palette)
     pal = build_palette(palette)
     sounds = build_sounds()
+    art = build_art_pass()
     attrib = []
     for g in gens:
         e = log[g["prompt_id"]]
@@ -263,12 +400,28 @@ def build():
             "source_file": g["src"], "processing": "crop/resize/median-cut quantize to palette region " + g["region"],
         })
         attrib.append(("data/base/" + g["out"], "LicenseRef-xAI-Output", "Created with Grok (%s), prompt %s" % (e["tool"], e["id"])))
+    for rel, g, pal_rel in art:
+        src = g.get("src", g["id"])
+        e = log["2026-11-17-%s-01" % src.replace("_", "-")]
+        write_meta(rel, {
+            "license": "LicenseRef-xAI-Output", "source": "generated", "tool": e["tool"], "model": e["model"],
+            "prompt_id": e["id"], "prompt": e["prompt"], "date": e["date"], "attribution": "Created with Grok",
+            "source_file": "art/src/generated/%s_src.jpg" % src,
+            "processing": "crop/resize/median-cut quantize to %d colours of %s" % (g["colors"], pal_rel),
+            "palette": pal_rel,
+        })
+        attrib.append(("data/base/" + rel, "LicenseRef-xAI-Output", "Created with Grok (%s), prompt %s" % (e["tool"], e["id"])))
+    for rel in list(dict.fromkeys(a[2] for a in art)):
+        write_meta(rel, {"license": "CC-BY-4.0", "source": "code", "author": AUTHOR,
+                         "generator": "tools/artpipe/artpipe.py",
+                         "notes": "colours picked by median-cut from Grok Imagine sources; the palette itself is code output"})
+        attrib.append(("data/base/" + rel, "CC-BY-4.0", "code-generated by tools/artpipe/artpipe.py, " + AUTHOR))
     for rel in sprites + [pal] + sounds:
         write_meta(rel, {"license": "CC-BY-4.0", "source": "code", "author": AUTHOR,
                          "generator": "tools/artpipe/artpipe.py"})
         attrib.append(("data/base/" + rel, "CC-BY-4.0", "code-generated by tools/artpipe/artpipe.py, " + AUTHOR))
     write_attribution(attrib, log)
-    print("artpipe: %d generated, %d code-generated assets" % (len(gens), len(sprites) + len(sounds) + 1))
+    print("artpipe: %d generated, %d code-generated assets" % (len(gens) + len(art), len(sprites) + len(sounds) + 1 + len(ART)))
 
 
 def write_attribution(attrib, log):

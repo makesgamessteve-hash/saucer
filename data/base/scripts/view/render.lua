@@ -568,6 +568,10 @@ function M.rooms(v, A, o, d, state)
       local lp, sc = fold.transform(g, a, { eye[1], g.anchor[2], eye[3] })
       local opts = { pos = at(d, lp), yaw = d.yaw, roll = d.roll, scale = { sc[1] * d.scale, sc[2] * d.scale, sc[3] * d.scale } }
       v:mesh(m, opts)
+      for _, mm in ipairs(A.group_mats and A.group_mats[g.id] or {}) do
+        v:mesh(mm.mesh, { pos = opts.pos, yaw = opts.yaw, roll = opts.roll, scale = opts.scale,
+                          tex = A.tex["mat_" .. mm.mat], palette = A.pal.interior })
+      end
       if a > 0 then
         -- fold-space shimmer around a room while it packs
         v:mesh(m, { pos = opts.pos, yaw = d.yaw, roll = d.roll, scale = { opts.scale[1] * 1.04, opts.scale[2] * 1.04 + 0.02,
@@ -678,6 +682,28 @@ local function draw_saucer(v, A, o, own_eyes, state, xr, cam)
   end
 end
 
+-- add-presentation-packaging: the sky backdrop. Two nebulae, a ringed gas
+-- giant and a far galaxy, all Grok Imagine sprites that ride with the eye so
+-- they never get closer. -> number of sprites drawn
+M.SKY = {
+  { tex = "nebula", pal = "base", at = { 700, 160, 520 }, size = 900, tint = { 0.8, 0.7, 1, 0.9 } },
+  { tex = "nebula_b", pal = "sky", at = { -820, -120, -300 }, size = 760, tint = { 1, 0.9, 0.85, 0.85 } },
+  { tex = "planet", pal = "sky", at = { -380, 260, 760 }, size = 210, tint = { 1, 1, 1, 1 } },
+  { tex = "galaxy", pal = "sky", at = { 860, -260, -420 }, size = 260, tint = { 0.9, 0.9, 1, 0.8 } },
+}
+function M.sky(v, A, eye)
+  local n = 0
+  for _, s in ipairs(M.SKY) do
+    local tex = A.tex[s.tex]
+    if tex then
+      v:billboard(tex, { eye[1] + s.at[1], eye[2] + s.at[2], eye[3] + s.at[3] }, s.size,
+                  { palette = A.pal[s.pal] or A.pal.base, tint = s.tint })
+      n = n + 1
+    end
+  end
+  return n
+end
+
 M.FOG = 0.0009
 M.DETAIL_DIST = 480   -- add-detail-pass: chunks nearer than this also draw their detail mesh
 M.DETAIL_BUILDS = 6   -- at most this many detail meshes are built per frame (no hitches)
@@ -702,6 +728,10 @@ function M.draw_ruins(v, A, state, cam, xr)
   local st = { chunks = 0, culled = 0, lod = 0, detail = 0, built = 0 }
   local function draw_detail(set, ch)
     if vec.dist(ch.center, cam.pos) - ch.radius > M.DETAIL_DIST then return end
+    for _, g in ipairs(ch.glyphs or {}) do
+      assets.decal(v, A, A.tex.glyphs, A.pal.sprites, g.c, g.yaw, g.w, g.w, { 0.8, 1, 1, 1 })
+      st.glyphs = (st.glyphs or 0) + 1
+    end
     if ch.detail == nil then
       if st.built >= M.DETAIL_BUILDS then return end
       st.built = st.built + 1
@@ -717,6 +747,7 @@ function M.draw_ruins(v, A, state, cam, xr)
     if r then
       local set = assets.ruin_chunks(r, site.pos)
       local tex = assets.kit_texture(A, set.kit)
+      local ftex = assets.floor_texture(A, set.kit)
       local lod = set.lod
       local far = vec.dist(lod.center, cam.pos) - lod.radius > M.LOD_DIST
       if far then
@@ -730,6 +761,7 @@ function M.draw_ruins(v, A, state, cam, xr)
         for _, ch in ipairs(set.chunks) do
           if M.visible(cam, ch.center, ch.radius, xr) then
             v:mesh(ch.mesh, { tex = tex, palette = A.pal.base })
+            if ch.floor then v:mesh(ch.floor, { tex = ftex or tex, palette = ftex and A.pal.kits or A.pal.base }) end
             st.chunks = st.chunks + 1
             draw_detail(set, ch)
           else
@@ -767,11 +799,7 @@ function M.render(v, state, alpha)
   v:fog({ color = { 0.02, 0.02, 0.06 }, density = M.FOG, clear = { 0.0, 0.0, 0.025 }, light = { 0.35, 0.8, 0.45 },
           ambient = 0.55 })
   v:mesh(A.stars, { pos = cam.pos, sky = true })
-  -- distant nebula sprites
-  v:billboard(A.tex.nebula, { cam.pos[1] + 700, cam.pos[2] + 160, cam.pos[3] + 520 }, 900,
-              { palette = A.pal.base, tint = { 0.8, 0.7, 1, 0.9 } })
-  v:billboard(A.tex.nebula, { cam.pos[1] - 820, cam.pos[2] - 120, cam.pos[3] - 300 }, 700,
-              { palette = A.pal.base, tint = { 1, 0.6, 0.5, 0.8 } })
+  M.sky(v, A, cam.pos)
   -- derelicts, in chunks: culled against the view, far sites as one silhouette
   M.draw_ruins(v, A, state, cam, v.xr)
   v:mesh(A.station, { pos = state.sector.trader.pos, yaw = state.tick * 0.002 })

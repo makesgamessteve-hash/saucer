@@ -11,6 +11,35 @@ local cache = { saucer = {}, ruin = {} }
 M.cache = cache
 
 function M.palette(name) return saucer.render.palette(name) end
+
+-- add-presentation-packaging: every texture of the art pass (see tools/artpipe)
+M.ART_TEXTURES = {
+  "mat_wood", "mat_fabric", "mat_tile", "mat_floor", "mat_metal", "mat_panel",
+  "floor_starship", "floor_station", "floor_city", "station_hall",
+  "nebula_b", "planet", "galaxy",
+  "folk_1", "folk_2", "folk_3", "folk_4", "sign_food", "sign_scrap", "sign_gems", "sign_bar", "glyphs", "title_emblem",
+}
+M.MATS = { "wood", "fabric", "tile", "floor", "metal", "panel" }
+
+-- a recipe whose parts carry mat tags -> the mesh of the untagged parts and a
+-- list of { mat = name, mesh = id } (one mesh per material that is used)
+function M.split_mats(recipe)
+  local by, base = {}, {}
+  for _, p in ipairs(recipe.parts) do
+    if p.mat then
+      by[p.mat] = by[p.mat] or {}
+      local list = by[p.mat]
+      list[#list + 1] = p
+    else
+      base[#base + 1] = p
+    end
+  end
+  local mats = {}
+  for _, m in ipairs(M.MATS) do
+    if by[m] then mats[#mats + 1] = { mat = m, mesh = saucer.mesh.build({ parts = by[m] }) } end
+  end
+  return saucer.mesh.build({ parts = base }), mats
+end
 function M.texture(path) return saucer.render.texture(path) end
 
 function M.init()
@@ -18,6 +47,11 @@ function M.init()
   cache.pal = {
     base = M.palette("authored/palettes/base.png"),
   }
+  -- add-presentation-packaging: the art pass palettes (one 256-colour row each)
+  cache.pal.interior = M.palette("authored/palettes/interior.png")
+  cache.pal.kits = M.palette("authored/palettes/kits.png")
+  cache.pal.sky = M.palette("authored/palettes/sky.png")
+  cache.pal.sprites = M.palette("authored/palettes/sprites.png")
   cache.tex = {
     hull = M.texture("generated/textures/hull_plating.png"),
     nebula = M.texture("generated/textures/nebula.png"),
@@ -30,6 +64,9 @@ function M.init()
     kit_station = M.texture("generated/textures/kit_station.png"),
     kit_city = M.texture("generated/textures/kit_city.png"),
   }
+  for _, id in ipairs(M.ART_TEXTURES) do cache.tex[id] = M.texture("generated/textures/" .. id .. ".png") end
+  cache.decal = saucer.mesh.build({ parts = { { kind = "box", min = { 0, 0, 0 }, max = { 1, 1, 0.02 }, color = { 1, 1, 1 },
+                                                uv = 1, emissive = 0.6 } } })
   cache.stars = saucer.mesh.build({ parts = { { kind = "stars", count = 1400, r = 900, size = 2.2, seed = 7 } } })
   cache.station = kit.build("station", {}, 11)
   cache.cache_mesh = kit.build("loot_cache", { size = 1 }, 1)
@@ -70,8 +107,9 @@ function M.init()
   local avatar = require("sim.avatar")
   local L = avatar.layout()
   cache.groups = {}
+  cache.group_mats = {}
   for _, g in ipairs(fold.groups(L)) do
-    cache.groups[g.id] = kit.build("interior", { part = "group", group = g.id }, 1)
+    cache.groups[g.id], cache.group_mats[g.id] = M.split_mats(kit.recipe("interior", { part = "group", group = g.id }, 1))
   end
   cache.doors = {}
   for i, d in ipairs(L.doors or {}) do cache.doors[i] = kit.build("interior", { part = "door", door = d.id }, 1) end
@@ -290,7 +328,15 @@ function M.ruin_chunks(ruin, origin)
   local function add(list, b, color, uv)
     list[#list + 1] = { kind = "box", min = b[1], max = b[2], color = color, uv = uv }
   end
-  for _, b in ipairs(ruin.walls) do add(by_room[b.room or 1], b, k.color, k.uv or 0.25) end
+  -- add-presentation-packaging: floor and ceiling slabs (thin in y, wide in
+  -- x and z) go into a per-room floor mesh drawn with the kit's floor art
+  local floors = {}
+  for _, r in ipairs(ruin.rooms) do floors[r.id] = {} end
+  for _, b in ipairs(ruin.walls) do
+    local dx, dy, dz = b[2][1] - b[1][1], b[2][2] - b[1][2], b[2][3] - b[1][3]
+    if dy * 3 < math.min(dx, dz) then add(floors[b.room or 1], b, k.floor_color or { 0.82, 0.82, 0.82 }, k.floor_uv or 0.125)
+    else add(by_room[b.room or 1], b, k.color, k.uv or 0.25) end
+  end
   for _, b in ipairs(ruin.debris) do add(by_room[b.room or 1], b, { 0.55, 0.45, 0.32 }, 0.5) end
   local out = { chunks = {} }
   local coarse = {}
@@ -298,7 +344,10 @@ function M.ruin_chunks(ruin, origin)
     local parts = by_room[r.id]
     for _, p in ipairs(M.room_decor(ruin, r, k, origin)) do parts[#parts + 1] = p end
     local c, rad = sphere_of(parts)
-    out.chunks[#out.chunks + 1] = { mesh = saucer.mesh.build({ parts = parts }), center = c, radius = rad, room = r.id }
+    local fl = floors[r.id]
+    out.chunks[#out.chunks + 1] = { mesh = saucer.mesh.build({ parts = parts }), center = c, radius = rad, room = r.id,
+                                    floor = #fl > 0 and saucer.mesh.build({ parts = fl }) or nil,
+                                    glyphs = M.room_glyphs(r, k, origin) }
     local mn, mx = ruinm.room_box(r, k, origin)
     coarse[#coarse + 1] = { kind = "box", min = mn, max = mx, color = k.color, uv = 0.25 }
   end
@@ -339,6 +388,39 @@ end
 -- the kit's wall material (falls back to the shared hull plating)
 function M.kit_texture(A, k)
   return A.tex["kit_" .. (k and k.id or "")] or A.tex.hull
+end
+
+-- add-presentation-packaging: a decal quad (cache.decal is a unit square in
+-- x/y facing +z, its texture spanning it once) centred at c, facing yaw
+function M.decal(v, A, tex, pal, c, yaw, w, h, tint)
+  local cy, sy = saucer.math.cos(yaw), saucer.math.sin(yaw)
+  v:mesh(A.decal, { pos = { c[1] - cy * w / 2, c[2] - h / 2, c[3] + sy * w / 2 }, yaw = yaw, scale = { w, h, 1 },
+                    tex = tex, palette = pal, tint = tint })
+end
+
+-- glyph inscriptions high on the door-less walls of a big room ->
+-- list of { c = centre, yaw =, w = size }
+M.GLYPH_FACES = { { "+x", 1, 1, -1.5708 }, { "-x", 1, -1, 1.5708 }, { "+z", 3, 1, 3.14159 }, { "-z", 3, -1, 0 } }
+function M.room_glyphs(r, k, origin)
+  local out = {}
+  if r.class < (k.big or 4) or r.kind == "shaft" then return out end
+  local mn, mx = ruinm.room_box(r, k, origin)
+  local h = mx[2] - mn[2]
+  local w = math.min(9, h * 0.28)
+  for _, f in ipairs(M.GLYPH_FACES) do
+    if not (r.faces and r.faces[f[1]]) and #out < 2 then
+      local axis, sign = f[2], f[3]
+      local c = { (mn[1] + mx[1]) / 2, mx[2] - w / 2 - 1.5, (mn[3] + mx[3]) / 2 }
+      c[axis] = (sign > 0 and mx[axis] - k.wall - 0.05) or (mn[axis] + k.wall + 0.05)
+      out[#out + 1] = { c = c, yaw = f[4], w = w }
+    end
+  end
+  return out
+end
+
+-- add-presentation-packaging: the kit's floor material (nil: none)
+function M.floor_texture(A, k)
+  return A.tex["floor_" .. (k and k.id or "")]
 end
 
 -- one mesh for a whole derelict (kept for mods and tools; the game draws chunks)

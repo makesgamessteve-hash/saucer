@@ -161,6 +161,12 @@ function M.panel(v, state, p)
   if p.mode == "foot" then y = math.max(y, math.min(H // 2 + 20, H - 46 - #rows * 11 - 24)) end
   local is_title = p.panel.kind == "title"
   if is_title then
+    -- add-presentation-packaging: the Grok Imagine title emblem above the name
+    local A = require("view.assets").init()
+    local es = math.min(96, y - 52)
+    if A.tex.title_emblem and es >= 24 then
+      v:image(A.tex.title_emblem, W // 2 - es // 2, y - 50 - es, es, es, A.pal.sprites)
+    end
     v:text(W // 2 - 6 * 8 * 3 // 2, y - 46, "SAUCER", AMBER, 3)
     v:text(W // 2 - 13 * 8 // 2, y - 18, "a cozy salvage", DIM)
   end
