@@ -342,7 +342,7 @@ surfaces or new on-foot tools; on foot in XR the hands are the controllers
 (no coin model in the hand); the Lifeline trail can put the Seat in the
 chamber if that was your newest roomy point.
 
-## 8. The wider dark (M2) — next
+## 8. The wider dark (M2) — done
 
 **Goal.** A bigger universe, and local co-op with one saucer each.
 
@@ -355,7 +355,60 @@ Shroud, Override spike; a third kit and procedural music.
 **Done when.** Four local players can share a sector in split screen, each
 in their own saucer, and a party can follow a multi-sector mystery.
 
-## 9. Home among the stars (M3) — later
+**Status (2026-11-17).** Done in OpenSpec change `add-wider-dark`.
+**Local co-op** (`sim/coop.lua`): with `--coop` the input layer builds
+frames for four slots; a free slot joins on its first Use, Menu, Tractor
+or size press (pad A, or F2 / `--split-keyboard` hands the right half of
+the keyboard to the next player as its own device). Each joiner gets a new
+Villa in formation; the viewport count follows the players (two split
+side by side, `--split horizontal` stacks them; three or four get
+quarters and a spare quarter shows the sector map). The party panel ejects
+loot for a partner's beam, docks at another player's Villa for a walk
+round their dome (guests are drawn in the host's dome) and hands items
+over at the gift table. **Galaxy** (`sim/galaxy.lua`, `galaxy/galaxy.lua`):
+seven sectors linked into a map with a spine Home Drift → Salt Hollow →
+Salt Lantern → The Heart; sector 1 generates exactly as before. Each
+sector keeps its own world state (`state.visited`, per-player away
+state). A party fold jump is proposed on the sector map, agreed by every
+player, waits until every saucer is the Villa, outside the sites and has
+the Fold Core's Charge, spools 3 s and lands the party in formation;
+Fold Core tiers (reach in links) are bought at trade terminals with
+reputation. **Civilisations** (`civs/traits.lua`, `sim/civs.lua`): traits
+(body, shape, temperament, aesthetic, values, music scale, kits, tint)
+generated per universe; the **Xenoarchive** (`sim/archive.lua`) fills per
+civ as finds are identified and gates the mystery. **Requests and
+reputation** (`sim/requests.lua`): trader requests pay double and raise
+reputation, which lifts sale prices and unlocks Fold Core tiers; the
+terminal also sells Decoy flares. **The mystery** (`sim/mystery.lua`,
+`sim/heart.lua`): after the vault, the Witness Echo in Salt Hollow only
+translates with 25% of its civ archived, decoding it (Act III) unlocks
+the Heart Key in Salt Lantern, and carrying the Key within 45 m of the
+core of the Heart site opens it; everyone at the Heart votes from the map
+(seal, restore, take; a tie goes to whoever set the last Key) and the
+ending changes the galaxy (Act IV, a centerpiece for everyone inside).
+**Advanced sentries and tools** (`sim/advsentry.lua`; danger 2+ only, so
+Home Drift is unchanged): Clamps grip a hull (no resizing, Charge drain;
+Boost or Jam), a Lockdown node seals its hall's big doors for 60 s on a
+Watcher lock (Jam or spike), Decoy flares draw sentries for 8 s, the
+Shroud hides a still saucer for Charge, and the on-foot Override spike
+shuts a disabled sentry or a Lockdown node down for good. Nothing is
+lethal. **The hive** (`kits/hive.lua`) is the third new kit (organic
+cells and chutes) for hive-building civs. **Procedural music**
+(`view/music.lua`): per-civ scale, root and tempo; space, site and alert
+stems played from four generated note samples with pitch (the audio API
+gained `pitch`). State version 9; everything saves, restores every tick
+and replays (`.srep` gains `slots`). Game test `tests/game/widerdark.lua`
+(four players, three party jumps, the Witness gate, the Heart Key, the
+vote), `tests/game/coop_replay.lua` + `tests/replays/coop_seed42.srep`,
+specs in `tests/lua/widerdark_spec.lua`, screenshot tour
+`tools/shots/m8.lua`. Known gaps: the game test sets Act I as solved and
+seeds the gate civ's archive through the API (Act I is played by
+`tests/game/mystery.lua`, identification by `tests/game/trade.lua`); one
+Heart site and three endings; the music has no stereo pan; split screen
+in a real headset is untested (joins are refused while XR is active);
+autopilot needs a climb-first waypoint out of the Heart's shaft.
+
+## 9. Home among the stars (M3) — next
 
 **Goal.** Networked co-op and a dome that is truly yours.
 

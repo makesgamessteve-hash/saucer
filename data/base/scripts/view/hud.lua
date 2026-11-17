@@ -381,7 +381,8 @@ function M.draw(v, state, p, target)
     v:text(W - 72, 6, "SANDBOX", DIM)
   else
     local t = string.format("%s %d/%d", m.title:upper(), m.found, #m.echoes)
-    v:text(W - 4 - #t * 8, 6, t, m.solved and GREEN or AMBER)
+    -- add-wider-dark: a split-screen view is too narrow for the top row
+    v:text(W - 4 - #t * 8, W < 400 and 76 or 6, t, m.solved and GREEN or AMBER)
   end
   -- messages
   local y = H - 12
@@ -414,18 +415,19 @@ end
 
 -- add-wider-dark: the sector you are in and a party jump being voted on
 function M.jump(v, state, p)
-  local W = v.width
+  local W, H = v.width, v.height
+  local narrow = W < 400
   local galaxy = require("sim.galaxy")
   local g = galaxy.generate(state.seed)
   local here = g.sectors[state.sector_id or 1]
   if here then
     local t = here.name:upper()
-    v:text(W - 4 - #t * 8, 16, t, here.heart and { 1, 0.45, 0.65, 1 } or DIM)
+    v:text(W - 4 - #t * 8, narrow and 86 or 16, t, here.heart and { 1, 0.45, 0.65, 1 } or DIM)
   end
   local m = state.mystery
   if require("sim.heart").can_vote(state, p) and not m.votes[tostring(p.index)] and state.tick % 60 < 45 then
-    local t = "THE HEART IS OPEN - TAB TO VOTE"
-    v:text(W // 2 - #t * 4, 56, t, { 1, 0.45, 0.65, 1 })
+    local t = narrow and "HEART OPEN - TAB TO VOTE" or "THE HEART IS OPEN - TAB TO VOTE"
+    v:text(W // 2 - #t * 4, narrow and H // 2 - 80 or 56, t, { 1, 0.45, 0.65, 1 })
   end
   local j = state.jump
   if not j then return end
@@ -433,9 +435,20 @@ function M.jump(v, state, p)
   for _ in pairs(j.yes) do n = n + 1 end
   local t
   if j.spool >= 0 then t = string.format("FOLD CORE SPOOLING %.1f", j.spool)
-  elseif not j.yes[tostring(p.index)] then t = string.format("P%d: JUMP TO %s? TAB TO AGREE", j.by, g.sectors[j.to].name:upper())
+  elseif not j.yes[tostring(p.index)] then
+    t = string.format(narrow and "P%d: %s? TAB AGREES" or "P%d: JUMP TO %s? TAB TO AGREE", j.by, g.sectors[j.to].name:upper())
   else t = string.format("JUMP TO %s %d/%d", g.sectors[j.to].name:upper(), n, #state.players) end
-  v:text(W // 2 - #t * 4, 46, t, j.spool >= 0 and CYAN or AMBER)
+  v:text(math.max(2, W // 2 - #t * 4), narrow and H // 2 - 68 or 46, t, j.spool >= 0 and CYAN or AMBER)
+  -- the spool: a widening fold ring and a tint that builds toward the jump
+  if j.spool >= 0 then
+    local k = 1 - j.spool / require("sim.galaxy").tune().spool
+    v:rect(0, 0, W, H, { 0.3, 0.6, 1, 0.25 * k })
+    local R = 12 + k * math.min(W, H) * 0.45
+    for a = 0, 47 do
+      local ang = a * saucer.math.tau / 48 + k * 2
+      v:rect(W // 2 + saucer.math.sin(ang) * R - 1, H // 2 + saucer.math.cos(ang) * R * 0.8 - 1, 3, 3, CYAN)
+    end
+  end
 end
 
 -- add-holodeck-home-life overlays: active buffs, the open book, the TV's

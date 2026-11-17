@@ -127,6 +127,10 @@ macOS is not a target for now.
 | On foot in a derelict: crouch / jet-hop | Ctrl / Space (you also duck into low openings by yourself) | left / right trigger | **dn** / **up** | right stick down / up |
 | On foot in a derelict: take loot by hand, turn a hand-lock, shut a grid (hold still) | G / Return | X | Use button | left trigger |
 | On foot in a derelict: deploy the Seat and board | E or 1 / 2 | RB | unfold button | B, or the size lever |
+| Sector map, party fold jumps, Xenoarchive, requests, the Heart vote | Tab | D-pad right | MAP button | right grip |
+| Decoy flare (3 per refill; Watchers and Clamps chase it) | B | D-pad down | DECOY button | — |
+| Shroud (hides a still saucer; drains Charge) | X | D-pad left | — | — |
+| Override spike (hold at a Clamp or Lockdown node, on foot) | N (hold) | B (hold) | — | — |
 
 You wake up in the bedroom on the lower deck. The title card offers **Get
 up** or **Load saved game**. Doors slide open as you walk up to them. Take
@@ -234,14 +238,59 @@ and Snatchers tear hot items out of your hands; nothing is lethal.
 | ![Suit Charge critical](docs/shots/m7_suit_critical.png) | ![The Lifeline pulls you back into the Seat](docs/shots/m7_lifeline_pullback.png) |
 | ![Walking back for the dropped cache](docs/shots/m7_recover_cache.png) | |
 
-Press A on a second gamepad (with `--coop`) to join as player 2; each player
-lives in and flies their own saucer. `--local-players 2 --viewports 2` starts split screen.
+**The wider dark** (milestone 8). Up to **four local players** share the
+universe in split screen, each in their own saucer. Start with `--coop`;
+press A on a free gamepad, or press **F2** to give the right half of the
+keyboard to the next player (`--split-keyboard` does it at start-up). Any
+of Use, Menu, Tractor or a size button on a free slot joins. Two players
+split side by side (`--split horizontal` stacks them); three or four get
+quarters (the spare quarter shows the sector map). Split keyboard for the
+second player: I J K L move, arrows look, O / U up / down, Return use,
+Comma / Period fold, 7 8 9 sizes, Right Shift tractor, Semicolon scan,
+Apostrophe jam, Slash boost, End camera, Home menu, Backslash map, [ decoy,
+] shroud, P spike. Eject loot from the **party** panel for a partner to
+beam up, dock at another player's Villa and walk round their dome, or
+hand things over at the gift table.
+
+The galaxy has **seven sectors** (Home Drift and six more, each with its
+own danger, civilisations and music). Open the **sector map** (Tab) and
+pick a sector to propose a **party fold jump**; everyone agrees from their
+own map, the jump waits until every saucer is the Villa, outside the sites
+and has the Fold Core's Charge, then spools for three seconds and the whole
+party arrives in formation. Charge comes back in open space. The starting
+Fold Core reaches one link of the map; Fold Core upgrades at the trade
+terminal (they need reputation there) reach further. Every civilisation is generated from
+traits (body, temperament, aesthetic, values and a music scale); the finds
+you identify fill its page in the **Xenoarchive** (map → Xenoarchive), and
+stations post **requests** that pay credits and reputation. Deeper sectors
+add **Clamps** (they grab your hull: no size changes and a Charge drain
+until you hold Boost or Jam them) and a **Lockdown** node that seals its
+hall's big doors for 60 s when a Watcher locks on. A **Decoy** flare draws
+every sentry that sees it for 8 s, the **Shroud** hides a saucer that holds
+still, and on foot the **Override spike** (hold 3 s at a disabled sentry or
+a Lockdown node) shuts it down for good. The **hive**, the third ruin kit, appears in
+the new sectors. The mystery goes on past the vault: the **Witness** Echo
+only translates once your Xenoarchive has 25% of its civilisation, it names
+the **Heart Key**, and carrying the Key into the core room of **the
+Heart** opens it. Everyone at the Heart votes from the map (seal, restore
+or take); a tie goes to whoever set the last Key, and the ending changes
+the galaxy. The music is generated from each civ's scale and the moment
+(space, a site, an alert).
+
+| | |
+|---|---|
+| ![Two players, vertical split](docs/shots/m8_coop_2p.png) | ![Four players at the Heart](docs/shots/m8_coop_4p.png) |
+| ![The sector map](docs/shots/m8_sector_map.png) | ![A party fold jump spooling](docs/shots/m8_fold_jump.png) |
+| ![The Xenoarchive](docs/shots/m8_xenoarchive.png) | ![A hive ruin, the third kit](docs/shots/m8_hive_kit.png) |
+| ![A Clamp and a decoy flare](docs/shots/m8_clamp_decoy.png) | ![The Heart opens to the Key](docs/shots/m8_heart_site.png) |
 
 ## Useful options
 
 ```
 --seed N  --root DIR  --user-dir DIR  --mods a,b  --mods-dir DIR
 --local-players N  --viewports N  --coop
+--split-keyboard      (with --coop: the right half of the keyboard is player 2; F2 does it in game)
+--split horizontal    (two players stacked instead of side by side)
 --record FILE.srep  --play FILE.srep  --restore-every-tick
 --screenshot FILE.png --screenshot-tick N     (exits after the capture)
 --windowed            (with --script: run a scripted tour in a real window, e.g. tools/shots/m3.lua)
