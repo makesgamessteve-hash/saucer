@@ -159,6 +159,24 @@ describe("hull and Fold Retreat", function()
     expect(s.shield).to_be(0) -- not yet: shields wait after a hit
     hull.regen(s, 10)
     expect(s.shield).to_be_greater(0)
+    -- the hull only mends in open space, slowly, after the same delay (and never from 0)
+    local h = s.hull
+    hull.regen(s, 10, true)
+    expect(s.hull).to_be(h)
+    s.hull, h = 50, 50
+    hull.regen(s, 10)
+    expect(s.hull).to_be(h)
+    hull.regen(s, 10, true)
+    expect(s.hull).to_be_greater(h)
+    expect(s.hull).to_be_less(h + 1.5)
+    s.since_hit = 0
+    h = s.hull
+    hull.regen(s, 1, true)
+    expect(s.hull).to_be(h) -- not right after a hit
+    s.hull = 99.95
+    hull.regen(s, 10, true)
+    expect(s.hull).to_be(100)
+    hull.damage(s, 200)
     s.size, s.morph = 2, { from = 1 }
     item(p)
     p.site = 2

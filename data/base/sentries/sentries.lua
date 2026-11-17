@@ -33,4 +33,5 @@ return {
   jammer = { charge = 8, suit = 15, cooldown = 10.0, range = 15.0, half_angle = 0.6, near = 3.0 }, -- near: all-round pulse radius; suit: % on foot
   shield_regen = 4.0,     -- per second, after shield_delay without hits
   shield_delay = 4.0,
+  hull_regen = 0.1,       -- hull points per second in open space, after shield_delay (Steady doubles it)
 }
