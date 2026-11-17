@@ -77,8 +77,8 @@ if(SAUCER_BUILD_GAME)
     target_compile_options(saucer PRIVATE -sUSE_SDL=3)
     target_link_options(saucer PRIVATE -sUSE_SDL=3 -sMAX_WEBGL_VERSION=2 -sMIN_WEBGL_VERSION=2
       -sALLOW_MEMORY_GROWTH=1 -sFORCE_FILESYSTEM=1 -sINVOKE_RUN=0 -sSTACK_SIZE=1048576 -sEXPORTED_RUNTIME_METHODS=FS,callMain,ccall
-      -sEXPORTED_FUNCTIONS=_main,_saucer_xr_set_available,_saucer_xr_begin,_saucer_xr_end,_saucer_xr_frame,_saucer_xr_set_view,_saucer_xr_set_head,_saucer_xr_set_control,_saucer_xr_set_hand,_malloc,_free
-      --js-library ${CMAKE_SOURCE_DIR}/web/saucer_xr.js
+      -sEXPORTED_FUNCTIONS=_main,_saucer_xr_set_available,_saucer_xr_begin,_saucer_xr_end,_saucer_xr_frame,_saucer_xr_set_view,_saucer_xr_set_head,_saucer_xr_set_control,_saucer_xr_set_hand,_saucer_net_push,_saucer_net_status,_malloc,_free
+      --js-library ${CMAKE_SOURCE_DIR}/web/saucer_xr.js --pre-js ${CMAKE_SOURCE_DIR}/web/saucer_net.js
       --shell-file ${CMAKE_SOURCE_DIR}/web/shell.html)
     set_target_properties(saucer PROPERTIES SUFFIX ".html")
   else()
@@ -178,6 +178,11 @@ if(SAUCER_BUILD_TESTS)
            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_mods COMMAND ${HL} --seed 42 --mods-dir tests/fixtures/mods --script tests/game/mods.lua
            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  # milestone 9: the web transport's JavaScript (codes, handshake, datagrams) under node
+  find_program(NODE_EXE node)
+  if(NODE_EXE)
+    add_test(NAME web_net_js COMMAND ${NODE_EXE} tests/web/net_web.test.js WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  endif()
   # milestone 9: the mod browser switches a mod off for the next start, and on again
   add_test(NAME game_mod_browser COMMAND ${CMAKE_COMMAND} -DHL=$<TARGET_FILE:saucer_headless> -DROOT=${CMAKE_SOURCE_DIR}
            -DUSER=${USERDIR}-modbrowser -P ${CMAKE_SOURCE_DIR}/tools/mod_browser.cmake
