@@ -465,7 +465,10 @@ across two starts. Screenshot tour `tools/shots/m9.lua` and
 `tools/shots/m9_net.sh` (two windows on loopback). Known gaps: lockstep
 only, no rollback; a browser and a desktop cannot share a session (UDP vs
 WebRTC; a relay would bridge them); guests join only before the session
-starts; no signaling server (codes are copy-pasted); the mod browser has no
+starts; no signaling server (codes are copy-pasted); the WebRTC path is
+tested under node with a fake peer-connection pair and the native protocol
+over UDP, but a session between two real browsers has not been verified
+yet (the CI and dev boxes' headless Chromium gathers no ICE candidates); the mod browser has no
 download source; the grapple has no touch button; the Xenoarchive set bonus
 for displays is not in; Wardens in the scripted mystery game test are
 switched off through the API (their own spec covers them).
