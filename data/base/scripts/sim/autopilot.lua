@@ -466,7 +466,14 @@ end
 -- needs it) and wait until it is aboard. -> true when it is
 function M.pull(t, pl, get, key)
   local tractor = require("sim.tractor")
-  if tractor.beam_of(get().ship).console and not M.to_console(t, pl, get) then return false end
+  -- add-playtest-recs: with the helm beam relay a small find is pulled from the helm
+  local p = get()
+  local relay = false
+  if p.mode == "helm" and key then
+    local c = tractor.by_key(t.state(), p, p.site, p.site ~= 0 and require("sim.game").ruin(p.site) or nil, key)
+    relay = c ~= nil and require("sim.upgrades").relay(p, c.item)
+  end
+  if tractor.beam_of(get().ship).console and not relay and not M.to_console(t, pl, get) then return false end
   t.press(pl, "tractor")
   t.wait(1)
   local tr = get().tractor
