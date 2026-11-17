@@ -393,16 +393,78 @@ static int start_net(sx_engine *e) {
   return 1;
 }
 
+static char *mods_txt(sx_engine *e) { return sx_path_join(e->opt.user_dir, "mods.txt"); }
+
+/* is `id` listed in <user-dir>/mods.txt (switched off in the mod browser)? */
+int sx_engine_mod_disabled(sx_engine *e, const char *id) {
+  char *path = mods_txt(e), *text = sx_fs_read(path, NULL), *p;
+  int found = 0;
+  size_t n = strlen(id);
+  free(path);
+  if (!text) return 0;
+  for (p = text; *p;) {
+    char *nl = strchr(p, '\n');
+    size_t len = nl ? (size_t)(nl - p) : strlen(p);
+    if (len && p[len - 1] == '\r') len--;
+    if (len == n && strncmp(p, id, n) == 0) found = 1;
+    if (!nl) break;
+    p = nl + 1;
+  }
+  free(text);
+  return found;
+}
+
+int sx_engine_set_mod_enabled(sx_engine *e, const char *id, int on) {
+  sx_buf b = {0};
+  int i, ok;
+  char *path;
+  if (strcmp(id, "base") == 0 || sx_modset_find(&e->catalog, id) < 0) return 0;
+  for (i = 0; i < e->catalog.count; i++) {
+    const char *m = e->catalog.mods[i].id;
+    int off = strcmp(m, id) == 0 ? !on : sx_engine_mod_disabled(e, m);
+    if (off) {
+      sx_buf_put(&b, m, strlen(m));
+      sx_buf_put(&b, "\n", 1);
+    }
+  }
+  sx_fs_mkdirs(e->opt.user_dir);
+  path = mods_txt(e);
+  ok = sx_fs_write_atomic(path, b.data ? (const void *)b.data : "", b.len);
+  free(path);
+  sx_buf_free(&b);
+  return ok;
+}
+
 sx_engine *sx_engine_create(const sx_options *o) {
   sx_engine *e = (sx_engine *)calloc(1, sizeof(sx_engine));
-  char *base, *mods;
+  char *base, *mods, *enabled = NULL;
   int i;
   e->opt = *o;
   sx_vfs_init(&e->vfs);
   sx_modset_init(&e->mods);
+  sx_modset_init(&e->catalog);
   base = sx_path_join(o->root, "data/base");
   mods = o->mods_dir[0] ? sx_strdup(o->mods_dir) : sx_path_join(o->root, "mods");
-  if (!sx_modset_scan(&e->mods, base, mods, o->mods[0] ? o->mods : NULL)) {
+  /* add-home-among-stars: every local mod folder for the browser; without
+   * --mods the folders switched off there stay off */
+  sx_modset_scan(&e->catalog, base, mods, NULL);
+  if (!o->mods[0]) {
+    sx_buf b = {0};
+    int any_off = 0;
+    for (i = 0; i < e->catalog.count; i++) {
+      if (sx_engine_mod_disabled(e, e->catalog.mods[i].id)) {
+        any_off = 1;
+        continue;
+      }
+      if (b.len) sx_buf_put(&b, ",", 1);
+      sx_buf_put(&b, e->catalog.mods[i].id, strlen(e->catalog.mods[i].id));
+    }
+    sx_buf_put(&b, "", 1);
+    if (any_off) enabled = sx_strdup((const char *)b.data);
+    sx_buf_free(&b);
+  }
+  if (!sx_modset_scan(&e->mods, base, mods, o->mods[0] ? o->mods : enabled)) {
+    free(enabled);
     free(base);
     free(mods);
     sx_engine_destroy(e);
@@ -410,6 +472,7 @@ sx_engine *sx_engine_create(const sx_options *o) {
   }
   free(base);
   free(mods);
+  free(enabled);
   sx_modset_resolve(&e->mods, SX_ENGINE_API);
   e->modset_hash = 0x5A0CE5ull;
   for (i = 0; i < e->mods.order_count; i++) {
@@ -495,6 +558,7 @@ void sx_engine_destroy(sx_engine *e) {
   sx_replay_free(&e->rec);
   sx_replay_free(&e->play);
   sx_modset_free(&e->mods);
+  sx_modset_free(&e->catalog);
   sx_vfs_free(&e->vfs);
   free(e);
 }

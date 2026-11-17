@@ -189,6 +189,7 @@ function M.register_panels(game, ctx)
         rows[#rows + 1] = { text = hc.on(st) and "Hardcore: ON (choose again for Standard)" or "Hardcore: off",
           act = function(state, p) hc.toggle(state, p, ctx) end }
       end
+      rows[#rows + 1] = { text = "Mod browser", act = function(_, p) panel.open(p, "mods") end }
       return rows
     end,
   })
@@ -224,10 +225,12 @@ function M.register_panels(game, ctx)
       if not require("sim.hardcore").on(state) then
         rows[#rows + 1] = { text = "Load saved game", act = function(st, p) M.load(st, p, ctx, game) end }
       end
+      rows[#rows + 1] = { text = "Mod browser", act = function(_, p) panel.open(p, "mods") end }
       rows[#rows + 1] = { text = "Close", act = function(_, p) panel.close(p) end }
       return rows
     end,
   })
+  require("sim.modbrowser").register(ctx)
 end
 
 return M

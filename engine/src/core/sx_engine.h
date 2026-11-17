@@ -78,6 +78,7 @@ typedef struct sx_engine {
   sx_options opt;
   sx_vfs vfs;
   sx_modset mods;
+  sx_modset catalog; /* add-home-among-stars: every local mod folder, for the mod browser */
   sx_mod_rt rt[SX_MAX_MODS];
   int nrt;
   uint64_t modset_hash;
@@ -159,6 +160,10 @@ int sx_engine_restore(sx_engine *e, const unsigned char *data, size_t len);
 int sx_engine_save_bindings(sx_engine *e, int player);
 int sx_engine_load_bindings(sx_engine *e, int player);
 int sx_engine_finish(sx_engine *e); /* flush recordings; returns exit status */
+/* add-home-among-stars: the mod browser's choices (<user-dir>/mods.txt lists
+ * the folders switched off; they apply on the next start) */
+int sx_engine_mod_disabled(sx_engine *e, const char *id);
+int sx_engine_set_mod_enabled(sx_engine *e, const char *id, int on);
 
 /* Runners used by main(): return a process exit status. */
 int sx_run_headless(const sx_options *o);

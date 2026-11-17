@@ -202,6 +202,12 @@ function M.panel(v, state, p)
   local nav = mode == "pad" and "STICK UP/DOWN  X: PICK" or (mode == "touch" and "STICK UP/DOWN  USE: PICK" or
     (mode == "keys2" and "I/K: CHOOSE  ENTER: PICK" or "W/S: CHOOSE  G/ENTER: PICK"))
   v:text(W // 2 - #nav * 4, y + top + 10 + #rows * 11, nav, DIM)
+  -- add-home-among-stars: the selected row's hint (a mod's description)
+  local cur = all[p.panel.sel]
+  if cur and cur.hint then
+    local h = cur.hint:sub(1, (W - 16) // 8)
+    v:text(W // 2 - #h * 4, y + top + 21 + #rows * 11, h, CYAN)
+  end
   return #rows
 end
 

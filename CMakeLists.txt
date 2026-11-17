@@ -178,6 +178,10 @@ if(SAUCER_BUILD_TESTS)
            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_mods COMMAND ${HL} --seed 42 --mods-dir tests/fixtures/mods --script tests/game/mods.lua
            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  # milestone 9: the mod browser switches a mod off for the next start, and on again
+  add_test(NAME game_mod_browser COMMAND ${CMAKE_COMMAND} -DHL=$<TARGET_FILE:saucer_headless> -DROOT=${CMAKE_SOURCE_DIR}
+           -DUSER=${USERDIR}-modbrowser -P ${CMAKE_SOURCE_DIR}/tools/mod_browser.cmake
+           WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   # milestone 9: two machines on loopback (a host and an XR guest) play one universe in
   # lockstep, decorate a dome and visit it; a deliberate desync must be caught
   if(NOT EMSCRIPTEN)

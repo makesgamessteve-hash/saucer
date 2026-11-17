@@ -92,6 +92,7 @@ int sx_mod_parse(const char *src, size_t len, const char *root, sx_mod *out, cha
     get_str(L, "entry", out->entry, sizeof out->entry, "");
     get_str(L, "license_code", out->license_code, sizeof out->license_code, "unknown");
     get_str(L, "license_assets", out->license_assets, sizeof out->license_assets, "unknown");
+    get_str(L, "description", out->description, sizeof out->description, "");
     lua_getfield(L, -1, "api");
     out->api = lua_isinteger(L, -1) ? (int)lua_tointeger(L, -1) : -1;
     lua_pop(L, 1);

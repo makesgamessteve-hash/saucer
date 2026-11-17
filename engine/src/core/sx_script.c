@@ -1614,6 +1614,52 @@ static int l_mods_list(lua_State *L) {
   return 1;
 }
 
+/* add-home-among-stars: the mod browser - every local mod folder, whether it
+ * is loaded now and whether it is switched off for the next start */
+static int l_mods_available(lua_State *L) {
+  sx_engine *e = get_engine(L);
+  int i;
+  lua_createtable(L, e->catalog.count, 0);
+  for (i = 0; i < e->catalog.count; i++) {
+    const sx_mod *m = &e->catalog.mods[i];
+    int k = sx_modset_find(&e->mods, m->id);
+    lua_createtable(L, 0, 8);
+    lua_pushstring(L, m->id);
+    lua_setfield(L, -2, "id");
+    lua_pushstring(L, m->name);
+    lua_setfield(L, -2, "name");
+    lua_pushstring(L, m->version);
+    lua_setfield(L, -2, "version");
+    lua_pushstring(L, m->description);
+    lua_setfield(L, -2, "description");
+    lua_pushstring(L, m->license_assets);
+    lua_setfield(L, -2, "license_assets");
+    lua_pushboolean(L, k >= 0 && e->mods.mods[k].ok);
+    lua_setfield(L, -2, "loaded");
+    lua_pushstring(L, k >= 0 ? e->mods.mods[k].status : "switched off");
+    lua_setfield(L, -2, "status");
+    lua_pushboolean(L, sx_engine_mod_disabled(e, m->id));
+    lua_setfield(L, -2, "off");
+    lua_rawseti(L, -2, i + 1);
+  }
+  return 1;
+}
+
+/* saucer.mods.set_enabled(id, on, player): writes <user-dir>/mods.txt. Only
+ * the machine that owns `player` writes, and never while a replay plays. */
+static int l_mods_set_enabled(lua_State *L) {
+  sx_engine *e = get_engine(L);
+  const char *id = luaL_checkstring(L, 1);
+  int on = lua_toboolean(L, 2);
+  lua_Integer player = luaL_optinteger(L, 3, 1);
+  if (e->opt.play[0] || (e->net_on && player != e->net.local_slot)) {
+    lua_pushboolean(L, 0);
+    return 1;
+  }
+  lua_pushboolean(L, sx_engine_set_mod_enabled(e, id, on));
+  return 1;
+}
+
 /* add-home-among-stars: the network session as the view and menus see it
  * (client-side: never feeds the sim) */
 static int l_net_status(lua_State *L) {
@@ -1963,7 +2009,10 @@ static void build_saucer_api(lua_State *L, sx_engine *e) {
       {"play", l_audio_play}, {"set", l_audio_set}, {"stop", l_audio_stop}, {NULL, NULL}};
   static const luaL_Reg save_f[] = {{"write", l_save_write}, {"read", l_save_read}, {NULL, NULL}};
   static const luaL_Reg time_f[] = {{"tick", l_time_tick}, {"sim_seconds", l_time_seconds}, {NULL, NULL}};
-  static const luaL_Reg mods_f[] = {{"list", l_mods_list}, {NULL, NULL}};
+  static const luaL_Reg mods_f[] = {{"list", l_mods_list},
+                                         {"available", l_mods_available},
+                                         {"set_enabled", l_mods_set_enabled},
+                                         {NULL, NULL}};
   static const luaL_Reg net_f[] = {{"status", l_net_status}, {NULL, NULL}};
   static const luaL_Reg events_f[] = {{"emit", l_events_emit}, {NULL, NULL}};
   static const luaL_Reg test_f[] = {{"state", l_test_state},           {"state_hash", l_test_state_hash},
