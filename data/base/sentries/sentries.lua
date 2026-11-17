@@ -11,13 +11,15 @@ return {
     -- size band by the civ's body scale: it ignores anything smaller (the Seat is class 1)
     band = { human = { 2, 4 }, tiny = { 2, 4 } },
     fire_every = 1.6, bolt_speed = 18, bolt_life = 5.0, bolt_damage = 9, bolt_radius = 0.4,
+    foot_range = 45,      -- add-on-foot-excursions: a person on foot is seen this far (any size band)
   },
   snatcher = {
     sense = 22, chase_speed = 7.5, patrol_speed = 2.0, flee_speed = 9.0, latch_time = 3.0, latch_dist = 1.6,
     give_up = 34,
+    foot_sense = 14,      -- add-on-foot-excursions: drawn to hot items in your hands from this close
   },
   scanner = { charge = 2, cooldown = 5.0, reveal = 10.0 },
-  jammer = { charge = 8, cooldown = 10.0, range = 15.0, half_angle = 0.6, near = 3.0 }, -- near: all-round pulse radius
+  jammer = { charge = 8, suit = 15, cooldown = 10.0, range = 15.0, half_angle = 0.6, near = 3.0 }, -- near: all-round pulse radius; suit: % on foot
   shield_regen = 4.0,     -- per second, after shield_delay without hits
   shield_delay = 4.0,
 }

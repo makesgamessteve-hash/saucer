@@ -171,12 +171,12 @@ describe("derelict generation", function()
   it("matches the committed 3D layout known answers (every platform)", function()
     -- re-record through a reviewed change when the generator changes on purpose
     local kat = {
-      { "starship", 1, -1809239244196615700, 9, 93, 5 },
-      { "starship", 42, 7450091784366959143, 10, 108, 3 },
-      { "station", 1, 3562661300374055466, 14, 155, 6 },
-      { "station", 42, -2183098872117938082, 11, 118, 6 },
-      { "city", 1, -142771327155978742, 14, 149, 16 },
-      { "city", 42, -4299469698777214091, 15, 162, 28 },
+      { "starship", 1, -1809239244196615700, 9, 126, 5, 1 },
+      { "starship", 42, 7450091784366959143, 10, 141, 3, 1 },
+      { "station", 1, 3562661300374055466, 14, 186, 6, 1 },
+      { "station", 42, -2183098872117938082, 11, 151, 6, 1 },
+      { "city", 1, -142771327155978742, 14, 182, 16, 1 },
+      { "city", 42, -4299469698777214091, 15, 195, 28, 1 },
     }
     for _, k in ipairs(kat) do
       local r = ruin.generate(k[2], k[1], civs[1], { 0, 0, 0 })
@@ -184,6 +184,7 @@ describe("derelict generation", function()
       expect(#r.rooms).to_be(k[4])
       expect(#r.walls).to_be(k[5])
       expect(#r.solids).to_be(k[6])
+      expect(r.foot.host).to_be(k[7]) -- add-on-foot-excursions (walls include its crawlspace)
     end
   end)
 end)

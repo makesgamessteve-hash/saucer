@@ -123,6 +123,10 @@ macOS is not a target for now.
 | On foot in a station: hold the coin in your fist / pocket it | F | A | tractor button | right trigger |
 | On foot in a station: sprint | Shift | LS | run button | left grip |
 | Unpocket in a hangar (Villa / Seat) | E or 1 / 2 | RB | unfold button | B, or the size lever |
+| Step out in a derelict (set the Seat down within 2 m of a deck) | 3, or Q past the Seat | LB past the Seat | fold button past the Seat | A past the Seat, or the size lever |
+| On foot in a derelict: crouch / jet-hop | Ctrl / Space (you also duck into low openings by yourself) | left / right trigger | **dn** / **up** | right stick down / up |
+| On foot in a derelict: take loot by hand, turn a hand-lock, shut a grid (hold still) | G / Return | X | Use button | left trigger |
+| On foot in a derelict: deploy the Seat and board | E or 1 / 2 | RB | unfold button | B, or the size lever |
 
 You wake up in the bedroom on the lower deck. The title card offers **Get
 up** or **Load saved game**. Doors slide open as you walk up to them. Take
@@ -201,6 +205,35 @@ and you are aboard at that hangar's space door. It only unfolds in a hangar
 with a free bay. The station layout comes from the seed, so it is the same
 every visit, and saves made on foot load back on foot.
 
+**On-foot excursions** (milestone 7). Every derelict hides a second layer
+that only a person fits: off one great hall a 1 m **crawlspace** leads to a
+**chamber** with a hand-lock, a grid console and a Delicate find, and next
+to the same hall a **strongroom** is sealed by a shutter. Set the Seat down
+by the crawlspace's lit mouth (within 2 m of the deck) and pick Pocket (3,
+or fold past the Seat): you step out and the saucer folds into your hand
+and pocket. Crawl through (you duck by yourself), take the **Delicate**
+find by hand (a beam would crush it; four hands' worth, nothing bigger than
+size M), hold Use at the **hand-lock** until the coupling locks home (the
+strongroom's shutter grinds open for the saucer) and at the **grid console**
+to put every sentry in that derelict to sleep until you leave. Your **Suit
+Charge** is the only meter on foot: it drains, faster in crawlspaces and
+under a Watcher's lock, hops and the Jammer spend it, stun bolts bite it,
+and the HUD warns at 30% and 10%. Press E to deploy the Seat (it needs a
+2.2 m sphere of room, so never in a crawlspace) and board: your hands empty
+into the hold and the suit refills. Let it run dry and the **Lifeline**
+fires: the screen whites out, the Seat deploys on your trail and you wake at
+its helm, and what you carried stays behind as a **cache** (on the radar and
+the HUD) to walk back for. Then fly through the door you opened and beam up
+the strongroom's loot. Watchers see you on foot whatever their size band
+and Snatchers tear hot items out of your hands; nothing is lethal.
+
+| | |
+|---|---|
+| ![Stepping out: the Seat folds into your hand](docs/shots/m7_step_out_fold.png) | ![Crawling through a 1 m crawlspace](docs/shots/m7_crawlspace.png) |
+| ![Turning the hand-lock in the chamber](docs/shots/m7_hand_lock.png) | ![Shutting the sentry grid down at its console](docs/shots/m7_grid_console.png) |
+| ![Suit Charge critical](docs/shots/m7_suit_critical.png) | ![The Lifeline pulls you back into the Seat](docs/shots/m7_lifeline_pullback.png) |
+| ![Walking back for the dropped cache](docs/shots/m7_recover_cache.png) | |
+
 Press A on a second gamepad (with `--coop`) to join as player 2; each player
 lives in and flies their own saucer. `--local-players 2 --viewports 2` starts split screen.
 
@@ -252,6 +285,12 @@ that never ends fails instead of hanging CI.
   `station.lua` docks, pockets the saucer, walks the station, sells at a
   stall, tops up at the chandler, drinks at the bar, gets robbed and runs the
   thief down, saves, unpockets in the far hangar and flies away (also with
+  `--restore-every-tick` and on seed 7);
+  `excursion.lua` sets the Seat down by a derelict's crawlspace, steps out,
+  crawls to the chamber, lifts a Delicate find, turns the hand-lock, shuts
+  the grid, saves, lets the suit run dry for the Lifeline, recovers the
+  dropped cache by hand, deploys and boards, then flies through the opened
+  shutter and beams up the strongroom's loot (also with
   `--restore-every-tick` and on seed 7);
   `boot.lua` covers touch, XR and rendering; `coop.lua` runs two players;
   `mods.lua` loads the fixture mods (one adds a holodeck program).

@@ -67,7 +67,7 @@ end
 function M.events(state, p)
   local was = seen[p.index]
   local now = { doors = {}, sel = p.panel and p.panel.sel, kind = p.panel and p.panel.kind,
-                coin = p.station and p.station.coin, mode = p.mode }
+                coin = (p.station and p.station.coin) or (p.excursion and p.excursion.coin), mode = p.mode }
   for i, d in ipairs(p.doors or {}) do now.doors[i] = d end
   seen[p.index] = now
   local out = {}
@@ -84,6 +84,11 @@ end
 -- how loud each loop should be right now (0 = off)
 function M.levels(state, p)
   local lv = { engine = 0, beam = 0, holo = 0, station = 0, derelict = 0 }
+  if p.mode == "foot" and p.excursion then
+    -- add-on-foot-excursions: no engine, just the derelict around you
+    lv.derelict = 0.6
+    return lv
+  end
   if p.mode == "foot" then
     lv.station = 0.55
     return lv

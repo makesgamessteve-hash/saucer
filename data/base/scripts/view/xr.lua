@@ -67,6 +67,14 @@ local CHARGE, HOLD, LOCK, DIM, FRAME = { 0.3, 0.9, 1, 1 }, { 1, 0.7, 0.25, 1 }, 
 -- wrist panel bars -> list of { frac, colour } (charge, hold fill, beam lock)
 function M.wrist(p, scan)
   local all = configs.all()
+  -- add-on-foot-excursions: on foot the wrist shows the suit, the hands, a hand-lock's progress
+  if p.mode == "foot" and p.excursion then
+    local T = require("sim.excursion").tune()
+    local s = math.max(0, math.min(1, (p.suit or 0) / T.suit.max))
+    local w = p.excursion.work
+    local f = w and math.min(1, w.t / w.total) or 0
+    return { { s, s > 0.3 and CHARGE or HOLD }, { #(p.hands or {}) / T.hands, HOLD }, { f, f > 0 and LOCK or DIM } }
+  end
   local charge = math.max(0, math.min(1, (p.ship.charge or 0) / all.max_charge))
   local hold = math.min(1, #(p.hold or {}) / all.hold_slots)
   local lock = scan and scan.ok and 1 or 0

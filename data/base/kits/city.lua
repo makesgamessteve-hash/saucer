@@ -16,6 +16,7 @@ return {
   shaft = { 9, 34, 9 },      -- tower shaft: 36 x 136 x 36 m
   chamber = { 3, 1, 3 },
   doors = {
+    [0] = { 1.0, 1.0 },   -- add-on-foot-excursions: a crawlspace mouth (on foot only)
     [1] = { 2.6, 2.1 },
     [4] = { 34.0, 20.0 },
   },
@@ -32,6 +33,7 @@ return {
   min_span = 24,
   min_levels = 3,
   solids = { kind = "tower", min = 24, max = 36, w = { 3, 6 }, h = { 12, 48 } },
+  foot = { crawl_len = { 2, 3 }, crawl = { 1.0, 1.0 }, chamber = { 3, 1, 2 }, strong = { 3, 1, 4 } },
   debris = 4,
   color = { 0.80, 0.84, 0.90 },  -- multiplies the kit wall texture (add-detail-pass)
   uv = 0.125,                 -- texture repeats per meter on walls

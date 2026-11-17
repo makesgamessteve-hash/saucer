@@ -11,7 +11,8 @@ into. The saucer folds to the one-seat Seat only for tight ducts. There are
 no lethal weapons: the risk is losing loot you haven't banked.
 
 Cruiser, Pod and Pocket are not in the base game (mods may add sizes).
-Stepping out of the saucer is post-MVP.
+Stepping out of the saucer was post-MVP; it is back since milestone 7
+(on-foot excursions in derelicts).
 
 ## 0. Engine spine — done
 
@@ -292,7 +293,7 @@ gaps: hands are boxes posed by yaw only (no pitch or roll yet); the wrist
 panel is bars, not text; no teleport locomotion; no music; no installer
 (zip only); Windows and Linux builds are unsigned.
 
-## 7. On-foot excursions — next (post-MVP)
+## 7. On-foot excursions — done
 
 **Goal.** Step out of the saucer into a derelict for crawlspaces and
 hand-locks. Cut from the MVP in v0.4 (was Pocket mode); builds on the
@@ -305,7 +306,43 @@ consoles.
 **Done when.** A game test steps out, opens a hand-lock, fails with
 Lifeline, and recovers the dropped cache.
 
-## 8. The wider dark (M2) — later
+**Status (2026-11-17).** Done in OpenSpec change `add-on-foot-excursions`
+(supersedes `add-on-foot-pocket-mode`). Every derelict now gets, from a
+child rng of its seed and on its own cell grid (rooms, slots and the layout
+hash are unchanged), a 1 m crawlspace off a great hall leading to a chamber
+with a hand-lock, a grid console and a Delicate find, plus a strongroom next
+to the same hall whose Seat-sized door is sealed by a shutter
+(`sim/footgen.lua`; all 600 ruins of seeds 1-200 get them). Set the Seat or
+the Villa down within 2 m of a deck and pick Pocket (3, or fold past the
+Seat on any device): you step out and the saucer folds into your hand and
+pocket (`sim/excursion.lua`, reusing milestone 5's Pocket configuration and
+walking). On foot you walk, run, crouch, duck into low openings by yourself,
+crawl and jet-hop; your Suit Charge is the only meter (drains, faster in
+crawlspaces and under a Watcher's lock; hops, the Jammer and stun bolts
+spend it; warnings at 30% and 10%); four hand slots take loot up to size M,
+and Delicate finds only by hand. Holding Use at the hand-lock opens the
+strongroom's shutter for the saucer; at the grid console it puts the
+derelict's sentries to sleep until you leave. Deploy (E, 1, 2) needs a
+2.2 m sphere ahead of you or around you, so never in a crawlspace; the Seat
+grows from the coin and you board with your hands emptied into the hold. At
+zero suit the Lifeline whites out the screen, deploys the Seat at the newest
+point of your trail with room for it and leaves your hands as a cache to
+walk back for. Watchers see you on foot whatever their size band;
+Snatchers tear hot items out of your hands (on-foot Snatchers fit, so they
+are in). Presentation: shutter, lock, console and crawl-mouth props, the
+hand, coin and fold, other players on foot, the suit/hands/coin HUD with
+the cache bearing and work bar, the derelict audio loop, a chase camera and
+XR wrist bars (suit, hands, work) (`view/excursion.lua`). State version 8;
+everything saves, restores every tick and replays. Game test
+`tests/game/excursion.lua` (also restore-every-tick and seed 7), specs in
+`tests/lua/excursion_spec.lua`, screenshot tour `tools/shots/m7.lua`.
+Known gaps: one crawlspace, chamber and strongroom per derelict (the entrance
+hall is tried first); no zero-g mag-floors, dead-city
+surfaces or new on-foot tools; on foot in XR the hands are the controllers
+(no coin model in the hand); the Lifeline trail can put the Seat in the
+chamber if that was your newest roomy point.
+
+## 8. The wider dark (M2) — next
 
 **Goal.** A bigger universe, and local co-op with one saucer each.
 

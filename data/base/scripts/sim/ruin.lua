@@ -436,8 +436,26 @@ end
 
 local function finish(seed, kit, rooms, doors, slots, reach, rng, grid, origin)
   local solids = rng and M.solids(rng, rooms, kit, grid, origin) or {}
-  return { seed = seed, kit = kit.id, rooms = rooms, doors = doors, slots = slots, walls = M.walls(rooms, doors, kit, origin),
-           debris = rng and M.debris(rng, rooms, doors, kit, origin) or {}, solids = solids,
+  local debris = rng and M.debris(rng, rooms, doors, kit, origin) or {}
+  -- add-on-foot-excursions: a crawlspace, a chamber and a sealed strongroom
+  -- off one hall (own rng, so the layout above is unchanged)
+  local foot = rng and require("sim.footgen").generate(seed, kit, rooms, doors, grid, origin, debris) or nil
+  local wall_doors = doors
+  if foot then
+    wall_doors = {}
+    for _, d in ipairs(doors) do wall_doors[#wall_doors + 1] = d end
+    for _, d in ipairs(foot.doors) do wall_doors[#wall_doors + 1] = d end
+  end
+  local walls = M.walls(rooms, wall_doors, kit, origin)
+  if foot then
+    for _, b in ipairs(foot.walls) do walls[#walls + 1] = b end
+    -- the strongroom's loot: small enough for the Seat's mini beam
+    slots[#slots + 1] = { id = #slots + 1, room = foot.host, pos = foot.slot_pos, max_size = 1, tier = 2, strong = true,
+                          seed = saucer.seed_child(seed, "slot", #slots + 1) }
+    foot.slot = #slots
+  end
+  return { seed = seed, kit = kit.id, rooms = rooms, doors = doors, slots = slots, walls = walls,
+           debris = debris, solids = solids, foot = foot,
            hash = layout_hash(rooms, doors, solids), reach = reach }
 end
 
@@ -527,6 +545,7 @@ function M.bounds(ruin, origin, pad)
     end
   end
   for _, r in ipairs(ruin.rooms) do grow(room_box(r, kit, origin)) end
+  for _, r in ipairs(ruin.foot and ruin.foot.rooms or {}) do grow(room_box(r, kit, origin)) end
   for _, s in ipairs(ruin.solids or {}) do grow(s[1], s[2]) end
   for k = 1, 3 do
     lo[k] = lo[k] - pad
