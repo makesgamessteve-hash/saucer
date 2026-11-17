@@ -249,6 +249,7 @@ function M.alarm(state, p)
     if site == p.site then
       for _, dyn in pairs(list) do
         if dyn.target == p.index and (dyn.st == "locked" or dyn.st == "latched") then worst = "LOCKED"
+        elseif dyn.target == p.index and dyn.st == "hunt" then worst = "WARDEN" -- add-home-among-stars
         elseif dyn.target == p.index and dyn.st == "alert" and not worst then worst = "ALERT" end
       end
     end

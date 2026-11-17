@@ -33,6 +33,7 @@ typedef SOCKET sock_t;
 #else
 #include <arpa/inet.h>
 #include <errno.h>
+#include <signal.h>
 #include <fcntl.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -58,6 +59,10 @@ static int start_net(void) {
     WSADATA w;
     if (WSAStartup(MAKEWORD(2, 2), &w) != 0) return 0;
   }
+#else
+  /* a session's summary goes to stdout and stderr; a closed pipe on the
+   * other end (a loopback test's partner exited first) must not kill us */
+  signal(SIGPIPE, SIG_IGN);
 #endif
   net_started = 1;
   return 1;

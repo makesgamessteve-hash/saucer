@@ -653,11 +653,12 @@ local function scan(state, p)
     end
     site = best
   end
-  local w, sn, cl, ld = sentry.summary(rt.sentries[site] or {})
+  local w, sn, cl, ld, wd = sentry.summary(rt.sentries[site] or {})
   local danger = (state.sector_id or 1) == 1 and (site == 1 and 1 or 2) or (state.sector.sites[site].danger or 2) + 1
-  msg(state, p, string.format("Scan: site %d, danger %d, %d Watcher%s, %d Snatcher%s%s", site, danger, w,
+  msg(state, p, string.format("Scan: site %d, danger %d, %d Watcher%s, %d Snatcher%s%s%s", site, danger, w,
     w == 1 and "" or "s", sn, sn == 1 and "" or "s",
-    (cl + ld > 0) and string.format(", %d Clamp%s, %d Lockdown", cl, cl == 1 and "" or "s", ld) or ""))
+    (cl + ld > 0) and string.format(", %d Clamp%s, %d Lockdown", cl, cl == 1 and "" or "s", ld) or "",
+    wd > 0 and ", A WARDEN" or ""))
   fx(state, p, "scan")
 end
 

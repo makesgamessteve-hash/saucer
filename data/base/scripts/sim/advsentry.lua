@@ -201,6 +201,7 @@ local function alarm(state, site)
   for i, def in ipairs(game.sentries(site)) do
     local dyn = state.sentries[site] and state.sentries[site][i]
     if def.kind == "watcher" and dyn and dyn.st == "locked" then return true end
+    if def.kind == "warden" and dyn and dyn.st == "hunt" then return true end -- add-home-among-stars
   end
   return false
 end

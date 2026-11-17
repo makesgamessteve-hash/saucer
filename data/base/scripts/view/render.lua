@@ -29,6 +29,7 @@ M.STATE_TINT = {
   -- add-wider-dark
   chase = { 1, 0.55, 0.15, 1 }, clamped = { 1, 0.2, 0.2, 1 }, sealed = { 1, 0.2, 0.2, 1 }, rest = { 0.6, 0.6, 0.7, 0.8 },
   off = { 0.25, 0.25, 0.3, 0.5 }, decoyed = { 0.4, 0.9, 1, 0.9 },
+  patrol = { 0.9, 0.85, 0.3, 0.9 }, hunt = { 1, 0.15, 0.1, 1 },
 }
 
 function M.draw_sentries(v, A, state, p)
@@ -61,6 +62,13 @@ function M.draw_sentries(v, A, state, p)
           local spin = (dyn.st == "chase" or dyn.st == "clamped") and state.tick * 0.2 or state.tick * 0.02
           v:mesh(A.clamp, { pos = pos, yaw = spin })
           v:billboard(A.tex.beam, { pos[1], pos[2] + 1.6, pos[3] }, show and 1.6 or 0.8,
+            { palette = A.pal.base, tint = tint })
+        elseif def.kind == "warden" then
+          -- add-home-among-stars: the Warden, its eye ring turning fast when it hunts
+          local pos = dyn.pos or def.pos
+          local spin = dyn.st == "hunt" and state.tick * 0.15 or state.tick * 0.015
+          v:mesh(A.warden, { pos = pos, yaw = spin })
+          v:billboard(A.tex.beam, { pos[1], pos[2] + 2.6, pos[3] }, show and 2.2 or 1.2,
             { palette = A.pal.base, tint = tint })
         elseif def.kind == "lockdown" then
           v:mesh(A.lockdown, { pos = def.pos, yaw = state.tick * 0.01 })

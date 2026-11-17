@@ -20,6 +20,7 @@ local panel = require("sim.panel")
 local ruinm = require("sim.ruin")
 local vec = require("lib.vec")
 local render = require("view.render")
+local hud = require("view.hud")
 local music = require("view.music")
 local mapv = require("view.map")
 
@@ -460,6 +461,91 @@ describe("advanced sentries and tools", function()
     expect(adv.jammed(st, def, dyn, t, game.seal)).to_be(false)
     adv.step_clamp(st, def, dyn, 1, ctx, t)
     expect(dyn.st).to_be("off")
+  end)
+  it("the Warden patrols the deep halls, hunts, wakes Snatchers and only the Jammer stops it", function()
+    local warden = require("sim.warden")
+    local st = new_state()
+    local g = galaxy.generate(42)
+    local deep
+    for _, id in ipairs(g.spine) do if g.sectors[id].danger >= 3 then deep = id break end end
+    game.enter_sector(st, deep)
+    local si, wi
+    for s2 = 1, #st.sector.sites do
+      for k, d in ipairs(game.sentries(s2)) do
+        if d.kind == "warden" and not wi then si, wi = s2, k end
+      end
+    end
+    expect(wi ~= nil).to_be(true)
+    local def, dyn = game.sentries(si)[wi], st.sentries[si][wi]
+    expect(select(5, sentry.summary(game.sentries(si)))).to_be(1)
+    expect(#def.route).to_be_greater(0)
+    expect(dyn.st).to_be("patrol")
+    local t = sentry.tune()
+    local p = st.players[1]
+    p.mode = "helm"
+    p.site = 0
+    -- patrol: it walks its route
+    local start = vec.copy(dyn.pos)
+    for _ = 1, 600 do warden.step(st, def, dyn, 1 / 60, ctx, t) end
+    expect(dyn.st).to_be("patrol")
+    if #def.route > 1 then expect(vec.dist(start, dyn.pos) > 0.5 or dyn.wp ~= 1).to_be(true) end
+    -- a hull in sight, inside its halls: the hunt
+    p.site = si
+    p.ship.pos = vec.add(dyn.pos, { 0, 0, 0.5 })
+    p.ship.vel = { 0, 0, 0 }
+    -- the Shroud hides a still hull
+    p.shroud = true
+    expect(warden.sees(def, dyn, p, t)).to_be(false)
+    p.shroud = false
+    expect(warden.sees(def, dyn, p, t)).to_be(true)
+    local before = #(st.bolts or {})
+    st.bolts = st.bolts or {}
+    warden.step(st, def, dyn, 1 / 60, ctx, t)
+    expect(dyn.st).to_be("hunt")
+    expect(dyn.target).to_be(1)
+    expect(last()).to_contain("WARDEN")
+    for _ = 1, 60 do warden.step(st, def, dyn, 1 / 60, ctx, t) end
+    expect(#st.bolts).to_be_greater(before)
+    expect(hud.alarm(st, p)).to_be("WARDEN")
+    -- it woke the site's Snatchers
+    for k, d in ipairs(game.sentries(si)) do
+      if d.kind == "snatcher" then expect(st.sentries[si][k].woke).to_be_greater(st.tick) end
+    end
+    -- far away: it follows, but never leaves its halls
+    p.ship.pos = vec.add(def.leash[2], { 50, 0, 0 })
+    for _ = 1, 30 do warden.step(st, def, dyn, 1 / 60, ctx, t) end
+    expect(adv.decoy_for(st, def, dyn.pos, t)).to_be(nil)
+    -- out of sight long enough: back on patrol
+    for _ = 1, math.ceil(t.lose_time * 3 * 60) + 2 do warden.step(st, def, dyn, 1 / 60, ctx, t) end
+    expect(dyn.st).to_be("patrol")
+    -- a Decoy takes its attention
+    st.decoys = { { site = si, pos = vec.add(dyn.pos, { 0, 0, 2 }), life = 8 } }
+    warden.step(st, def, dyn, 1 / 60, ctx, t)
+    expect(dyn.st).to_be("decoyed")
+    st.decoys = {}
+    warden.step(st, def, dyn, 1 / 60, ctx, t)
+    expect(dyn.st).to_be("patrol")
+    -- the Jammer stuns it; the spike can then finish it
+    local n = sentry.jam(st, si, game.sentries(si), vec.add(dyn.pos, { 0, 0, -2 }), { 0, 0, 1 }, p)
+    expect(n).to_be_greater(0)
+    expect(dyn.st).to_be("disabled")
+    p.mode = "foot"
+    p.excursion = { body = { pos = vec.add(dyn.pos, { 0, -1.6, 0 }), yaw = 0, pitch = 0 } }
+    expect(adv.spike_target(st, p, t)).to_be(wi)
+    p.mode, p.excursion = "helm", nil
+    warden.step(st, def, dyn, t.disabled_time + 1, ctx, t)
+    expect(dyn.st).to_be("patrol")
+    dyn.st = "off"
+    warden.step(st, def, dyn, 1, ctx, t)
+    expect(dyn.st).to_be("off")
+    -- a hunting Warden sounds the Lockdown alarm; the view draws it
+    dyn.st, dyn.target = "hunt", 1
+    local A = require("view.assets").init()
+    local v = fake_view()
+    p.scan_until = st.tick + 100
+    render.draw_sentries(v, A, st, p)
+    expect(v.calls.mesh).to_be_greater(0)
+    expect(#render.radar_targets(st, p)).to_be_greater(0)
   end)
   it("the Cutter slices a Lockdown's seals (add-home-among-stars)", function()
     local tools = require("sim.tools")

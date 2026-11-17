@@ -110,6 +110,8 @@ function M.layout(site, ruin, civ)
   end
   -- add-wider-dark: deeper sectors add Clamps and a Lockdown node
   if (site.danger or 1) >= 2 then adv.layout(out, site, ruin, kit, t) end
+  -- add-home-among-stars: the deepest derelicts keep a Warden
+  if (site.danger or 1) >= 3 and t.warden then require("sim.warden").layout(out, site, ruin, kit, t) end
   return out
 end
 
@@ -118,6 +120,8 @@ function M.new_state(defs, state)
   for i, d in ipairs(defs) do
     if d.kind == "clamp" or d.kind == "lockdown" then
       out[i] = adv.new_state(d)
+    elseif d.kind == "warden" then
+      out[i] = require("sim.warden").new_state(d)
     elseif d.kind == "watcher" then
       out[i] = { st = "dormant", t = 0, lost = 0, fire = 0, target = 0, yaw = d.yaw, pitch = d.pitch }
     else
@@ -269,7 +273,9 @@ end
 function M.snatcher_wants(def, dyn, p, t)
   if p.site ~= def.site or not seat(p) or #losable(p) == 0 then return false end
   if def.leash and not in_box(def.leash, p.ship.pos) then return false end
-  return vec.dist(dyn.pos, p.ship.pos) <= (on_foot(p) and t.snatcher.foot_sense or t.snatcher.sense)
+  -- add-home-among-stars: a Warden's alarm wakes them (twice the sense)
+  local woke = dyn.woke and require("sim.game").state_ref and dyn.woke > (require("sim.game").state_ref.tick or 0)
+  return vec.dist(dyn.pos, p.ship.pos) <= (on_foot(p) and t.snatcher.foot_sense or t.snatcher.sense) * (woke and 2 or 1)
 end
 
 local function step_snatcher(state, def, dyn, dt, ctx, t)
@@ -427,6 +433,7 @@ function M.step(state, site_idx, defs, dt, ctx)
     if def.kind == "watcher" then step_watcher(state, def, dyn, dt, ctx, t)
     elseif def.kind == "clamp" then adv.step_clamp(state, def, dyn, dt, ctx, t)
     elseif def.kind == "lockdown" then adv.step_lockdown(state, def, dyn, dt, ctx, t, ctx.seal)
+    elseif def.kind == "warden" then require("sim.warden").step(state, def, dyn, dt, ctx, t)
     else step_snatcher(state, def, dyn, dt, ctx, t) end
   end
 end
@@ -504,14 +511,15 @@ end
 
 -- for the scanner readout
 function M.summary(defs)
-  local w, s, c, l = 0, 0, 0, 0
+  local w, s, c, l, wd = 0, 0, 0, 0, 0
   for _, d in ipairs(defs) do
     if d.kind == "watcher" then w = w + 1
     elseif d.kind == "clamp" then c = c + 1
     elseif d.kind == "lockdown" then l = l + 1
+    elseif d.kind == "warden" then wd = wd + 1
     else s = s + 1 end
   end
-  return w, s, c, l
+  return w, s, c, l, wd
 end
 
 return M

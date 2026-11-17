@@ -183,13 +183,13 @@ if(SAUCER_BUILD_TESTS)
   if(NODE_EXE)
     add_test(NAME web_net_js COMMAND ${NODE_EXE} tests/web/net_web.test.js WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   endif()
-  # milestone 9: the mod browser switches a mod off for the next start, and on again
-  add_test(NAME game_mod_browser COMMAND ${CMAKE_COMMAND} -DHL=$<TARGET_FILE:saucer_headless> -DROOT=${CMAKE_SOURCE_DIR}
-           -DUSER=${USERDIR}-modbrowser -P ${CMAKE_SOURCE_DIR}/tools/mod_browser.cmake
-           WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   # milestone 9: two machines on loopback (a host and an XR guest) play one universe in
   # lockstep, decorate a dome and visit it; a deliberate desync must be caught
   if(NOT EMSCRIPTEN)
+    # milestone 9: the mod browser switches a mod off for the next start, and on again
+    add_test(NAME game_mod_browser COMMAND ${CMAKE_COMMAND} -DHL=$<TARGET_FILE:saucer_headless> -DROOT=${CMAKE_SOURCE_DIR}
+             -DUSER=${USERDIR}-modbrowser -P ${CMAKE_SOURCE_DIR}/tools/mod_browser.cmake
+             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
     set(NETL ${CMAKE_COMMAND} -DHL=$<TARGET_FILE:saucer_headless> -DROOT=${CMAKE_SOURCE_DIR})
     add_test(NAME game_netplay COMMAND ${NETL} -DUSER=${USERDIR}-net -DPORT=47831 -DSCRIPT=tests/game/netplay.lua
              -P ${CMAKE_SOURCE_DIR}/tools/net_loopback.cmake WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})

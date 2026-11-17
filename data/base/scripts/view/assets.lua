@@ -94,6 +94,14 @@ function M.init()
     { kind = "ring", c = { 0, 0.3, 0 }, rin = 0.75, r = 1.05, h = 0.25, seg = 12, color = { 1, 0.25, 0.2 }, emissive = 0.8 },
     { kind = "sphere", c = { 0, 1.1, 0 }, r = 0.35, h = 0.35, seg = 8, rings = 2, color = { 1, 0.3, 0.2 }, emissive = 1 },
   } })
+  -- add-home-among-stars: the Warden - a tall armoured hunter with a red eye ring
+  cache.warden = saucer.mesh.build({ parts = {
+    { kind = "cylinder", c = { 0, -2.2, 0 }, r = 1.6, h = 3.4, seg = 8, color = { 0.28, 0.27, 0.33 } },
+    { kind = "sphere", c = { 0, 1.4, 0 }, r = 1.5, h = 1.1, seg = 10, rings = 3, color = { 0.4, 0.38, 0.45 } },
+    { kind = "ring", c = { 0, 1.2, 0 }, rin = 1.45, r = 1.9, h = 0.35, seg = 16, color = { 1, 0.15, 0.1 }, emissive = 1 },
+    { kind = "box", min = { -2.4, -0.6, -0.25 }, max = { -1.5, 0.4, 0.25 }, color = { 0.55, 0.5, 0.45 } },
+    { kind = "box", min = { 1.5, -0.6, -0.25 }, max = { 2.4, 0.4, 0.25 }, color = { 0.55, 0.5, 0.45 } },
+  } })
   cache.seal = saucer.mesh.build({ parts = {
     { kind = "box", min = { 0, 0, 0 }, max = { 1, 1, 1 }, color = { 1, 0.3, 0.2 }, emissive = 0.8 },
   } })
