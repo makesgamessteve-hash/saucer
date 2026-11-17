@@ -52,6 +52,37 @@ TEST(options_parse_all) {
   CHECK(strstr(sx_usage(), "--seed") != NULL);
 }
 
+TEST(realtime_pacing) {
+  sx_pace p = {0, 0}, p2 = {0, 0};
+  sx_options o;
+  char *rt[] = {"x", "--realtime"};
+  double w;
+  CHECK(sx_env_flag("1") && sx_env_flag("yes") && !sx_env_flag("0") && !sx_env_flag("") && !sx_env_flag(NULL));
+  /* the first frame is due one tick after it starts; running fast means sleeping */
+  w = sx_pace_wait(&p, 10.0, 1);
+  CHECK(w > 1.0 / 60 - 1e-9 && w < 1.0 / 60 + 1e-9);
+  /* the next frame, drawn after 4 ms: sleeps off the rest of the second tick */
+  w = sx_pace_wait(&p, 10.0 + 0.004, 1);
+  CHECK(w > 2.0 / 60 - 0.004 - 1e-9 && w < 2.0 / 60 - 0.004 + 1e-9);
+  /* N ticks a frame are due N/60 s apart (and 0 counts as 1) */
+  w = sx_pace_wait(&p2, 0.0, 30);
+  CHECK(w > 0.5 - 1e-9 && w < 0.5 + 1e-9);
+  w = sx_pace_wait(&p2, 0.5, 0);
+  CHECK(w > 1.0 / 60 - 1e-9 && w < 1.0 / 60 + 1e-9);
+  /* a slow frame (a bit late) does not sleep and the next one catches up */
+  w = sx_pace_wait(&p2, 0.5 + 0.1, 1);
+  CHECK(w == 0);
+  w = sx_pace_wait(&p2, 0.5 + 0.1 + 0.001, 1);
+  CHECK(w == 0);
+  /* far behind: restart the schedule instead of bursting */
+  w = sx_pace_wait(&p2, 50.0, 1);
+  CHECK(w == 0 && p2.due == 50.0);
+  w = sx_pace_wait(&p2, 50.0, 1);
+  CHECK(w > 1.0 / 60 - 1e-9);
+  sx_options_default(&o);
+  CHECK(parse(&o, 2, rt) && o.realtime);
+}
+
 TEST(ticks_for_frame) {
   double acc = 0;
   CHECK(sx_ticks_for_frame(&acc, 1.0 / 60) == 1);
