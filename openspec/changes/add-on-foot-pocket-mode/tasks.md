@@ -1,7 +1,7 @@
 ## 1. Requirements
 
-- [ ] 1.1 Pocket and deploy: not in milestone 1
-- [ ] 1.2 Suit Charge and Lifeline: not in milestone 1
+- [x] 1.1 Pocket and deploy: superseded, built in `add-on-foot-excursions`
+- [x] 1.2 Suit Charge and Lifeline: superseded, built in `add-on-foot-excursions`
 
 ## 2. Verification
 

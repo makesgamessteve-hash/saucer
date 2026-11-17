@@ -30,6 +30,21 @@ function M.site_props(v, A, state, p, site, f, tick)
   local n = 0
   for _, sh in ipairs(f.shutters) do
     local k = M.shutter_open(state, site, sh.id, tick)
+    -- a hazard frame round the strongroom door, open or shut
+    local l = sh.axis == 1 and 3 or 1
+    local c0 = vec.scale(vec.add(sh.min, sh.max), 0.5)
+    local hgt = sh.max[2] - sh.min[2]
+    local wid = sh.max[l] - sh.min[l]
+    local fc = { 1, 0.62, 0.1, 1 }
+    for _, side in ipairs({ -1, 1 }) do
+      local q = vec.copy(c0)
+      q[l] = c0[l] + side * (wid / 2 + 0.1)
+      v:mesh(A.unit, { pos = { q[1], sh.min[2] + hgt / 2, q[3] }, scale = { 0.2, hgt + 0.4, 0.2 }, tint = fc })
+    end
+    local tsc = { 0.2, 0.2, 0.2 }
+    tsc[l] = wid + 0.4
+    v:mesh(A.unit, { pos = { c0[1], sh.max[2] + 0.1, c0[3] }, scale = tsc, tint = fc })
+    n = n + 3
     if k < 1 then
       local size = vec.sub(sh.max, sh.min)
       local c = vec.scale(vec.add(sh.min, sh.max), 0.5)
