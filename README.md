@@ -232,7 +232,7 @@ and Snatchers tear hot items out of your hands; nothing is lethal.
 | ![Stepping out: the Seat folds into your hand](docs/shots/m7_step_out_fold.png) | ![Crawling through a 1 m crawlspace](docs/shots/m7_crawlspace.png) |
 | ![Turning the hand-lock in the chamber](docs/shots/m7_hand_lock.png) | ![Shutting the sentry grid down at its console](docs/shots/m7_grid_console.png) |
 | ![Suit Charge critical](docs/shots/m7_suit_critical.png) | ![The Lifeline pulls you back into the Seat](docs/shots/m7_lifeline_pullback.png) |
-| ![Walking back for the dropped cache](docs/shots/m7_recover_cache.png) | ![The Seat at the strongroom door the hand-lock opened](docs/shots/m7_open_shutter.png) |
+| ![Walking back for the dropped cache](docs/shots/m7_recover_cache.png) | |
 
 Press A on a second gamepad (with `--coop`) to join as player 2; each player
 lives in and flies their own saucer. `--local-players 2 --viewports 2` starts split screen.
