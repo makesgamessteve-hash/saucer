@@ -62,6 +62,41 @@ return {
       label = "USE: WATCH TV" },
     { id = "books",    kind = "books",    deck = 1, pos = { -7.0, 0.6, -3.45 }, radius = 1.0, room = "Living room",
       label = "USE: BOOKSHELF" },
+    -- add-home-among-stars: the trophy plinths either side of the helm walk,
+    -- the planner (place and buy furniture) and the garden behind the stairwell
+    { id = "display1", kind = "display", slot = 1, deck = 1, pos = { -4.2, 0.6, 5.3 }, radius = 0.8, room = "Living room",
+      label = "USE: DISPLAY SLOT" },
+    { id = "display2", kind = "display", slot = 2, deck = 1, pos = { -5.6, 0.6, 4.3 }, radius = 0.8, room = "Living room",
+      label = "USE: DISPLAY SLOT" },
+    { id = "display3", kind = "display", slot = 3, deck = 1, pos = { -2.6, 0.6, 6.5 }, radius = 0.8, room = "Helm",
+      label = "USE: DISPLAY SLOT" },
+    { id = "display4", kind = "display", slot = 4, deck = 1, pos = { 4.2, 0.6, 5.3 }, radius = 0.8, room = "Kitchen",
+      label = "USE: DISPLAY SLOT" },
+    { id = "display5", kind = "display", slot = 5, deck = 1, pos = { 5.4, 0.6, 4.6 }, radius = 0.6, room = "Kitchen",
+      label = "USE: DISPLAY SLOT" },
+    { id = "display6", kind = "display", slot = 6, deck = 1, pos = { 2.6, 0.6, 6.5 }, radius = 0.8, room = "Helm",
+      label = "USE: DISPLAY SLOT" },
+    { id = "planner", kind = "planner", deck = 1, pos = { -2.4, 0.6, 3.2 }, radius = 0.9, room = "Living room",
+      label = "USE: HOME PLANNER" },
+    { id = "garden", kind = "garden", deck = 1, pos = { 0.3, 0.6, -6.6 }, radius = 1.6, room = "Lab",
+      label = "USE: GARDEN" },
+  },
+  -- add-home-among-stars: display slots (plinth centre and top), garden beds
+  -- ({ x0, z0, x1, z1 }) and where furniture may not go (stair openings, the
+  -- walk to the helm). See home/decor.lua for what can be placed.
+  display = {
+    { at = { -4.2, 6.2 }, top = 1.05 }, { at = { -6.2, 5.0 }, top = 1.05 }, { at = { -2.7, 7.5 }, top = 1.05 },
+    { at = { 4.2, 6.2 }, top = 1.05 }, { at = { 6.2, 5.2 }, top = 1.05 }, { at = { 2.7, 7.5 }, top = 1.05 },
+  },
+  garden = {
+    { box = { -2.9, -8.2, -1.6, -7.2 } }, { box = { -1.3, -8.2, 0.0, -7.2 } },
+    { box = { 0.6, -8.2, 1.9, -7.2 } }, { box = { 2.2, -8.2, 3.5, -7.2 } },
+  },
+  keep_clear = {
+    { deck = 1, box = { -1.2, 2.0, 1.6, 10 } },      -- the walk from the dome to the helm
+    { deck = 1, box = { -3.2, -6.3, 4.6, -4.2 } },   -- the stairwell and its top
+    { deck = 2, box = { -4.2, -6.3, 3.8, -4.2 } },
+    { deck = 2, box = { -8.0, -3.4, -3.6, -1.4 } },  -- the belly stair
   },
   -- add-holodeck-home-life: where you sit or stand while doing things at home
   -- (hull-local eye, yaw relative to the hull). The holodeck's arch spans
@@ -95,6 +130,8 @@ return {
       bed = { 2.4, -3.0, 4.0 }, shower = { -3.9, -3.0, 3.4 }, engine = { 0.0, -3.0, -0.3 }, living = { -3.2, 0.6, 1.5 },
       holodeck = { 3.2, -3.0, -3.15 }, holo_arch = { 3.3, -3.0, -2.0 }, holo_in = { 5.2, -3.0, -2.0 },
       living_s = { -6.4, 0.6, 1.5 }, tv = { -6.55, 0.6, -0.2 }, books = { -7.0, 0.6, -3.45 },
+      planner = { -2.4, 0.6, 3.2 }, display1 = { -4.2, 0.6, 5.3 }, display4 = { 4.2, 0.6, 5.3 },
+      display3 = { -2.6, 0.6, 6.5 }, display2 = { -5.6, 0.6, 4.3 }, display5 = { 5.4, 0.6, 4.6 }, display6 = { 2.6, 0.6, 6.5 }, trade_w = { 4.0, 0.6, -6.5 }, garden = { 0.3, 0.6, -6.6 },
     },
     links = {
       { "helm", "dome" }, { "dome", "aft" }, { "dome", "living" }, { "aft", "stair_top_in" },
@@ -109,6 +146,8 @@ return {
       { "belly_mid", "belly_side" }, { "belly_side", "tractor" },
       { "engine_e", "holodeck" }, { "holodeck", "holo_arch" }, { "holo_arch", "holo_in" },
       { "living", "living_s" }, { "living_s", "tv" }, { "lab_in", "books" },
+      { "dome", "planner" }, { "planner", "display1" }, { "dome", "display4" }, { "dome", "display3" },
+      { "dome", "display6" }, { "display1", "display2" }, { "display4", "display5" }, { "trade", "trade_w" }, { "trade_w", "garden" },
     },
   },
   rooms = {
@@ -146,6 +185,17 @@ return {
     { deck = 1, kind = "table",   box = { -5.6, -1.2, -4.4, 0.8 }, h = 0.45, color = { 0.45, 0.30, 0.20 } },
     { deck = 1, kind = "armchair",box = { -5.6, 2.7, -4.4, 3.9 }, h = 0.9, color = { 0.25, 0.45, 0.70 } },
     { deck = 1, kind = "plant",   box = { -7.1, -5.6, -6.3, -4.8 }, h = 1.6, color = { 0.25, 0.65, 0.30 } },
+    -- add-home-among-stars: six display plinths and the four garden beds
+    { deck = 1, kind = "plinth",  box = { -4.5, 5.9, -3.9, 6.5 }, h = 1.05, color = { 0.86, 0.84, 0.80 } },
+    { deck = 1, kind = "plinth",  box = { -6.5, 4.7, -5.9, 5.3 }, h = 1.05, color = { 0.86, 0.84, 0.80 } },
+    { deck = 1, kind = "plinth",  box = { -3.0, 7.2, -2.4, 7.8 }, h = 1.05, color = { 0.86, 0.84, 0.80 } },
+    { deck = 1, kind = "plinth",  box = { 3.9, 5.9, 4.5, 6.5 }, h = 1.05, color = { 0.86, 0.84, 0.80 } },
+    { deck = 1, kind = "plinth",  box = { 5.9, 4.9, 6.5, 5.5 }, h = 1.05, color = { 0.86, 0.84, 0.80 } },
+    { deck = 1, kind = "plinth",  box = { 2.4, 7.2, 3.0, 7.8 }, h = 1.05, color = { 0.86, 0.84, 0.80 } },
+    { deck = 1, kind = "planter", box = { -2.9, -8.2, -1.6, -7.2 }, h = 0.5, color = { 0.42, 0.30, 0.22 } },
+    { deck = 1, kind = "planter", box = { -1.3, -8.2, 0.0, -7.2 }, h = 0.5, color = { 0.42, 0.30, 0.22 } },
+    { deck = 1, kind = "planter", box = { 0.6, -8.2, 1.9, -7.2 }, h = 0.5, color = { 0.42, 0.30, 0.22 } },
+    { deck = 1, kind = "planter", box = { 2.2, -8.2, 3.5, -7.2 }, h = 0.5, color = { 0.42, 0.30, 0.22 } },
     { deck = 1, kind = "plant",   box = { 6.8, -5.8, 7.6, -5.0 }, h = 1.4, color = { 0.25, 0.65, 0.30 } },
     -- stair rails on the dome deck (sides and the far low end)
     { deck = 1, kind = "rail", box = { -3.0, -6.1, 3.5, -6.0 }, h = 1.0, color = { 0.6, 0.62, 0.7 } },

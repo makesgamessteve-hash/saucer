@@ -13,4 +13,17 @@ return {
   { kind = "module", id = "seats", price = 80 },
   { kind = "book", id = "star_cookbook", price = 12 },
   { kind = "book", id = "fold_primer", price = 10 },
+  -- add-home-among-stars: furniture and garden seeds (prices in home/decor.lua)
+  { kind = "furniture", id = "beanbag" },
+  { kind = "furniture", id = "armchair" },
+  { kind = "furniture", id = "rug" },
+  { kind = "furniture", id = "lamp" },
+  { kind = "furniture", id = "bookcase" },
+  { kind = "furniture", id = "aquarium" },
+  { kind = "furniture", id = "telescope" },
+  { kind = "furniture", id = "hammock" },
+  { kind = "furniture", id = "crystal" },
+  { kind = "seed", id = "glowmoss", n = 2 },
+  { kind = "seed", id = "sunvine", n = 2 },
+  { kind = "seed", id = "emberleaf", n = 2 },
 }

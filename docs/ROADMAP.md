@@ -408,7 +408,7 @@ Heart site and three endings; the music has no stereo pan; split screen
 in a real headset is untested (joins are refused while XR is active);
 autopilot needs a climb-first waypoint out of the Heart's shaft.
 
-## 9. Home among the stars (M3) — next
+## 9. Home among the stars (M3) — done
 
 **Goal.** Networked co-op and a dome that is truly yours.
 
@@ -418,6 +418,60 @@ grapple; a mod browser; Hardcore mode.
 
 **Done when.** Two machines (or a browser and a desktop) play one universe
 without a desync, and a guest can visit a decorated dome.
+
+**Status (2026-11-17).** Done in OpenSpec change `add-home-among-stars`.
+**Netplay** (`engine/src/core/sx_net.c`): deterministic lockstep in a star
+(the host is slot 1, guests 2-4). Each machine sends its slot's command
+frames `--net-delay` ticks ahead (default 3), redundantly until acked, and
+advances only with every slot's frame; HELLO carries the network API and the
+mod-set hash, so a different version or mod set is refused with the reason;
+a machine silent for 8 s is dropped and its slot plays empty frames. Every
+60 ticks each side sends its state hash; a mismatch stops the session on
+both sides with the first differing tick. Desktop transport: UDP
+(`sx_net_udp.c`, `--host [PORT]`, `--join HOST[:PORT]`, `--net-players`),
+the window title shows the status. Web transport: an unordered WebRTC data
+channel without retransmits (`web/saucer_net.js`), signaled by copy-paste
+offer and answer codes from the shell's **Online co-op** panel (no server).
+A WebXR player can host or join (their headset follows their own slot).
+Split screen got a compact HUD for two and four players. **The dome**
+(`sim/decor.lua`, `home/decor.lua`): nine furniture kinds from traders,
+placed with the Home planner on a 0.25 m grid with quarter turns (solid for
+guests), six display slots for identified finds, four garden beds with
+three alien seeds that grow while watered into kitchen ingredients, and
+Comfort (diminishing per kind, Bare to Beloved) that speeds up Charge
+regeneration by 2% a point (at most 50%); docked guests walk the decorated
+dome and admire the displays. **The Warden** (`sim/warden.lua`, danger 3
+only): patrols its great halls through big doors, hunts with stun bolts,
+sounds the Lockdown alarm and wakes the site's Snatchers (double sense for
+30 s); Decoy and Shroud work on it, only the Jammer stuns it and the
+Override spike then shuts it down. **Tools** (`sim/tools.lua`): the grapple
+(X on foot, 25 m) and the cutter (hold N with no sentry to spike: a sealed
+shutter or a Lockdown seal in 6 s). **Mod browser** (`sim/modbrowser.lua`,
+`saucer.mods`): lists every mod folder with its description and load status
+and switches mods for the next start (`<user-dir>/mods.txt`). **Hardcore**
+(`sim/hardcore.lua`, title card or `--hardcore`): Fold Retreat loses all
+cargo, the Lifeline loses your hands, no loading from the bed. Decor,
+Hardcore and tool state are created on first use, so old saves and replays
+keep their hashes. Tests: `tests/c/test_net.c` (lossy lockstep, four
+players, desyncs, rejects, timeouts), `tests/web/net_web.test.js` (the web
+transport under node with a fake RTCPeerConnection pair),
+`tests/lua/homestars_spec.lua`, and the Done-when as two processes on
+loopback: `tests/game/netplay.lua` via `tools/net_loopback.cmake` (a host
+and a guest in a WebXR session decorate the dome, dock, the guest walks it
+and admires the display; both must end on the same tick and hash after at
+least ten hash checks; also on seed 7 with delay 5), `tests/game/netdesync.lua`
+(a forced divergence is caught on both sides) and `tests/game/modbrowser.lua`
+across two starts. Screenshot tour `tools/shots/m9.lua` and
+`tools/shots/m9_net.sh` (two windows on loopback). Known gaps: lockstep
+only, no rollback; a browser and a desktop cannot share a session (UDP vs
+WebRTC; a relay would bridge them); guests join only before the session
+starts; no signaling server (codes are copy-pasted); the WebRTC path is
+tested under node with a fake peer-connection pair and the native protocol
+over UDP, but a session between two real browsers has not been verified
+yet (the CI and dev boxes' headless Chromium gathers no ICE candidates); the mod browser has no
+download source; the grapple has no touch button; the Xenoarchive set bonus
+for displays is not in; Wardens in the scripted mystery game test are
+switched off through the API (their own spec covers them).
 
 ## Later / maybe
 

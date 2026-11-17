@@ -41,6 +41,7 @@ local requests = require("sim.requests")
 local coop = require("sim.coop")
 local adv = require("sim.advsentry")
 local heart = require("sim.heart")
+local decor = require("sim.decor")
 local M = {}
 
 M.SITE_PAD = 30
@@ -236,6 +237,7 @@ function M.init(state, ctx)
     state.players[i] = M.new_player(i, { x, door[2], door[3] - 120 }, 0)
   end
   for i = 1, n do msg(state, state.players[i], "You wake up in your saucer. Press Use to get up.") end
+  if ctx.hardcore then state.hardcore = true end
   requests.ensure(state)
 end
 
@@ -651,11 +653,12 @@ local function scan(state, p)
     end
     site = best
   end
-  local w, sn, cl, ld = sentry.summary(rt.sentries[site] or {})
+  local w, sn, cl, ld, wd = sentry.summary(rt.sentries[site] or {})
   local danger = (state.sector_id or 1) == 1 and (site == 1 and 1 or 2) or (state.sector.sites[site].danger or 2) + 1
-  msg(state, p, string.format("Scan: site %d, danger %d, %d Watcher%s, %d Snatcher%s%s", site, danger, w,
+  msg(state, p, string.format("Scan: site %d, danger %d, %d Watcher%s, %d Snatcher%s%s%s", site, danger, w,
     w == 1 and "" or "s", sn, sn == 1 and "" or "s",
-    (cl + ld > 0) and string.format(", %d Clamp%s, %d Lockdown", cl, cl == 1 and "" or "s", ld) or ""))
+    (cl + ld > 0) and string.format(", %d Clamp%s, %d Lockdown", cl, cl == 1 and "" or "s", ld) or "",
+    wd > 0 and ", A WARDEN" or ""))
   fx(state, p, "scan")
 end
 
@@ -756,6 +759,8 @@ local function world_step(state, p, dt)
     if cache then
       msg(state, p, string.format("%d hot item%s stayed behind as a cache at site %d.", #cache.items,
         #cache.items == 1 and "" or "s", from))
+    elseif require("sim.hardcore").on(state) and (p.lost_for_good or 0) > 0 then
+      msg(state, p, "HARDCORE: the cargo in your hold is lost for good.")
     end
     fx(state, p, "grow")
   end
@@ -817,12 +822,18 @@ function M.spike_step(state, p, cmd, dt)
   local t = sentry.tune().spike
   if not cmd:held("spike") then
     p.spike = false
+    p.cut = nil
     return
   end
   local idx = adv.spike_target(state, p, sentry.tune())
+  -- add-home-among-stars: no sentry to spike - the same tool cuts shutters and seals
+  if not idx and require("sim.tools").cut_step(state, p, cmd:pressed("spike"), dt, ctx_fns) then
+    p.spike = false
+    return
+  end
   if not idx then
     if cmd:pressed("spike") then
-      msg(state, p, "Override spike: get within 3 m of a Disabled sentry or a Lockdown node")
+      msg(state, p, "Override spike: get within 3 m of a Disabled sentry or a Lockdown node (or a shutter to cut)")
       fx(state, p, "denied")
     end
     p.spike = false
@@ -894,6 +905,8 @@ function M.step_player(state, p, cmd, dt)
     if cmd:pressed("scan") then scan(state, p) end
     if cmd:pressed("jam") then jam(state, p) end
     if cmd:pressed("decoy") then M.decoy(state, p) end
+    -- add-home-among-stars: the Shroud key fires the Grapple on foot
+    if cmd:pressed("shroud") then require("sim.tools").grapple_fire(state, p, ctx_fns) end
     M.spike_step(state, p, cmd, dt)
     excursion.step(state, p, cmd, dt, ctx_fns)
     world_step(state, p, dt)
@@ -1010,6 +1023,7 @@ function M.step(state, cmds, dt)
 end
 
 home.register_panels(M, ctx_fns)
+decor.register(home, ctx_fns)
 visit.register_panels(ctx_fns)
 -- add-wider-dark panels
 panel.register("map", { title = "SECTOR MAP", rows = function(state, p) return galaxy.rows(state, p, ctx_fns) end })

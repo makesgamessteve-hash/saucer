@@ -67,9 +67,16 @@ describe("wake-up and panels", function()
     run(st, cmd({ axes = { move_z = -1 } })) -- held: no repeat
     expect(p.panel.sel).to_be(2)
     run(st, cmd())
-    run(st, cmd({ axes = { move_z = -1 } })) -- wraps
-    expect(p.panel.sel).to_be(1)
     run(st, cmd({ axes = { move_z = 1 } }))
+    expect(p.panel.sel).to_be(1)
+    run(st, cmd())
+    run(st, cmd({ axes = { move_z = 1 } })) -- wraps (Hardcore and the mod browser are last)
+    expect(p.panel.sel).to_be(#panel.rows(st, p))
+    run(st, cmd())
+    run(st, cmd({ axes = { move_z = -1 } })) -- and back
+    expect(p.panel.sel).to_be(1)
+    run(st, cmd())
+    run(st, cmd({ axes = { move_z = -1 } }))
     expect(p.panel.sel).to_be(2)
     expect(panel.find(st, p, "Get")).to_be(1)
     expect(panel.find(st, p, "Zzz")).to_be(nil)

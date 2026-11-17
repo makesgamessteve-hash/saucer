@@ -40,7 +40,7 @@ local HELP = {
   "Derelict: Seat near a deck, 3 (or Q) steps out; E deploys it",
   "On foot: Ctrl crouch, Space hop, G grabs / turns a hand-lock",
   "Map TAB: fold jumps (the party agrees), party, Xenoarchive",
-  "Decoy B, Shroud X (hover still), Override spike N (on foot)",
+  "Decoy B, Shroud X; on foot X grapples, hold N spikes or cuts",
   "Clamped? hold Boost to shake it off, or Jam it",
   "Co-op: gamepad A or F2 (right-hand keys) joins a player",
   "Camera C, mystery mode M, help H/F1",
@@ -202,6 +202,12 @@ function M.panel(v, state, p)
   local nav = mode == "pad" and "STICK UP/DOWN  X: PICK" or (mode == "touch" and "STICK UP/DOWN  USE: PICK" or
     (mode == "keys2" and "I/K: CHOOSE  ENTER: PICK" or "W/S: CHOOSE  G/ENTER: PICK"))
   v:text(W // 2 - #nav * 4, y + top + 10 + #rows * 11, nav, DIM)
+  -- add-home-among-stars: the selected row's hint (a mod's description)
+  local cur = all[p.panel.sel]
+  if cur and cur.hint then
+    local h = cur.hint:sub(1, (W - 16) // 8)
+    v:text(W // 2 - #h * 4, y + top + 21 + #rows * 11, h, CYAN)
+  end
   return #rows
 end
 
@@ -243,6 +249,7 @@ function M.alarm(state, p)
     if site == p.site then
       for _, dyn in pairs(list) do
         if dyn.target == p.index and (dyn.st == "locked" or dyn.st == "latched") then worst = "LOCKED"
+        elseif dyn.target == p.index and dyn.st == "hunt" then worst = "WARDEN" -- add-home-among-stars
         elseif dyn.target == p.index and dyn.st == "alert" and not worst then worst = "ALERT" end
       end
     end
@@ -303,8 +310,10 @@ end
 
 function M.draw(v, state, p, target)
   local W, H = v.width, v.height
-  -- add-wider-dark: a four-way split-screen quarter keeps only the essentials
-  local compact = H < 200
+  -- add-wider-dark: a split-screen view keeps only the essentials (a quarter
+  -- of a four-way split, and since add-home-among-stars the narrow halves of
+  -- a two-way split too: the full Seat HUD stacked on itself there)
+  local compact = H < 200 or W < 400
   local function fit(t) return t:sub(1, (W - 8) // 8) end
   local ship = p.ship
   local c = configs.get(ship.size)
@@ -335,6 +344,11 @@ function M.draw(v, state, p, target)
   v:rect(128, 12, 60, 4, { 0.15, 0.15, 0.2, 1 })
   v:rect(128, 12, 60 * math.max(0, hu), 4, hu > 0.3 and GREEN or RED)
   v:text(128, 19, string.format("%dc", p.credits or 0), AMBER)
+  -- add-home-among-stars: Hardcore is always on screen
+  -- (under the status lines; "HC" inside the Charge box in a compact view)
+  if state.hardcore then
+    if compact then v:text(96, 25, "HC", RED) else v:text(8, 76, "HARDCORE", RED) end
+  end
   local ls = M.lab_status(state, p)
   if ls and not compact then v:text(8, 56, ls, DIM) end
   local alarm = M.alarm(state, p)
@@ -367,8 +381,14 @@ function M.draw(v, state, p, target)
   local where, hint = M.status(p, state)
   v:text(8, 46, where, CYAN)
   if hint then
-    hint = fit(hint)
-    v:text(W // 2 - #hint * 4, H // 2 + (compact and 24 or 40), hint, AMBER)
+    if not compact then hint = fit(hint) end
+    -- (in a split view it sits above the messages, clear of the beam scope)
+    if compact then
+      -- one line per part ("F: MINI BEAM  E: UNFOLD" -> two lines), left of the scope
+      local parts = {}
+      for part in (hint .. "  "):gmatch("(.-)  +") do parts[#parts + 1] = part end
+      for i = #parts, 1, -1 do v:text(6, H - 34 - (#parts - i) * 10, parts[i]:sub(1, (W - 64) // 8), AMBER) end
+    else v:text(W // 2 - #hint * 4, H // 2 + 40, hint, AMBER) end
   end
   -- navigation
   local site, d = M.nav(state, p)
@@ -392,7 +412,8 @@ function M.draw(v, state, p, target)
     if (p.scan_until or 0) > state.tick then nav(40, 10, "SCANNING", CYAN) end
   end
   -- the belly beam's alignment indicator (add-tractor-beam)
-  if not compact then M.beam(v, state, p, target) end
+  -- (a two-way split half still has room for the scope: the beam needs it)
+  if not compact or H >= 200 then M.beam(v, state, p, target) end
   -- mystery
   local m = state.mystery
   if compact then -- no room
@@ -448,7 +469,7 @@ function M.jump(v, state, p, compact)
   local m = state.mystery
   if require("sim.heart").can_vote(state, p) and not m.votes[tostring(p.index)] and state.tick % 60 < 45 then
     local t = narrow and "HEART OPEN - TAB TO VOTE" or "THE HEART IS OPEN - TAB TO VOTE"
-    v:text(W // 2 - #t * 4, compact and H // 2 + 12 or narrow and H // 2 - 80 or 56, t, { 1, 0.45, 0.65, 1 })
+    v:text(W // 2 - #t * 4, compact and 58 or narrow and H // 2 - 80 or 56, t, { 1, 0.45, 0.65, 1 })
   end
   local j = state.jump
   if not j then return end

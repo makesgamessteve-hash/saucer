@@ -15,6 +15,7 @@
 #include "stb_image_write.h"
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
+#include "sx_net.h"
 #endif
 
 typedef struct app {
@@ -26,6 +27,7 @@ typedef struct app {
   int running, status;
   int fixed_step;          /* one tick per frame (screenshots, slow CI GPUs) */
   int shot_done;
+  char net_title[160];
   SDL_JoystickID pads[SX_MAX_PADS];
   SDL_Gamepad *pad_handles[SX_MAX_PADS];
 } app;
@@ -155,6 +157,16 @@ static void present(void) {
     e->shot_pending = 0;
     save_png(e->shot_path, w, h);
   }
+#if !defined(__EMSCRIPTEN__)
+  /* add-home-among-stars: a network game says where it stands in the title
+   * (the web shell shows it in its own status bar) */
+  if (e->net_on && strcmp(A.net_title, e->net.status) != 0) {
+    char t[200];
+    snprintf(A.net_title, sizeof A.net_title, "%s", e->net.status);
+    snprintf(t, sizeof t, "Saucer - %s - network %s", e->net.role == SX_NET_HOST ? "host" : "guest", e->net.status);
+    SDL_SetWindowTitle(A.win, t);
+  }
+#endif
   SDL_GL_SwapWindow(A.win);
 }
 
@@ -207,6 +219,18 @@ static void em_frame(void) {
 }
 
 extern void saucer_web_xr_probe(void);
+
+/* ---- networked co-op over a WebRTC data channel (web/saucer_net.js) ---- */
+EM_JS(int, saucer_web_net_send, (const unsigned char *buf, int len), {
+  return Module.saucerNetSend ? Module.saucerNetSend(HEAPU8.slice(buf, buf + len)) : -1;
+});
+static int web_net_send(const unsigned char *buf, int len) { return saucer_web_net_send(buf, len); }
+/* the page pushes every datagram from the data channel in here */
+EMSCRIPTEN_KEEPALIVE int saucer_net_push(const unsigned char *buf, int len) { return sx_net_web_push(buf, len); }
+/* what the page shows while the session runs */
+EMSCRIPTEN_KEEPALIVE const char *saucer_net_status(void) {
+  return A.e && A.e->net_on ? A.e->net.status : "";
+}
 
 /* ---- WebXR glue called from web/saucer_xr.js ---- */
 EMSCRIPTEN_KEEPALIVE void saucer_xr_set_available(int a) {
@@ -360,6 +384,9 @@ int main(int argc, char **argv) {
   }
   SDL_GL_SetSwapInterval(A.fixed_step ? 0 : 1);
   sx_audio_init();
+#ifdef __EMSCRIPTEN__
+  sx_net_web_set_send(web_net_send);
+#endif
   A.e = sx_engine_create(&o);
   if (!A.e) {
     fprintf(stderr, "failed to start (is data/ beside the binary? root: %s)\n", o.root);

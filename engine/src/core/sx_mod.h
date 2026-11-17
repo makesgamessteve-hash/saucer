@@ -16,6 +16,7 @@ typedef struct sx_mod {
   char license_code[32];
   char license_assets[32];
   char root[512];
+  char description[200]; /* add-home-among-stars: shown by the mod browser */
   int api;
   sx_strlist depends;     /* ids */
   sx_strlist depends_req; /* version requirement per dependency (">=0.1" or "") */

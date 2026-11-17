@@ -76,6 +76,8 @@ function M.solids(L, p)
   for i, door in ipairs(L.doors or {}) do
     if (p.doors and p.doors[i] or 0) < L.door_solid_below then out[#out + 1] = { deck = door.deck, box = door.box } end
   end
+  -- add-home-among-stars: placed furniture is solid (for guests too)
+  for _, b in ipairs(require("sim.decor").solids(p)) do out[#out + 1] = b end
   return out
 end
 
@@ -86,7 +88,8 @@ function M.fed(state, p) return (p.fed_until or 0) > state.tick or buffs.active(
 function M.regen_factor(state, p)
   local f = buffs.factor(state, p, "charge_regen")
   if (p.fed_until or 0) > state.tick and not buffs.active(state, p, "fed") then f = f * M.FED_FACTOR end
-  return f
+  -- add-home-among-stars: a comfortable dome
+  return f * require("sim.decor").regen_factor(state, p)
 end
 
 -- add-holodeck-home-life: the kitchen cooks recipes from the pantry
@@ -175,11 +178,19 @@ end
 function M.register_panels(game, ctx)
   panel.register("title", {
     title = "SAUCER",
-    rows = function()
-      return {
+    rows = function(st)
+      local rows = {
         { text = "Get up", act = function(state, p) M.get_up(state, p, ctx) end },
         { text = "Load saved game", act = function(state, p) M.load(state, p, ctx, game) end },
       }
+      -- add-home-among-stars: Hardcore is chosen before anyone gets up
+      local hc = require("sim.hardcore")
+      if st and hc.can_choose(st) then
+        rows[#rows + 1] = { text = hc.on(st) and "Hardcore: ON (choose again for Standard)" or "Hardcore: off",
+          act = function(state, p) hc.toggle(state, p, ctx) end }
+      end
+      rows[#rows + 1] = { text = "Mod browser", act = function(_, p) panel.open(p, "mods") end }
+      return rows
     end,
   })
   panel.register("lab", {
@@ -208,14 +219,18 @@ function M.register_panels(game, ctx)
   })
   panel.register("bed", {
     title = "BED",
-    rows = function()
-      return {
-        { text = "Sleep until morning (save)", act = function(state, p) M.sleep(state, p, ctx) end },
-        { text = "Load saved game", act = function(state, p) M.load(state, p, ctx, game) end },
-        { text = "Close", act = function(_, p) panel.close(p) end },
-      }
+    rows = function(state)
+      local rows = { { text = "Sleep until morning (save)", act = function(st, p) M.sleep(st, p, ctx) end } }
+      -- add-home-among-stars: no loading from the bed in Hardcore
+      if not require("sim.hardcore").on(state) then
+        rows[#rows + 1] = { text = "Load saved game", act = function(st, p) M.load(st, p, ctx, game) end }
+      end
+      rows[#rows + 1] = { text = "Mod browser", act = function(_, p) panel.open(p, "mods") end }
+      rows[#rows + 1] = { text = "Close", act = function(_, p) panel.close(p) end }
+      return rows
     end,
   })
+  require("sim.modbrowser").register(ctx)
 end
 
 return M

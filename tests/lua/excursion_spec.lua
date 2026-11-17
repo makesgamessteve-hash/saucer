@@ -461,6 +461,98 @@ describe("on foot", function()
     p.excursion.coin = "fold"
     expect(ex.use(st, p, ctx)).to_be(false)
   end)
+  it("the Grapple reels you to what it hooks; the Cutter opens a shutter (add-home-among-stars)", function()
+    local tools = require("sim.tools")
+    local st, p, f = out()
+    local b = p.excursion.body
+    put(p, f.route[1])
+    -- look straight up: the ceiling is close; reel up to it
+    b.pitch = 1.4
+    local y0 = b.pos[2]
+    p.suit = 50
+    run(st, cmd({ pressed = { "shroud" } }))
+    expect(p.excursion.grapple ~= nil).to_be(true)
+    expect(heard(p, "Grapple hooked")).to_be(true)
+    expect(p.suit).to_be_less(50)
+    expect(tools.grapple_fire(st, p, ctx)).to_be(false) -- one line at a time
+    local top = y0
+    for _ = 1, 200 do
+      run(st, cmd())
+      top = math.max(top, p.excursion.body.pos[2])
+    end
+    expect(p.excursion.grapple).to_be(nil)
+    expect(p.grapples).to_be(1)
+    expect(top).to_be_greater(y0 + 0.5) -- reeled up toward the ceiling
+    -- nothing in range, or no suit charge
+    put(p, f.route[1])
+    p.excursion.body.pos = { 0, 90000, 0 }
+    expect(tools.grapple_fire(st, p, ctx)).to_be(false)
+    expect(last()).to_contain("nothing to hook")
+    p.suit = 1
+    expect(tools.grapple_fire(st, p, ctx)).to_be(false)
+    expect(last()).to_contain("not enough suit charge")
+    expect(tools.grapple_step(st, p, 1 / 60)).to_be(false)
+    -- a grapple that cannot get anywhere lets go
+    put(p, f.route[1])
+    p.excursion.grapple = { to = vec.add(ex.eye(p.excursion.body), { 0, -30, 0 }), t = 0 }
+    for _ = 1, 400 do if not tools.grapple_step(st, p, 1 / 60) then break end end
+    expect(p.excursion.grapple).to_be(nil)
+    -- the Cutter at the strongroom shutter
+    local lock = f.locks[1]
+    local sh
+    for _, s2 in ipairs(f.shutters) do if s2.id == lock.opens then sh = s2 end end
+    local c = { (sh.min[1] + sh.max[1]) / 2, (sh.min[2] + sh.max[2]) / 2, (sh.min[3] + sh.max[3]) / 2 }
+    p.suit = 50
+    p.excursion.body.pos = { 0, 90000, 0 }
+    expect(tools.cut_target(st, p)).to_be(nil)
+    -- stand next to it (eye within reach of the box), settled on the floor
+    local e = ex.tune().body.eye
+    local mn, mx = sh.min, sh.max
+    local thin = 1
+    for k = 2, 3 do if (mx[k] - mn[k]) < (mx[thin] - mn[thin]) then thin = k end end
+    local found = false
+    for _, side in ipairs({ -1, 1 }) do
+      for _, off in ipairs({ 0.6, 1.0, 1.5, 2.0 }) do
+        if not found then
+          local q = { c[1], mn[2] + 0.05, c[3] }
+          q[thin] = (side < 0 and mn[thin] or mx[thin]) + side * off
+          put(p, q)
+          run(st, cmd(), 20)
+          local tg = tools.cut_target(st, p)
+          if tg and tg.kind == "shutter" and ex.area(st, p) ~= "strong" then found = true end
+        end
+      end
+    end
+    expect(found).to_be(true)
+    expect(e).to_be_greater(0)
+    expect(tools.cut_target(st, p).kind).to_be("shutter")
+    p.suit = 3
+    expect(tools.cut_step(st, p, true, 1 / 60, ctx)).to_be(true)
+    expect(last()).to_contain("not enough suit charge")
+    p.suit = 50
+    run(st, cmd({ pressed = { "spike" }, buttons = { "spike" } }))
+    expect(p.cut ~= nil).to_be(true)
+    run(st, cmd({ buttons = { "spike" } }), 60)
+    run(st, cmd({ buttons = { "spike" } }), 60 * tools.tune().cutter.time + 2)
+    expect(game.shutter_closed(1, sh.id)).to_be(false)
+    expect(ex.lock_open(st, 1, sh.id)).to_be(true)
+    expect(p.cuts).to_be(1)
+    expect(p.suit).to_be_less(50)
+    run(st, cmd())
+    expect(p.cut).to_be(nil)
+    expect(tools.cut_target({ sentries = {} }, { mode = "walk" })).to_be(nil)
+  end)
+  it("Hardcore: the Lifeline loses what was in your hands for good (add-home-among-stars)", function()
+    local st, p, f = out()
+    st.hardcore = true
+    put(p, f.route[1])
+    p.hands = { items.stamp(p, { type = "coil", name = "Coil" }, 1, "velari") }
+    p.suit = 0.001
+    run(st, cmd())
+    expect(p.mode).to_be("helm")
+    expect(p.lost_for_good).to_be(1)
+    for _, c in ipairs(st.caches or {}) do expect(c.lifeline).to_be(nil) end
+  end)
   it("the Lifeline: whiteout, the Seat on your trail, the hands left as a cache", function()
     local st, p, f = out()
     -- walk a little to lay a trail, then run dry

@@ -40,6 +40,7 @@ endif()
 set(CORE_SOURCES
   engine/src/core/sx_engine.c engine/src/core/sx_fs.c engine/src/core/sx_input.c
   engine/src/core/sx_log.c engine/src/core/sx_math.c engine/src/core/sx_mesh.c
+  engine/src/core/sx_net.c engine/src/core/sx_net_udp.c
   engine/src/core/sx_mod.c engine/src/core/sx_phys.c engine/src/core/sx_procgen.c
   engine/src/core/sx_render.c engine/src/core/sx_replay.c engine/src/core/sx_rng.c
   engine/src/core/sx_script.c engine/src/core/sx_ser.c engine/src/core/sx_touch.c
@@ -49,6 +50,9 @@ add_library(saucer_stb STATIC engine/src/core/sx_stb.c)
 target_include_directories(saucer_stb PUBLIC third_party/stb)
 target_include_directories(saucer_core PUBLIC engine/src/core third_party/stb)
 target_link_libraries(saucer_core PUBLIC saucer_lua saucer_stb)
+if(WIN32)
+  target_link_libraries(saucer_core PUBLIC ws2_32)
+endif()
 if(NOT MSVC)
   target_compile_options(saucer_core PRIVATE -Wall -Wextra -Wno-unused-parameter)
 endif()
@@ -73,8 +77,8 @@ if(SAUCER_BUILD_GAME)
     target_compile_options(saucer PRIVATE -sUSE_SDL=3)
     target_link_options(saucer PRIVATE -sUSE_SDL=3 -sMAX_WEBGL_VERSION=2 -sMIN_WEBGL_VERSION=2
       -sALLOW_MEMORY_GROWTH=1 -sFORCE_FILESYSTEM=1 -sINVOKE_RUN=0 -sSTACK_SIZE=1048576 -sEXPORTED_RUNTIME_METHODS=FS,callMain,ccall
-      -sEXPORTED_FUNCTIONS=_main,_saucer_xr_set_available,_saucer_xr_begin,_saucer_xr_end,_saucer_xr_frame,_saucer_xr_set_view,_saucer_xr_set_head,_saucer_xr_set_control,_saucer_xr_set_hand,_malloc,_free
-      --js-library ${CMAKE_SOURCE_DIR}/web/saucer_xr.js
+      -sEXPORTED_FUNCTIONS=_main,_saucer_xr_set_available,_saucer_xr_begin,_saucer_xr_end,_saucer_xr_frame,_saucer_xr_set_view,_saucer_xr_set_head,_saucer_xr_set_control,_saucer_xr_set_hand,_saucer_net_push,_saucer_net_status,_malloc,_free
+      --js-library ${CMAKE_SOURCE_DIR}/web/saucer_xr.js --pre-js ${CMAKE_SOURCE_DIR}/web/saucer_net.js
       --shell-file ${CMAKE_SOURCE_DIR}/web/shell.html)
     set_target_properties(saucer PROPERTIES SUFFIX ".html")
   else()
@@ -174,6 +178,27 @@ if(SAUCER_BUILD_TESTS)
            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_mods COMMAND ${HL} --seed 42 --mods-dir tests/fixtures/mods --script tests/game/mods.lua
            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  # milestone 9: the web transport's JavaScript (codes, handshake, datagrams) under node
+  find_program(NODE_EXE node)
+  if(NODE_EXE)
+    add_test(NAME web_net_js COMMAND ${NODE_EXE} tests/web/net_web.test.js WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  endif()
+  # milestone 9: two machines on loopback (a host and an XR guest) play one universe in
+  # lockstep, decorate a dome and visit it; a deliberate desync must be caught
+  if(NOT EMSCRIPTEN)
+    # milestone 9: the mod browser switches a mod off for the next start, and on again
+    add_test(NAME game_mod_browser COMMAND ${CMAKE_COMMAND} -DHL=$<TARGET_FILE:saucer_headless> -DROOT=${CMAKE_SOURCE_DIR}
+             -DUSER=${USERDIR}-modbrowser -P ${CMAKE_SOURCE_DIR}/tools/mod_browser.cmake
+             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+    set(NETL ${CMAKE_COMMAND} -DHL=$<TARGET_FILE:saucer_headless> -DROOT=${CMAKE_SOURCE_DIR})
+    add_test(NAME game_netplay COMMAND ${NETL} -DUSER=${USERDIR}-net -DPORT=47831 -DSCRIPT=tests/game/netplay.lua
+             -P ${CMAKE_SOURCE_DIR}/tools/net_loopback.cmake WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+    add_test(NAME game_netplay_seed7 COMMAND ${NETL} -DUSER=${USERDIR}-net7 -DPORT=47832 -DSEED=7 -DDELAY=5
+             -DSCRIPT=tests/game/netplay.lua -P ${CMAKE_SOURCE_DIR}/tools/net_loopback.cmake
+             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+    add_test(NAME game_net_desync COMMAND ${NETL} -DUSER=${USERDIR}-netd -DPORT=47833 -DSCRIPT=tests/game/netdesync.lua
+             -DEXPECT=desync -P ${CMAKE_SOURCE_DIR}/tools/net_loopback.cmake WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  endif()
   add_test(NAME headless_run COMMAND ${HL} --seed 1 --ticks 600 --test WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   file(GLOB REPLAYS tests/replays/*.srep)
   foreach(r ${REPLAYS})

@@ -7,6 +7,7 @@
 #include "lua.h"
 #include "sx_input.h"
 #include "sx_mod.h"
+#include "sx_net.h"
 #include "sx_phys.h"
 #include "sx_render.h"
 #include "sx_replay.h"
@@ -44,6 +45,14 @@ typedef struct sx_options {
   int split_horizontal; /* two players: stacked instead of side by side */
   int quiet;
   int test_mode; /* debug checks: render mutation guard, saucer.test */
+  /* add-home-among-stars: networked co-op (lockstep) */
+  int net_role;        /* SX_NET_OFF / SX_NET_HOST / SX_NET_GUEST */
+  int net_web;         /* the transport is the web shell's data channel */
+  char net_addr[256];  /* --join HOST */
+  int net_port;
+  int net_players;     /* host: players in the session (2-4) */
+  int net_delay;       /* input delay in ticks */
+  int hardcore;        /* --hardcore: a new game starts in Hardcore */
   int show_help;
 } sx_options;
 
@@ -69,6 +78,7 @@ typedef struct sx_engine {
   sx_options opt;
   sx_vfs vfs;
   sx_modset mods;
+  sx_modset catalog; /* add-home-among-stars: every local mod folder, for the mod browser */
   sx_mod_rt rt[SX_MAX_MODS];
   int nrt;
   uint64_t modset_hash;
@@ -116,6 +126,12 @@ typedef struct sx_engine {
   /* screenshots requested by scripts */
   char shot_path[512];
   int shot_pending;
+  /* add-home-among-stars: networked co-op */
+  sx_net net;
+  int net_on;
+  int net_stalled;     /* the last tick call waited for a peer */
+  int net_joined;      /* a guest's first frame presses Use (joins its slot) */
+  int64_t net_wait_since;
   /* events */
   int events_ref;
   int ticks_called;
@@ -144,6 +160,10 @@ int sx_engine_restore(sx_engine *e, const unsigned char *data, size_t len);
 int sx_engine_save_bindings(sx_engine *e, int player);
 int sx_engine_load_bindings(sx_engine *e, int player);
 int sx_engine_finish(sx_engine *e); /* flush recordings; returns exit status */
+/* add-home-among-stars: the mod browser's choices (<user-dir>/mods.txt lists
+ * the folders switched off; they apply on the next start) */
+int sx_engine_mod_disabled(sx_engine *e, const char *id);
+int sx_engine_set_mod_enabled(sx_engine *e, const char *id, int on);
 
 /* Runners used by main(): return a process exit status. */
 int sx_run_headless(const sx_options *o);

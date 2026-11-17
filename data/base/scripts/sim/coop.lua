@@ -229,7 +229,11 @@ function M.step_visit(state, p, cmd, dt, ctx)
                          look = cmd:axis("look"), run = cmd:held("boost"), aim = cmd.aim }, dt, L,
     require("sim.home").solids(L, host))
   if cmd:pressed("use") then
-    require("sim.panel").open(p, "gift_table")
+    -- add-home-among-stars: Use at a display slot admires what is on it
+    local st = avatar.station(L, p.vbody)
+    if not (st and st.kind == "display" and require("sim.decor").admire(state, p, host, st.slot, ctx)) then
+      require("sim.panel").open(p, "gift_table")
+    end
   end
 end
 

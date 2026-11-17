@@ -13,6 +13,18 @@
         color: #9cf; border: 1px solid #9cf; font: 14px monospace; cursor: pointer; }
   #vr { right: 12px; }
   #vr-seated { right: 160px; }
+  /* add-home-among-stars: online co-op (copy-paste WebRTC signaling) */
+  #online { position: fixed; left: 12px; bottom: 12px; display: none; padding: 8px 12px; background: #123;
+            color: #9cf; border: 1px solid #9cf; font: 13px monospace; cursor: pointer; }
+  #net { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); display: none; width: min(560px, 92vw);
+         background: #0a1420; border: 1px solid #9cf; padding: 16px; }
+  #net h2 { margin: 0 0 8px; font-size: 16px; color: #fc6; }
+  #net textarea { width: 100%; height: 72px; background: #000; color: #9f9; border: 1px solid #456; font: 11px monospace; }
+  #net button { margin: 6px 6px 6px 0; padding: 6px 12px; background: #123; color: #9cf; border: 1px solid #9cf;
+                font: 13px monospace; cursor: pointer; }
+  #net .hint { color: #789; font-size: 12px; margin: 4px 0; }
+  #net-state { color: #fc6; min-height: 1.2em; }
+  #net-bar { position: fixed; left: 12px; top: 8px; color: #fc6; font: 12px monospace; pointer-events: none; }
 </style>
 </head>
 <body>
@@ -20,6 +32,32 @@
 <div id="status">loading data…</div>
 <button id="vr" class="vr" title="standing / room scale (local-floor)">VR standing</button>
 <button id="vr-seated" class="vr" title="seated (local, eye level at the cockpit)">VR seated</button>
+<button id="online" title="play with a friend in another browser">Online co-op</button>
+<div id="net-bar"></div>
+<div id="net">
+  <h2>ONLINE CO-OP</h2>
+  <div id="net-pick">
+    <div class="hint">Two browsers play one universe in lockstep. No server: you swap two codes through any chat.</div>
+    <button id="net-host">Host a game</button><button id="net-join">Join a game</button><button id="net-solo">Play alone</button>
+  </div>
+  <div id="net-hosting" style="display:none">
+    <div class="hint">1. Send this offer code to your friend:</div>
+    <textarea id="net-offer" readonly>making the code…</textarea>
+    <button id="net-copy-offer">Copy</button>
+    <div class="hint">2. Paste the answer code they send back:</div>
+    <textarea id="net-answer-in"></textarea>
+    <button id="net-connect">Connect</button>
+  </div>
+  <div id="net-joining" style="display:none">
+    <div class="hint">1. Paste the host's offer code:</div>
+    <textarea id="net-offer-in"></textarea>
+    <button id="net-answer-make">Make my answer code</button>
+    <div class="hint">2. Send this answer code back to the host:</div>
+    <textarea id="net-answer" readonly></textarea>
+    <button id="net-copy-answer">Copy</button>
+  </div>
+  <div id="net-state"></div>
+</div>
 <script>
   // Assets are plain files beside the page: data/index.json lists the tree,
   // and every file is fetched into the in-memory filesystem before start.
@@ -54,14 +92,68 @@
         Module.FS.mkdirTree('/mods');
         Module.FS.mkdirTree('/user');
         statusEl.style.display = 'none';
-        var args = ['--root', '/', '--width', String(window.innerWidth), '--height', String(window.innerHeight)];
         var q = new URLSearchParams(location.search);
-        if (q.get('seed')) args.push('--seed', q.get('seed'));
-        if (q.get('players')) args.push('--local-players', q.get('players'), '--viewports', q.get('players'), '--coop');
-        Module.callMain(args);
+        if (q.get('net')) online(q);
+        else start(q, []);
       }).catch(function (e) { statusEl.textContent = 'failed to load: ' + e.message; });
     },
   };
+  function start(q, extra) {
+    var args = ['--root', '/', '--width', String(window.innerWidth), '--height', String(window.innerHeight)];
+    if (q.get('seed') && extra.indexOf('--seed') < 0) args.push('--seed', q.get('seed'));
+    if (q.get('players') && !extra.length) args.push('--local-players', q.get('players'), '--viewports', q.get('players'), '--coop');
+    if (!extra.length) document.getElementById('online').style.display = 'block';
+    Module.callMain(args.concat(extra));
+  }
+  // add-home-among-stars: host or join over a WebRTC data channel
+  function online(q) {
+    var N = Module.saucerNet, $ = function (id) { return document.getElementById(id); };
+    var box = $('net'), st = $('net-state');
+    box.style.display = 'block';
+    function say(t) { st.textContent = t; }
+    function go(ch, role, seed) {
+      Module.saucerNetSend = N.bridge(ch, Module.saucerNetPush);
+      ch.onclose = function () { $('net-bar').textContent = 'ONLINE: the connection closed - playing on alone'; };
+      box.style.display = 'none';
+      setInterval(function () {
+        if (!$('net-bar').textContent.match(/closed/)) $('net-bar').textContent = 'ONLINE ' + Module.ccall('saucer_net_status', 'string', [], []);
+      }, 1000);
+      start(q, N.args(role, seed));
+    }
+    function copy(id) { var t = $(id); t.select(); try { navigator.clipboard.writeText(t.value); } catch (e) { document.execCommand('copy'); } }
+    $('net-copy-offer').onclick = function () { copy('net-offer'); };
+    $('net-copy-answer').onclick = function () { copy('net-answer'); };
+    $('net-solo').onclick = function () { box.style.display = 'none'; start(q, []); };
+    $('net-host').onclick = function () {
+      $('net-pick').style.display = 'none';
+      $('net-hosting').style.display = 'block';
+      var seed = q.get('seed') || String(1 + Math.floor(Math.random() * 1e9));
+      var h;
+      try { h = N.host({ seed: seed, players: 2 }); } catch (e) { return say(e.message); }
+      h.offer.then(function (code) { $('net-offer').value = code; say('waiting for the answer code…'); },
+                   function (e) { say('could not make an offer: ' + e); });
+      $('net-connect').onclick = function () {
+        try { h.accept($('net-answer-in').value).then(function () { say('connecting…'); }, function (e) { say(String(e)); }); }
+        catch (e) { say(e.message); }
+      };
+      h.open.then(function (ch) { go(ch, 'host', seed); }, function (e) { say('connection failed: ' + e); });
+    };
+    $('net-join').onclick = function () {
+      $('net-pick').style.display = 'none';
+      $('net-joining').style.display = 'block';
+      $('net-answer-make').onclick = function () {
+        var j;
+        try { j = N.join($('net-offer-in').value); } catch (e) { return say(e.message); }
+        say('making the answer code…');
+        j.answer.then(function (code) { $('net-answer').value = code; say('send it to the host, then wait…'); },
+                      function (e) { say('could not answer: ' + e); });
+        j.open.then(function (ch) { go(ch, 'guest', j.info.seed); });
+      };
+    };
+  }
+  document.getElementById('online').addEventListener('click', function () {
+    location.search = '?net=1' + (new URLSearchParams(location.search).get('seed') ? '&seed=' + new URLSearchParams(location.search).get('seed') : '');
+  });
   vrBtn.addEventListener('click', function () { if (Module.saucerEnterVR) Module.saucerEnterVR('standing'); });
   vrSeat.addEventListener('click', function () { if (Module.saucerEnterVR) Module.saucerEnterVR('seated'); });
 </script>

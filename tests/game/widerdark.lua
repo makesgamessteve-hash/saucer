@@ -86,6 +86,22 @@ local function jump(to)
   end
 end
 
+-- add-home-among-stars: danger-3 sectors keep a Warden (tests/lua/widerdark_spec.lua
+-- covers it). This script follows the mystery chain, so the party's Override
+-- spike has already shut the sector's Wardens down for good.
+local function wardens_off()
+  local adv = require("sim.advsentry")
+  for si = 1, #T.state().sector.sites do
+    for k, d in ipairs(game.sentries(si)) do
+      if d.kind == "warden" then
+        T.state().overrides = T.state().overrides or {}
+        T.state().overrides[adv.key(d)] = T.state().tick
+        T.state().sentries[si][k].st = "off"
+      end
+    end
+  end
+end
+
 -- fetch the Echo at a site of this sector with player pi (the Seat)
 local function fetch(pi, site, size)
   local get = P(pi)
@@ -152,9 +168,11 @@ T.assert(m().act == 3, "Act III: the Witness names the Heart")
 
 -- 5. Act III: the Heart Key, one more sector in
 jump(g.spine[3])
+wardens_off()
 fetch(2, ke.site, 2)
 T.assert(heart.key_item(T.state(), P(2)()) ~= nil, "P2 carries the Heart Key")
 jump(g.spine[4])
+wardens_off()
 T.assert(T.state().sector.sites[heart.site(T.state())].heart, "the Heart site is in this sector")
 
 -- 6. the Heart: P2 carries the Key to the core, P1 comes along; both vote

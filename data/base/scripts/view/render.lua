@@ -29,6 +29,7 @@ M.STATE_TINT = {
   -- add-wider-dark
   chase = { 1, 0.55, 0.15, 1 }, clamped = { 1, 0.2, 0.2, 1 }, sealed = { 1, 0.2, 0.2, 1 }, rest = { 0.6, 0.6, 0.7, 0.8 },
   off = { 0.25, 0.25, 0.3, 0.5 }, decoyed = { 0.4, 0.9, 1, 0.9 },
+  patrol = { 0.9, 0.85, 0.3, 0.9 }, hunt = { 1, 0.15, 0.1, 1 },
 }
 
 function M.draw_sentries(v, A, state, p)
@@ -61,6 +62,13 @@ function M.draw_sentries(v, A, state, p)
           local spin = (dyn.st == "chase" or dyn.st == "clamped") and state.tick * 0.2 or state.tick * 0.02
           v:mesh(A.clamp, { pos = pos, yaw = spin })
           v:billboard(A.tex.beam, { pos[1], pos[2] + 1.6, pos[3] }, show and 1.6 or 0.8,
+            { palette = A.pal.base, tint = tint })
+        elseif def.kind == "warden" then
+          -- add-home-among-stars: the Warden, its eye ring turning fast when it hunts
+          local pos = dyn.pos or def.pos
+          local spin = dyn.st == "hunt" and state.tick * 0.15 or state.tick * 0.015
+          v:mesh(A.warden, { pos = pos, yaw = spin })
+          v:billboard(A.tex.beam, { pos[1], pos[2] + 2.6, pos[3] }, show and 2.2 or 1.2,
             { palette = A.pal.base, tint = tint })
         elseif def.kind == "lockdown" then
           v:mesh(A.lockdown, { pos = def.pos, yaw = state.tick * 0.01 })
@@ -297,6 +305,59 @@ end
 -- colours and moving shapes while someone watches), a steaming pot on the
 -- stove while cooking, and a holo shimmer in the arch while a program runs.
 -- Render-only. -> number of draws
+-- add-home-among-stars: the owner's furniture, displayed finds and garden,
+-- drawn in their dome (guests from docked saucers see the same). Meshes are
+-- built once per kind. Render-only. -> number of draws
+local decor_meshes = {}
+local function decor_mesh(key, recipe)
+  local m = decor_meshes[key]
+  if not m then
+    m = saucer.mesh.build(recipe())
+    decor_meshes[key] = m
+  end
+  return m
+end
+M.CATEGORY_TINT = { curio = { 1, 0.75, 0.3, 1 }, tool = { 0.4, 0.9, 1, 1 }, material = { 0.7, 0.75, 0.8, 1 },
+                    module = { 0.5, 1, 0.6, 1 } }
+function M.decor(v, A, o, d, state)
+  local D = o.decor
+  if not D then return 0 end
+  local decor = require("sim.decor")
+  local fm = require("lib.data").load("meshes/furniture.lua")
+  local L = avatar.layout()
+  local n = 0
+  for _, pc in ipairs(D.placed) do
+    local def = decor.furniture(pc.kind)
+    if def then
+      local m = decor_mesh("f:" .. pc.kind, function() return fm.furniture(def) end)
+      v:mesh(m, { pos = at(d, { pc.x, L.decks[pc.deck].floor, pc.z }), yaw = d.yaw + pc.q * math.pi / 2, roll = d.roll,
+                  scale = d.scale })
+      n = n + 1
+    end
+  end
+  for slot, it in pairs(D.display) do
+    local s = L.display[slot]
+    if it and s then
+      local m = decor_mesh("trophy", fm.trophy)
+      v:mesh(m, { pos = at(d, { s.at[1], L.decks[1].floor + s.top, s.at[2] }), yaw = d.yaw + (state and state.tick or 0) * 0.01,
+                  roll = d.roll, scale = d.scale * (0.8 + 0.2 * (it.size or 1)), tint = M.CATEGORY_TINT[it.category] or { 1, 1, 1, 1 } })
+      n = n + 1
+    end
+  end
+  for i, bed in pairs(D.garden) do
+    local b = L.garden[i] and L.garden[i].box
+    local seed = bed and decor.seed(bed.seed)
+    if b and seed then
+      local st = decor.stage(state, bed)
+      local m = decor_mesh("p:" .. bed.seed .. st, function() return fm.plant(seed, st) end)
+      v:mesh(m, { pos = at(d, { (b[1] + b[3]) / 2, L.decks[1].floor + 0.52, (b[2] + b[4]) / 2 }), yaw = d.yaw, roll = d.roll,
+                  scale = d.scale })
+      n = n + 1
+    end
+  end
+  return n
+end
+
 M.TV_COLORS = { trader_wave = { 0.3, 0.8, 1.0 }, static_noir = { 0.75, 0.75, 0.8 }, sky_garden = { 0.5, 1.0, 0.5 } }
 function M.home_parts(v, A, o, d, tick)
   local L = avatar.layout()
@@ -634,6 +695,7 @@ function M.rooms(v, A, o, d, state)
     if state and (amounts["3:Tractor room"] or 0) == 0 then M.beam_console(v, A, state, o, d) end
     if (amounts["2:Engine room"] or 0) == 0 then M.engine_parts(v, A, d, state and state.tick or 0) end
     M.home_parts(v, A, o, d, state and state.tick or 0)
+    if state and (amounts["1:Living room"] or 0) == 0 then M.decor(v, A, o, d, state) end
   end
   return drawn
 end
