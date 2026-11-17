@@ -207,6 +207,8 @@ local function run_all()
     if alive == 0 then break end
     T.wait(1)
     sample()
+    local st = CFG.shot_ticks and CFG.shot_ticks[tick()]
+    if st then T.screenshot(CFG.shots .. CFG.run .. "_" .. st .. ".png") ev(0, "shot", st) end
     if tick() > LIMIT + 60 * 600 then
       ev(0, "hardstop", "bots still running 10 min past the limit")
       break
