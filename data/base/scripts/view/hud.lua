@@ -40,7 +40,7 @@ local HELP = {
   "Derelict: Seat near a deck, 3 (or Q) steps out; E deploys it",
   "On foot: Ctrl crouch, Space hop, G grabs / turns a hand-lock",
   "Map TAB: fold jumps (the party agrees), party, Xenoarchive",
-  "Decoy B, Shroud X (hover still), Override spike N (on foot)",
+  "Decoy B, Shroud X; on foot X grapples, hold N spikes or cuts",
   "Clamped? hold Boost to shake it off, or Jam it",
   "Co-op: gamepad A or F2 (right-hand keys) joins a player",
   "Camera C, mystery mode M, help H/F1",

@@ -461,6 +461,28 @@ describe("advanced sentries and tools", function()
     adv.step_clamp(st, def, dyn, 1, ctx, t)
     expect(dyn.st).to_be("off")
   end)
+  it("the Cutter slices a Lockdown's seals (add-home-among-stars)", function()
+    local tools = require("sim.tools")
+    local st, si, _, li = far_state()
+    local p = st.players[1]
+    local def, dyn = game.sentries(si)[li], st.sentries[si][li]
+    p.site = si
+    game.seal(def, dyn, true)
+    expect(#dyn.sealed).to_be_greater(0)
+    local bx = def.boxes[dyn.sealed[1]]
+    p.mode = "foot"
+    p.suit = 80
+    p.excursion = { body = { pos = { bx[3][1], bx[3][2] - 1.6, bx[3][3] }, yaw = 0, pitch = 0, crouch = false } }
+    local tg = tools.cut_target(st, p)
+    expect(tg.kind).to_be("seal")
+    local n = 0
+    while tools.cut_step(st, p, n == 0, 1 / 60, ctx) and dyn.st ~= "rest" do n = n + 1 if n > 1000 then break end end
+    expect(dyn.st).to_be("rest")
+    expect(#dyn.sealed).to_be(0)
+    expect(game.sealed_count(def)).to_be(0)
+    expect(last()).to_contain("Lockdown seals")
+    p.mode, p.excursion = "helm", nil
+  end)
   it("Lockdown seals the hall's big doors on a lock, rests, and the Jammer opens it", function()
     local st, si, _, li = far_state()
     local p = st.players[1]

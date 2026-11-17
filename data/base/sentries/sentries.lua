@@ -24,6 +24,11 @@ return {
   decoy = { life = 8.0, range = 80, ahead = 8, start = 3, price = 60 },
   shroud = { drain = 1.2, still = 0.6 },
   spike = { time = 3.0, reach = 3.0 },
+  -- add-home-among-stars: the Warden (danger 3 sectors) and two suit tools
+  warden = { sense = 40, foot_sense = 24, speed = 5.0, chase_speed = 7.0, fire_every = 2.2, wake = 30,
+             leash = 8, per_site = 1 },
+  grapple = { range = 25, speed = 14, suit = 4, max_time = 3.0 },
+  cutter = { time = 6.0, reach = 2.5, suit = 6 },
   scanner = { charge = 2, cooldown = 5.0, reveal = 10.0 },
   jammer = { charge = 8, suit = 15, cooldown = 10.0, range = 15.0, half_angle = 0.6, near = 3.0 }, -- near: all-round pulse radius; suit: % on foot
   shield_regen = 4.0,     -- per second, after shield_delay without hits

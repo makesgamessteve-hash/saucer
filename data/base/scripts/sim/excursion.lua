@@ -641,7 +641,10 @@ function M.step(state, p, cmd, dt, ctx)
   if want then
     if M.deploy(state, p, ctx) then return end
   end
-  if ex.work then
+  if ex.grapple and require("sim.tools").grapple_step(state, p, dt) then
+    -- add-home-among-stars: reeling in on the Grapple line
+    ex.body.yaw = comfort.yaw(ex.body.yaw, cmd, avatar().layout().turn, dt)
+  elseif ex.work then
     work_step(state, p, cmd, dt, ctx)
     local STILL = { axis = function(_, a) return (a == "turn" or a == "look") and cmd:axis(a) or 0 end,
                     held = function() return false end, pressed = function(_, k) return cmd:pressed(k) end, aim = cmd.aim }

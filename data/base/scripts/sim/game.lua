@@ -821,12 +821,18 @@ function M.spike_step(state, p, cmd, dt)
   local t = sentry.tune().spike
   if not cmd:held("spike") then
     p.spike = false
+    p.cut = nil
     return
   end
   local idx = adv.spike_target(state, p, sentry.tune())
+  -- add-home-among-stars: no sentry to spike - the same tool cuts shutters and seals
+  if not idx and require("sim.tools").cut_step(state, p, cmd:pressed("spike"), dt, ctx_fns) then
+    p.spike = false
+    return
+  end
   if not idx then
     if cmd:pressed("spike") then
-      msg(state, p, "Override spike: get within 3 m of a Disabled sentry or a Lockdown node")
+      msg(state, p, "Override spike: get within 3 m of a Disabled sentry or a Lockdown node (or a shutter to cut)")
       fx(state, p, "denied")
     end
     p.spike = false
@@ -898,6 +904,8 @@ function M.step_player(state, p, cmd, dt)
     if cmd:pressed("scan") then scan(state, p) end
     if cmd:pressed("jam") then jam(state, p) end
     if cmd:pressed("decoy") then M.decoy(state, p) end
+    -- add-home-among-stars: the Shroud key fires the Grapple on foot
+    if cmd:pressed("shroud") then require("sim.tools").grapple_fire(state, p, ctx_fns) end
     M.spike_step(state, p, cmd, dt)
     excursion.step(state, p, cmd, dt, ctx_fns)
     world_step(state, p, dt)
