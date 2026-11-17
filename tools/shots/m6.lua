@@ -139,5 +139,17 @@ if want("08") then
   quiet()
   shot("08_bar_npcs")
 end
+if want("10") then
+  -- the touch overlay mid-play: thumb on the stick, a finger on USE
+  T.touch("down", 11, 0.12, 0.7)
+  T.touch("move", 11, 0.18, 0.62)
+  local use
+  for _, w in ipairs(saucer.input.touch_layout()) do if w.name == "use" then use = w end end
+  T.touch("down", 12, use.x + use.w / 2, use.y + use.h / 2)
+  T.wait(2)
+  shot("10_touch_hud")
+  T.touch("up", 11)
+  T.touch("up", 12)
+end
 print("m6 tour done at tick", T.state().tick)
 

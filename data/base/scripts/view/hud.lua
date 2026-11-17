@@ -474,15 +474,55 @@ function M.station(v, state, p)
   return 1
 end
 
+-- add-presentation-packaging: touch overlay. Held widgets light up, labels
+-- sit centred, the stick shows where the thumb landed and where it is now,
+-- and the lift slider shows its level.
+M.TOUCH_LABEL = { stick = "MOVE", lift = "LIFT", up = "UP", dn = "DN", shrink = "-SZ", grow = "+SZ",
+                  tractor = "BEAM", scan = "SCAN", use = "USE", boost = "BST", jam = "JAM" }
+local TOUCH_FILL, TOUCH_EDGE = { 0.4, 0.8, 1, 0.22 }, { 0.6, 0.9, 1, 0.55 }
+local TOUCH_HELD, TOUCH_KNOB = { 0.6, 1, 1, 0.5 }, { 0.8, 1, 1, 0.75 }
+
+local function outline(v, x, y, w, h, c)
+  v:rect(x, y, w, 1, c)
+  v:rect(x, y + h - 1, w, 1, c)
+  v:rect(x, y, 1, h, c)
+  v:rect(x + w - 1, y, 1, h, c)
+end
+
 function M.touch(v)
   local W, H = v.width, v.height
-  for _, w in ipairs(saucer.input.touch_layout()) do
+  local lay = saucer.input.touch_layout()
+  local n = 0
+  for _, w in ipairs(lay) do
     if w.name ~= "look" then
-      local a = w.active and 0.55 or 0.25
-      v:rect(w.x * W, w.y * H, w.w * W, w.h * H, { 0.4, 0.8, 1, a })
-      v:text(w.x * W + 2, w.y * H + 2, w.name:upper():sub(1, 6), WHITE)
+      local x, y, ww, hh = w.x * W, w.y * H, w.w * W, w.h * H
+      if w.kind ~= 1 then v:rect(x, y, ww, hh, w.held and TOUCH_HELD or TOUCH_FILL) end
+      if not (w.kind == 1 and w.held) then outline(v, x, y, ww, hh, TOUCH_EDGE) end
+      if w.kind == 2 then
+        -- the lift level: a bar from the middle toward the thumb
+        local mid, lv = y + hh / 2, (w.value or 0) * hh / 2
+        v:rect(x + 2, math.min(mid, mid - lv), ww - 4, math.max(1, math.abs(lv)), TOUCH_KNOB)
+      end
+      local label = M.TOUCH_LABEL[w.name] or w.name:upper()
+      label = label:sub(1, math.max(1, (ww - 2) // 8))
+      local tw = #label * 8
+      v:text(x + math.max(1, (ww - tw) / 2), y + (w.kind == 1 and 2 or (hh - 8) / 2), label, WHITE)
+      n = n + 1
     end
   end
+  if lay.stick then
+    -- floating stick: a ring where the thumb landed, a knob where it is
+    local s = lay.stick
+    local bx, by, kx, ky = s[1] * W, s[2] * H, s[3] * W, s[4] * H
+    local r = 0.53 * 0.35 * H
+    outline(v, bx - r, by - r, r * 2, r * 2, TOUCH_EDGE)
+    local dx, dy = kx - bx, ky - by
+    local d = math.sqrt(dx * dx + dy * dy)
+    if d > r then kx, ky = bx + dx / d * r, by + dy / d * r end
+    v:rect(kx - 6, ky - 6, 12, 12, TOUCH_KNOB)
+    n = n + 1
+  end
+  return n
 end
 
 return M

@@ -147,6 +147,62 @@ TEST(xr_controls) {
   CHECK(aim[2] == 32767 && aim[0] == 0);
 }
 
+/* add-presentation-packaging: the comfort filter turns stick flicks into snaps */
+TEST(xr_snap_filter) {
+  sx_xr x;
+  float out[SX_XR_COUNT];
+  sx_xr_init(&x);
+  CHECK(x.snap == 1 && sx_xr_ctl_from_name("snap_l") == SX_XR_SNAP_L);
+  x.values[SX_XR_STICK_RX] = 0.9f;
+  sx_xr_filter(&x, out);
+  CHECK(out[SX_XR_SNAP_R] == 1.0f && out[SX_XR_SNAP_L] == 0.0f && out[SX_XR_STICK_RX] == 0.0f);
+  sx_xr_filter(&x, out); /* still held: latched, no second snap */
+  CHECK(out[SX_XR_SNAP_R] == 0.0f);
+  x.values[SX_XR_STICK_RX] = 0.5f; /* between the thresholds: stays latched */
+  sx_xr_filter(&x, out);
+  CHECK(x.snap_latch == 1);
+  x.values[SX_XR_STICK_RX] = 0.1f;
+  sx_xr_filter(&x, out);
+  CHECK(x.snap_latch == 0);
+  x.values[SX_XR_STICK_RX] = -0.8f;
+  sx_xr_filter(&x, out);
+  CHECK(out[SX_XR_SNAP_L] == 1.0f);
+  x.values[SX_XR_STICK_RX] = 0.0f;
+  sx_xr_filter(&x, out);
+  x.snap = 0; /* smooth turning: the stick passes through */
+  x.values[SX_XR_STICK_RX] = 0.9f;
+  x.values[SX_XR_SNAP_R] = 1.0f; /* never from the device */
+  sx_xr_filter(&x, out);
+  CHECK(out[SX_XR_STICK_RX] == 0.9f && out[SX_XR_SNAP_R] == 0.0f);
+}
+
+/* add-presentation-packaging: touch slop, held highlights, floating stick, haptics */
+TEST(touch_polish) {
+  sx_touch t;
+  float s[4];
+  int i, use = -1;
+  sx_touch_init(&t, 16.0f / 9.0f);
+  for (i = 0; i < t.nwidgets; i++)
+    if (strcmp(t.widgets[i].name, "use") == 0) use = i;
+  CHECK(use >= 0);
+  CHECK(!sx_touch_stick(&t, s));
+  /* just above the USE button (inside the slop) still presses it and buzzes */
+  sx_touch_down(&t, 1, t.widgets[use].x + 0.01f, t.widgets[use].y - SX_TOUCH_SLOP * 0.5f);
+  CHECK(sx_touch_held(&t, use) && t.values[SX_TOUCH_USE] == 1.0f && t.buzz == 1);
+  sx_touch_up(&t, 1);
+  CHECK(!sx_touch_held(&t, use));
+  /* the stick reports where the thumb landed and where it is */
+  sx_touch_down(&t, 2, 0.1f, 0.7f);
+  sx_touch_move(&t, 2, 0.15f, 0.65f);
+  CHECK(sx_touch_stick(&t, s) && s[0] == 0.1f && s[3] == 0.65f);
+  CHECK(t.buzz == 1); /* sticks do not buzz */
+  sx_touch_up(&t, 2);
+  /* far from any button on the right half: the look area */
+  sx_touch_down(&t, 3, 0.6f, 0.2f);
+  CHECK(t.widgets[t.fingers[0].widget].kind == 3);
+  sx_touch_up(&t, 3);
+}
+
 TEST(touch_widgets) {
   sx_touch t;
   sx_raw_input raw;

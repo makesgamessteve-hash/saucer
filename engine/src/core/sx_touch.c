@@ -49,13 +49,42 @@ void sx_touch_init(sx_touch *t, float aspect) {
   add(t, "look", SX_TOUCH_LOOK_X, 0.5f, 0.0f, 0.5f, 1.0f, 3); /* last: lowest priority */
 }
 
+static int inside(const sx_touch_widget *w, float x, float y, float s) {
+  return x >= w->x - s && x <= w->x + w->w + s && y >= w->y - s && y <= w->y + w->h + s;
+}
+
 static int hit(const sx_touch *t, float x, float y) {
   int i;
-  for (i = 0; i < t->nwidgets; i++) {
-    const sx_touch_widget *w = &t->widgets[i];
-    if (x >= w->x && x <= w->x + w->w && y >= w->y && y <= w->y + w->h) return i;
-  }
+  for (i = 0; i < t->nwidgets; i++)
+    if (t->widgets[i].kind != 3 && inside(&t->widgets[i], x, y, 0)) return i;
+  /* forgiving pass: a near miss on a button still counts before the look area */
+  for (i = 0; i < t->nwidgets; i++)
+    if ((t->widgets[i].kind == 0 || t->widgets[i].kind == 4) && inside(&t->widgets[i], x, y, SX_TOUCH_SLOP)) return i;
+  for (i = 0; i < t->nwidgets; i++)
+    if (t->widgets[i].kind == 3 && inside(&t->widgets[i], x, y, 0)) return i;
   return -1;
+}
+
+int sx_touch_held(const sx_touch *t, int i) {
+  int f;
+  for (f = 0; f < t->nfingers; f++)
+    if (t->fingers[f].widget == i) return 1;
+  return 0;
+}
+
+int sx_touch_stick(const sx_touch *t, float out[4]) {
+  int f;
+  for (f = 0; f < t->nfingers; f++) {
+    int wi = t->fingers[f].widget;
+    if (wi >= 0 && t->widgets[wi].kind == 1) {
+      out[0] = t->fingers[f].sx;
+      out[1] = t->fingers[f].sy;
+      out[2] = t->fingers[f].x;
+      out[3] = t->fingers[f].y;
+      return 1;
+    }
+  }
+  return 0;
 }
 
 static int find(const sx_touch *t, long long id) {
@@ -94,6 +123,8 @@ void sx_touch_down(sx_touch *t, long long id, float x, float y) {
   t->fingers[f].widget = hit(t, x, y);
   t->fingers[f].sx = t->fingers[f].x = x;
   t->fingers[f].sy = t->fingers[f].y = y;
+  if (t->fingers[f].widget >= 0 && (t->widgets[t->fingers[f].widget].kind == 0 || t->widgets[t->fingers[f].widget].kind == 4))
+    t->buzz++;
   update_finger(t, f);
 }
 

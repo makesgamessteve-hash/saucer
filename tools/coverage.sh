@@ -39,7 +39,7 @@ names=()
 start() { lua_run "$@" & pids+=($!); names+=("$1"); }
 throttle() { while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do sleep 1; done; }
 # longest first so the slow ones overlap the rest
-for s in sentries mystery station holodeck slice derelict3d home trade vertical coop interior fold tractor boot; do
+for s in sentries mystery station holodeck slice derelict3d home trade vertical coop interior fold tractor xr boot; do
   extra=""
   [ "$s" = coop ] && extra="--local-players 2 --viewports 2"
   [ "$s" = mystery ] && extra="--ticks 60000"

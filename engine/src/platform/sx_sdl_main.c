@@ -113,7 +113,16 @@ static void handle_event(const SDL_Event *ev) {
     s = pad_slot(ev->gaxis.which);
     if (s >= 0 && ev->gaxis.axis < 8) raw->pad_axis[s][ev->gaxis.axis] = (float)ev->gaxis.value / 32767.0f;
     break;
-  case SDL_EVENT_FINGER_DOWN: sx_touch_down(&e->touch, (long long)ev->tfinger.fingerID, ev->tfinger.x, ev->tfinger.y); break;
+  case SDL_EVENT_FINGER_DOWN:
+    sx_touch_down(&e->touch, (long long)ev->tfinger.fingerID, ev->tfinger.x, ev->tfinger.y);
+#ifdef __EMSCRIPTEN__
+    if (e->touch.buzz) {
+      /* add-presentation-packaging: a short tick under the thumb on button presses */
+      EM_ASM({ if (navigator.vibrate) navigator.vibrate(12); });
+      e->touch.buzz = 0;
+    }
+#endif
+    break;
   case SDL_EVENT_FINGER_MOTION: sx_touch_move(&e->touch, (long long)ev->tfinger.fingerID, ev->tfinger.x, ev->tfinger.y); break;
   case SDL_EVENT_FINGER_UP:
   case SDL_EVENT_FINGER_CANCELED: sx_touch_up(&e->touch, (long long)ev->tfinger.fingerID); break;

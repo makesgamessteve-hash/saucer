@@ -19,8 +19,12 @@ M.SNAP_JUMP = 0.3          -- a yaw step this big is a snap turn: no vignette
 M.EASE = 0.25
 
 local last = {}            -- per view index: { pos, yaw, k }
+M.stats = { frames = 0, vignettes = 0, hands = 0 }
 
-function M.reset() last = {} end
+function M.reset()
+  last = {}
+  M.stats = { frames = 0, vignettes = 0, hands = 0 }
+end
 
 -- the headset's reference space for this view: "seated", "standing" or nil
 function M.space(v)
@@ -111,7 +115,12 @@ function M.overlay(v, A, cam, p, scan)
   if not v.xr then return 0 end
   local n = M.hands(v, A, cam, p, scan)
   local k = M.motion(v.index, cam, saucer.xr.comfort().vignette)
-  if k > 0.01 then v:vignette(k) end
+  M.stats.frames = M.stats.frames + 1
+  M.stats.hands = M.stats.hands + n
+  if k > 0.01 then
+    v:vignette(k)
+    M.stats.vignettes = M.stats.vignettes + 1
+  end
   return n, k
 end
 

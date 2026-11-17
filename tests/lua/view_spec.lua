@@ -11,7 +11,7 @@ local vec = require("lib.vec")
 local function fake_view(opts)
   local v = { calls = {}, width = 480, height = 270, player = 1, index = 1, xr = false }
   for k, x in pairs(opts or {}) do v[k] = x end
-  for _, m in ipairs({ "camera", "fog", "mesh", "billboard", "rect", "text", "image" }) do
+  for _, m in ipairs({ "camera", "fog", "mesh", "billboard", "rect", "text", "image", "vignette" }) do
     v[m] = function(self, ...)
       self.calls[m] = (self.calls[m] or 0) + 1
       if m == "text" then

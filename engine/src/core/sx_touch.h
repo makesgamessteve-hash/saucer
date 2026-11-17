@@ -42,7 +42,14 @@ typedef struct sx_touch {
   int nfingers;
   float look_acc[2];
   float values[SX_TOUCH_COUNT];
+  /* add-presentation-packaging: a press landing on a button/hold widget
+   * bumps buzz (the web build turns it into a short vibration) */
+  int buzz;
 } sx_touch;
+
+/* Fingers that just miss a button still press it within this slop
+ * (normalized, either axis); the look area never takes slop hits. */
+#define SX_TOUCH_SLOP 0.025f
 
 int sx_touch_ctl_from_name(const char *name);
 const char *sx_touch_ctl_name(int ctl);
@@ -50,6 +57,10 @@ void sx_touch_init(sx_touch *t, float aspect);
 void sx_touch_down(sx_touch *t, long long id, float x, float y);
 void sx_touch_move(sx_touch *t, long long id, float x, float y);
 void sx_touch_up(sx_touch *t, long long id);
+/* Is any finger holding widget i? (for pressed highlights) */
+int sx_touch_held(const sx_touch *t, int i);
+/* The stick finger's start and current point -> 1 when the stick is held */
+int sx_touch_stick(const sx_touch *t, float out[4]);
 /* Write current values into raw->touch and reset look deltas. */
 void sx_touch_apply(sx_touch *t, sx_raw_input *raw);
 #endif

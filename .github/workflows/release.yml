@@ -1,0 +1,152 @@
+# SPDX-License-Identifier: MIT
+# add-presentation-packaging: playable builds attached to a GitHub Release.
+# Push a tag vX.Y.Z (or run it by hand with a tag) and this builds the
+# Windows zip (windows-msvc), a Linux tarball and a self-contained web zip,
+# smoke-tests them and publishes them on the release for that tag.
+name: release
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "tag to (re)publish, e.g. v0.1.0"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ github.event.inputs.tag || github.ref_name }}
+  SDL_LINUX_DEPS: >-
+    ninja-build libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxss-dev libxtst-dev
+    libxkbcommon-dev libwayland-dev libegl1-mesa-dev libgl1-mesa-dev libasound2-dev libpulse-dev libudev-dev
+
+jobs:
+  windows:
+    name: windows-msvc zip
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - name: Build (Release, SDL3 static)
+        run: |
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DSAUCER_BUILD_TESTS=OFF
+          cmake --build build --config Release --parallel --target saucer
+      - name: Package
+        shell: pwsh
+        run: |
+          $dir = "saucer-$env:TAG-windows-x64"
+          New-Item -ItemType Directory $dir | Out-Null
+          Copy-Item build/Release/saucer.exe $dir/
+          Copy-Item -Recurse build/Release/data $dir/data
+          New-Item -ItemType Directory $dir/mods | Out-Null
+          Copy-Item README.md, LICENSE, LICENSING.md, ATTRIBUTION.md $dir/
+          Copy-Item -Recurse LICENSES $dir/LICENSES
+          "Double-click saucer.exe. Options: saucer.exe --help" | Set-Content $dir/PLAY.txt
+          Compress-Archive -Path $dir -DestinationPath "$dir.zip"
+          if ((Get-Item "$dir.zip").Length -lt 1000000) { throw "zip too small" }
+      - name: Smoke test the packaged exe (headless boot is in ci.yml; here: --help runs)
+        shell: pwsh
+        run: |
+          $dir = "saucer-$env:TAG-windows-x64"
+          $p = Start-Process -FilePath "$dir/saucer.exe" -ArgumentList "--help" -NoNewWindow -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "saucer.exe --help failed: $($p.ExitCode)" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: saucer-*-windows-x64.zip
+
+  linux:
+    name: linux tarball
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - run: sudo apt-get update && sudo apt-get install -y $SDL_LINUX_DEPS xvfb
+      - name: Build (Release, SDL3 static)
+        run: |
+          cmake -S . -B build/game -G Ninja -DCMAKE_BUILD_TYPE=Release -DSAUCER_BUILD_TESTS=OFF
+          cmake --build build/game
+      - name: Package and smoke test
+        run: |
+          set -euo pipefail
+          d="saucer-$TAG-linux-x64"
+          mkdir -p "$d/mods"
+          cp build/game/saucer "$d/"
+          cp -a build/game/data "$d/data"
+          cp -a README.md LICENSE LICENSING.md ATTRIBUTION.md LICENSES "$d/"
+          tar czf "$d.tar.gz" "$d"
+          cd "$d"
+          SDL_AUDIODRIVER=dummy xvfb-run -s "-screen 0 1280x720x24" ./saucer --seed 42 --screenshot ../shot.png \
+            --screenshot-tick 60 --user-dir ../tmp-user
+          test -s ../shot.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: saucer-*-linux-x64.tar.gz
+
+  web:
+    name: web zip
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: latest
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Build and package (serve the folder over HTTP and open index.html)
+        run: |
+          set -euo pipefail
+          emcmake cmake -S . -B build/web -G Ninja -DCMAKE_BUILD_TYPE=Release -DSAUCER_BUILD_TESTS=OFF
+          cmake --build build/web --target saucer
+          d="saucer-$TAG-web"
+          mkdir -p "$d"
+          cp build/web/saucer.html "$d/index.html"
+          cp build/web/saucer.js build/web/saucer.wasm "$d/"
+          cp -a build/web/data "$d/data"
+          cp -a README.md LICENSE LICENSING.md ATTRIBUTION.md "$d/"
+          test -s "$d/data/index.json"
+          zip -qr "$d.zip" "$d"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web
+          path: saucer-*-web.zip
+
+  publish:
+    name: publish GitHub Release
+    needs: [windows, linux, web]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ls -l dist
+          notes="docs/releases/$TAG.md"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          elif [ -f "$notes" ]; then
+            gh release create "$TAG" dist/* --title "Saucer $TAG" --notes-file "$notes" --verify-tag
+          else
+            gh release create "$TAG" dist/* --title "Saucer $TAG" --generate-notes --verify-tag
+          fi

@@ -607,10 +607,24 @@ static int l_input_touch_layout(lua_State *L) {
     lua_setfield(L, -2, "kind");
     lua_pushnumber(L, e->touch.values[w->ctl]);
     lua_setfield(L, -2, "value");
+    lua_pushboolean(L, sx_touch_held(&e->touch, i));
+    lua_setfield(L, -2, "held");
     lua_rawseti(L, -2, i + 1);
   }
   lua_pushboolean(L, e->touch.active);
   lua_setfield(L, -2, "active");
+  {
+    float s[4];
+    if (sx_touch_stick(&e->touch, s)) {
+      int k;
+      lua_createtable(L, 4, 0);
+      for (k = 0; k < 4; k++) {
+        lua_pushnumber(L, s[k]);
+        lua_rawseti(L, -2, k + 1);
+      }
+      lua_setfield(L, -2, "stick");
+    }
+  }
   return 1;
 }
 
@@ -1686,6 +1700,12 @@ static int l_test_audio_loops(lua_State *L) {
   return 1;
 }
 
+/* drop this frame's queued requests (specs run many "frames" in one) */
+static int l_test_audio_flush(lua_State *L) {
+  get_engine(L)->naudio = 0;
+  return 0;
+}
+
 static int l_test_audio_count(lua_State *L) {
   lua_pushinteger(L, get_engine(L)->audio_played_total);
   return 1;
@@ -1709,6 +1729,9 @@ static int l_test_set_xr(lua_State *L) {
   e->xr.session = (int)field_num(L, 1, "session", (float)e->xr.session);
   field_vec(L, 1, "head_fwd", e->xr.head_fwd, 3);
   field_vec(L, 1, "head_pos", e->xr.head_pos, 3);
+  e->xr.nviews = (int)field_num(L, 1, "views", (float)e->xr.nviews);
+  if (e->xr.nviews < 0) e->xr.nviews = 0;
+  if (e->xr.nviews > 2) e->xr.nviews = 2;
   lua_getfield(L, 1, "hands");
   if (lua_istable(L, -1)) {
     int i;
@@ -1907,7 +1930,7 @@ static void build_saucer_api(lua_State *L, sx_engine *e) {
                                     {"wait", l_test_wait},             {"press", l_test_press},
                                     {"axis", l_test_axis},             {"assert", l_test_assert},
                                     {"screenshot", l_test_screenshot}, {"audio_count", l_test_audio_count},
-                                    {"audio_loops", l_test_audio_loops},
+                                    {"audio_loops", l_test_audio_loops}, {"audio_flush", l_test_audio_flush},
                                     {"touch", l_test_set_touch},       {"xr", l_test_set_xr},
                                     {"viewports", l_test_viewports},   {NULL, NULL}};
   struct {
