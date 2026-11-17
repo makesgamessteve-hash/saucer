@@ -72,12 +72,12 @@ local function excursion(site, use_cutter)
     B.press(1, "spike", 60 * 7)
     if not game.shutter_closed(site, 1) then mark("cutter") end
   end
-  -- the grapple (the Shroud key on foot): hook the far wall of the hall
+  -- the grapple (its own key since add-playtest-recs): hook the far wall of the hall
   if get().mode == "foot" then
     local g0 = get().grapples or 0
     local b = get().excursion.body
     ap.ex_look(B, 1, get, b.yaw + saucer.math.pi, 0.15, 300)
-    B.press(1, "shroud")
+    B.press(1, "grapple")
     B.wait(240)
     if (get().grapples or 0) > g0 then mark("grapple") end
   end

@@ -197,7 +197,7 @@ function M.step(state, dt, ctx, enter)
 end
 
 -- per-sector world state that stays behind when the party jumps away
-M.WORLD = { "traders", "nests", "caches", "vault", "locks", "grids", "lockdowns", "decoys", "gifts" }
+M.WORLD = { "traders", "nests", "caches", "vault", "locks", "grids", "lockdowns", "decoys", "gifts", "twins" }
 -- per-player memory of a sector
 M.AWAY = { "looted", "trails" }
 
@@ -283,6 +283,11 @@ function M.rows(state, p, ctx)
     local id = s.id
     rows[#rows + 1] = { text = string.format("%-14s d%d %dh %s %s", s.name, s.danger, hops, table.concat(names, "/"),
       table.concat(tags, " ")), enabled = ok, sector = id, act = function(st, pl)
+        -- add-playtest-recs: deeper danger than you have braved asks first
+        if #M.warning(st, pl, id) > 0 then
+          require("sim.panel").open(pl, "fold_warn", id)
+          return
+        end
         local okp, why = M.propose(st, pl, id, ctx)
         if not okp then
           ctx.msg(st, pl, "Fold Core: " .. why)
@@ -300,6 +305,49 @@ function M.rows(state, p, ctx)
   rows[#rows + 1] = { text = "Close", act = function(_, pl) pl.panel = false end }
   return rows
 end
+-- add-playtest-recs (recommendation 3): what folding to sector `to` means
+-- for this saucer, as warning lines (empty: no warning). It warns once per
+-- danger level above the deepest you have agreed to (p.braved), and the
+-- lines name what is missing: a first Seat dive, Fold Core T2, repair money.
+M.WARN_CREDITS = 100
+function M.warning(state, p, to)
+  local s = M.sector(state.seed, to)
+  if not s or s.danger < 2 or s.danger <= (p.braved or 1) then return {} end
+  local lines = {}
+  if s.danger == 2 then
+    lines[1] = "Danger 2: Watchers lock on to a Villa and drain the hull."
+    lines[2] = "Dive guarded sites in the Seat (2 or Q): Watchers can't see it."
+  else
+    lines[1] = string.format("Danger %d: Clamps, Lockdowns and a Warden in the deepest halls.", s.danger)
+    lines[2] = "Seat dives, Decoys (B) and the Jammer (T) keep you in one piece."
+  end
+  if (p.seat_dives or 0) == 0 then lines[#lines + 1] = "You haven't dived in the Seat yet: try it in a home site first." end
+  if (p.fold_tier or 1) < 2 then lines[#lines + 1] = "Fold Core T1: one hop at a time, so the way home is slow." end
+  local bill = (data.load("sentries/sentries.lua").retreat_bill or {})[s.danger] or 0
+  if (p.credits or 0) < M.WARN_CREDITS then
+    lines[#lines + 1] = string.format("You have %d c. A Fold Retreat there costs a %d c tow bill.", p.credits or 0, bill)
+  end
+  return lines
+end
+
+function M.warn_rows(state, p, ctx)
+  local to = p.panel and p.panel.ctx
+  local rows = {}
+  for _, l in ipairs(M.warning(state, p, to)) do rows[#rows + 1] = { text = l, enabled = false } end
+  local s = M.sector(state.seed, to)
+  rows[#rows + 1] = { text = "Fold anyway", act = function(st, pl)
+    pl.braved = math.max(pl.braved or 1, s and s.danger or 1)
+    local okp, why = M.propose(st, pl, to, ctx)
+    if not okp then
+      ctx.msg(st, pl, "Fold Core: " .. why)
+      ctx.fx(st, pl, "denied")
+    end
+    pl.panel = false
+  end }
+  rows[#rows + 1] = { text = "Not yet", act = function(_, pl) pl.panel = false end }
+  return rows
+end
+
 function M.dist(a, b) return vec.dist(a, b) end
 
 return M

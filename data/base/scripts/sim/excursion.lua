@@ -231,7 +231,7 @@ end
 
 -- hands -> hold; what does not fit stays as a cache where you stand
 local function stow(state, p, ctx, where)
-  local cap = configs.all().hold_slots
+  local cap = require("sim.upgrades").hold_slots(p)
   local left = {}
   local n = 0
   for _, it in ipairs(p.hands or {}) do
@@ -459,6 +459,12 @@ function M.shut_grid(state, p, site, ctx)
   local n = require("sim.sentry").grid_down(state, site)
   ctx.msg(state, p, n > 0 and string.format("Grid down: %d sentr%s in this derelict sleep until you leave it.", n,
     n == 1 and "y" or "ies") or "Grid down. Nothing on this grid was awake anyway.")
+  for _, d in ipairs(require("sim.game").sentries(site)) do
+    if d.kind == "warden" then
+      ctx.msg(state, p, "The Warden runs on its own power: it keeps patrolling, slower now.")
+      break
+    end
+  end
   ctx.fx(state, p, "jam")
   return n
 end

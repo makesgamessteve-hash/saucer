@@ -26,12 +26,15 @@ return {
   spike = { time = 3.0, reach = 3.0 },
   -- add-home-among-stars: the Warden (danger 3 sectors) and two suit tools
   warden = { sense = 40, foot_sense = 24, speed = 5.0, chase_speed = 7.0, fire_every = 2.2, wake = 30,
-             leash = 8, per_site = 1 },
+             leash = 8, per_site = 1, drowsy = 0.5 }, -- drowsy: its speed with the site grid down
   grapple = { range = 25, speed = 14, suit = 4, max_time = 3.0 },
   cutter = { time = 6.0, reach = 2.5, suit = 6 },
   scanner = { charge = 2, cooldown = 5.0, reveal = 10.0 },
   jammer = { charge = 8, suit = 15, cooldown = 10.0, range = 15.0, half_angle = 0.6, near = 3.0 }, -- near: all-round pulse radius; suit: % on foot
   shield_regen = 4.0,     -- per second, after shield_delay without hits
   shield_delay = 4.0,
+  -- add-playtest-recs: the trader's tow bill for a Fold Retreat, by sector
+  -- danger (credits first; what you can't pay comes out of the Charge)
+  retreat_bill = { 0, 60, 120 },
   hull_regen = 0.1,       -- hull points per second in open space, after shield_delay (Steady doubles it)
 }

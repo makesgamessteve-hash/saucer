@@ -88,6 +88,40 @@ function M.sell(state, p, trader_idx, uid)
   return true, price, it
 end
 
+-- add-playtest-recs (recommendation 11): story items warn before a sale.
+-- -> the warning, or nil for ordinary loot
+function M.story_warning(it)
+  if require("sim.lab").is_core(it) then
+    return "decode it at your lab bench first: it holds a holodeck program"
+  end
+  if it.home and it.home.kind == "module" then return "it upgrades your holodeck (holodeck panel)" end
+  if it.home and it.home.kind == "program" then return "it is a holodeck program core" end
+  return nil
+end
+
+-- the first pick on a story item only warns; a second pick sells it.
+-- -> true when the sale may go ahead
+function M.confirm_sale(state, p, it, ctx)
+  local why = M.story_warning(it)
+  if not why or p.sell_confirm == it.uid then
+    p.sell_confirm = nil
+    return true
+  end
+  p.sell_confirm = it.uid
+  ctx.msg(state, p, string.format("Wait: %s - %s. Pick Sell again to sell it anyway.", items.label(it), why))
+  ctx.fx(state, p, "denied")
+  return false
+end
+
+-- sell row text: story items are marked, and spelled out once armed
+function M.sell_text(p, it, price)
+  if M.story_warning(it) then
+    if p.sell_confirm == it.uid then return string.format("CONFIRM: sell %s - %d c", items.label(it), price) end
+    return string.format("Sell %s - %d c (story item!)", items.label(it), price)
+  end
+  return string.format("Sell %s - %d c", items.label(it), price)
+end
+
 function M.refill_cost(p)
   return math.ceil((configs.all().max_charge - p.ship.charge) * econ().charge_price)
 end
@@ -159,7 +193,7 @@ M.shop_name = shop_name
 function M.can_buy(p, e)
   if e.kind == "program" and require("sim.holo").has(p, e.id) then return false, "owned" end
   if e.kind == "book" and require("sim.books").has(p, e.id) then return false, "owned" end
-  if e.kind == "module" and #p.hold >= configs.all().hold_slots then return false, "hold full" end
+  if e.kind == "module" and #p.hold >= require("sim.upgrades").hold_slots(p) then return false, "hold full" end
   if (p.credits or 0) < e.price then return false, "credits" end
   return true
 end
@@ -197,8 +231,10 @@ function M.rows(state, p, ctx)
     local uid = it.uid
     local price = M.offer(state, tr, it, p)
     if price then
-      rows[#rows + 1] = { text = string.format("Sell %s - %d c", items.label(it), price),
+      rows[#rows + 1] = { text = M.sell_text(p, it, price), hint = M.story_warning(it),
         act = function(st, pl)
+          local cur = items.find(pl, uid)
+          if cur and not M.confirm_sale(st, pl, cur, ctx) then return end
           local ok, got, sold = M.sell(st, pl, tr, uid)
           if ok then
             local saved = require("sim.save").write(st)
@@ -212,6 +248,8 @@ function M.rows(state, p, ctx)
   end
   -- add-wider-dark: the trader's requests, reputation and Fold Core upgrades
   for _, r in ipairs(require("sim.requests").rows(state, p, tr, ctx)) do rows[#rows + 1] = r end
+  -- add-playtest-recs: saucer upgrades (beam relay, coils, racks, cells, a second bench)
+  for _, r in ipairs(require("sim.upgrades").rows(state, p, ctx)) do rows[#rows + 1] = r end
   for _, e in ipairs(M.shop()) do
     local ok, why = M.can_buy(p, e)
     local entry = e

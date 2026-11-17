@@ -113,11 +113,12 @@ function M.pocket(state, p, to, ctx)
   ship.vel = { 0, 0, 0 }
   ship.bank = 0
   local h = sg.hangars(L)[1]
+  local working = M.thief_roll(state, p)
   p.station = {
     trader = idx, seed = seed, t = 0, hand_t = 0, coin = "fold", from = from,
     body = { pos = { L.spawn.pos[1], 0, L.spawn.pos[3] }, yaw = L.spawn.yaw, pitch = -0.08 },
     bays = M.bays(state, ship, idx), area = h and h.id or 1, stolen = 0, caught = 0,
-    thief = { pos = { L.thief.home[1], L.thief.home[2] }, yaw = 0, mode = "lurk", t = 0, cool = 0 },
+    thief = { pos = { L.thief.home[1], L.thief.home[2] }, yaw = 0, mode = "lurk", t = 0, cool = 0, working = working },
   }
   p.mode = "foot"
   p.tractor, p.beam_console, p.panel = false, false, false
@@ -258,6 +259,27 @@ local function flee_next(L, th, you)
   return best or th.node
 end
 
+-- add-playtest-recs (recommendation 6): is the pickpocket working this
+-- visit? A deterministic roll per visit (seeded by the universe and the
+-- visit count): he always works your first visit, then `chance` per visit,
+-- never within `quiet_visits` of his last one, and sure to come after `pity`
+-- quiet visits. -> true/false
+function M.thief_roll(state, p)
+  local T = tune()
+  p.visits = (p.visits or 0) + 1
+  local since = p.visits - (p.thief_visit or 0)
+  local on
+  if not p.thief_visit then on = true -- the first visit shows you the danger once
+  elseif since <= (T.quiet_visits or 0) then on = false
+  elseif since > (T.pity or 6) then on = true
+  else
+    local rng = saucer.rng.new(saucer.seed_child(state.seed, "thief", p.index * 1000 + p.visits))
+    on = rng:float() < (T.chance or 1)
+  end
+  if on then p.thief_visit = p.visits end
+  return on
+end
+
 function M.thief_step(state, p, dt, ctx)
   local st = p.station
   local th = st.thief
@@ -275,7 +297,7 @@ function M.thief_step(state, p, dt, ctx)
       th.pos = toward(th.pos, path[1], ws * 0.8, dt)
       face(th, path[1])
     end
-    if st.t >= T.after and th.cool <= 0 and st.coin == "pocket" and d <= T.notice then
+    if th.working ~= false and st.t >= T.after and th.cool <= 0 and st.coin == "pocket" and d <= T.notice then
       th.mode = "stalk"
       th.t = 0
     end
@@ -543,9 +565,10 @@ function M.vendor_rows(state, p, ctx)
       local uid = it.uid
       if price then
         any = true
-        rows[#rows + 1] = { text = string.format("Sell %s - %d c", items.label(it), price), act = function(st2, pl)
+        rows[#rows + 1] = { text = trade.sell_text(p, it, price), hint = trade.story_warning(it), act = function(st2, pl)
           local item = items.find(pl, uid)
           if not item then return end
+          if not trade.confirm_sale(st2, pl, item, ctx) then return end
           local got = M.vendor_offer(st2, pl, v, item)
           items.remove(pl, uid)
           pl.credits = (pl.credits or 0) + got
@@ -579,6 +602,8 @@ function M.vendor_rows(state, p, ctx)
     end
   end
   if v.services then
+    -- add-playtest-recs: the chandler fits saucer upgrades too
+    for _, r in ipairs(require("sim.upgrades").rows(state, p, ctx)) do rows[#rows + 1] = r end
     local rc, hc = trade.refill_cost(p), trade.repair_cost(p)
     rows[#rows + 1] = { text = string.format("Top up the coin's Charge - %d c", rc),
       enabled = rc > 0 and (p.credits or 0) > 0, act = function(st2, pl)

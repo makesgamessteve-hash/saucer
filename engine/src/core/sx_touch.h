@@ -20,6 +20,7 @@ typedef enum {
   SX_TOUCH_JAM,
   SX_TOUCH_MAP,   /* add-wider-dark: sector map */
   SX_TOUCH_DECOY, /* add-wider-dark: throw a decoy */
+  SX_TOUCH_GRAPPLE, /* add-playtest-recs: the on-foot grapple */
   SX_TOUCH_COUNT
 } sx_touch_ctl;
 

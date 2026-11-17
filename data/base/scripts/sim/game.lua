@@ -42,6 +42,9 @@ local coop = require("sim.coop")
 local adv = require("sim.advsentry")
 local heart = require("sim.heart")
 local decor = require("sim.decor")
+-- add-playtest-recs
+local upgrades = require("sim.upgrades")
+local twin = require("sim.twin")
 local M = {}
 
 M.SITE_PAD = 30
@@ -198,7 +201,7 @@ end
 function M.init(state, ctx)
   M.state_ref = state
   local seed = ctx.seed
-  state.version = 9   -- v9: the wider dark (add-wider-dark); v8: on-foot excursions; v7: station visits
+  state.version = 10  -- v10: playtest recommendations (add-playtest-recs); v9: the wider dark (add-wider-dark); v8: on-foot excursions; v7: station visits
   state.seed = seed
   state.tick = 0
   civs.use(seed)
@@ -264,7 +267,7 @@ function M.enter_sector(state, to)
   local next_sector = sector.generate(state.seed, to, info)
   local fresh = { traders = trade.new_traders(next_sector), nests = {}, caches = {}, locks = {}, grids = {},
                   vault = to == 1 and { pos = vec.copy(next_sector.vault.pos), taken = false } or false,
-                  decoys = {}, gifts = {}, lockdowns = {} }
+                  decoys = {}, gifts = {}, lockdowns = {}, twins = {} }
   galaxy.unstash(state, to, fresh)
   M.load_sector(state, to)
   local n = #state.players
@@ -279,6 +282,8 @@ function M.enter_sector(state, to)
     p.latched_by, p.clamped_by, p.shake = nil, nil, 0
     p.sectors = p.sectors or {}
     p.sectors[tostring(to)] = true
+    p.braved = math.max(p.braved or 1, info.danger)
+    p.ready_fold = false
     local names = {}
     for _, ci in ipairs(info.civs) do names[#names + 1] = civs.get(state.seed, ci).name end
     msg(state, p, string.format("Fold jump complete: %s, danger %d (%s)", info.name, info.danger, table.concat(names, ", ")))
@@ -532,8 +537,14 @@ local function tractor_step(state, p, cmd, dt)
   end
   if not cmd:pressed("tractor") then return end
   local b = tractor.beam_of(ship)
-  if b.console and not p.beam_console then
-    if p.mode == "helm" then
+  local _, heading = M.viewpoint(p)
+  local sc = tractor.scan(state, p, p.site, rt.ruins[p.site], heading)
+  -- add-playtest-recs: with the helm beam relay the helm pulls small finds itself
+  local relay = b.console and not p.beam_console and p.mode == "helm" and sc and upgrades.relay(p, sc.cand.item)
+  if b.console and not p.beam_console and not relay then
+    if p.mode == "helm" and sc and sc.status == "lock" and upgrades.level(p, "beam_relay") > 0 then
+      msg(state, p, "Too big for the helm relay: pull it from the Tractor Room console.")
+    elseif p.mode == "helm" then
       msg(state, p, "The beam runs from the Tractor Room below the lower deck. Line up, then go down: hover-hold keeps you here.")
     else
       msg(state, p, "Use the beam console in the Tractor Room (stairs down beside the engine).")
@@ -541,23 +552,22 @@ local function tractor_step(state, p, cmd, dt)
     fx(state, p, "denied")
     return
   end
-  local _, heading = M.viewpoint(p)
-  local sc = tractor.scan(state, p, p.site, rt.ruins[p.site], heading)
   if not sc then
     msg(state, p, "Nothing under the beam")
     fx(state, p, "denied")
   elseif sc.status ~= "lock" then
     msg(state, p, "Beam: " .. sc.info.hint:lower())
     fx(state, p, "denied")
-  elseif sc.cand.kind ~= "cache" and #p.hold >= configs.all().hold_slots then
+  elseif sc.cand.kind ~= "cache" and sc.cand.kind ~= "anchor" and #p.hold >= upgrades.hold_slots(p) then
     msg(state, p, "Hold is full")
     fx(state, p, "denied")
   else
     local cand = sc.cand
-    p.tractor = { key = cand.key, site = p.site, t = 0, total = tractor.pull_time(ship, sc.info.depth),
-                  from = vec.copy(cand.pos), size = ship.size, console = b.console, item_size = cand.item.size,
-                  kind = cand.kind }
-    msg(state, p, "Beam lock: pulling up " .. items.label(cand.item))
+    p.tractor = { key = cand.key, site = p.site, t = 0,
+                  total = tractor.pull_time(ship, sc.info.depth) * upgrades.pull_factor(p),
+                  from = vec.copy(cand.pos), size = ship.size, console = b.console and not relay, item_size = cand.item.size,
+                  kind = cand.kind, relay = relay or nil }
+    msg(state, p, (relay and "Helm relay lock: pulling up " or "Beam lock: pulling up ") .. items.label(cand.item))
     fx(state, p, "tractor")
   end
 end
@@ -583,6 +593,12 @@ function M.pick_up(state, p, cand, site_idx)
   elseif cand.kind == "gift" then
     coop.receive(state, p, cand.index, ctx_fns)
     fx(state, p, "pickup")
+  elseif cand.kind == "anchor" then
+    -- add-playtest-recs: the anchor stays put; the beam latches the shutter open
+    twin.hold(state, p, site_idx, ctx_fns)
+    fx(state, p, "tractor")
+  elseif cand.kind == "twin" then
+    twin.take(state, p, site_idx, ctx_fns)
   elseif cand.kind == "nest" then
     local n = table.remove(state.nests, cand.index)
     n.item.hot = true
@@ -592,7 +608,7 @@ function M.pick_up(state, p, cand, site_idx)
   elseif cand.kind == "cache" then
     local c = state.caches[cand.index]
     local got = 0
-    while #c.items > 0 and #p.hold < configs.all().hold_slots do
+    while #c.items > 0 and #p.hold < upgrades.hold_slots(p) do
       local it = table.remove(c.items, 1)
       it.hot = true
       p.hold[#p.hold + 1] = it
@@ -708,12 +724,25 @@ local function trader_pos(state, p)
   return (list[p.last_trader or 1] or list[1]).pos
 end
 
+-- add-playtest-recs (recommendation 4): entering a guarded site in the Villa
+-- says that Watchers are about and the Seat slips past them
+function M.entry_text(state, p, site)
+  local w = sentry.summary(rt.sentries[site] or {})
+  if w > 0 and p.ship.size == 1 then
+    return string.format("Entering derelict site %d: %d Watcher%s here lock on to a Villa - the Seat slips past", site, w,
+      w == 1 and "" or "s")
+  end
+  return "Entering derelict site " .. site
+end
+
 local function world_step(state, p, dt)
   local ship = p.ship
   local site = M.site_at(ship.pos)
   if site ~= p.site then
     if p.site ~= 0 then excursion.left_site(state, p, p.site, ctx_fns) end
-    if site == 0 then bank(state, p) else msg(state, p, "Entering derelict site " .. site) end
+    if site == 0 then bank(state, p) else msg(state, p, M.entry_text(state, p, site)) end
+    -- add-playtest-recs: a Seat dive counts toward the fold warning's soft gate
+    if site ~= 0 and ship.size == 2 then p.seat_dives = (p.seat_dives or 0) + 1 end
     p.site = site
     -- add-wider-dark: entering a site files its civ in your Xenoarchive
     if site ~= 0 and archive.meet(p, civ_of(state.sector.sites[site])) then
@@ -762,6 +791,11 @@ local function world_step(state, p, dt)
     elseif require("sim.hardcore").on(state) and (p.lost_for_good or 0) > 0 then
       msg(state, p, "HARDCORE: the cargo in your hold is lost for good.")
     end
+    if p.last_bill then
+      local b = p.last_bill
+      msg(state, p, b.charge > 0 and string.format("Tow bill %d c: you paid %d c and %d Charge.", b.bill, b.paid, b.charge // 1)
+        or string.format("Tow bill: %d c for the fold-back at danger %d.", b.bill, galaxy.sector(state.seed, state.sector_id or 1).danger))
+    end
     msg(state, p, "The hull mends slowly in open space; the trade terminal repairs it at once.")
     fx(state, p, "grow")
   end
@@ -808,7 +842,7 @@ end
 -- add-wider-dark: the Shroud (saucer utility) on or off
 function M.shroud(state, p)
   if p.mode == "foot" then
-    msg(state, p, "The Shroud is a saucer utility")
+    msg(state, p, "The Shroud is a saucer utility (on foot, Y fires the grapple)")
     fx(state, p, "denied")
     return false
   end
@@ -866,7 +900,7 @@ function M.step_player(state, p, cmd, dt)
   if cmd:held("boost") and p.clamped_by then p.shake = (p.shake or 0) + dt end
   if cmd:pressed("map") and p.mode ~= "wake" then
     local k = p.panel and p.panel.kind
-    if k == "map" or k == "party" or k == "archive" then p.panel = false
+    if k == "map" or k == "party" or k == "archive" or k == "fold_warn" then p.panel = false
     elseif not p.panel then panel.open(p, "map") end
   end
   if cmd:pressed("camera") then p.cam = p.cam == "first" and "chase" or "first" end
@@ -906,8 +940,10 @@ function M.step_player(state, p, cmd, dt)
     if cmd:pressed("scan") then scan(state, p) end
     if cmd:pressed("jam") then jam(state, p) end
     if cmd:pressed("decoy") then M.decoy(state, p) end
-    -- add-home-among-stars: the Shroud key fires the Grapple on foot
-    if cmd:pressed("shroud") then require("sim.tools").grapple_fire(state, p, ctx_fns) end
+    -- add-playtest-recs: the Grapple has its own key (Y, D-pad up, GRP);
+    -- the Shroud key on foot only says what it is
+    if cmd:pressed("grapple") then require("sim.tools").grapple_fire(state, p, ctx_fns) end
+    if cmd:pressed("shroud") then M.shroud(state, p) end
     M.spike_step(state, p, cmd, dt)
     excursion.step(state, p, cmd, dt, ctx_fns)
     world_step(state, p, dt)
@@ -1019,6 +1055,7 @@ function M.step(state, cmds, dt)
   end
   state.decoys = keep
   coop.step(state, ctx_fns)
+  twin.step(state, ctx_fns)
   heart.step(state, ctx_fns)
   galaxy.step(state, dt, ctx_fns, M.enter_sector)
 end
@@ -1028,6 +1065,7 @@ decor.register(home, ctx_fns)
 visit.register_panels(ctx_fns)
 -- add-wider-dark panels
 panel.register("map", { title = "SECTOR MAP", rows = function(state, p) return galaxy.rows(state, p, ctx_fns) end })
+panel.register("fold_warn", { title = "FOLD WARNING", rows = function(state, p) return galaxy.warn_rows(state, p, ctx_fns) end })
 panel.register("party", { title = "PARTY", rows = function(state, p) return coop.rows(state, p, ctx_fns) end })
 panel.register("archive", { title = "XENOARCHIVE", rows = function(state, p) return archive.rows(state, p) end })
 panel.register("heart", { title = "THE HEART", rows = function(state, p) return heart.rows(state, p) end })

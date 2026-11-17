@@ -104,8 +104,18 @@ function M.wake_snatchers(state, def, t)
   return n
 end
 
-function M.step(state, def, dyn, dt, ctx, t)
+-- slow: the site's grid is down (add-playtest-recs): it patrols and hunts
+-- at `drowsy` of its speed, fires half as often and wakes no Snatchers
+function M.step(state, def, dyn, dt, ctx, t, slow)
   local w = t.warden
+  if slow then
+    local k = w.drowsy or 0.5
+    local s = {}
+    for key, v in pairs(w) do s[key] = v end
+    s.speed, s.chase_speed, s.fire_every = w.speed * k, w.chase_speed * k, w.fire_every / k
+    w = s
+  end
+  dyn.drowsy = slow or nil
   if dyn.st == "off" then return end
   if dyn.st == "disabled" then
     dyn.t = dyn.t - dt
@@ -134,8 +144,8 @@ function M.step(state, def, dyn, dt, ctx, t)
     dyn.pos, arrived = move_to(dyn.pos, goal, w.speed, dt)
     if arrived then dyn.wp = dyn.wp % #def.route + 1 end
     if seen then
-      dyn.st, dyn.target, dyn.lost, dyn.fire = "hunt", seen.index, 0, 0.6
-      local woke = M.wake_snatchers(state, def, t)
+      dyn.st, dyn.target, dyn.lost, dyn.fire = "hunt", seen.index, 0, slow and 1.2 or 0.6
+      local woke = slow and 0 or M.wake_snatchers(state, def, t)
       ctx.fx(state, seen, "alert")
       ctx.msg(state, seen, woke > 0 and "THE WARDEN has seen you - and the Snatchers wake. Jam it, or break its line of sight"
         or "THE WARDEN has seen you. Jam it, or break its line of sight")

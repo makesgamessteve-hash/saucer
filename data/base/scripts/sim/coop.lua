@@ -55,6 +55,7 @@ function M.join(state, idx, ctx)
   local pos, yaw = M.spawn_spot(state, idx)
   local p = g.new_player(idx, pos, yaw)
   state.players[idx] = p
+  require("sim.requests").ensure(state) -- add-playtest-recs: the party request
   ctx.msg(state, p, string.format("Player %d: you wake up in your own saucer. Press Use to get up.", idx))
   for _, o in ipairs(state.players) do
     if o ~= p then ctx.msg(state, o, string.format("Player %d joined in their own saucer", idx)) end
@@ -110,7 +111,7 @@ end
 function M.give(state, p, q, uid, ctx)
   local it = items.find(p, uid)
   if not it or not q then return false end
-  if #q.hold >= configs.all().hold_slots then
+  if #q.hold >= require("sim.upgrades").hold_slots(q) then
     ctx.msg(state, p, "P" .. q.index .. "'s hold is full")
     return false
   end
@@ -257,6 +258,31 @@ function M.step(state, ctx)
   end
 end
 
+-- ---------- add-playtest-recs: "ready to fold" ----------
+-- each player's fold readiness for the HUD and the party panel:
+-- { {index, ok, why, flagged} } in player order. flagged: they said so
+function M.readiness(state)
+  local galaxy = require("sim.galaxy")
+  local out = {}
+  for _, o in ipairs(state.players) do
+    local ok, why = galaxy.ready(state, o)
+    out[#out + 1] = { index = o.index, ok = ok, why = why, flagged = o.ready_fold == true }
+  end
+  return out
+end
+
+-- say (or take back) "I'm ready to fold"
+function M.set_ready(state, p, on, ctx)
+  p.ready_fold = on and true or false
+  for _, o in ipairs(state.players) do
+    if o ~= p then
+      ctx.msg(state, o, on and string.format("P%d is ready to fold (TAB: map)", p.index)
+        or string.format("P%d is not ready to fold after all", p.index))
+    end
+  end
+  return p.ready_fold
+end
+
 -- ---------- the party panel (from the sector map) ----------
 function M.rows(state, p, ctx)
   local rows = {}
@@ -294,6 +320,16 @@ function M.rows(state, p, ctx)
         end
       end
     end
+  end
+  -- add-playtest-recs: fold readiness and "I'm ready to fold"
+  if #state.players > 1 then
+    local parts = {}
+    for _, r in ipairs(M.readiness(state)) do
+      parts[#parts + 1] = string.format("P%d %s", r.index, r.flagged and "READY" or (r.ok and "can fold" or r.why))
+    end
+    rows[#rows + 1] = { text = "Fold: " .. table.concat(parts, ", "), enabled = false }
+    rows[#rows + 1] = { text = p.ready_fold and "Not ready to fold yet" or "I'm ready to fold",
+      act = function(st, pl) M.set_ready(st, pl, not pl.ready_fold, ctx) end }
   end
   if #rows == 0 then rows[1] = { text = "Nobody else is here. Join with a gamepad (A) or F2.", enabled = false } end
   rows[#rows + 1] = { text = "Close", act = function(_, pl) pl.panel = false end }

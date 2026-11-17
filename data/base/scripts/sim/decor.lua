@@ -227,7 +227,7 @@ function M.unshow(state, p, slot, ctx)
   local D = M.ensure(p)
   local it = D.display[slot]
   if not it then return false end
-  if #p.hold >= require("sim.config").all().hold_slots then
+  if #p.hold >= require("sim.upgrades").hold_slots(p) then
     if ctx then ctx.msg(state, p, "Your hold is full") end
     return false
   end
