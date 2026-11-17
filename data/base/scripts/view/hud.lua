@@ -34,6 +34,8 @@ local HELP = {
   "Scanner V (reveals sentries 10 s), Jammer T (disables 12 s)",
   "Lab bench: identify and decode; trade terminal when docked",
   "Home: holodeck (engine room), stove, bookshelf, TV (sofa)",
+  "Docked: 3 pockets the saucer; F holds the coin, Shift sprints",
+  "Station: G trades/talks/grabs a thief, E or 1-2 in a hangar",
   "Camera C, mystery mode M, help H/F1",
   "Gamepad, touch and WebXR work too.",
 }

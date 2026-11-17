@@ -211,7 +211,7 @@ the TV gives hints from the nearest stations. Tests:
 there is no shared game in it yet; programs have no sound of their own; the
 TV picture is a simple animated card, not a rendered scene.
 
-## 5. Pocket saucer and station visits — next
+## 5. Pocket saucer and station visits — done
 
 **Goal.** Steve: travel to a space station, shrink the saucer to the size
 of a big coin, put it in your pocket and explore the station on foot.
@@ -225,7 +225,32 @@ a non-lethal pocket risk (e.g. a pickpocket you can chase down).
 **Done when.** A game test docks, pockets the saucer, walks the station,
 trades on foot, unpockets in a hangar and flies away.
 
-## 6. Presentation and packaging — after 5
+**Status (2026-11-17).** Done in OpenSpec change `add-pocket-station-visits`.
+Pocket is the third configuration (the saucer has Villa, Seat and Pocket;
+5 cm across), chosen with 3 or by folding once more past the Seat, and only
+while docked. You step out into the arrival hangar, the saucer folds into
+your hand and goes into your pocket; F holds it in your fist. Stations are
+generated from their seed and the `walk` section of the station kit
+(`sim/stationgen.lua`): arrival and far hangars, a concourse with passages,
+a market with four or five stalls (scrap, curio, grocer, archivist,
+outfitter, chandler) and a bar with a bartender, patrons, drinks for buffs
+and rumours for leads, furnished in the detail-pass style with folk of five
+species (`station/folk.lua`, `meshes/npc.lua`, `view/station.lua`). A
+hooded pickpocket stalks pocketed coins; look at him to spook him, chase
+him down to get it back, or deal with the fence at the bar if he escapes.
+Unpocketing works in either hangar with a free bay and grows the saucer
+from your hand onto the pad; you are aboard at that hangar's space door.
+Movement uses the interior walk axes on every input path (WebXR walks where
+you look). Visits are plain player state, saved and replayed (sim version
+7). Tests: `tests/game/station.lua` (plus restore-every-tick and seed 7),
+`tests/lua/station_spec.lua`; the slice replay was re-recorded. Screenshot
+tour: `tools/shots/m5.lua`. Known gaps: one station (the trader) has an
+interior so far; NPCs follow fixed paths and do not path around players;
+co-op players see each other on foot but the thief only targets one coin at
+a time; unpocketing in open space outside a station is not exposed yet
+(the hook exists for milestone 7).
+
+## 6. Presentation and packaging — next
 
 **Goal.** It looks and ships like the retro-3D game in the concept.
 

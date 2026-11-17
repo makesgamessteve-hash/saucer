@@ -1,6 +1,6 @@
 # Saucer — Game Concept & Design
 
-> Status: draft v0.8 (2026-11-16). Updated with Steve's answers on combat, co-op, the mystery, WebXR, and art (v0.2), on co-op saucers, licensing, and hero meshes (v0.3), with Steve's correction of the core fantasy: you are a person on foot inside the saucer, and it reconfigures around you (v0.4), with the milestone 2 live-in interior (v0.5), with the milestone 3 one-sector loop (v0.6), and with Steve's request for true 3D: the saucer flies up and down, and sites grow in every direction and are huge (v0.7), and with Steve's belly tractor beam: loot is beamed up from a Tractor Room under the lower deck, only when the saucer is lined up over it, and shrinks on the way into the hold (v0.8). · Owner: Steve Makesgames · Repo: <https://github.com/makesgamessteve-hash/saucer> (`main`)
+> Status: draft v0.9 (2026-11-17). Updated with Steve's answers on combat, co-op, the mystery, WebXR, and art (v0.2), on co-op saucers, licensing, and hero meshes (v0.3), with Steve's correction of the core fantasy: you are a person on foot inside the saucer, and it reconfigures around you (v0.4), with the milestone 2 live-in interior (v0.5), with the milestone 3 one-sector loop (v0.6), and with Steve's request for true 3D: the saucer flies up and down, and sites grow in every direction and are huge (v0.7), and with Steve's belly tractor beam: loot is beamed up from a Tractor Room under the lower deck, only when the saucer is lined up over it, and shrinks on the way into the hold (v0.8), and with milestone 5's pocket saucer and station visits: the Pocket comes back, docked only (v0.9). · Owner: Steve Makesgames · Repo: <https://github.com/makesgamessteve-hash/saucer> (`main`)
 > Licenses: code (including all Lua) is MIT · hand-authored art and audio are CC BY 4.0 · Grok Imagine–generated images are under xAI's terms for outputs (§11.6)
 > Purpose: the source document for OpenSpec specs. Section 16 lists capabilities with SHALL requirements and scenarios ready to paste into `openspec/specs/` or `openspec/changes/`.
 
@@ -58,6 +58,13 @@
   - The Villa's beam runs from the **Tractor Room**, a third deck under the lower deck, down a stair beside the engine. It has a floor window round the belly hatch, a sling seat with two console arms, a cargo tube up to the hold and hold racks that light a cubby per slot. Line up from the helm (the HUD scope and hint say how), walk down (hover-hold keeps the saucer there), sit at the console (Use) and look down through the glass. There the stick and lift **trim** the saucer slowly in the operator's frame, turn trims the heading, F pulls and Use gets up.
   - **The pull shrinks the loot.** The target rises up the beam into the hatch at the pull speed (at least 0.6 s), shrinking to 12 % of its size (Seat: 35 %), while the belly iris opens. Then it is in the hold like before (hot, unidentified, Echoes, nests, caches, the Curio). Getting up, folding or drifting out of the beam drops it where it lay.
   - **The Seat** has no room for a Tractor Room: its small mini beam fires straight from the seat with the same rule (class S only).
+- **Notes from milestone 5 (v0.9), pocket saucer and station visits:** Steve: "travel to a space station, minimize the saucer to the size of a big coin and put it in his/her pocket before exploring the station."
+  - **Pocket returns** as a third configuration (class 0, 5 cm across), but **only while docked at a station**. Folding to it costs 30 Charge from the Villa (10 from the Seat); unfolding costs half. You step out into the station's arrival hangar, the saucer folds down into your palm (2.4 s) and goes into your pocket. F holds it in your fist instead.
+  - **Unpocketing** only works in a hangar (or, later, open space) whose bay outside is free: the coin grows from your hand onto the pad (2.2 s), and you are aboard at that hangar's space door, still docked, free to fly off.
+  - **Station interiors** are generated from the station seed with the `walk` section of the station kit: an arrival hangar and a far hangar, a concourse spine with passages, a market of four or five stalls and a bar, furnished in the detail-pass style and peopled by five species (stall keepers, a bartender, patrons, strollers). Nothing about a layout is saved; it is rebuilt from the seed.
+  - **On-foot trading:** vendors buy at the trader's price times their own multiplier (the scrap dealer pays 1.25× for materials, the curio dealer for curios), the grocer, archivist and outfitter sell stock, the chandler tops up Charge and patches the hull, and the bar sells buff drinks and rumours that mark leads.
+  - **The pickpocket** is the non-lethal risk on foot: he stalks a pocketed coin, is spooked if you look straight at him, steals it from behind and flees along the walk graph after a 1.5 s head start. Grab him (Use) to get it back; if he keeps away for 35 s the coin goes to the fence at the bar (buy back, trade your best item, or plead if broke). While he has it you cannot unfold.
+  - The §3.5 stepping-out-in-derelicts rules (Suit Charge, Lifeline) remain post-MVP (roadmap milestone 7).
 - All names in this doc (capabilities, Lua modules, folders) are proposals. Nothing in the repo constrains them yet.
 
 ---
@@ -91,7 +98,7 @@ v0.4 simplifies the sizes to two. Derelicts are built big enough for the Villa (
 | **Villa** | XL (4) | 26 × 12 | Glass dome deck (kitchen, living room, helm) and lower deck (bedroom, bathroom, engine room); you walk it on foot | 30 m/s cruise | XL / 45 m | — (default) |
 | **Seat** | S (1) | 1.8 × 1.4 | One seat under a bubble canopy, about the size of a one-seat car | 10 m/s, agile | S / 10 m | 20 (unfolding back to the Villa costs half, 10) |
 
-Cut in v0.4: Cruiser, Pod, and Pocket. Mods can add sizes back through `saucer/configs.lua`.
+Cut in v0.4: Cruiser, Pod, and Pocket. Mods can add sizes back through `saucer/configs.lua`. v0.9 brings **Pocket** back as a third size (class 0, 5 × 1.4 cm, docked only, §0 milestone 5 notes).
 
 **Interior fiction ("Fold"):** shrinking folds rooms away into a fold-space; it doesn't destroy them. Their contents persist, but you can only walk into a room while the saucer's config makes it available. That's a deliberate tension: to *work* on loot (lab, workshop) you need to unfold back to the Villa.
 
@@ -925,6 +932,7 @@ Format follows OpenSpec (`### Requirement:` + `#### Scenario:` with WHEN/THEN). 
 21. `add-save-system`
 22. `add-walkable-saucer-interior` (first-person avatar, two-deck Villa, two sizes, derelict scale; defers `on-foot`)
 23. `add-holodeck-home-life` (holodeck programs and modules, cooking buffs, bookshelf, TV hints; roadmap milestone 4)
+24. `add-pocket-station-visits` (Pocket configuration docked only, walkable station interiors, on-foot trading, the pickpocket; roadmap milestone 5)
 
 Changes 1–8 are the architectural spine. Determinism, command frames, and viewports have to land before any gameplay, so co-op and XR aren't retrofitted later. Change 22 reworks 12 and 13 around the v0.4 fantasy. The living implementation plan is `docs/ROADMAP.md`.
 

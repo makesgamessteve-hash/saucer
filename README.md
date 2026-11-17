@@ -34,7 +34,10 @@ out, unfold, and leave the site to bank it. Keyboard/mouse, gamepad, touch
 | ![The holodeck: arch, panel and grid room](docs/shots/m4_holodeck_room.png) | ![Holodeck program: Sunset Beach](docs/shots/m4_program_beach.png) |
 | ![Holodeck program: the Seat flight course](docs/shots/m4_program_seat_course.png) | ![Holodeck program: the decoded alien memory](docs/shots/m4_program_memory.png) |
 | ![Cooking ember-spiced noodles](docs/shots/m4_cooking.png) | ![Reading a found log at the bookshelf](docs/shots/m4_bookshelf_reading.png) |
-| ![The TV gives a hint](docs/shots/m4_tv.png) | |
+| ![The TV gives a hint](docs/shots/m4_tv.png) | ![Docked: the Villa folds down into your hand](docs/shots/m5_pocketing_fold.png) |
+| ![The saucer as a coin in your palm](docs/shots/m5_coin_in_hand.png) | ![The station market and its stalls](docs/shots/m5_station_market.png) |
+| ![The Drift bar: bartender and patrons](docs/shots/m5_bar_npcs.png) | ![Selling to the scrap dealer on foot](docs/shots/m5_trade_on_foot.png) |
+| ![Chasing the pickpocket](docs/shots/m5_pickpocket_chase.png) | ![Unpocketing: the Villa grows onto the far hangar's pad](docs/shots/m5_unpocket_far_hangar.png) |
 
 [Play in browser](https://makesgamessteve-hash.github.io/saucer/) — the live
 web build on GitHub Pages, rebuilt on every push to `main`.
@@ -50,7 +53,7 @@ web build on GitHub Pages, rebuilt on every push to `main`.
 | `mods/` | user mods (`mods/<id>/mod.lua`), created beside the binary |
 | `tests/` | C unit tests, Lua specs, headless game tests, replays, fixtures |
 | `tools/` | `artpipe` (asset pipeline + license lint), `coverage.sh` |
-| `openspec/` | project conventions and changes 0–24 |
+| `openspec/` | project conventions and changes 0–25 |
 
 Assets are never baked into the binary: the build copies `data/` next to the
 executable, and the web build fetches the files listed in `data/index.json`.
@@ -98,6 +101,11 @@ macOS is not a target for now.
 | Run/boost, camera, help | Shift, C, H | LS, Back, Start | buttons | left grip, —, menu |
 | Holodeck program: use a spot / leave at the arch / end a flight run | G / Return | X | Use button | left trigger |
 | TV next channel, book next page (on the sofa / at the shelf); get up | G / Return; W A S D | X; left stick | Use; stick | left trigger; left stick |
+| Pocket the saucer (docked at a station only) | 3, or Q past the Seat | LB past the Seat | fold button past the Seat | A past the Seat, or the size lever |
+| On foot in a station: talk, trade at a stall, the bar, grab the thief | G / Return | X | Use button | left trigger |
+| On foot in a station: hold the coin in your fist / pocket it | F | A | tractor button | right trigger |
+| On foot in a station: sprint | Shift | LS | run button | left grip |
+| Unpocket in a hangar (Villa / Seat) | E or 1 / 2 | RB | unfold button | B, or the size lever |
 
 You wake up in the bedroom on the lower deck. The title card offers **Get
 up** or **Load saved game**. Doors slide open as you walk up to them. Take
@@ -155,6 +163,27 @@ range, each with a gentle hint about what to do next. Holodeck programs are
 Lua files under `holo/`, so a mod adds one by dropping in a file (see
 `tests/fixtures/mods/holo_garden`).
 
+**Station visits** (milestone 5). Dock at the trader and pick the third
+size, **Pocket** (3, or fold once more past the Seat): you step out into
+the station's arrival hangar and the saucer folds down into your palm, the
+size of a big coin, then you slip it into your pocket. Pocket only works
+docked. Walk the station in first person: a concourse with strolling folk
+of five species, a **market** whose stall keepers buy and sell face to face
+(the scrap dealer pays extra for materials and modules, the curio dealer
+for curios and tools; the grocer, archivist and outfitter sell stock, and
+the chandler tops up Charge and patches the hull) and a **bar** with drinks
+that give buffs and rumours that mark leads. Mind the hooded **pickpocket**:
+he follows anyone with a saucer in their pocket. Turn round and look at him
+and he melts away; hold the coin in your fist (F) and he cannot take it. If
+he lifts it, sprint after him (the HUD shows where he is and how long
+before he gets away) and press Use to grab him. If he escapes, the fence at
+the bar sells it back, takes your best loot for it or, if you are broke,
+hears you out. To leave, walk into either hangar and press E (or 1 / 2):
+the coin grows out of your hand onto the pad into the Villa (or the Seat)
+and you are aboard at that hangar's space door. It only unfolds in a hangar
+with a free bay. The station layout comes from the seed, so it is the same
+every visit, and saves made on foot load back on foot.
+
 Press A on a second gamepad (with `--coop`) to join as player 2; each player
 lives in and flies their own saucer. `--local-players 2 --viewports 2` starts split screen.
 
@@ -195,6 +224,10 @@ tools/coverage.sh                            # coverage gate: >= 95% lines, C (g
   reloads it; `holodeck.lua` runs the beach and the flight course, loots a
   data core, decodes it, runs the replay and the alien memory, reads a found
   log, watches the TV, cooks for a buff and installs a bought module;
+  `station.lua` docks, pockets the saucer, walks the station, sells at a
+  stall, tops up at the chandler, drinks at the bar, gets robbed and runs the
+  thief down, saves, unpockets in the far hangar and flies away (also with
+  `--restore-every-tick` and on seed 7);
   `boot.lua` covers touch, XR and rendering; `coop.lua` runs two players;
   `mods.lua` loads the fixture mods (one adds a holodeck program).
 - **Replays** (`tests/replays/*.srep`): recorded command frames with a state
