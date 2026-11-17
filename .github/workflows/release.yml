@@ -52,7 +52,7 @@ jobs:
           "Double-click saucer.exe. Options: saucer.exe --help" | Set-Content $dir/PLAY.txt
           Compress-Archive -Path $dir -DestinationPath "$dir.zip"
           if ((Get-Item "$dir.zip").Length -lt 1000000) { throw "zip too small" }
-      - name: Smoke test the packaged exe (headless boot is in ci.yml; here: --help runs)
+      - name: Smoke test the packaged exe (saucer.exe --help; the headless boot test is in ci.yml)
         shell: pwsh
         run: |
           $dir = "saucer-$env:TAG-windows-x64"
