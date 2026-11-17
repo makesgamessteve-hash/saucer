@@ -455,13 +455,13 @@ function M.station(v, state, p)
     local a = saucer.math.wrap(saucer.math.atan2(pos[1] - b.pos[1], pos[2] - b.pos[3]) - b.yaw)
     local dir = math.abs(a) < 0.4 and "AHEAD" or (math.abs(a) > 2.6 and "BEHIND" or (a > 0 and "LEFT" or "RIGHT"))
     local t = string.format("THIEF %s %dm  SPRINT: SHIFT", dir, d // 1)
-    v:text(W // 2 - #t * 4, 30, t, RED)
+    v:text(W // 2 - #t * 4, 80, t, RED)
     local left = math.max(0, visit.tune().escape - (p.station.thief.t or 0))
-    v:rect(W // 2 - 50, 40, 100, 3, { 0.15, 0.15, 0.2, 1 })
-    v:rect(W // 2 - 50, 40, 100 * left / visit.tune().escape, 3, RED)
+    v:rect(W // 2 - 50, 90, 100, 3, { 0.15, 0.15, 0.2, 1 })
+    v:rect(W // 2 - 50, 90, 100 * left / visit.tune().escape, 3, RED)
   elseif mode == "stalk" and d < 5 then
     local t = "SOMEONE IS CROWDING YOU"
-    v:text(W // 2 - #t * 4, 30, t, AMBER)
+    v:text(W // 2 - #t * 4, 80, t, AMBER)
   end
   return 1
 end

@@ -107,8 +107,20 @@ T.assert(require("sim.buffs").active(T.state(), get(), "calm"), "calm from the t
 T.assert(ap.pick(T, 1, get, "Ask about rumours"), "asked about rumours")
 T.assert(ap.pick(T, 1, get, "Close"), "closed the bar")
 
--- 6. the pickpocket: stand still with your back turned until he strikes
-local th = get().station.thief
+-- 6. the pickpocket: walk over to his haunt holding the coin in your fist (safe
+-- from him), turn your back on him, pocket the coin and stand still
+local home = visit.layout(T.state(), get()).thief.home
+T.press(1, "tractor")
+T.wait(1)
+T.assert(get().station.coin == "hand" and get().station.held, "the coin is held in the fist")
+T.assert(ap.foot_to(T, 1, get, home[1], home[2], 1.5, 4000), "near the hooded figure's haunt")
+T.assert(get().station.coin == "hand", "nobody takes a held coin")
+local A = require("sim.avatar").layout()
+T.axis(1, "turn", 1, (saucer.math.pi / A.turn * 60) // 1)
+T.axis(1, "turn", 0, 1)
+T.press(1, "tractor")
+T.wait(1)
+T.assert(get().station.coin == "pocket", "back in the pocket")
 T.assert(ap.wait_until(T, 1, function() return get().station.coin == "thief" end, 60 * 90),
   "the pickpocket lifted the saucer (" .. get().station.thief.mode .. ")")
 T.assert(get().station.thief.mode == "flee" and said("pocket is light"), "and runs for it")
@@ -116,7 +128,7 @@ T.press(1, "size1")
 T.wait(1)
 T.assert(get().mode == "foot", "no saucer, no unfolding")
 T.assert(ap.chase(T, 1, get), "ran him down")
-T.assert(said("catch the thief") and get().station.caught == 1, "caught him; the saucer is back")
+T.assert(said("catch the thief") and get().station.caught == get().station.stolen, "caught him; the saucer is back")
 T.assert(get().station.coin == "hand" or get().station.coin == "pocket", "the coin is yours again")
 
 -- save mid-visit and load it back: the visit survives
