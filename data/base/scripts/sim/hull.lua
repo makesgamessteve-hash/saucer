@@ -23,6 +23,11 @@ function M.damage(ship, amount)
   M.ensure(ship)
   local c = configs.get(ship.size)
   local a = amount / math.max(c.shield or 1, 0.05)
+  -- add-playtest-recs: Shield cells (an upgrade) make every shield point soak more
+  if (ship.cells or 0) > 0 then
+    local u = require("sim.upgrades").def("shield_cells")
+    a = a / (1 + ship.cells * (u and u.soak or 0.25))
+  end
   ship.since_hit = 0
   if ship.shield >= a then
     ship.shield = ship.shield - a
@@ -83,7 +88,25 @@ function M.retreat(state, p, trader_pos)
   p.tractor = false
   p.latched_by = nil
   p.retreats = (p.retreats or 0) + 1
+  M.bill(state, p)
   return cache
+end
+
+-- add-playtest-recs (recommendation 7): at danger 2+ a Fold Retreat costs a
+-- tow bill. Credits first; the rest comes out of the Charge (never below 0,
+-- never anything else). -> credits paid, Charge taken
+function M.bill(state, p)
+  local g = require("sim.galaxy").sector(state.seed, state.sector_id or 1)
+  local bill = (tune().retreat_bill or {})[g and g.danger or 1] or 0
+  p.last_bill = nil
+  if bill <= 0 then return 0, 0 end
+  local paid = math.min(p.credits or 0, bill)
+  p.credits = (p.credits or 0) - paid
+  local chg = math.min(p.ship.charge, bill - paid)
+  p.ship.charge = p.ship.charge - chg
+  p.bills = (p.bills or 0) + paid
+  p.last_bill = { bill = bill, paid = paid, charge = chg }
+  return paid, chg
 end
 
 return M

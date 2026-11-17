@@ -130,6 +130,7 @@ macOS is not a target for now.
 | Sector map, party fold jumps, Xenoarchive, requests, the Heart vote | Tab | D-pad right | MAP button | right grip |
 | Decoy flare (3 per refill; Watchers and Clamps chase it) | B | D-pad down | DECOY button | — |
 | Shroud (hides a still saucer; drains Charge) | X | D-pad left | — | — |
+| Grapple (on foot in a derelict, 25 m) | Y | D-pad up | GRP button | — |
 | Override spike (hold at a Clamp or Lockdown node, on foot) | N (hold) | B (hold) | — | — |
 
 You wake up in the bedroom on the lower deck. The title card offers **Get
@@ -320,13 +321,26 @@ up Charge regeneration by 2%. Docked guests walk your decorated dome and can
 admire what you display. The deepest derelicts (danger 3) keep a **Warden**:
 it patrols its great halls, hunts what it sees with stun bolts and wakes
 every Snatcher of the site; decoy it, Shroud, or Jam it and spike it. On
-foot, **X** fires the **grapple** and holding **N** with no sentry in reach
+foot, **Y** fires the **grapple** and holding **N** with no sentry in reach
 runs the **cutter** through a sealed shutter or a Lockdown seal. The
 **mod browser** (title card or bed) lists every mod with its description and
 why it did not load, and switches mods on or off from the next start.
 **Hardcore** (title card, or `--hardcore`) is opt-in for a whole universe:
 a Fold Retreat loses all cargo for good, the Lifeline loses what you held,
 and there is no loading from the bed.
+
+**After the first playtest** (OpenSpec `add-playtest-recs`): the trade
+terminal sells **saucer upgrades**: the helm beam relay (pull small finds
+from the helm, no trip to the Tractor Room), and from Fold Core T2 tractor
+coils, hold racks, shield cells and a second lab bench. Decodes jump the lab
+queue. Folding into deeper danger for the first time asks first (**fold
+warning**), the first Watcher lock tips you off about the Seat, and a Fold
+Retreat at danger 2 or 3 costs a **tow bill** (credits, then Charge). A shut
+grid leaves the Warden awake but slower; the pickpocket strikes on the first
+visit and then about one in four. In co-op, **twin vaults** need one saucer
+on the shutter anchor while the other beams, traders post **party
+requests**, and the party panel has **I'm ready to fold**. Story items ask
+before they are sold, and the HUD keeps its messages and alerts short.
 
 | | |
 |---|---|

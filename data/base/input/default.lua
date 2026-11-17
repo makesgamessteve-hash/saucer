@@ -30,7 +30,7 @@ return {
     camera = { "key:C", "pad:back", "key2:End" },
     menu   = { "key:F1", "key:H", "pad:start", "xr:menu", "key2:Home" },
     jam    = { "key:T", "pad:rightstick", "touch:jam", "xr:y", "key2:Apostrophe" },
-    mystery_mode = { "key:M", "pad:dpup" },
+    mystery_mode = { "key:M" },   -- add-playtest-recs: the D-pad's up went to the grapple
     -- add-presentation-packaging: XR snap turns (the comfort filter derives them from the right stick)
     snap_left  = { "xr:snap_l" },
     snap_right = { "xr:snap_r" },
@@ -39,10 +39,12 @@ return {
     decoy  = { "key:B", "pad:dpdown", "touch:decoy", "key2:LeftBracket" },
     shroud = { "key:X", "pad:dpleft", "key2:RightBracket" },
     spike  = { "key:N", "pad:b", "key2:P" },
+    -- add-playtest-recs: the grapple has its own key (it used to share X with the Shroud)
+    grapple = { "key:Y", "pad:dpup", "touch:grapple", "key2:0" },
   },
   -- stable order so action slots (and therefore replays) never depend on table order
   axis_order = { "move_x", "move_z", "lift", "turn", "look" },
   button_order = { "shrink", "grow", "size1", "size2", "tractor", "scan", "boost", "use",
                    "camera", "menu", "jam", "mystery_mode", "size3", "snap_left", "snap_right",
-                   "map", "decoy", "shroud", "spike" },
+                   "map", "decoy", "shroud", "spike", "grapple" },
 }

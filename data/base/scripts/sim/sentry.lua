@@ -220,6 +220,7 @@ local function step_watcher(state, def, dyn, dt, ctx, t)
       dyn.st, dyn.t, dyn.fire, dyn.lock_tick = "locked", 0, 0, state.tick
       ctx.fx(state, seen, "locked")
       ctx.msg(state, seen, "Watcher LOCKED: stun bolts incoming")
+      M.seat_hint(state, seen, ctx)
     end
   elseif dyn.st == "locked" and seen then
     dyn.fire = dyn.fire - dt
@@ -388,8 +389,11 @@ end
 function M.grid_down(state, site_idx)
   local t = M.tune()
   local n = 0
-  for _, dyn in ipairs(state.sentries[site_idx] or {}) do
-    if dyn.st ~= "off" then
+  local defs = require("sim.game").sentries(site_idx)
+  for i, dyn in ipairs(state.sentries[site_idx] or {}) do
+    if defs[i] and defs[i].kind == "warden" then
+      -- add-playtest-recs: the Warden stays awake (sentry.step slows it)
+    elseif dyn.st ~= "off" then
       if dyn.st == "latched" and dyn.target > 0 and state.players[dyn.target] then state.players[dyn.target].latched_by = nil end
       if dyn.st == "clamped" then adv.release(state, dyn) end
       dyn.st, dyn.t, dyn.target, dyn.lost = "disabled", t.disabled_time, 0, 0
@@ -401,6 +405,17 @@ end
 
 function M.grid_up(state, site_idx)
   return #(state.sentries[site_idx] or {})
+end
+
+-- add-playtest-recs (recommendation 4): the first time a Watcher locks on
+-- to a Villa, say what to do about it. -> true when the hint was given
+function M.seat_hint(state, p, ctx)
+  if not p or p.ship.size ~= 1 or p.mode == "foot" then return false end
+  p.hints = p.hints or {}
+  if p.hints.seat then return false end
+  p.hints.seat = state.tick
+  ctx.msg(state, p, "TIP: Watchers ignore anything as small as the Seat. Fold down (2 or Q) to dive guarded sites.")
+  return true
 end
 
 -- is a Watcher Locked onto player p?
@@ -420,7 +435,11 @@ function M.step(state, site_idx, defs, dt, ctx)
   if not dyns then return end
   if state.grids and state.grids[tostring(site_idx)] then
     for i, dyn in ipairs(dyns) do
-      if dyn.st ~= "off" then
+      if defs[i] and defs[i].kind == "warden" and dyn.st ~= "off" then
+        -- add-playtest-recs (recommendation 8): the Warden runs on its own
+        -- power: with the grid down it keeps patrolling, only slower
+        require("sim.warden").step(state, defs[i], dyn, dt, ctx, t, true)
+      elseif dyn.st ~= "off" then
         if dyn.st == "clamped" then adv.release(state, dyn) end
         if defs[i] and defs[i].kind == "lockdown" and #(dyn.sealed or {}) > 0 then ctx.seal(defs[i], dyn, false) end
         dyn.st, dyn.t = "disabled", t.disabled_time

@@ -470,7 +470,7 @@ describe("on foot", function()
     b.pitch = 1.4
     local y0 = b.pos[2]
     p.suit = 50
-    run(st, cmd({ pressed = { "shroud" } }))
+    run(st, cmd({ pressed = { "grapple" } }))
     expect(p.excursion.grapple ~= nil).to_be(true)
     expect(heard(p, "Grapple hooked")).to_be(true)
     expect(p.suit).to_be_less(50)
@@ -709,7 +709,7 @@ describe("saves and the views", function()
     expect(st2.locks["1:1"]).to_be(5)
     expect(st2.grids["1"].by).to_be(1)
     expect(game.shutter_closed(1, f.shutters[1].id)).to_be(false)
-    expect(st2.version).to_be(9)
+    expect(st2.version).to_be(10)
   end)
   it("renders the props, the hand, the coin, the fold and the HUD without touching the state", function()
     local st, f = at_mouth(2)

@@ -85,6 +85,11 @@ for _ = 1, 6 do
   for _, it in ipairs(get().hold) do
     if not any and visit.vendor_offer(T.state(), get(), visit.vendor_def("scrap"), it) then
       any = ap.pick(T, 1, get, "Sell " .. items.label(it))
+      -- add-playtest-recs: a story item (a data core) warns first; sell it anyway
+      if any and get().sell_confirm then
+        T.assert(get().msgs[#get().msgs].text:find("Wait:", 1, true), "the stall warns before a story item goes")
+        any = ap.pick(T, 1, get, "CONFIRM: sell")
+      end
       if any then sold = sold + 1 end
     end
   end

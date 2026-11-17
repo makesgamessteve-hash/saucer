@@ -473,6 +473,30 @@ download source; the grapple has no touch button; the Xenoarchive set bonus
 for displays is not in; Wardens in the scripted mystery game test are
 switched off through the API (their own spec covers them).
 
+## 10. Playtest recommendations — done
+
+**Goal.** Act on the eleven recommendations of the first long playtest
+(`docs/playtest/2026-11-17.md`).
+
+**Status (2026-11-17).** Done in OpenSpec change `add-playtest-recs`. Saucer
+upgrades at traders (`sim/upgrades.lua`, `economy/upgrades.lua`: helm beam
+relay, tractor coils, hold racks, shield cells, second lab bench); decodes
+jump the lab queue; a fold warning before the first deeper danger; a
+one-time Seat tip on the first Watcher lock; the tow bill on Fold Retreats at
+danger 2 and 3 (`hull.bill`); the Warden stays awake (slower) when the grid is
+shut; the pickpocket's chance per visit (`visit.thief_roll`); co-op twin
+vaults (`sim/twin.lua`), party requests and "ready to fold"; the grapple on
+its own key (Y, D-pad up, touch GRP); a HUD that wraps, folds and sorts its
+messages and stacks its alerts; a warning before selling story items. State
+version 10; replays re-recorded. Tests: `tests/lua/playtest_recs_spec.lua`,
+the station and wider-dark game tests read the new warnings. The ten playtests
+were rerun: `docs/playtest/2026-11-17-after.md` has the before/after numbers.
+Screenshot tours: `tools/shots/recs.lua`, `tools/shots/recs_coop.lua`.
+Known gaps: no Tractor Room target queue (the relay covers S and M only);
+twin anchors and vaults sit on loot slots, so the find on the slot comes up
+first; upgrade prices are untested with people; the follower bot can wait by
+a twin anchor in vain.
+
 ## Later / maybe
 
 Rivals, planet-surface cities, a fabricator, and a macOS port.

@@ -112,6 +112,8 @@ function M.check(ship, cand, heading)
   if cand.item.size > b.class then
     return out("big", "NEEDS A SIZE " .. loot.size_name(cand.item.size) .. " BEAM")
   end
+  -- add-playtest-recs: a twin vault opens only while a partner holds its anchor
+  if cand.sealed then return out("sealed", "SHUTTER SHUT - A PARTNER MUST HOLD THE ANCHOR") end
   if m.depth > b.range then return out("far", string.format("TOO HIGH - DESCEND %dM", (m.depth - b.range) // 1 + 1)) end
   if m.depth < b.min then
     if m.depth < 0 then return out("close", "ABOVE THE BELLY - CLIMB OVER IT") end
@@ -181,6 +183,10 @@ function M.candidates(state, p, site_idx, ruin)
   end
   -- add-wider-dark: gifts ejected for you (or anyone) by the others
   for _, c in ipairs(require("sim.coop").candidates(state, p, site_idx)) do out[#out + 1] = c end
+  -- add-playtest-recs: co-op twin vaults and their shutter anchors
+  if ruin then
+    for _, c in ipairs(require("sim.twin").candidates(state, p, site_idx, ruin)) do out[#out + 1] = c end
+  end
   local v = state.vault
   if site_idx == 0 and v and state.mystery.vault_open and not v.taken then
     out[#out + 1] = { key = "vault:curio", kind = "curio", pos = { v.pos[1], v.pos[2] + 2, v.pos[3] },

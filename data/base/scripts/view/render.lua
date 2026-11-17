@@ -470,7 +470,7 @@ function M.console(v, A, state, o, d)
   if rw then
     local x = wing_face(rw)
     local y0 = fl + rw.h * 0.62
-    for i = 1, all.hold_slots do
+    for i = 1, require("sim.upgrades").hold_slots(o) do
       local it = o.hold[i]
       local col = { 0.12, 0.14, 0.18, 1 }
       if it then col = it.hot and { 1, 0.7, 0.25, 1 } or { 0.4, 1, 0.5, 1 } end
@@ -640,7 +640,7 @@ function M.beam_console(v, A, state, o, d)
     n = n + 1
   end
   local all = configs.all()
-  for i = 1, all.hold_slots do
+  for i = 1, require("sim.upgrades").hold_slots(o) do
     local it = o.hold[i]
     local rack = racks[(i - 1) // 6 + 1]
     if it and rack then

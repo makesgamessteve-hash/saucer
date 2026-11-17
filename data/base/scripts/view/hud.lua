@@ -22,6 +22,103 @@ local HINTS = {
 }
 M.HINTS = HINTS
 
+-- add-playtest-recs (recommendation 10): the control hints for what you are
+-- doing right now (helm, walking the saucer, on foot in a derelict, a
+-- station); HINTS above stay the helm line for each device
+local MODE_HINTS = {
+  walk = {
+    kbm = "WASD walk MOUSE look SHIFT run G use (helm, lab, terminal, beam console) TAB map H help",
+    pad = "LS walk RS look LS-click run X use (helm, lab, terminal, beam console) DPAD-RIGHT map",
+    keys2 = "IJKL walk ARROWS look ENTER use \\ map",
+    touch = "Stick walk  drag look  USE helm/lab/terminal/console  MAP",
+  },
+  foot = {
+    kbm = "WASD walk SHIFT sprint CTRL crouch SPACE hop G grab Y grapple N spike/cut V scan T jam E deploy",
+    pad = "LS walk RS look X grab DPAD-UP grapple B spike Y scan RS-click jam RB deploy",
+    keys2 = "IJKL walk ARROWS look ENTER grab 0 grapple P spike ; scan . deploy",
+    touch = "Stick walk  drag look  USE grab  GRP grapple  SCN scan  JAM jam  +SZ deploy",
+  },
+  station = {
+    kbm = "WASD walk SHIFT sprint G trade/talk/grab F hold the coin E or 1/2 unfold (hangar) H help",
+    pad = "LS walk RS look LS-click sprint X trade/talk A hold the coin RB unfold (hangar)",
+    keys2 = "IJKL walk ARROWS look ENTER trade/talk RSHIFT hold the coin . unfold",
+    touch = "Stick walk  drag look  USE trade/talk  BM hold the coin  +SZ unfold",
+  },
+}
+M.MODE_HINTS = MODE_HINTS
+
+-- the context a hint line is for
+function M.hint_context(p)
+  if p.mode == "foot" then return p.station and "station" or "foot" end
+  if p.mode == "walk" and not p.beam_console then return "walk" end
+  return "helm"
+end
+
+function M.hint_for(p, mode)
+  local c = M.hint_context(p)
+  local set = MODE_HINTS[c]
+  if c == "helm" or not set then return HINTS[mode] or HINTS.kbm end
+  return set[mode] or set.kbm
+end
+
+-- per view, which context its hint was last shown for (view state, not sim)
+local hint_seen = {}
+M.HINT_TICKS = 600
+
+-- wrap text to `cols` columns (long words are cut), at most `max` lines
+function M.wrap(text, cols, max)
+  local out = {}
+  for _, l in ipairs(require("sim.books").wrap(text, math.max(4, cols))) do
+    if max and #out >= max then
+      out[#out] = out[#out]:sub(1, math.max(1, cols - 3)) .. "..."
+      break
+    end
+    out[#out + 1] = l:sub(1, cols)
+  end
+  return out
+end
+
+-- how urgent a message is: 3 = act now, 2 = advice, 1 = news
+local URGENT = { "LOCKED", "CLAMPED", "THE WARDEN", "FOLD RETREAT", "LOCKDOWN", "latched on", "pocket is light",
+                 "CRITICAL", "HARDCORE" }
+local ADVICE = { "TIP:", "Wait:", "Tow bill", "stirs", "Snatcher", "Clamp", "Fold jump waiting" }
+function M.urgency(text)
+  for _, k in ipairs(URGENT) do if text:find(k, 1, true) then return 3 end end
+  for _, k in ipairs(ADVICE) do if text:find(k, 1, true) then return 2 end end
+  return 1
+end
+
+-- the message log as screen lines: live messages, repeats folded into "(xN)",
+-- the most urgent first, each wrapped to two lines. -> { {text, urgency} }
+function M.message_lines(state, p, cols, max_lines)
+  local live, by_text = {}, {}
+  for i = #p.msgs, 1, -1 do
+    local m = p.msgs[i]
+    if state.tick - m.tick < M.MSG_TICKS then
+      local e = by_text[m.text]
+      if e then e.n = e.n + 1
+      else
+        e = { text = m.text, n = 1, tick = m.tick, order = #live, u = M.urgency(m.text) }
+        by_text[m.text] = e
+        live[#live + 1] = e
+      end
+    end
+  end
+  table.sort(live, function(a, b)
+    if a.u ~= b.u then return a.u > b.u end
+    return a.order < b.order
+  end)
+  local lines = {}
+  for _, e in ipairs(live) do
+    local t = e.n > 1 and string.format("%s (x%d)", e.text, e.n) or e.text
+    for _, l in ipairs(M.wrap(t, cols, 2)) do
+      if #lines >= max_lines then return lines end
+      lines[#lines + 1] = { l, e.u }
+    end
+  end
+  return lines
+end
+
 local HELP = {
   "SAUCER - controls",
   "Walk or fly: W A S D, look: mouse (click to capture)",
@@ -40,7 +137,7 @@ local HELP = {
   "Derelict: Seat near a deck, 3 (or Q) steps out; E deploys it",
   "On foot: Ctrl crouch, Space hop, G grabs / turns a hand-lock",
   "Map TAB: fold jumps (the party agrees), party, Xenoarchive",
-  "Decoy B, Shroud X; on foot X grapples, hold N spikes or cuts",
+  "Decoy B, Shroud X; on foot Y grapples, hold N spikes or cuts",
   "Clamped? hold Boost to shake it off, or Jam it",
   "Co-op: gamepad A or F2 (right-hand keys) joins a player",
   "Camera C, mystery mode M, help H/F1",
@@ -154,7 +251,8 @@ function M.panel(v, state, p)
   local title = panel.title(state, p)
   -- long lists (the trade terminal) show a window of rows around the selection
   local all, first = rows, 1
-  local maxr = math.max(4, (H - 60) // 11)
+  -- (add-playtest-recs: leaves room for the nav, the row hint and two message lines)
+  local maxr = math.max(4, (H - 110) // 11)
   if #all > maxr then
     first = vec.clamp(p.panel.sel - maxr // 2, 1, #all - maxr + 1)
     rows = {}
@@ -237,10 +335,41 @@ function M.lab_status(state, p)
   if not job then return nil end
   local it = items.find(p, job.uid)
   local what = it and items.label(it) or "?"
-  local pct = math.floor((1 - job.left / job.total) * 100)
-  local paused = not require("sim.lab").running(p)
-  return string.format("LAB %s %d%%%s%s", job.kind == "identify" and "ID" or "DECODE", pct,
-    paused and " (PAUSED)" or "", #q > 1 and (" +" .. (#q - 1)) or ""), what
+  local lab = require("sim.lab")
+  local paused = not lab.running(p)
+  -- add-playtest-recs: every running bench shows its job; the rest are "+N"
+  local parts = {}
+  local live = math.min(lab.slots(p), #q)
+  for k = 1, live do
+    local j = q[k]
+    parts[#parts + 1] = string.format("%s %d%%", j.kind == "identify" and "ID" or "DECODE",
+      math.floor((1 - j.left / j.total) * 100))
+  end
+  return string.format("LAB %s%s%s", table.concat(parts, " "), paused and " (PAUSED: VILLA ONLY)" or "",
+    #q > live and (" +" .. (#q - live)) or ""), what
+end
+
+-- add-playtest-recs: the centre alerts, most urgent first -> { {text, colour, bar} }
+function M.alerts(state, p, W)
+  local out = {}
+  local narrow = W < 400
+  if p.clamped_by then
+    out[#out + 1] = { string.format(narrow and "CLAMPED - BOOST %.1f/%.0f" or "CLAMPED - HOLD BOOST %.1f/%.0f OR JAM",
+      p.shake or 0, require("sim.sentry").tune().clamp.shake_time), RED }
+  end
+  if p.latched_by then
+    out[#out + 1] = { narrow and "SNATCHER - JAM IT" or "SNATCHER SIPHONING - JAM IT (T)", RED,
+      math.min(1, (p.latched_by.t or 0) / 3) }
+  end
+  local alarm = M.alarm(state, p)
+  if alarm == "LOCKED" then
+    out[#out + 1] = { narrow and "! LOCKED - JAM OR RUN !" or "! SENTRY LOCKED - JAM (T) OR RUN !", RED }
+  elseif alarm == "WARDEN" then
+    out[#out + 1] = { narrow and "! WARDEN - JAM OR HIDE !" or "! THE WARDEN HUNTS YOU - JAM (T) OR HIDE !", RED }
+  elseif alarm == "ALERT" then
+    out[#out + 1] = { "! SENTRY ALERT !", AMBER }
+  end
+  return out
 end
 
 function M.alarm(state, p)
@@ -284,7 +413,10 @@ function M.beam(v, state, p, scan)
   v:text(W // 2 - #label * 4, y0, label, col)
   n = n + 1
   local hint = info.hint
-  if st == "lock" and b.console and not p.beam_console then hint = "LOCK - GO DOWN TO THE TRACTOR ROOM" end
+  if st == "lock" and b.console and not p.beam_console then
+    -- add-playtest-recs: the helm beam relay pulls small finds from here
+    hint = require("sim.upgrades").relay(p, scan.cand.item) and "LOCK - F PULLS (HELM RELAY)" or "LOCK - GO DOWN TO THE TRACTOR ROOM"
+  end
   v:text(W // 2 - #hint * 4, y0 + 10, hint, col)
   n = n + 1
   -- the scope, bottom right
@@ -335,7 +467,7 @@ function M.draw(v, state, p, target)
   local hot = 0
   for _, it in ipairs(p.hold) do if it.hot then hot = hot + 1 end end
   if not compact then
-    v:text(8, 36, string.format("HOLD %d/%d HOT %d BANK %dc", #p.hold, configs.all().hold_slots, hot, p.banked_value), DIM)
+    v:text(8, 36, string.format("HOLD %d/%d HOT %d BANK %dc", #p.hold, require("sim.upgrades").hold_slots(p), hot, p.banked_value), DIM)
   end
   -- hull, shield and credits (milestone 3)
   local sh, hu = (ship.shield or 100) / 100, (ship.hull or 100) / 100
@@ -347,34 +479,27 @@ function M.draw(v, state, p, target)
   -- add-home-among-stars: Hardcore is always on screen
   -- (under the status lines; "HC" inside the Charge box in a compact view)
   if state.hardcore then
-    if compact then v:text(96, 25, "HC", RED) else v:text(8, 76, "HARDCORE", RED) end
+    if compact then v:text(96, 25, "HC", RED) else v:text(8, p.mode == "foot" and 116 or 76, "HARDCORE", RED) end
   end
   local ls = M.lab_status(state, p)
   if ls and not compact then v:text(8, 56, ls, DIM) end
-  local alarm = M.alarm(state, p)
-  if alarm then
-    local a = alarm == "LOCKED" and "! SENTRY LOCKED - JAM (T) OR RUN !" or "! SENTRY ALERT !"
-    if W < 400 then a = alarm == "LOCKED" and "! LOCKED - JAM OR RUN !" or a end
-    v:text(math.max(2, W // 2 - #a * 4), H // 2 - (compact and 20 or 44), a, alarm == "LOCKED" and RED or AMBER)
-  end
-  -- add-wider-dark: Clamp, Shroud, decoys, the sector and a fold jump in progress
-  if p.clamped_by then
-    local a = string.format(W < 400 and "CLAMPED - BOOST %.1f/%.0f" or "CLAMPED - HOLD BOOST %.1f/%.0f OR JAM",
-      p.shake or 0, require("sim.sentry").tune().clamp.shake_time)
-    v:text(math.max(2, W // 2 - #a * 4), H // 2 - (compact and 30 or 56), a, RED)
+  -- add-playtest-recs: the centre alerts as one stack, most urgent on top
+  local alerts = M.alerts(state, p, W)
+  local ay = H // 2 - (compact and 20 or 44) - (#alerts - 1) * 11
+  for _, a in ipairs(alerts) do
+    v:text(math.max(2, W // 2 - #a[1] * 4), ay, a[1]:sub(1, (W - 4) // 8), a[2])
+    if a[3] then
+      v:rect(W // 2 - 40, ay + 9, 80 * a[3], 2, a[2])
+    end
+    ay = ay + 11
   end
   if p.shroud then
     local moving = vec.len(ship.vel or { 0, 0, 0 }) > require("sim.sentry").tune().shroud.still
     v:text(128, 26, moving and "SHROUD (MOVING)" or "SHROUD", moving and AMBER or CYAN)
   end
-  if (p.decoys or 0) > 0 and not compact then v:text(8, 66, string.format("DECOYS %d", p.decoys), DIM) end
+  if (p.decoys or 0) > 0 and not compact and p.mode ~= "foot" then v:text(8, 66, string.format("DECOYS %d", p.decoys), DIM) end
   if p.visiting then v:text(W // 2 - 64, 36, string.format("VISITING P%d'S DOME", p.visiting), GREEN) end
   M.jump(v, state, p, compact)
-  if p.latched_by then
-    local f = math.min(1, (p.latched_by.t or 0) / 3)
-    v:text(W // 2 - 72, H // 2 - 70, "SNATCHER SIPHONING", RED)
-    v:rect(W // 2 - 40, H // 2 - 60, 80 * f, 3, RED)
-  end
   if p.mode == "helm" and not compact then M.altitude(v, p) end
   -- crosshair, where you are and what Use does
   v:text(W // 2 - 4, H // 2 - 4, "+", p.tractor and AMBER or WHITE)
@@ -425,15 +550,13 @@ function M.draw(v, state, p, target)
     v:text(W - 4 - #t * 8, W < 400 and 86 or 6, t, m.solved and GREEN or AMBER)
   end
   -- messages
-  local y = H - 12
-  local shown = 0
-  for i = #p.msgs, 1, -1 do
-    local msg = p.msgs[i]
-    if state.tick - msg.tick < M.MSG_TICKS and not (compact and shown >= 2) then
-      shown = shown + 1
-      v:text(6, y, msg.text:sub(1, (W - 12) // 8), WHITE)
-      y = y - 10
-    end
+  -- add-playtest-recs: wrapped, repeats folded, the most urgent first
+  -- (two lines under an open panel, so the two never overlap)
+  local lines = M.message_lines(state, p, (W - 12) // 8, (compact or p.panel) and 2 or 5)
+  local y = H - 12 - (#lines - 1) * 10
+  for _, l in ipairs(lines) do
+    v:text(6, y, l[1], l[2] == 3 and RED or (l[2] == 2 and AMBER or WHITE))
+    y = y + 10
   end
   M.home(v, state, p)
   local fs = p.mode ~= "foot" and M.fold_status(p) or nil
@@ -449,10 +572,39 @@ function M.draw(v, state, p, target)
   end
   local mode = saucer.input.device_mode(v.player)
   if mode == "touch" then M.touch(v) end
-  if state.tick < 600 then
-    local h = HINTS[mode] or HINTS.kbm
-    v:text(6, H - 24 - 10 * #p.msgs, h:sub(1, (W - 12) // 8), DIM)
+  -- add-playtest-recs: the hint for the current context only, wrapped, for
+  -- a while after the context changes (and at the start)
+  local ctxk = (v.player or 0) .. ":" .. M.hint_context(p) .. ":" .. mode
+  local hs = hint_seen[v.player or 0]
+  if not hs or hs.key ~= ctxk or state.tick < hs.tick then
+    hs = { key = ctxk, tick = state.tick }
+    hint_seen[v.player or 0] = hs
   end
+  if not compact and not p.panel and state.tick - hs.tick < M.HINT_TICKS then
+    local hl = M.wrap(M.hint_for(p, mode), (W - 12) // 8, 2)
+    for i, l in ipairs(hl) do v:text(6, H - 14 - 10 * #lines - 10 * (#hl - i + 1), l, DIM) end
+  end
+end
+
+-- add-playtest-recs: the co-op fold readiness line. During a jump vote:
+-- every player's state ("P1 READY  P2 INSIDE A SITE"); otherwise the others
+-- who said they are ready. -> text or nil
+function M.ready_line(state, p, narrow)
+  if #state.players < 2 then return nil end
+  local coop = require("sim.coop")
+  local parts = {}
+  if state.jump then
+    for _, r in ipairs(coop.readiness(state)) do
+      local why = r.ok and "READY" or (narrow and "WAIT" or r.why:upper())
+      parts[#parts + 1] = string.format("P%d %s", r.index, why)
+    end
+    return table.concat(parts, "  ")
+  end
+  for _, r in ipairs(coop.readiness(state)) do
+    if r.flagged and r.index ~= p.index then parts[#parts + 1] = "P" .. r.index end
+  end
+  if #parts == 0 then return nil end
+  return table.concat(parts, " ") .. (narrow and " READY TO FOLD" or " READY TO FOLD - TAB: MAP")
 end
 
 -- add-wider-dark: the sector you are in and a party jump being voted on
@@ -472,6 +624,12 @@ function M.jump(v, state, p, compact)
     v:text(W // 2 - #t * 4, compact and 58 or narrow and H // 2 - 80 or 56, t, { 1, 0.45, 0.65, 1 })
   end
   local j = state.jump
+  -- add-playtest-recs: who is ready to fold (co-op), for whoever waits
+  local rl = M.ready_line(state, p, narrow)
+  if rl then
+    v:text(math.max(2, W // 2 - #rl * 4), compact and H // 2 - 6 or narrow and H // 2 - 20 or 66, rl:sub(1, (W - 4) // 8),
+      j and AMBER or GREEN)
+  end
   if not j then return end
   local n = 0
   for _ in pairs(j.yes) do n = n + 1 end
@@ -646,7 +804,7 @@ end
 -- and the lift slider shows its level.
 -- (three letters fit the smallest buttons at the 512 x 288 target)
 M.TOUCH_LABEL = { stick = "MOVE", lift = "LFT", up = "UP", dn = "DN", shrink = "-SZ", grow = "+SZ",
-                  tractor = "BM", scan = "SCN", use = "USE", boost = "BST", jam = "JAM" }
+                  tractor = "BM", scan = "SCN", use = "USE", boost = "BST", jam = "JAM", grapple = "GRP" }
 local TOUCH_FILL, TOUCH_EDGE = { 0.4, 0.8, 1, 0.22 }, { 0.6, 0.9, 1, 0.55 }
 local TOUCH_HELD, TOUCH_KNOB = { 0.6, 1, 1, 0.5 }, { 0.8, 1, 1, 0.75 }
 

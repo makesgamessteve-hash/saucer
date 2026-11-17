@@ -73,6 +73,10 @@ local function jump(to)
   T.wait(1)
   T.assert(P(1)().panel and P(1)().panel.kind == "map", "P1 opened the sector map")
   T.assert(ap.pick(T, 1, P(1), name), "P1 proposed the jump to " .. name)
+  -- add-playtest-recs: deeper danger asks first
+  if P(1)().panel and P(1)().panel.kind == "fold_warn" then
+    T.assert(ap.pick(T, 1, P(1), "Fold anyway"), "P1 read the fold warning and folds anyway")
+  end
   T.assert(T.state().jump and T.state().jump.to == to, "a jump is proposed")
   for i = 2, 4 do
     T.press(i, "map")

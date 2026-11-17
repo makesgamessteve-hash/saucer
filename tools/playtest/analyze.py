@@ -10,7 +10,8 @@ import json, re, statistics, sys
 MEANINGFUL = [r"^Got ", r"^Banked ", r"^Sold ", r"^Request filled", r"Fold jump complete", r"^Recovered ",
               r"Echo .* decoded|decoded", r"^Bought ", r"Course clear", r"vault opens", r"^You take the ",
               r"^New civilization", r"^Identified", r"Fold Core upgraded", r"Shelved", r"Pantry: \+", r"ENDING",
-              r"Placed ", r"Planted ", r"Harvest", r"caught|catch the thief", r"shutter grinds open", r"grid"]
+              r"Placed ", r"Planted ", r"Harvest", r"caught|catch the thief", r"shutter grinds open", r"grid",
+              r"^Fitted ", r"^Twin vault open", r"^Party request filled"]
 MEAN_RE = re.compile("|".join(MEANINGFUL))
 
 def parse(path):
@@ -86,6 +87,28 @@ def player_summary(r, pl):
     out["lost_hardcore"] = sum(1 for t, m in msgs if "lost for good" in m)
     out["charge_denied"] = sum(1 for t, m in msgs if "Not enough Charge" in m)
     out["denied_grow"] = sum(1 for t, m in msgs if "No room to grow" in m)
+    # add-playtest-recs
+    out["upgrades"] = [d for t, k, d in pte if k == "upgrade"]
+    out["tow_bills"] = sum(1 for t, m in msgs if m.startswith("Tow bill"))
+    out["tow_paid"] = sum(int(re.search(r"(\d+) c", m).group(1)) for t, m in msgs if m.startswith("Tow bill"))
+    out["pickpocket"] = sum(1 for t, m in msgs if "A pickpocket has your saucer" in m)
+    out["fold_warnings"] = sum(1 for t, k, d in pte if k == "fold_warn")
+    out["sell_warnings"] = sum(1 for t, m in msgs if m.startswith("Wait: "))
+    out["seat_tips"] = sum(1 for t, m in msgs if m.startswith("TIP: Watchers ignore"))
+    out["twins"] = sum(1 for t, m in msgs if m.startswith("Twin vault open"))
+    out["party_requests"] = sum(1 for t, m in msgs if m.startswith("Party request filled"))
+    out["relay_pulls"] = sum(1 for t, m in msgs if m.startswith("Helm relay lock"))
+    # co-op idle: seconds idle at the helm in open space plus bot waits for the partner
+    out["idle_helm_s"] = sum(1 for s in pts if s["mode"].startswith("helm") and s["site"] == 0 and s["speed"] <= 2)
+    waits = 0
+    for t, k, d in pte:
+        mm = re.search(r"waited (\d+)", d)
+        if k in ("agree_done", "wait_claim") and mm:
+            waits += int(mm.group(1))
+    # the follower's "waiting_partner N ticks so far" is a running total
+    wp = [int(re.search(r"(\d+) ticks", d).group(1)) for t, k, d in pte if k == "waiting_partner"]
+    waits += max(wp) if wp else 0
+    out["partner_wait_s"] = waits // 60
     # gaps between meaningful events
     times = sorted(set([t for t, m in msgs if MEAN_RE.search(m)]))
     gaps = [b - a for a, b in zip([0] + times, times + [end])]
@@ -163,6 +186,10 @@ def main():
                   f"{p['recovered']} lifelines {p['lifelines']} hc-lost {p['lost_hardcore']} hull min {p['hull_min']}")
             print(f"     events {p['meaningful_events']} gap median {p['gap_median']/60:.0f}s max {p['gap_max']/60:.0f}s "
                   f"dead-air(>2min) {p['dead_air_2min']} = {p['dead_air_total']/60:.0f}s  grab/item {p['grab_ticks_per_item']} ticks")
+            print(f"     upgrades {p['upgrades']} tow bills {p['tow_bills']} ({p['tow_paid']} c) pickpocket {p['pickpocket']} "
+                  f"fold warnings {p['fold_warnings']} sell warnings {p['sell_warnings']} seat tips {p['seat_tips']} "
+                  f"twins {p['twins']} party requests {p['party_requests']} relay pulls {p['relay_pulls']}")
+            print(f"     idle at helm {p['idle_helm_s']/60:.1f} min, partner waits {p['partner_wait_s']/60:.1f} min")
             print(f"     time {p['time_split']}")
             print(f"     bot {p['bot_events']}")
 

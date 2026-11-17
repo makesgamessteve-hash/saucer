@@ -8,6 +8,26 @@ local items = require("sim.items")
 local B, ev, P, S = BOT.B, BOT.ev, BOT.P, BOT.S
 local get = P(1)
 local function close() if get().panel then ap.pick(B, 1, get, "Close") end end
+local trade = require("sim.trade")
+-- the pickpocket can strike on any walk: chase him as soon as the coin is gone
+local function thief_check()
+  if get().station and get().station.coin == "thief" then
+    ev(1, "pickpocket", "stolen")
+    local caught = ap.chase(B, 1, get)
+    ev(1, "chase", "caught " .. tostring(caught and get().station.coin ~= "fence"))
+  end
+end
+-- he got away: buy the saucer back from the bartender (or trade, or plead)
+local function fence_check(L)
+  if not (get().station and get().station.coin == "fence") then return end
+  ev(1, "fence", "the saucer is at the bar")
+  if ap.foot_use(B, 1, get, L.bar.spot) then
+    local ok = BOT.pick_enabled(1, "Buy back your saucer") or BOT.pick_enabled(1, "Trade the ")
+      or BOT.pick_enabled(1, "Plead")
+    ev(1, "fence", "got it back " .. tostring(ok))
+    close()
+  end
+end
 
 local function station_visit(n)
   local t0 = BOT.tick()
@@ -35,7 +55,8 @@ local function station_visit(n)
     for _ = 1, 12 do
       local any = false
       for _, it in ipairs(get().hold) do
-        if not any and visit.vendor_offer(S(), get(), visit.vendor_def("scrap"), it) then
+        -- the bot heeds the story-item warning (data cores, modules, programs)
+        if not any and not trade.story_warning(it) and visit.vendor_offer(S(), get(), visit.vendor_def("scrap"), it) then
           any = ap.pick(B, 1, get, "Sell " .. items.label(it))
           if any then sold = sold + 1 end
         end
@@ -46,7 +67,9 @@ local function station_visit(n)
   end
   ev(1, "visit_market", string.format("walk+sell %d ticks sold %d for %d c", BOT.tick() - tw, sold, get().credits - c0))
   if n == 1 then BOT.shot("station_market") end
+  thief_check()
   if chandler and ap.foot_use(B, 1, get, chandler.spot) then BOT.pick_enabled(1, "Top up") close() end
+  thief_check()
   if ap.foot_use(B, 1, get, L.bar.spot) then
     BOT.dump_panel(1, "bar")
     BOT.pick_enabled(1, "Nebula tea")
@@ -55,12 +78,13 @@ local function station_visit(n)
   end
   -- wander to the far hangar, coin in the pocket (the pickpocket's chance)
   local far = sg.hangars(L)[2] or sg.hangars(L)[1]
+  thief_check()
+  fence_check(L)
   local tf = BOT.tick()
   local ok = ap.foot_to(B, 1, get, far.pad[1], far.pad[2] + 3, 0.6, 6000)
   if get().station and get().station.coin == "thief" then
-    ev(1, "pickpocket", "stolen")
-    local caught = ap.chase(B, 1, get)
-    ev(1, "chase", "caught " .. tostring(caught))
+    thief_check()
+    fence_check(L)
     ok = ap.foot_to(B, 1, get, far.pad[1], far.pad[2] + 3, 0.6, 6000)
   end
   ev(1, "visit_walk", string.format("to far hangar %d ticks ok %s", BOT.tick() - tf, tostring(ok)))

@@ -20,6 +20,21 @@ local function queued(p, uid)
 end
 M.queued = queued
 
+-- add-playtest-recs: decodes (Echoes, data cores) jump the Identify queue:
+-- they go in ahead of the first Identify job (which keeps its progress)
+function M.push_front(p, job)
+  local q = p.lab.queue
+  local at = #q + 1
+  for k, j in ipairs(q) do
+    if j.kind == "identify" then at = k break end
+  end
+  table.insert(q, at, job)
+  return at
+end
+
+-- how many jobs run at once (the Second lab bench upgrade adds one)
+function M.slots(p) return require("sim.upgrades").lab_slots(p) end
+
 -- enqueue(p, uid) -> ok, reason
 function M.enqueue(state, p, uid)
   p.lab = p.lab or M.new()
@@ -34,13 +49,13 @@ function M.enqueue(state, p, uid)
       return false, "translation"
     end
     local s = econ().decode_seconds
-    p.lab.queue[#p.lab.queue + 1] = { uid = uid, kind = "decode", left = s, total = s }
+    M.push_front(p, { uid = uid, kind = "decode", left = s, total = s })
     return true
   end
   -- add-holodeck-home-life: a data core decodes into a holodeck program
   if M.is_core(it) then
     local s = econ().decode_seconds
-    p.lab.queue[#p.lab.queue + 1] = { uid = uid, kind = "core", left = s, total = s }
+    M.push_front(p, { uid = uid, kind = "core", left = s, total = s })
     return true
   end
   if it.ident or it.unique then return false, "already identified" end
@@ -61,10 +76,15 @@ end
 function M.step(state, p, dt, ctx)
   local lab = p.lab
   if not lab or #lab.queue == 0 or not M.running(p) then return nil end
-  local job = lab.queue[1]
-  job.left = job.left - dt
-  if job.left > 1e-9 then return nil end
-  table.remove(lab.queue, 1)
+  -- the first slots(p) jobs run side by side; at most one finishes per tick
+  local done
+  for k = 1, math.min(M.slots(p), #lab.queue) do
+    local j = lab.queue[k]
+    j.left = j.left - dt
+    if not done and j.left <= 1e-9 then done = k end
+  end
+  if not done then return nil end
+  local job = table.remove(lab.queue, done)
   local it = items.find(p, job.uid)
   if not it then return nil end
   if job.kind == "core" then
@@ -114,8 +134,9 @@ function M.rows(state, p, ctx)
     local it = items.find(p, j.uid)
     local name = it and items.label(it) or "?"
     local pct = math.floor((1 - j.left / j.total) * 100)
+    local live = k <= M.slots(p)
     rows[#rows + 1] = { text = string.format("%s %s %d%%%s", j.kind == "identify" and "Identifying" or "Decoding", name,
-      pct, k == 1 and not M.running(p) and " (paused)" or ""), enabled = false }
+      pct, (live and not M.running(p)) and " (paused)" or (live and "" or " (queued)")), enabled = false }
   end
   for _, it in ipairs(p.hold) do
     if not queued(p, it.uid) then

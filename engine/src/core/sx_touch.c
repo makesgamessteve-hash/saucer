@@ -4,7 +4,7 @@
 
 static const char *ctl_names[SX_TOUCH_COUNT] = {"stick_x", "stick_y", "look_x", "look_y", "lift",  "shrink",
                                                 "grow",    "tractor", "scan",   "use",    "boost", "jam",
-                                                "map",     "decoy"};
+                                                "map",     "decoy",   "grapple"};
 
 int sx_touch_ctl_from_name(const char *name) {
   int i;
@@ -49,6 +49,7 @@ void sx_touch_init(sx_touch *t, float aspect) {
   add(t, "jam", SX_TOUCH_JAM, 0.93f - 3.3f * bw, 0.62f, bw, 0.16f, 0);
   add(t, "map", SX_TOUCH_MAP, 0.02f, 0.04f, bw, 0.14f, 0);
   add(t, "decoy", SX_TOUCH_DECOY, 0.34f, 0.62f, bw, 0.16f, 0);
+  add(t, "grapple", SX_TOUCH_GRAPPLE, 0.34f + 1.1f * bw, 0.80f, bw, 0.16f, 0);
   add(t, "look", SX_TOUCH_LOOK_X, 0.5f, 0.0f, 0.5f, 1.0f, 3); /* last: lowest priority */
 }
 

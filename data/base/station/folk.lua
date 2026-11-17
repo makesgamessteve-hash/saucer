@@ -57,5 +57,9 @@ return {
     escape = 35,        -- seconds of running before he gets away to the fence
     fence_min = 40,     -- the bartender's price to buy your saucer back (credits) ...
     fence_frac = 0.2,   -- ... or this share of the hold's sale value, whichever is more
+    -- add-playtest-recs: he works a visit only now and then
+    chance = 0.25,      -- per station visit
+    quiet_visits = 2,   -- after he struck, this many visits pass in peace
+    pity = 6,           -- ... and after this many quiet visits he is sure to turn up
   },
 }
