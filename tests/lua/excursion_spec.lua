@@ -461,6 +461,17 @@ describe("on foot", function()
     p.excursion.coin = "fold"
     expect(ex.use(st, p, ctx)).to_be(false)
   end)
+  it("Hardcore: the Lifeline loses what was in your hands for good (add-home-among-stars)", function()
+    local st, p, f = out()
+    st.hardcore = true
+    put(p, f.route[1])
+    p.hands = { items.stamp(p, { type = "coil", name = "Coil" }, 1, "velari") }
+    p.suit = 0.001
+    run(st, cmd())
+    expect(p.mode).to_be("helm")
+    expect(p.lost_for_good).to_be(1)
+    for _, c in ipairs(st.caches or {}) do expect(c.lifeline).to_be(nil) end
+  end)
   it("the Lifeline: whiteout, the Seat on your trail, the hands left as a cache", function()
     local st, p, f = out()
     -- walk a little to lay a trail, then run dry

@@ -45,6 +45,17 @@ function M.ensure(p)
   return p.decor
 end
 
+-- read-only: p.decor, or what it would start as (never stored; panels and
+-- the HUD call this, and render must not change the sim)
+function M.view(p)
+  if p.decor then return p.decor end
+  local st = M.defs().start or {}
+  local v = { store = {}, placed = {}, display = {}, garden = {}, seeds = {}, next_id = 0, visitors = 0 }
+  for k, n in pairs(st.furniture or {}) do v.store[k] = n end
+  for k, n in pairs(st.seeds or {}) do v.seeds[k] = n end
+  return v
+end
+
 -- ---------- furniture ----------
 local function snap(x) return math.floor(x / M.GRID + 0.5) * M.GRID end
 local function quarter(yaw) return (math.floor(yaw / (math.pi / 2) + 0.5) % 4) end
@@ -95,7 +106,7 @@ function M.can_place(p, def, d, x, z, q, body)
       if (cx - st.pos[1]) ^ 2 + (cz - st.pos[3]) ^ 2 < 0.55 ^ 2 then return false, "it would block a station" end
     end
   end
-  local D = M.ensure(p)
+  local D = M.view(p)
   for _, o in ipairs(D.placed) do
     local od = M.furniture(o.kind)
     if o.deck == d and od and overlap(fp, M.footprint(od, o.x, o.z, o.q), 0.02) and not (def.walk or od.walk) then
@@ -147,7 +158,7 @@ end
 
 -- the placed piece nearest the body on its deck (within PICK_RANGE)
 function M.nearest(p)
-  local D = M.ensure(p)
+  local D = M.view(p)
   local L = avatar.layout()
   local d = avatar.deck_of(L, p.body)
   local best, bd
@@ -361,7 +372,7 @@ end
 local function close_row() return { text = "Close", act = function(_, pl) panel.close(pl) end } end
 
 function M.planner_rows(state, p, ctx)
-  local D = M.ensure(p)
+  local D = M.view(p)
   local rows = { { text = string.format("Comfort %d - %s (Charge x%.2f)", M.comfort(state, p), M.level(state, p),
     M.regen_factor(state, p)), enabled = false } }
   for _, def in ipairs(M.defs().furniture) do
@@ -388,7 +399,7 @@ function M.display_rows(state, p, ctx)
   local L = avatar.layout()
   local st = avatar.station(L, p.body)
   local slot = (p.panel and p.panel.slot) or (st and st.slot) or 1
-  local D = M.ensure(p)
+  local D = M.view(p)
   local rows = {}
   if D.display[slot] then
     rows[#rows + 1] = { text = "On display: " .. items.label(D.display[slot]), enabled = false }
@@ -409,7 +420,7 @@ function M.display_rows(state, p, ctx)
 end
 
 function M.garden_rows(state, p, ctx)
-  local D = M.ensure(p)
+  local D = M.view(p)
   local L = avatar.layout()
   local stages = M.defs().stages
   local rows = {}
@@ -445,9 +456,9 @@ function M.garden_rows(state, p, ctx)
 end
 
 function M.register(home, ctx)
-  home.USE.planner = function(_, p) panel.open(p, "planner") end
-  home.USE.display = function(_, p, st) panel.open(p, "display"); p.panel.slot = st.slot end
-  home.USE.garden = function(_, p) panel.open(p, "garden") end
+  home.USE.planner = function(_, p) M.ensure(p); panel.open(p, "planner") end
+  home.USE.display = function(_, p, st) M.ensure(p); panel.open(p, "display"); p.panel.slot = st.slot end
+  home.USE.garden = function(_, p) M.ensure(p); panel.open(p, "garden") end
   panel.register("planner", { title = "HOME PLANNER", rows = function(s, p) return M.planner_rows(s, p, ctx) end })
   panel.register("display", { title = "DISPLAY SLOT", rows = function(s, p) return M.display_rows(s, p, ctx) end })
   panel.register("garden", { title = "GARDEN", rows = function(s, p) return M.garden_rows(s, p, ctx) end })
