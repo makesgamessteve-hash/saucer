@@ -85,10 +85,16 @@ for i, d in ipairs(game.sentries(site)) do if d.kind == "watcher" and not w then
 T.assert(w, "a Watcher at site 2")
 local wdef = game.sentries(site)[w]
 ap.travel(T, 1, get, ap.route(ruin, origin, wdef.room)[1].pos, 4, 6000)
-ap.enter(T, 1, get, ruin, origin, wdef.room)
-look_at(wdef.pos)
-ap.wait_until(T, 1, function() return get().hints and get().hints.seat end, 1500)
-T.wait(40)
+-- fly in waypoint by waypoint, so the shot lands right after the first lock
+local function tipped() return get().hints and get().hints.seat ~= nil end
+for _, wp in ipairs(ap.route(ruin, origin, wdef.room)) do
+  for _ = 1, 40 do
+    if tipped() or ap.fly(T, 1, get, wp.pos, wp.tol or 2, 30) then break end
+  end
+  if tipped() then break end
+end
+ap.wait_until(T, 1, tipped, 3000)
+T.wait(20)
 shot("03_seat_hint")
 T.wait(240)
 shot("04_hud_alerts_1280x720")
