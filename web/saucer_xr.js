@@ -47,16 +47,36 @@ addToLibrary({
       for (var k = 0; k < 15; k++) _saucer_xr_set_control(k, v[k]);
     }
 
-    Module.saucerEnterVR = function () {
+    // grip poses for the diegetic hands / wrist panel (0 left, 1 right)
+    function hands(session, frame, space) {
+      var ok = [0, 0];
+      for (var i = 0; i < session.inputSources.length; i++) {
+        var src = session.inputSources[i], h = src.handedness === 'left' ? 0 : 1;
+        if (!src.gripSpace) continue;
+        var gp = frame.getPose(src.gripSpace, space);
+        if (!gp) continue;
+        var p = gp.transform.position, m = gp.transform.matrix;
+        _saucer_xr_set_hand(h, 1, p.x, p.y, p.z, -m[8], -m[9], -m[10]);
+        ok[h] = 1;
+      }
+      for (var k = 0; k < 2; k++) if (!ok[k]) _saucer_xr_set_hand(k, 0, 0, 0, 0, 0, 0, 0);
+    }
+
+    // mode 'seated' asks for the 'local' space (origin at the head, eye level
+    // = cockpit eye); 'standing' (default) asks for 'local-floor' and falls
+    // back to 'local' when the device has no floor.
+    Module.saucerEnterVR = function (mode) {
       if (XR.session) { XR.session.end(); return; }
       var gl = GL.currentContext && GL.currentContext.GLctx;
       if (!gl) return;
+      var seated = mode === 'seated';
       navigator.xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor'] }).then(function (session) {
         XR.session = session;
         return gl.makeXRCompatible().then(function () {
           session.updateRenderState({ baseLayer: new XRWebGLLayer(session, gl, { antialias: false }) });
-          return session.requestReferenceSpace('local-floor').then(function (s) { return [s, 2]; },
-            function () { return session.requestReferenceSpace('local').then(function (s) { return [s, 1]; }); });
+          function local() { return session.requestReferenceSpace('local').then(function (s) { return [s, 1]; }); }
+          if (seated) return local();
+          return session.requestReferenceSpace('local-floor').then(function (s) { return [s, 2]; }, local);
         }).then(function (res) {
           var space = res[0], viewBuf = _malloc(64), projBuf = _malloc(64), lastFb = null, fbId = 0, last = 0;
           _saucer_xr_begin(res[1]);
@@ -82,6 +102,7 @@ addToLibrary({
             var p = pose.transform.position, m = pose.transform.matrix;
             _saucer_xr_set_head(p.x, p.y, p.z, -m[8], -m[9], -m[10]);
             controls(session);
+            hands(session, frame, space);
             var dt = last ? t - last : 1000 / 72;
             last = t;
             _saucer_xr_frame(fbId, n, dt);

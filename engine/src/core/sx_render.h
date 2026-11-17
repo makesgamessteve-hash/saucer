@@ -55,7 +55,7 @@ typedef struct sx_draw_billboard {
 } sx_draw_billboard;
 
 typedef struct sx_draw_ui {
-  int kind; /* 0 rect, 1 text, 2 image */
+  int kind; /* 0 rect, 1 text, 2 image, 3 comfort vignette (color[3] = strength) */
   float x, y, w, h;
   float color[4];
   int tex, palette;

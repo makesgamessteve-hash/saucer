@@ -27,9 +27,12 @@ return {
     menu   = { "key:F1", "key:H", "pad:start", "xr:menu" },
     jam    = { "key:T", "pad:rightstick", "touch:jam", "xr:y" },
     mystery_mode = { "key:M", "pad:dpup" },
+    -- add-presentation-packaging: XR snap turns (the comfort filter derives them from the right stick)
+    snap_left  = { "xr:snap_l" },
+    snap_right = { "xr:snap_r" },
   },
   -- stable order so action slots (and therefore replays) never depend on table order
   axis_order = { "move_x", "move_z", "lift", "turn", "look" },
   button_order = { "shrink", "grow", "size1", "size2", "tractor", "scan", "boost", "use",
-                   "camera", "menu", "jam", "mystery_mode", "size3" },
+                   "camera", "menu", "jam", "mystery_mode", "size3", "snap_left", "snap_right" },
 }

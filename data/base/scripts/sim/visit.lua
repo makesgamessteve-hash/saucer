@@ -14,6 +14,7 @@
 -- Everything lives in p.station as plain data (saved, snapshotted, replayed);
 -- the layout is rebuilt from its seed. Station-local meters, floor at y = 0.
 local vec = require("lib.vec")
+local comfort = require("sim.comfort")
 local configs = require("sim.config")
 local shipm = require("sim.ship")
 local sg = require("sim.stationgen")
@@ -203,7 +204,7 @@ end
 -- walk the body: like the Villa's decks, axis by axis against the layout
 function M.walk(L, body, cmd, dt)
   local A = require("sim.avatar").layout()
-  body.yaw = sm.wrap(body.yaw - cmd:axis("turn") * A.turn * dt)
+  body.yaw = comfort.yaw(body.yaw, cmd, A.turn, dt)
   body.pitch = vec.clamp(body.pitch + cmd:axis("look") * A.look * dt, -A.pitch_limit, A.pitch_limit)
   local mx, mz = cmd:axis("move_x"), cmd:axis("move_z")
   if mx == 0 and mz == 0 then return 0 end
@@ -446,7 +447,7 @@ function M.step(state, p, cmd, dt, ctx)
   else
     -- reshaping: you can look around, not walk
     local A = require("sim.avatar").layout()
-    st.body.yaw = sm.wrap(st.body.yaw - cmd:axis("turn") * A.turn * dt)
+    st.body.yaw = comfort.yaw(st.body.yaw, cmd, A.turn, dt)
     st.body.pitch = vec.clamp(st.body.pitch + cmd:axis("look") * A.look * dt, -A.pitch_limit, A.pitch_limit)
   end
   local a = M.area(state, p)

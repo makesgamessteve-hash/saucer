@@ -3,6 +3,7 @@
 -- (snapshots, saves and hashes cover it). Derived data (ruin geometry,
 -- physics boxes) is rebuilt from seeds in rebuild().
 local vec = require("lib.vec")
+local comfort = require("sim.comfort")
 local configs = require("sim.config")
 local shipm = require("sim.ship")
 local flight = require("sim.flight")
@@ -632,6 +633,7 @@ function M.step_player(state, p, cmd, dt)
     local L = avatar.layout()
     flight.trim(ship, { move_x = cmd:axis("move_x"), move_z = cmd:axis("move_z"), lift = cmd:axis("lift"),
                         turn = cmd:axis("turn") }, ship.yaw + L.tractor.yaw, dt, mover(state, p))
+    ship.yaw = saucer.math.wrap(ship.yaw + comfort.snap(cmd))
     p.body.pitch = vec.clamp(p.body.pitch + cmd:axis("look") * L.look * dt, -L.pitch_limit, L.pitch_limit)
   else
     -- nobody at the helm: the saucer brakes to a stop and holds station
@@ -639,6 +641,7 @@ function M.step_player(state, p, cmd, dt)
     local L = avatar.layout()
     avatar.step(p.body, { move_x = cmd:axis("move_x"), move_z = cmd:axis("move_z"), turn = cmd:axis("turn"),
                           look = cmd:axis("look"), run = cmd:held("boost"), aim = cmd.aim }, dt, L, home.solids(L, p))
+    p.body.yaw = saucer.math.wrap(p.body.yaw + comfort.snap(cmd))
   end
   world_step(state, p, dt)
   tractor_step(state, p, cmd, dt)

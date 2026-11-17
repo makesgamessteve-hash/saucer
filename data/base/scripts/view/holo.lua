@@ -319,7 +319,8 @@ function M.render(v, state, p)
   local sc = holo.scene(state, host, run)
   local look = pr.look or {}
   local eye, yaw, pitch = holo.viewpoint(state, p)
-  v:camera({ pos = eye, yaw = yaw, pitch = pitch, fov = 75, near = 0.05, far = 600 })
+  M.cam = require("view.xr").adjust(v, { pos = eye, yaw = yaw, pitch = pitch, fov = 75, near = 0.05, far = 600 })
+  v:camera(M.cam)
   local sky = look.sky or { 0.4, 0.6, 0.9 }
   v:fog({ color = look.fog or sky, density = look.density or 0.02, clear = sky, light = look.light or { 0.4, 0.8, 0.3 },
           ambient = look.ambient or 0.6 })

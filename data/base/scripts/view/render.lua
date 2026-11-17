@@ -17,6 +17,7 @@ local M = {}
 
 -- add-presentation-packaging: sounds live in view/audio.lua (kept here for mods)
 local sound = require("view.audio")
+local xrv = require("view.xr")
 M.SOUNDS = sound.SOUNDS
 
 -- milestone 3: sentry state lights (Dormant green, Alert yellow, Locked red,
@@ -774,19 +775,21 @@ function M.render(v, state, alpha)
   local A = assets.init()
   if p.mode == "foot" and p.station then
     -- add-pocket-station-visits: on foot you see the station's inside
-    require("view.station").render(v, state, p)
-    if not v.xr then hud.draw(v, state, p, nil) end
+    local stv = require("view.station")
+    stv.render(v, state, p)
+    if v.xr then xrv.overlay(v, A, stv.cam, p, nil) else hud.draw(v, state, p, nil) end
     if v.index == v.player then M.audio(state, p) end
     return
   end
   if p.holo_run then
     -- add-holodeck-home-life: inside a program you only see the simulation
-    require("view.holo").render(v, state, p)
-    if not v.xr then hud.draw(v, state, p, nil) end
+    local hv = require("view.holo")
+    hv.render(v, state, p)
+    if v.xr and hv.cam then xrv.overlay(v, A, hv.cam, p, nil) elseif not v.xr then hud.draw(v, state, p, nil) end
     if v.index == v.player then M.audio(state, p) end
     return
   end
-  local cam = M.camera(p, v.xr)
+  local cam = xrv.adjust(v, M.camera(p, v.xr))
   v:camera(cam)
   v:fog({ color = { 0.02, 0.02, 0.06 }, density = M.FOG, clear = { 0.0, 0.0, 0.025 }, light = { 0.35, 0.8, 0.45 },
           ambient = 0.55 })
@@ -836,7 +839,7 @@ function M.render(v, state, alpha)
       M.draw_beam(v, A, o, nil, state.tick)
     end
   end
-  if not v.xr then hud.draw(v, state, p, scan) end
+  if v.xr then xrv.overlay(v, A, cam, p, scan) else hud.draw(v, state, p, scan) end
   if v.index == v.player then M.audio(state, p) end
 end
 

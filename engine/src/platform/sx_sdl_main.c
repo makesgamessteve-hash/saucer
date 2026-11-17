@@ -212,6 +212,7 @@ EMSCRIPTEN_KEEPALIVE void saucer_xr_begin(int mode) {
 EMSCRIPTEN_KEEPALIVE void saucer_xr_end(void) {
   if (!A.e) return;
   A.e->xr.session = 0;
+  A.e->xr.hand_ok[0] = A.e->xr.hand_ok[1] = 0;
   memset(A.e->xr.values, 0, sizeof A.e->xr.values);
   A.last = SDL_GetPerformanceCounter();
 }
@@ -241,6 +242,19 @@ EMSCRIPTEN_KEEPALIVE void saucer_xr_set_head(float px, float py, float pz, float
   A.e->xr.head_fwd[0] = -fx;
   A.e->xr.head_fwd[1] = fy;
   A.e->xr.head_fwd[2] = -fz;
+}
+/* add-presentation-packaging: controller grip poses, same flip as the head */
+EMSCRIPTEN_KEEPALIVE void saucer_xr_set_hand(int i, int ok, float px, float py, float pz, float fx, float fy, float fz) {
+  float *h;
+  if (!A.e || i < 0 || i > 1) return;
+  A.e->xr.hand_ok[i] = ok;
+  h = A.e->xr.hands[i];
+  h[0] = -px;
+  h[1] = py;
+  h[2] = -pz;
+  h[3] = -fx;
+  h[4] = fy;
+  h[5] = -fz;
 }
 EMSCRIPTEN_KEEPALIVE void saucer_xr_set_control(int ctl, float v) {
   if (A.e && ctl >= 0 && ctl < SX_XR_COUNT) A.e->xr.values[ctl] = v;

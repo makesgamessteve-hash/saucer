@@ -1332,6 +1332,21 @@ static int l_v_image(lua_State *L) {
   return 0;
 }
 
+/* add-presentation-packaging: comfort vignette, a radial fade over the whole view */
+static int l_v_vignette(lua_State *L) {
+  sx_viewport *v = check_view(L);
+  sx_draw_ui u;
+  float k = (float)luaL_checknumber(L, 2);
+  if (!(k > 0.0f)) return 0;
+  memset(&u, 0, sizeof u);
+  u.kind = 3;
+  u.w = (float)v->w;
+  u.h = (float)v->h;
+  u.color[3] = k > 1.0f ? 1.0f : k;
+  sx_view_ui(v, &u);
+  return 0;
+}
+
 static int l_v_index(lua_State *L) {
   int *vi = (int *)luaL_checkudata(L, 1, VIEW_MT);
   sx_engine *e = get_engine(L);
@@ -1376,6 +1391,57 @@ static int l_xr_comfort(lua_State *L) {
   lua_setfield(L, -2, "vignette");
   lua_pushboolean(L, 1);
   lua_setfield(L, -2, "xr_safe_retro");
+  lua_pushboolean(L, e->xr.snap);
+  lua_setfield(L, -2, "snap");
+  return 1;
+}
+/* add-presentation-packaging: comfort is a client setting (never in the sim) */
+static int l_xr_set_comfort(lua_State *L) {
+  sx_engine *e = get_engine(L);
+  luaL_checktype(L, 1, LUA_TTABLE);
+  lua_getfield(L, 1, "snap");
+  if (!lua_isnil(L, -1)) e->xr.snap = lua_toboolean(L, -1);
+  lua_pop(L, 1);
+  e->xr.snap_latch = 0;
+  e->xr.vignette = (float)field_num(L, 1, "vignette", e->xr.vignette);
+  if (e->xr.vignette < 0) e->xr.vignette = 0;
+  if (e->xr.vignette > 1) e->xr.vignette = 1;
+  e->xr.snap_turn_deg = (float)field_num(L, 1, "snap_turn", e->xr.snap_turn_deg);
+  return 0;
+}
+static void push_vec3f(lua_State *L, const float *v) {
+  int i;
+  lua_createtable(L, 3, 0);
+  for (i = 0; i < 3; i++) {
+    lua_pushnumber(L, v[i]);
+    lua_rawseti(L, -2, i + 1);
+  }
+}
+/* head pose in the cockpit frame (yaw 0 looks down +z) -> pos, fwd */
+static int l_xr_head(lua_State *L) {
+  sx_engine *e = get_engine(L);
+  if (!e->xr.session) return 0;
+  push_vec3f(L, e->xr.head_pos);
+  push_vec3f(L, e->xr.head_fwd);
+  return 2;
+}
+/* tracked controllers -> { {hand = "left"|"right", pos = {}, fwd = {}}, ... } */
+static int l_xr_hands(lua_State *L) {
+  sx_engine *e = get_engine(L);
+  int i, n = 0;
+  lua_newtable(L);
+  if (!e->xr.session) return 1;
+  for (i = 0; i < 2; i++) {
+    if (!e->xr.hand_ok[i]) continue;
+    lua_createtable(L, 0, 3);
+    lua_pushstring(L, i == 0 ? "left" : "right");
+    lua_setfield(L, -2, "hand");
+    push_vec3f(L, e->xr.hands[i]);
+    lua_setfield(L, -2, "pos");
+    push_vec3f(L, e->xr.hands[i] + 3);
+    lua_setfield(L, -2, "fwd");
+    lua_rawseti(L, -2, ++n);
+  }
   return 1;
 }
 static int l_xr_haptic(lua_State *L) {
@@ -1642,6 +1708,18 @@ static int l_test_set_xr(lua_State *L) {
   e->xr.available = (int)field_num(L, 1, "available", (float)e->xr.available);
   e->xr.session = (int)field_num(L, 1, "session", (float)e->xr.session);
   field_vec(L, 1, "head_fwd", e->xr.head_fwd, 3);
+  field_vec(L, 1, "head_pos", e->xr.head_pos, 3);
+  lua_getfield(L, 1, "hands");
+  if (lua_istable(L, -1)) {
+    int i;
+    for (i = 0; i < 2; i++) {
+      lua_rawgeti(L, -1, i + 1);
+      e->xr.hand_ok[i] = lua_istable(L, -1);
+      if (e->xr.hand_ok[i]) field_vec(L, lua_gettop(L), "pose", e->xr.hands[i], 6);
+      lua_pop(L, 1);
+    }
+  }
+  lua_pop(L, 1);
   lua_getfield(L, 1, "controls");
   if (lua_istable(L, -1)) {
     lua_pushnil(L);
@@ -1816,6 +1894,7 @@ static void build_saucer_api(lua_State *L, sx_engine *e) {
       {"texture", l_r_texture}, {"palette", l_r_palette}, {"settings", l_r_settings}, {"stats", l_r_stats}, {NULL, NULL}};
   static const luaL_Reg xr_f[] = {
       {"available", l_xr_available}, {"session", l_xr_session}, {"comfort", l_xr_comfort}, {"haptic", l_xr_haptic},
+      {"set_comfort", l_xr_set_comfort}, {"head", l_xr_head}, {"hands", l_xr_hands},
       {NULL, NULL}};
   static const luaL_Reg audio_f[] = {
       {"play", l_audio_play}, {"set", l_audio_set}, {"stop", l_audio_stop}, {NULL, NULL}};
@@ -2018,7 +2097,7 @@ int sx_script_open(sx_engine *e) {
     static const luaL_Reg grid_m[] = {{"place", l_grid_place}, {"free", l_grid_free}, {"get", l_grid_get}, {NULL, NULL}};
     static const luaL_Reg view_m[] = {{"camera", l_v_camera}, {"fog", l_v_fog},     {"mesh", l_v_mesh},
                                       {"billboard", l_v_billboard}, {"rect", l_v_rect}, {"text", l_v_text},
-                                      {"image", l_v_image},   {NULL, NULL}};
+                                      {"image", l_v_image},   {"vignette", l_v_vignette}, {NULL, NULL}};
     static const luaL_Reg cmd_m[] = {{"held", l_cmd_held}, {"pressed", l_cmd_pressed}, {"axis", l_cmd_axis}, {NULL, NULL}};
     luaL_newmetatable(L, RNG_MT);
     lua_newtable(L);

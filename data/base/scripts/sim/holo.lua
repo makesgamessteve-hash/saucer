@@ -27,6 +27,7 @@
 -- the number of guests who can share a program in co-op.
 local data = require("lib.data")
 local vec = require("lib.vec")
+local comfort = require("sim.comfort")
 local buffs = require("sim.buffs")
 local M = {}
 
@@ -318,7 +319,7 @@ end
 -- walking in the simulated space: the square of half width size, round solids
 function M.walk(body, cmd, dt, sc)
   local L = require("sim.avatar").layout()
-  body.yaw = saucer.math.wrap(body.yaw - cmd:axis("turn") * L.turn * dt)
+  body.yaw = comfort.yaw(body.yaw, cmd, L.turn, dt)
   body.pitch = vec.clamp(body.pitch + cmd:axis("look") * L.look * dt, -L.pitch_limit, L.pitch_limit)
   local mx, mz = cmd:axis("move_x"), cmd:axis("move_z")
   if mx == 0 and mz == 0 then return 0 end

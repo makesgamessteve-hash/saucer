@@ -9,27 +9,30 @@
   html, body { margin: 0; height: 100%; background: #000; color: #9cf; font: 14px monospace; overflow: hidden; }
   canvas { display: block; width: 100vw; height: 100vh; touch-action: none; image-rendering: pixelated; }
   #status { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); text-align: center; }
-  #vr { position: fixed; right: 12px; bottom: 12px; display: none; padding: 10px 16px; background: #123;
+  .vr { position: fixed; bottom: 12px; display: none; padding: 10px 16px; background: #123;
         color: #9cf; border: 1px solid #9cf; font: 14px monospace; cursor: pointer; }
+  #vr { right: 12px; }
+  #vr-seated { right: 160px; }
 </style>
 </head>
 <body>
 <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
 <div id="status">loading data…</div>
-<button id="vr">Enter VR</button>
+<button id="vr" class="vr" title="standing / room scale (local-floor)">VR standing</button>
+<button id="vr-seated" class="vr" title="seated (local, eye level at the cockpit)">VR seated</button>
 <script>
   // Assets are plain files beside the page: data/index.json lists the tree,
   // and every file is fetched into the in-memory filesystem before start.
   var statusEl = document.getElementById('status');
-  var vrBtn = document.getElementById('vr');
+  var vrBtn = document.getElementById('vr'), vrSeat = document.getElementById('vr-seated');
   var Module = {
     canvas: document.getElementById('canvas'),
     noInitialRun: true,
     print: function (t) { console.log(t); },
     printErr: function (t) { console.warn(t); },
-    onXRAvailable: function () { vrBtn.style.display = 'block'; },
-    onXRStart: function () { vrBtn.textContent = 'Exit VR'; },
-    onXREnd: function () { vrBtn.textContent = 'Enter VR'; },
+    onXRAvailable: function () { vrBtn.style.display = vrSeat.style.display = 'block'; },
+    onXRStart: function () { vrBtn.textContent = 'Exit VR'; vrSeat.style.display = 'none'; },
+    onXREnd: function () { vrBtn.textContent = 'VR standing'; vrSeat.style.display = 'block'; },
     onRuntimeInitialized: function () {
       fetch('data/index.json').then(function (r) {
         if (!r.ok) throw new Error('data/index.json: HTTP ' + r.status);
@@ -59,7 +62,8 @@
       }).catch(function (e) { statusEl.textContent = 'failed to load: ' + e.message; });
     },
   };
-  vrBtn.addEventListener('click', function () { if (Module.saucerEnterVR) Module.saucerEnterVR(); });
+  vrBtn.addEventListener('click', function () { if (Module.saucerEnterVR) Module.saucerEnterVR('standing'); });
+  vrSeat.addEventListener('click', function () { if (Module.saucerEnterVR) Module.saucerEnterVR('seated'); });
 </script>
 {{{ SCRIPT }}}
 </body>

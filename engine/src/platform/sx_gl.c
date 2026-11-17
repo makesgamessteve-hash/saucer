@@ -221,6 +221,9 @@ static const char *ui_fs =
     "    if (texture(u_idx, v_uv).r < 0.002) discard;\n"
     "  } else if (u_tex == 3) {\n" /* plain RGBA texture (upscale pass) */
     "    c = texture(u_idx, v_uv);\n"
+    "  } else if (u_tex == 4) {\n" /* comfort vignette: dark rim, clear centre */
+    "    float d = length(v_uv - vec2(0.5)) * 2.0;\n"
+    "    c = vec4(0.0, 0.0, 0.0, smoothstep(1.0 - 0.7 * u_color.a, 1.15, d) * min(1.0, u_color.a * 1.6));\n"
     "  }\n"
     "  o_col = c;\n"
     "}\n";
@@ -585,6 +588,9 @@ static void draw_ui(const sx_render *r, const sx_viewport *v) {
         if (c != ' ') ui_quad(x, u->y, 8 * sc, 8 * sc, gx, gy, gx + 8.0f / 128.0f, gy + 8.0f / 64.0f);
         x += 8 * sc;
       }
+    } else if (u->kind == 3) {
+      glUniform1i(G.ui.tex, 4);
+      ui_quad(u->x, u->y, u->w, u->h, 0, 0, 1, 1);
     } else {
       glUniform1i(G.ui.tex, 1);
       glUniform1i(G.ui.palrow, pal_row(r, u->palette));
