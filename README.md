@@ -205,6 +205,14 @@ ctest --test-dir build --output-on-failure   # C unit, Lua specs, game tests, re
 tools/coverage.sh                            # coverage gate: >= 95% lines, C (gcovr) and Lua (luacov)
 ```
 
+`tools/coverage.sh` runs the Lua specs and every game test under luacov in
+parallel (`SAUCER_JOBS`, default `nproc`), each with its own stats file that
+`tools/luacov_merge.lua` merges; luacov's line hook makes the sim 20-40x
+slower, so the slowest run (`mystery.lua`, about 20 min) sets the pace. Every
+CTest test has a 30 min timeout (`SAUCER_TEST_TIMEOUT`), each luacov run 40 min
+(`SAUCER_COV_TIMEOUT`), and the CI jobs have their own limits, so a game test
+that never ends fails instead of hanging CI.
+
 - **C unit tests** (`tests/c`): known-answer vectors for the RNG and the
   deterministic math (`tests/data/*_kat.txt`; regenerate with
   `SAUCER_WRITE_KAT=1`), VFS, serializer, replays, mods, renderer lists,
