@@ -129,8 +129,48 @@ function M.init()
   cache.thrusters = require("lib.data").load("meshes/saucer.lua").THRUSTERS
   cache.unit = saucer.mesh.build({ parts = { { kind = "box", min = { -0.5, -0.5, -0.5 }, max = { 0.5, 0.5, 0.5 },
                                               color = { 1, 1, 1 }, emissive = 1 } } })
+  -- add-on-foot-excursions: the strongroom shutter, a hand-lock coupling and
+  -- a grid console (all facing +z, sized in meters; the shutter is a unit slab)
+  cache.foot = M.foot_meshes()
   cache.ready = true
   return cache
+end
+
+-- add-on-foot-excursions: code-built props for the on-foot features
+function M.foot_parts()
+  local DARK, PLATE, HAZ, BRASS = { 0.2, 0.22, 0.26 }, { 0.5, 0.52, 0.56 }, { 0.95, 0.72, 0.12 }, { 0.78, 0.6, 0.25 }
+  local shutter = { { kind = "box", min = { -0.5, -0.5, -0.5 }, max = { 0.5, 0.5, 0.5 }, color = PLATE } }
+  for k = 0, 4 do
+    local y = -0.42 + k * 0.2
+    shutter[#shutter + 1] = { kind = "box", min = { -0.48, y, -0.52 }, max = { 0.48, y + 0.06, 0.52 },
+                              color = k % 2 == 0 and HAZ or DARK }
+  end
+  local lock = {
+    { kind = "box", min = { -0.45, -0.45, -0.08 }, max = { 0.45, 0.45, 0.0 }, color = DARK },
+    { kind = "box", min = { -0.38, -0.38, 0.0 }, max = { 0.38, 0.38, 0.04 }, color = PLATE },
+    { kind = "cylinder", c = { 0, -0.06, 0.1 }, r = 0.08, h = 0.12, seg = 8, color = BRASS },
+  }
+  -- the coupling's wheel: a square rim and two spokes
+  for _, b in ipairs({ { -0.28, 0.24, 0.28, 0.28 }, { -0.28, -0.28, 0.28, -0.24 }, { -0.28, -0.28, -0.24, 0.28 },
+                       { 0.24, -0.28, 0.28, 0.28 }, { -0.02, -0.28, 0.02, 0.28 }, { -0.28, -0.02, 0.28, 0.02 } }) do
+    lock[#lock + 1] = { kind = "box", min = { b[1], b[2], 0.1 }, max = { b[3], b[4], 0.16 }, color = BRASS }
+  end
+  local console = {
+    { kind = "box", min = { -0.45, -0.55, -0.25 }, max = { 0.45, 0.35, 0.25 }, color = DARK },
+    { kind = "box", min = { -0.4, 0.35, -0.2 }, max = { 0.4, 0.42, 0.22 }, color = PLATE },
+    { kind = "box", min = { -0.35, 0.42, -0.15 }, max = { 0.35, 0.82, -0.1 }, color = { 0.15, 0.5, 0.45 }, emissive = 0.8 },
+    { kind = "box", min = { -0.3, 0.38, 0.05 }, max = { -0.18, 0.46, 0.17 }, color = { 0.9, 0.2, 0.15 }, emissive = 1 },
+    { kind = "box", min = { -0.06, 0.38, 0.05 }, max = { 0.06, 0.46, 0.17 }, color = HAZ, emissive = 1 },
+    { kind = "box", min = { 0.18, 0.38, 0.05 }, max = { 0.3, 0.46, 0.17 }, color = { 0.3, 0.9, 0.4 }, emissive = 1 },
+  }
+  return { shutter = shutter, lock = lock, console = console }
+end
+
+function M.foot_meshes()
+  local out = {}
+  local parts = M.foot_parts()
+  for _, k in ipairs({ "shutter", "lock", "console" }) do out[k] = saucer.mesh.build({ parts = parts[k] }) end
+  return out
 end
 
 -- True 3D derelicts are drawn in chunks (one per room, one per exterior

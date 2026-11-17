@@ -36,6 +36,8 @@ local HELP = {
   "Home: holodeck (engine room), stove, bookshelf, TV (sofa)",
   "Docked: 3 pockets the saucer; F holds the coin, Shift sprints",
   "Station: G trades/talks/grabs a thief, E or 1-2 in a hangar",
+  "Derelict: Seat near a deck, 3 (or Q) steps out; E deploys it",
+  "On foot: Ctrl crouch, Space hop, G grabs / turns a hand-lock",
   "Camera C, mystery mode M, help H/F1",
   "Gamepad, touch and WebXR work too.",
 }
@@ -63,6 +65,7 @@ function M.status(p, state)
     return "HOLODECK: " .. (pr and pr.name:upper() or "PROGRAM"), state and holo.hint(state, p) or nil
   end
   if p.mode == "foot" and p.station and state then return require("sim.visit").status(state, p) end
+  if p.mode == "foot" and p.excursion and state then return require("sim.excursion").status(state, p) end
   if p.tv then return "LIVING ROOM - TV", "USE: NEXT CHANNEL  MOVE: GET UP" end
   if p.reading then return "BOOKSHELF", nil end
   if p.cooking then return "KITCHEN", nil end
@@ -337,6 +340,7 @@ function M.draw(v, state, p, target)
   local site, d = M.nav(state, p)
   if p.holo_run or p.mode == "foot" then site = nil end
   if p.mode == "foot" and p.station then M.station(v, state, p) end
+  if p.mode == "foot" and p.excursion then M.excursion(v, state, p) end
   if site then
     local c = M.site_center(state, site)
     v:text(W // 2 - 60, 6, string.format("%s SITE %d %dm", M.bearing(p, c), site.id, vec.dist(c, p.ship.pos) // 1), CYAN)
@@ -368,6 +372,7 @@ function M.draw(v, state, p, target)
   M.home(v, state, p)
   local fs = p.mode ~= "foot" and M.fold_status(p) or nil
   if fs then v:text(W // 2 - #fs * 4, H // 2 - 30, fs, CYAN) end
+  M.lifeline(v, state, p)
   if p.slept_tick and state.tick - p.slept_tick < 120 then
     v:rect(0, 0, W, H, { 0, 0, 0.02, 1 - (state.tick - p.slept_tick) / 120 })
   end
@@ -472,6 +477,64 @@ function M.station(v, state, p)
     v:text(W // 2 - #t * 4, 80, t, AMBER)
   end
   return 1
+end
+
+-- add-on-foot-excursions: the suit (the only meter on foot), your four hand
+-- slots, the coin, a hand-lock's progress and your caches' bearing
+function M.excursion(v, state, p)
+  local ex = require("sim.excursion")
+  local T = ex.tune()
+  local W, H = v.width, v.height
+  local e = p.excursion
+  local s = math.max(0, (p.suit or 0) / T.suit.max)
+  local col = s > 0.3 and CYAN or (s > 0.1 and AMBER or RED)
+  local blink = s <= 0.1 and (state.tick // 15) % 2 == 0
+  v:rect(4, 60, 120, 40, { 0, 0, 0, 0.45 })
+  v:text(8, 63, string.format("SUIT %d%%", (p.suit or 0) // 1), blink and WHITE or col)
+  v:rect(8, 73, 100, 5, { 0.15, 0.15, 0.2, 1 })
+  v:rect(8, 73, 100 * s, 5, col)
+  -- hands: four slots
+  for i = 1, T.hands do
+    local it = p.hands[i]
+    local x = 8 + (i - 1) * 14
+    v:rect(x, 82, 12, 12, it and (it.delicate and { 0.2, 0.5, 0.6, 0.9 } or { 0.5, 0.38, 0.15, 0.9 }) or { 0.15, 0.15, 0.2, 0.8 })
+    if it then v:text(x + 2, 84, (it.name or "?"):sub(1, 1), WHITE) end
+  end
+  v:text(70, 84, "HANDS", DIM)
+  local text, kind = ex.coin_text(p)
+  v:text(8, 104, text, kind == "busy" and AMBER or GREEN)
+  if s <= 0.3 then
+    local t = s <= 0.1 and "! SUIT CHARGE CRITICAL - DEPLOY (E) !" or "SUIT CHARGE LOW"
+    v:text(W // 2 - #t * 4, H // 2 - 56, t, s <= 0.1 and RED or AMBER)
+  end
+  if e.work then
+    local f = vec.clamp(e.work.t / e.work.total, 0, 1)
+    v:rect(W // 2 - 50, H // 2 + 52, 100, 4, { 0.15, 0.15, 0.2, 1 })
+    v:rect(W // 2 - 50, H // 2 + 52, 100 * f, 4, AMBER)
+  end
+  -- your caches here: which way and how far
+  local b = e.body
+  local n = 0
+  for _, c in ipairs(state.caches or {}) do
+    if c.owner == p.record_index and c.site == e.site and n < 2 then
+      local a = saucer.math.wrap(saucer.math.atan2(c.pos[1] - b.pos[1], c.pos[3] - b.pos[3]) - b.yaw)
+      local dir = math.abs(a) < 0.4 and "AHEAD" or (math.abs(a) > 2.6 and "BEHIND" or (a > 0 and "LEFT" or "RIGHT"))
+      local t = string.format("CACHE %s %dm", dir, vec.dist(c.pos, b.pos) // 1)
+      v:text(W - 4 - #t * 8, 40 + n * 10, t, AMBER)
+      n = n + 1
+    end
+  end
+  return 1
+end
+
+-- the Lifeline's white-out, fading as you come to in the Seat
+function M.lifeline(v, state, p)
+  if not p.lifeline then return false end
+  local frames = require("sim.excursion").tune().white * 60
+  local k = 1 - (state.tick - p.lifeline.tick) / frames
+  if k <= 0 then return false end
+  v:rect(0, 0, v.width, v.height, { 1, 1, 1, k })
+  return true
 end
 
 -- add-presentation-packaging: touch overlay. Held widgets light up, labels

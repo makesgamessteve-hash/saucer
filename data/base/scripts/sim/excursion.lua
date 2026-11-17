@@ -276,7 +276,7 @@ end
 function M.lifeline(state, p, ctx)
   local ex = p.excursion
   local b = ex.body
-  local cache = { site = ex.site, pos = { b.pos[1], b.pos[2] + 0.35, b.pos[3] }, owner = p.record_index, items = {},
+  local cache = { site = ex.site, pos = { b.pos[1], b.pos[2] + 0.9, b.pos[3] }, owner = p.record_index, items = {},
                   lifeline = true }
   local keep = {}
   for _, it in ipairs(p.hands or {}) do

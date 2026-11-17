@@ -73,6 +73,8 @@ end
 
 function M.camera(p, xr)
   local ship = p.ship
+  -- add-on-foot-excursions: the chase view on foot hangs behind your shoulder
+  if p.cam == "chase" and not xr and p.mode == "foot" and p.excursion then return require("view.excursion").chase(p) end
   if p.cam == "chase" and not xr then
     local c = configs.get(ship.size)
     local R, H = c.diameter / 2, c.height
@@ -799,8 +801,12 @@ function M.render(v, state, alpha)
   M.draw_ruins(v, A, state, cam, v.xr)
   v:mesh(A.station, { pos = state.sector.trader.pos, yaw = state.tick * 0.002 })
   M.draw_sentries(v, A, state, p)
-  -- what this player's beam sees (the HUD, the beam console and the cone use it)
-  local scan = tractor.scan(state, p, p.site, p.site ~= 0 and game.ruin(p.site) or nil, M.beam_heading(p))
+  -- add-on-foot-excursions: shutters, hand-locks, grid consoles, Delicate finds
+  local exv = require("view.excursion")
+  exv.props(v, A, state, p, cam)
+  local on_foot = p.mode == "foot" and p.excursion
+  -- what this player's beam sees (the HUD, the beam console and the cone use it); none on foot
+  local scan = not on_foot and tractor.scan(state, p, p.site, p.site ~= 0 and game.ruin(p.site) or nil, M.beam_heading(p)) or nil
   M.last_scan[p.index] = scan
   -- this player's loot instances, Echoes, nests, caches and the vault's Curio
   local spin = (state.tick % 360) * sm.tau / 360
@@ -830,6 +836,15 @@ function M.render(v, state, alpha)
   for j, o in ipairs(state.players) do
     draw_saucer(v, A, o, j == v.player and (p.cam ~= "chase" or v.xr), state, v.xr, cam)
   end
+  -- on foot: your hand and coin (or your body, in the chase view), the others on foot
+  if on_foot then
+    if p.cam == "chase" and not v.xr then
+      local b = p.excursion.body
+      v:mesh(A.person, { pos = b.pos, yaw = b.yaw, scale = b.crouch and { 1, 0.5, 1 } or nil })
+    end
+    exv.own(v, A, state, p, cam)
+  end
+  exv.others(v, A, state, p)
   -- the belly beams: everyone's while it pulls, your own while you watch it
   for _, o in ipairs(state.players) do
     if o == p then
