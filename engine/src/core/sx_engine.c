@@ -745,9 +745,11 @@ void sx_engine_render(sx_engine *e, double alpha) {
   e->render.xr = e->xr.session != 0;
   sx_render_begin_frame(&e->render, nviews);
   if (e->xr.session) {
+    /* a headset on a network guest shows that machine's own slot */
+    int me = e->net_on && e->net.local_slot && e->net.local_slot <= sx_engine_sim_players(e) ? e->net.local_slot : 1;
     for (i = 0; i < nviews && i < 2; i++) {
       sx_viewport *v = &e->render.views[i];
-      v->player = 1;
+      v->player = me;
       v->cam.has_matrices = 1;
       memcpy(v->cam.view, e->xr.views[i].view, sizeof v->cam.view);
       memcpy(v->cam.proj, e->xr.views[i].proj, sizeof v->cam.proj);

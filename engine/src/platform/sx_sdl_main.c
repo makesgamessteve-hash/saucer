@@ -27,6 +27,7 @@ typedef struct app {
   int running, status;
   int fixed_step;          /* one tick per frame (screenshots, slow CI GPUs) */
   int shot_done;
+  char net_title[160];
   SDL_JoystickID pads[SX_MAX_PADS];
   SDL_Gamepad *pad_handles[SX_MAX_PADS];
 } app;
@@ -156,6 +157,16 @@ static void present(void) {
     e->shot_pending = 0;
     save_png(e->shot_path, w, h);
   }
+#if !defined(__EMSCRIPTEN__)
+  /* add-home-among-stars: a network game says where it stands in the title
+   * (the web shell shows it in its own status bar) */
+  if (e->net_on && strcmp(A.net_title, e->net.status) != 0) {
+    char t[200];
+    snprintf(A.net_title, sizeof A.net_title, "%s", e->net.status);
+    snprintf(t, sizeof t, "Saucer - %s - network %s", e->net.role == SX_NET_HOST ? "host" : "guest", e->net.status);
+    SDL_SetWindowTitle(A.win, t);
+  }
+#endif
   SDL_GL_SwapWindow(A.win);
 }
 
