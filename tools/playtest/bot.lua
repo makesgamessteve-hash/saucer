@@ -299,9 +299,11 @@ end
 local function hold_free(pl) return upgrades.hold_slots(P(pl)()) - #P(pl)().hold end
 
 -- the bot watches for a Fold Retreat while it flies a dive
+-- (the tick of the newest FOLD RETREAT message: a count would miss a new
+-- retreat when an old one drops out of the message list at the same time)
 local function retreats(pl)
   local n = 0
-  for _, m in ipairs(P(pl)().msgs) do if m.text:find("FOLD RETREAT", 1, true) then n = n + 1 end end
+  for _, m in ipairs(P(pl)().msgs) do if m.text:find("FOLD RETREAT", 1, true) then n = math.max(n, m.tick) end end
   return n
 end
 
@@ -393,6 +395,8 @@ local function dive(pl, site, opts)
   if #villa_rooms + #seat_rooms == 0 then return 0 end
   if not ensure_helm(pl) then ev(pl, "fail", "no helm") return 0 end
   local r0 = retreats(pl)
+  local retreated = false
+  local function fell() if retreats(pl) > r0 then retreated = true end return retreated end
   local got, cur = 0, 0
   local t0 = tick()
   local first = (#villa_rooms > 0) and villa_rooms[1] or seat_rooms[1]
@@ -408,12 +412,12 @@ local function dive(pl, site, opts)
   ev(pl, "arrived", string.format("site %d after %d ticks", site, tick() - t_travel))
   local function visit(list, size)
     for _, room in ipairs(list) do
-      if B.time_up() or (hold_free(pl) <= 0 and not opts.twin) or retreats(pl) > r0 then return false end
+      if B.time_up() or (hold_free(pl) <= 0 and not opts.twin) or fell() then return false end
       local wps = path_between(ruin, origin, cur, room, size)
       local tf = tick()
       local ok, leg = ap.follow(B, pl, get, wps, 1500)
       ev(pl, "path", string.format("site %d room %d wps %d ticks %d ok %s", site, room, #wps, tick() - tf, tostring(ok)))
-      if retreats(pl) > r0 then return false end
+      if fell() then return false end
       if not ok then
         ev(pl, "stuck", string.format("site %d room %d leg %s/%d size %d", site, room, tostring(leg), #wps, get().ship.size))
         unstick(pl)
@@ -444,21 +448,21 @@ local function dive(pl, site, opts)
     end
     return true
   end
-  B.guard(function() return retreats(pl) > r0 end, function()
+  B.guard(function() return fell() end, function()
     local okv = visit(villa_rooms, nil)
-    if okv and #seat_rooms > 0 and retreats(pl) == r0 then
+    if okv and #seat_rooms > 0 and not fell() then
       if get().ship.size ~= 2 then
         if not ap.resize(B, pl, get, 2) then ev(pl, "fail", "could not fold to the Seat (charge " .. get().ship.charge // 1 .. ")") end
       end
       if get().ship.size == 2 then visit(seat_rooms, 2) end
     end
   end)
-  if opts.hold_until and retreats(pl) == r0 then
+  if opts.hold_until and not fell() then
     -- co-op twin vault: hover by the anchor (claim released so the partner can come in)
     claims[pl] = nil
     opts.hold_until()
   end
-  if retreats(pl) > r0 then
+  if fell() then
     ev(pl, "retreat", string.format("site %d hull gave out, hold %d", site, #get().hold))
   elseif cur ~= 0 then
     local ok = ap.follow(B, pl, get, out_of(ruin, origin, cur, get().ship.size == 2 and 2 or nil), 1500)
@@ -479,7 +483,7 @@ local function dive(pl, site, opts)
   if get().ship.size ~= 1 and get().site == 0 then ap.resize(B, pl, get, 1) end
   claims[pl] = nil
   ev(pl, "dive_end", string.format("site %d got %d ticks %d hold %d banked %d retreat %s", site, got, tick() - t0,
-    #get().hold, get().banked_value, tostring(retreats(pl) > r0)))
+    #get().hold, get().banked_value, tostring(fell())))
   return got
 end
 
@@ -632,12 +636,13 @@ end
 
 -- the holder: beam the shutter anchor and hover by it until the partner has the vault (or gives up)
 local function twin_hold(pl, max_wait)
-  local site = twin_site()
+  local site, L = twin_site()
   if not site then return false end
   local get = P(pl)
   ev(pl, "twin_hold", "site " .. site)
   local t0 = tick()
-  dive(pl, site, { twin = true, want = function(c) return c.kind == "anchor" end,
+  -- (the anchor and the vault sit on loot slots: what lies on them comes up first)
+  dive(pl, site, { twin = true, want = function(c) return c.kind ~= "twin" and (c.kind == "anchor" or c.room == L.anchor.room) end,
     hold_until = function()
       if twin.holder(S(), site) ~= get() then ev(pl, "twin_hold_fail", "site " .. site) return end
       ev(pl, "twin_holding", "site " .. site)
@@ -657,10 +662,12 @@ local function twin_take(pl)
   if not site then return false end
   local h = twin.holder(S(), site)
   if not h or h == P(pl)() then return false end
-  local got = dive(pl, site, { twin = true, want = function(c) return c.kind == "twin" end })
+  local _, L = twin_site()
+  local got = dive(pl, site, { twin = true, want = function(c) return c.kind ~= "anchor" and (c.kind == "twin" or c.room == L.vault.room) end })
   ev(pl, "twin_take", string.format("site %d got %d twins %d", site, got, P(pl)().twins or 0))
-  if got > 0 then shot("twin_vault") end
-  return got > 0
+  local e = S().twins and S().twins[twin.key(site)]
+  if e and e.done then shot("twin_vault") end
+  return e and e.done
 end
 
 -- co-op: say "I'm ready to fold" from the party panel

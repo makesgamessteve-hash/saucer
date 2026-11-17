@@ -15,9 +15,9 @@ local function career(pl, pol)
   ev(pl, "career", pol.name)
   while not BOT.B.time_up() do
     if BOT.agree_if_asked(pl) then visited[S().sector_id] = true end
-    if pol.mystery then BOT.mystery_step(pl) end
-    -- co-op twin vault: the partner holds an anchor open
+    -- co-op twin vault: the partner holds an anchor open (before anything long)
     if #S().players > 1 and not pol.follower and BOT.twin_take(pl) then ev(pl, "twin", "taken") end
+    if pol.mystery then BOT.mystery_step(pl) end
     if BOT.B.time_up() then break end
     local list = BOT.site_order(pl)
     if pol.pick then list = pol.pick(list) end
@@ -95,6 +95,7 @@ local function career(pl, pol)
         BOT.sleep(pl)
         since_sleep = 0
       end
+      if #S().players > 1 and not pol.follower and BOT.twin_take(pl) then ev(pl, "twin", "taken") end
       if pol.after_trip then pol.after_trip(pl, trips) end
     end
   end

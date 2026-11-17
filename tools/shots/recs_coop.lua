@@ -45,18 +45,31 @@ local function cand(get, kind)
   for _, c in ipairs(tractor.candidates(T.state(), get(), site, ruin)) do if c.kind == kind then return c end end
 end
 print(string.format("twin site %d anchor room %s vault room %s", site, tostring(L.anchor.room), tostring(L.vault.room)))
-ap.travel(T, 2, p2, ap.route(ruin, origin, L.anchor.room)[1].pos, 4, 6000)
-ap.enter(T, 2, p2, ruin, origin, L.anchor.room)
-local ok = ap.beam_up(T, 2, p2, cand(p2, "anchor"))
-ap.back_to_helm(T, 2, p2)
+-- the Seat where the way in is too small for the Villa
+local function size_for(room)
+  for _, w in ipairs(ap.route(ruin, origin, room)) do if w.size ~= 1 then return 2 end end
+  return nil
+end
+local function go(pl, get, room)
+  local sz = size_for(room)
+  ap.travel(T, pl, get, ap.route(ruin, origin, room, sz)[1].pos, 4, 6000)
+  if sz then ap.resize(T, pl, get, 2) end
+  ap.enter(T, pl, get, ruin, origin, room, sz)
+end
+go(2, p2, L.anchor.room)
+-- (the anchor sits on a loot slot: beam the find under it up first)
+ap.grab(T, 2, p2, site, ruin, L.anchor.room, nil, function(c) return c.kind ~= "anchor" and c.kind ~= "twin" end)
+ap.grab(T, 2, p2, site, ruin, L.anchor.room, nil, function(c) return c.kind == "anchor" end)
+local ok = twin.holder(T.state(), site) == p2()
 print("anchor held " .. tostring(twin.holder(T.state(), site) == p2()) .. " beam " .. tostring(ok))
-ap.travel(T, 1, p1, ap.route(ruin, origin, L.vault.room)[1].pos, 4, 6000)
-ap.enter(T, 1, p1, ruin, origin, L.vault.room)
+go(1, p1, L.vault.room)
 T.wait(20)
 shot("05b_twin_vault_held")
 local c = cand(p1, "twin")
 print("twin sealed " .. tostring(c and c.sealed))
-ok = c and ap.beam_up(T, 1, p1, c)
+-- (the vault sits on a loot slot too: whatever lies on top comes up first)
+ap.grab(T, 1, p1, site, ruin, L.vault.room, nil, function(x) return x.kind ~= "anchor" and x.kind ~= "twin" end)
+ok = c and ap.grab(T, 1, p1, site, ruin, L.vault.room, nil, function(x) return x.kind == "twin" end) > 0
 T.wait(30)
 print("twin taken " .. tostring(ok) .. " twins " .. tostring(p1().twins) .. "/" .. tostring(p2().twins))
 shot("05c_twin_vault_taken")
