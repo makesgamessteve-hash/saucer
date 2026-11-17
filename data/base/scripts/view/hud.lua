@@ -306,7 +306,7 @@ function M.draw(v, state, p, target)
   -- add-wider-dark: a split-screen view keeps only the essentials (a quarter
   -- of a four-way split, and since add-home-among-stars the narrow halves of
   -- a two-way split too: the full Seat HUD stacked on itself there)
-  local compact = H < 200 or W < 640
+  local compact = H < 200 or W < 400
   local function fit(t) return t:sub(1, (W - 8) // 8) end
   local ship = p.ship
   local c = configs.get(ship.size)
@@ -369,9 +369,14 @@ function M.draw(v, state, p, target)
   local where, hint = M.status(p, state)
   v:text(8, 46, where, CYAN)
   if hint then
-    hint = fit(hint)
+    if not compact then hint = fit(hint) end
     -- (in a split view it sits above the messages, clear of the beam scope)
-    v:text(W // 2 - #hint * 4, compact and H - 36 or H // 2 + 40, hint, AMBER)
+    if compact then
+      -- one line per part ("F: MINI BEAM  E: UNFOLD" -> two lines), left of the scope
+      local parts = {}
+      for part in (hint .. "  "):gmatch("(.-)  +") do parts[#parts + 1] = part end
+      for i = #parts, 1, -1 do v:text(6, H - 34 - (#parts - i) * 10, parts[i]:sub(1, (W - 64) // 8), AMBER) end
+    else v:text(W // 2 - #hint * 4, H // 2 + 40, hint, AMBER) end
   end
   -- navigation
   local site, d = M.nav(state, p)
@@ -452,7 +457,7 @@ function M.jump(v, state, p, compact)
   local m = state.mystery
   if require("sim.heart").can_vote(state, p) and not m.votes[tostring(p.index)] and state.tick % 60 < 45 then
     local t = narrow and "HEART OPEN - TAB TO VOTE" or "THE HEART IS OPEN - TAB TO VOTE"
-    v:text(W // 2 - #t * 4, compact and H // 2 + 12 or narrow and H // 2 - 80 or 56, t, { 1, 0.45, 0.65, 1 })
+    v:text(W // 2 - #t * 4, compact and 58 or narrow and H // 2 - 80 or 56, t, { 1, 0.45, 0.65, 1 })
   end
   local j = state.jump
   if not j then return end

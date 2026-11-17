@@ -76,6 +76,8 @@ function M.solids(L, p)
   for i, door in ipairs(L.doors or {}) do
     if (p.doors and p.doors[i] or 0) < L.door_solid_below then out[#out + 1] = { deck = door.deck, box = door.box } end
   end
+  -- add-home-among-stars: placed furniture is solid (for guests too)
+  for _, b in ipairs(require("sim.decor").solids(p)) do out[#out + 1] = b end
   return out
 end
 
@@ -86,7 +88,8 @@ function M.fed(state, p) return (p.fed_until or 0) > state.tick or buffs.active(
 function M.regen_factor(state, p)
   local f = buffs.factor(state, p, "charge_regen")
   if (p.fed_until or 0) > state.tick and not buffs.active(state, p, "fed") then f = f * M.FED_FACTOR end
-  return f
+  -- add-home-among-stars: a comfortable dome
+  return f * require("sim.decor").regen_factor(state, p)
 end
 
 -- add-holodeck-home-life: the kitchen cooks recipes from the pantry

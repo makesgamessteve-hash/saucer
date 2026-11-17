@@ -126,7 +126,17 @@ function M.repair(p)
 end
 
 -- add-holodeck-home-life: the home shop (home/shop.lua)
-function M.shop() return data.load("home/shop.lua") end
+function M.shop()
+  local list = data.load("home/shop.lua")
+  -- add-home-among-stars: furniture and seed prices live in home/decor.lua
+  for _, e in ipairs(list) do
+    if e.price == nil then
+      local d = e.kind == "furniture" and require("sim.decor").furniture(e.id) or require("sim.decor").seed(e.id)
+      e.price = d and d.price or 0
+    end
+  end
+  return list
+end
 
 local function shop_name(e)
   if e.kind == "ingredient" then return string.format("%d %s", e.n or 1, require("sim.kitchen").name(e.id)) end
@@ -138,6 +148,8 @@ local function shop_name(e)
     local m = data.load("home/holo_modules.lua")[e.id]
     return m and m.name or e.id
   end
+  if e.kind == "furniture" then return require("sim.decor").furniture(e.id).name:lower() end
+  if e.kind == "seed" then return string.format("%d %s seeds", e.n or 1, require("sim.decor").seed(e.id).name) end
   local b = require("sim.books").def(e.id)
   return b and b.title or e.id
 end
@@ -161,6 +173,8 @@ function M.buy(p, e)
   if e.kind == "ingredient" then require("sim.kitchen").stock(p, e.id, e.n or 1)
   elseif e.kind == "program" then require("sim.holo").unlock(p, e.id)
   elseif e.kind == "book" then require("sim.books").add(p, e.id)
+  elseif e.kind == "furniture" then require("sim.decor").buy_furniture(p, e.id)
+  elseif e.kind == "seed" then require("sim.decor").buy_seeds(p, e.id, e.n)
   else
     local it = items.stamp(p, require("sim.finds").item({ kind = e.kind, id = e.id }), 1, nil)
     it.hot = false

@@ -336,6 +336,21 @@ function BUILD.holo_panel(out, f, y)
                         { emissive = 0.8 })
   end
 end
+-- add-home-among-stars: a display plinth (stepped column with a lit top) and a
+-- raised garden bed with soil
+function BUILD.plinth(out, f, y)
+  local b = f.box
+  local i = 0.06
+  out[#out + 1] = box(b[1], y, b[2], b[3], y + 0.12, b[4], darker(f.color, 0.8))
+  out[#out + 1] = box(b[1] + i, y + 0.12, b[2] + i, b[3] - i, y + f.h - 0.06, b[4] - i, f.color)
+  out[#out + 1] = box(b[1] - 0.02, y + f.h - 0.06, b[2] - 0.02, b[3] + 0.02, y + f.h, b[4] + 0.02, { 0.55, 0.85, 1.0 },
+                      { emissive = 0.6 })
+end
+function BUILD.planter(out, f, y)
+  local b = f.box
+  out[#out + 1] = box(b[1], y, b[2], b[3], y + f.h, b[4], f.color)
+  out[#out + 1] = box(b[1] + 0.07, y + f.h, b[2] + 0.07, b[3] - 0.07, y + f.h + 0.02, b[4] - 0.07, { 0.24, 0.17, 0.11 })
+end
 function BUILD.tv(out, f, y)
   local b = f.box
   -- low stand with two shelves

@@ -41,6 +41,7 @@ local requests = require("sim.requests")
 local coop = require("sim.coop")
 local adv = require("sim.advsentry")
 local heart = require("sim.heart")
+local decor = require("sim.decor")
 local M = {}
 
 M.SITE_PAD = 30
@@ -1010,6 +1011,7 @@ function M.step(state, cmds, dt)
 end
 
 home.register_panels(M, ctx_fns)
+decor.register(home, ctx_fns)
 visit.register_panels(ctx_fns)
 -- add-wider-dark panels
 panel.register("map", { title = "SECTOR MAP", rows = function(state, p) return galaxy.rows(state, p, ctx_fns) end })
