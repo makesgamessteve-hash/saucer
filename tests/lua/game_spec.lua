@@ -27,7 +27,10 @@ local function new_state(players, raw)
   return st
 end
 local function run(st, c, n)
-  for _ = 1, n or 1 do game.step(st, { c, c, c, c }, 1 / 60) end
+  -- one frame per player in the game (a frame for an empty slot would join it)
+  local cs = {}
+  for i = 1, #st.players do cs[i] = c end
+  for _ = 1, n or 1 do game.step(st, cs, 1 / 60) end
 end
 -- put player p at the helm inside the room of candidate c, eyes facing it:
 -- the Villa in a great hall, the Seat in a duct

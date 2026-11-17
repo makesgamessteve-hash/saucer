@@ -21,4 +21,10 @@ return {
     { kind = "ingredient", id = "sunfruit", n = 3 },
     { kind = "book", id = "oquun_hymns" },
   },
+  -- add-wider-dark: the hive kit's brood vaults
+  hive = {
+    { kind = "ingredient", id = "glowcap", n = 3 },
+    { kind = "module", id = "detail" },
+    { kind = "book", id = "oquun_hymns" },
+  },
 }

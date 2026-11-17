@@ -54,7 +54,9 @@ const char *sx_usage(void) {
          "  --screenshot-tick N   tick for --screenshot (default 120)\n"
          "  --windowed            run a --script in the game window (screenshot tours)\n"
          "  --width W --height H  window size\n"
-         "  --coop                allow extra devices to join as P2-P4\n"
+         "  --coop                allow extra devices to join as P2-P4 (gamepad A, F2)\n"
+         "  --split-keyboard      P2 plays on the right half of the keyboard\n"
+         "  --split horizontal|vertical  two-player split (default vertical)\n"
          "  --test                enable test/debug checks\n"
          "  --quiet               less logging\n";
 }
@@ -93,6 +95,8 @@ int sx_options_parse(sx_options *o, int argc, char **argv, char *err, int errlen
     else if (strcmp(a, "--width") == 0) { NEEDV(); o->width = atoi(v); }
     else if (strcmp(a, "--height") == 0) { NEEDV(); o->height = atoi(v); }
     else if (strcmp(a, "--coop") == 0) o->coop = 1;
+    else if (strcmp(a, "--split-keyboard") == 0) o->split_keyboard = 1;
+    else if (strcmp(a, "--split") == 0) { NEEDV(); o->split_horizontal = strcmp(v, "horizontal") == 0; }
     else if (strcmp(a, "--test") == 0) o->test_mode = 1;
     else if (strcmp(a, "--quiet") == 0) o->quiet = 1;
     else if (strcmp(a, "--windowed") == 0) o->windowed = 1;
@@ -347,10 +351,11 @@ sx_engine *sx_engine_create(const sx_options *o) {
     e->playing = 1;
     e->opt.seed = e->play.seed;
     e->opt.local_players = e->play.players;
+    if (e->play.slots > e->play.players) e->opt.coop = 1;
     if (e->play.modset_hash != e->modset_hash) SX_WARN("replay was recorded with a different mod set");
   }
   sx_input_init(&e->input, e->opt.local_players);
-  e->input.coop_enabled = o->coop;
+  e->input.coop_enabled = e->opt.coop;
   sx_touch_init(&e->touch, (float)o->width / (float)(o->height > 0 ? o->height : 1));
   sx_xr_init(&e->xr);
   sx_phys_init(&e->phys);
@@ -370,7 +375,9 @@ sx_engine *sx_engine_create(const sx_options *o) {
     return NULL;
   }
   if (o->record[0]) {
+    /* add-wider-dark: with co-op on every slot sends frames (joins replay in order) */
     sx_replay_init(&e->rec, SX_VERSION, e->opt.seed, e->modset_hash, e->opt.local_players);
+    if (o->coop) e->rec.slots = SX_MAX_PLAYERS;
     e->recording = 1;
   }
   /* on_init(ctx) */
@@ -385,6 +392,8 @@ sx_engine *sx_engine_create(const sx_options *o) {
   lua_setfield(e->L, -2, "headless");
   sx_script_call_hook(e, "on_init", 1, 1LL << 40);
   for (i = 1; i <= e->opt.local_players; i++) sx_engine_load_bindings(e, i);
+  if (o->split_keyboard) sx_input_split_keyboard(&e->input, 2);
+  e->render.settings.split_horizontal = o->split_horizontal;
   if (o->script[0] && start_test_script(e)) resume_test(e);
   return e;
 }
@@ -429,7 +438,7 @@ int sx_engine_tick(sx_engine *e) {
   sx_cmd cmds[SX_MAX_PLAYERS];
   int n;
   if (e->playing) {
-    n = e->play.players;
+    n = e->play.slots > e->play.players ? e->play.slots : e->play.players;
     if (n < 1 || n > SX_MAX_PLAYERS) n = 1;
     sx_replay_frames_for(&e->play, e->tick, cmds, n);
   } else {
@@ -443,6 +452,7 @@ int sx_engine_tick(sx_engine *e) {
     /* the head pose only steers anything while an immersive session runs */
     if (e->xr.session) sx_xr_aim(&e->xr, e->input.raw.aim);
     else memset(e->input.raw.aim, 0, sizeof e->input.raw.aim);
+    e->input.xr_active = e->xr.session != 0;
     sx_input_build(&e->input, e->tick, cmds, &n);
     apply_injection(e, cmds, n);
   }
@@ -499,13 +509,30 @@ int sx_engine_step(sx_engine *e, const sx_cmd *cmds, int n) {
   return !e->failed;
 }
 
+/* players in the sim right now (#state.players) */
+int sx_engine_sim_players(sx_engine *e) {
+  lua_State *L = e->L;
+  int n = 0;
+  lua_rawgeti(L, LUA_REGISTRYINDEX, e->state_ref);
+  if (lua_getfield(L, -1, "players") == LUA_TTABLE) n = (int)lua_rawlen(L, -1);
+  lua_pop(L, 2);
+  return n;
+}
+
 void sx_engine_render(sx_engine *e, double alpha) {
   lua_State *L = e->L;
-  int i, nviews = e->xr.session ? e->xr.nviews : e->opt.viewports;
+  int i, nviews = e->xr.session ? e->xr.nviews : e->opt.viewports, nsim = 0;
   uint64_t before = 0;
+  /* add-wider-dark: split screen follows the players in the game (a third
+   * player gets a quad; the spare quarter shows the sector map) */
+  if (!e->xr.session) {
+    nsim = sx_engine_sim_players(e);
+    if (nsim == 3) nsim = 4;
+    if (nsim > nviews) nviews = nsim;
+  }
   if (nviews < 1) nviews = 1;
-  sx_render_begin_frame(&e->render, nviews);
   e->render.xr = e->xr.session != 0;
+  sx_render_begin_frame(&e->render, nviews);
   if (e->xr.session) {
     for (i = 0; i < nviews && i < 2; i++) {
       sx_viewport *v = &e->render.views[i];
@@ -519,8 +546,10 @@ void sx_engine_render(sx_engine *e, double alpha) {
       v->h = e->xr.views[i].h;
     }
   } else {
+    int np = sx_engine_sim_players(e);
+    if (np < e->input.nplayers) np = e->input.nplayers;
     for (i = 0; i < nviews; i++)
-      e->render.views[i].player = e->input.nplayers > 1 ? (i % e->input.nplayers) + 1 : 1;
+      e->render.views[i].player = np > 1 ? (i < np ? i + 1 : 0) : 1;
   }
   if (e->opt.test_mode) before = sx_engine_state_hash(e);
   e->in_render = 1;

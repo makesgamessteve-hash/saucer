@@ -9,7 +9,7 @@
 #define SX_MAX_ACTIONS 48
 #define SX_MAX_BUTTON_ACTIONS 32
 #define SX_NUM_AXES 6
-#define SX_MAX_BINDINGS 8
+#define SX_MAX_BINDINGS 12
 #define SX_MAX_PADS 8
 #define SX_AXIS_MAX 32767
 
@@ -32,15 +32,19 @@ typedef enum {
   SX_SRC_PAD_BTN,   /* code = SDL_GamepadButton order */
   SX_SRC_PAD_AXIS,  /* code = SDL_GamepadAxis order */
   SX_SRC_TOUCH,     /* code = sx_touch_ctl */
-  SX_SRC_XR         /* code = sx_xr_ctl */
+  SX_SRC_XR,        /* code = sx_xr_ctl */
+  SX_SRC_KEY2       /* code = HID scancode, right half of a split keyboard */
 } sx_source;
 
 typedef enum {
   SX_DEV_KBM = 0,
   SX_DEV_TOUCH = 1,
   SX_DEV_XR = 2,
-  SX_DEV_PAD0 = 3 /* SX_DEV_PAD0 + n */
+  SX_DEV_KEYS2 = 3, /* add-wider-dark: the right half of a split keyboard */
+  SX_DEV_PAD0 = 4   /* SX_DEV_PAD0 + n */
 } sx_device;
+/* F2 offers the right half of the keyboard to the next player (co-op) */
+#define SX_KEY_JOIN2 59
 #define SX_NUM_DEVICES (SX_DEV_PAD0 + SX_MAX_PADS)
 
 typedef struct sx_binding {
@@ -86,6 +90,12 @@ typedef struct sx_input {
   int coop_enabled;
   int join_offer[SX_NUM_DEVICES]; /* device is offered "press A to join" */
   int device_used[SX_NUM_DEVICES];
+  /* add-wider-dark: with co-op on, frames go out for every slot (zero frames
+   * for slots nobody plays yet) so replays and the sim see joins in order;
+   * joins are refused while an XR session runs */
+  int xr_active;
+  int join2_prev;
+  unsigned char key2_mask[512]; /* keys the split keyboard's right half owns */
   sx_raw_input raw;
 } sx_input;
 
@@ -109,6 +119,8 @@ void sx_input_pad_connected(sx_input *in, int pad, int connected);
 void sx_input_build(sx_input *in, int64_t tick, sx_cmd *out, int *count);
 const char *sx_input_device_mode(const sx_input *in, int player);
 int16_t sx_quantize_axis(float v);
+/* add-wider-dark: give the right half of the keyboard to `player` (1-based) */
+int sx_input_split_keyboard(sx_input *in, int player);
 /* HID scancode from a key name like "W", "Space", "LCtrl"; -1 when unknown. */
 int sx_key_from_name(const char *name);
 const char *sx_key_name(int code);

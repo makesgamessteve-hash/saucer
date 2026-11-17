@@ -23,6 +23,7 @@ typedef struct sx_replay {
   uint64_t seed;
   uint64_t modset_hash;
   int players;
+  int slots; /* add-wider-dark: frame slots when co-op joins were possible (0 = players) */
   int64_t end_tick;
   sx_replay_frame *frames;
   int nframes, cap_frames;

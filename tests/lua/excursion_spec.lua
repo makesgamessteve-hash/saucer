@@ -20,7 +20,12 @@ local xr = require("view.xr")
 
 local function cmd(t) return saucer.input.command(t or {}) end
 local function run(st, c, n)
-  for _ = 1, n or 1 do game.step(st, { c or cmd(), c or cmd() }, 1 / 60) end
+  -- one frame per player in the game (a frame for an empty slot would join it)
+  for _ = 1, n or 1 do
+    local cs = {}
+    for i = 1, #st.players do cs[i] = c or cmd() end
+    game.step(st, cs, 1 / 60)
+  end
 end
 local said = {}
 local ctx = { msg = function(_, _, t) said[#said + 1] = t end, fx = function() end }
@@ -612,7 +617,7 @@ describe("saves and the views", function()
     expect(st2.locks["1:1"]).to_be(5)
     expect(st2.grids["1"].by).to_be(1)
     expect(game.shutter_closed(1, f.shutters[1].id)).to_be(false)
-    expect(st2.version).to_be(8)
+    expect(st2.version).to_be(9)
   end)
   it("renders the props, the hand, the coin, the fold and the HUD without touching the state", function()
     local st, f = at_mouth(2)

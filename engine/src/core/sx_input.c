@@ -16,7 +16,10 @@ static const name_code key_names[] = {
     {"Equals", 46},  {"F1", 58},     {"F2", 59},        {"F3", 60},     {"F4", 61},     {"F5", 62},
     {"F6", 63},      {"F7", 64},     {"F8", 65},        {"F9", 66},     {"F10", 67},    {"F11", 68},
     {"F12", 69},     {"Right", 79},  {"Left", 80},      {"Down", 81},   {"Up", 82},     {"LCtrl", 224},
-    {"LShift", 225}, {"LAlt", 226},  {"RCtrl", 228},    {"RShift", 229}, {"RAlt", 230}, {NULL, 0}};
+    {"LShift", 225}, {"LAlt", 226},  {"RCtrl", 228},    {"RShift", 229}, {"RAlt", 230}, {"LeftBracket", 47},
+    {"RightBracket", 48}, {"Backslash", 49}, {"Semicolon", 51}, {"Apostrophe", 52}, {"Comma", 54},
+    {"Period", 55},  {"Slash", 56},  {"Insert", 73},    {"Home", 74},   {"PageUp", 75}, {"Delete", 76},
+    {"End", 77},     {"PageDown", 78}, {NULL, 0}};
 
 static const char *pad_buttons[] = {"a",          "b",           "x",            "y",           "back",
                                     "guide",      "start",       "leftstick",    "rightstick",  "leftshoulder",
@@ -114,8 +117,8 @@ int sx_binding_parse(const char *s, sx_binding *out) {
   if (scale) *scale++ = 0;
   memset(out, 0, sizeof *out);
   out->scale = scale ? (float)atof(scale) : 1.0f;
-  if (strcmp(dev, "key") == 0) {
-    out->src = SX_SRC_KEY;
+  if (strcmp(dev, "key") == 0 || strcmp(dev, "key2") == 0) {
+    out->src = dev[3] ? SX_SRC_KEY2 : SX_SRC_KEY;
     code = sx_key_from_name(name);
   } else if (strcmp(dev, "mouse") == 0) {
     code = index_of(mouse_btns, name);
@@ -150,6 +153,7 @@ void sx_binding_format(const sx_binding *b, char *buf, int cap) {
   const char *dev = "?", *name = "?";
   switch (b->src) {
   case SX_SRC_KEY: dev = "key"; name = sx_key_name(b->code); break;
+  case SX_SRC_KEY2: dev = "key2"; name = sx_key_name(b->code); break;
   case SX_SRC_MOUSE_BTN: dev = "mouse"; name = mouse_btns[b->code]; break;
   case SX_SRC_MOUSE_AXIS: dev = "mouse"; name = mouse_axes[b->code]; break;
   case SX_SRC_PAD_BTN: dev = "pad"; name = pad_buttons[b->code]; break;
@@ -236,8 +240,14 @@ static float binding_value(const sx_input *in, const sx_player_slot *p, const sx
   int d;
   switch (b->src) {
   case SX_SRC_KEY:
-    if (p->claims[SX_DEV_KBM] && b->code < 512 && in->raw.keys[b->code]) {
+    if (p->claims[SX_DEV_KBM] && b->code < 512 && in->raw.keys[b->code] && !in->key2_mask[b->code]) {
       *dev_used = SX_DEV_KBM;
+      return axis ? b->scale : 1.0f;
+    }
+    return 0;
+  case SX_SRC_KEY2:
+    if (p->claims[SX_DEV_KEYS2] && b->code < 512 && in->raw.keys[b->code]) {
+      *dev_used = SX_DEV_KEYS2;
       return axis ? b->scale : 1.0f;
     }
     return 0;
@@ -276,11 +286,38 @@ static float binding_value(const sx_input *in, const sx_player_slot *p, const sx
   }
 }
 
+static int first_free_slot(const sx_input *in) {
+  int pi;
+  for (pi = 0; pi < SX_MAX_PLAYERS; pi++)
+    if (!in->players[pi].active) return pi + 1;
+  return 0;
+}
+
+int sx_input_split_keyboard(sx_input *in, int player) {
+  int a, k, owner = sx_input_owner(in, SX_DEV_KEYS2);
+  if (owner && owner != player) return 0;
+  if (!sx_input_claim(in, player, SX_DEV_KEYS2)) return 0;
+  memset(in->key2_mask, 0, sizeof in->key2_mask);
+  for (a = 0; a < in->nactions; a++)
+    for (k = 0; k < in->players[player - 1].nbindings[a]; k++) {
+      const sx_binding *b = &in->players[player - 1].bindings[a][k];
+      if (b->src == SX_SRC_KEY2 && b->code >= 0 && b->code < 512) in->key2_mask[b->code] = 1;
+    }
+  return 1;
+}
+
 void sx_input_build(sx_input *in, int64_t tick, sx_cmd *out, int *count) {
   int pi, a, k, n = 0, d;
+  int join2 = in->raw.keys[SX_KEY_JOIN2] != 0;
+  /* add-wider-dark: F2 hands the right half of the keyboard to the next free slot */
+  if (join2 && !in->join2_prev && in->coop_enabled && !in->xr_active && !sx_input_owner(in, SX_DEV_KEYS2)) {
+    int slot = first_free_slot(in);
+    if (slot) sx_input_split_keyboard(in, slot);
+  }
+  in->join2_prev = join2;
   /* join offers: with co-op enabled, pressing A on an offered pad claims a slot */
   for (d = SX_DEV_PAD0; d < SX_NUM_DEVICES; d++) {
-    if (in->join_offer[d] && in->coop_enabled && in->raw.pad_btn[d - SX_DEV_PAD0][0]) {
+    if (in->join_offer[d] && in->coop_enabled && !in->xr_active && in->raw.pad_btn[d - SX_DEV_PAD0][0]) {
       for (pi = 0; pi < SX_MAX_PLAYERS; pi++) {
         if (!in->players[pi].active) {
           sx_input_claim(in, pi + 1, d);
@@ -293,11 +330,12 @@ void sx_input_build(sx_input *in, int64_t tick, sx_cmd *out, int *count) {
     sx_player_slot *p = &in->players[pi];
     sx_cmd *c;
     float axes[SX_NUM_AXES] = {0};
-    if (!p->active) continue;
+    if (!p->active && !in->coop_enabled) continue;
     c = &out[n++];
     memset(c, 0, sizeof *c);
     c->player = pi + 1;
     c->tick = tick;
+    if (!p->active) continue; /* co-op: a zero frame for a slot nobody plays yet */
     for (a = 0; a < in->nactions; a++) {
       const sx_action *act = &in->actions[a];
       for (k = 0; k < p->nbindings[a]; k++) {

@@ -6,7 +6,8 @@ local input_setup = require("input_setup")
 local view = require("view.render")
 
 function on_init(ctx)
-  input_setup.setup(ctx.players)
+  -- add-wider-dark: every slot gets the defaults so co-op players can join later
+  input_setup.setup(4)
   game.init(ctx.state, ctx)
 end
 

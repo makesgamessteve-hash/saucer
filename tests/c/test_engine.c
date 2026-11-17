@@ -30,7 +30,8 @@ TEST(options_parse_all) {
                  "--headless", "--script", "s.lua", "--test-lua", "t", "--filter", "f", "--coverage", "--ticks", "5",
                  "--local-players", "2", "--viewports", "2", "--record", "r.srep", "--play", "p.srep",
                  "--restore-every-tick", "--screenshot", "a.png", "--screenshot-tick", "3", "--width", "640",
-                 "--height", "360", "--coop", "--test", "--quiet", "--help"};
+                 "--height", "360", "--coop", "--test", "--quiet", "--help",
+                 "--split-keyboard", "--split", "horizontal"};
   char *one[] = {"x", "--seed"};
   char *unk[] = {"x", "--what"};
   char *lp[] = {"x", "--local-players", "5"};
@@ -40,6 +41,7 @@ TEST(options_parse_all) {
   CHECK(parse(&o, (int)(sizeof all / sizeof *all), all));
   CHECK(o.seed == 9 && o.local_players == 2 && o.coop && o.show_help && o.max_ticks == 5 && o.width == 640);
   CHECK(o.screenshot_tick == 3 && o.restore_every_tick && o.coverage && o.height == 360);
+  CHECK(o.split_keyboard && o.split_horizontal);
   CHECK_STR(o.mods_dir, "m");
   CHECK(!parse(&o, 2, one) && !parse(&o, 2, unk) && !parse(&o, 3, lp) && !parse(&o, 3, vp));
   CHECK(parse(&o, 4, h) && strcmp(o.user_dir, "rr/.saucer-user") == 0);

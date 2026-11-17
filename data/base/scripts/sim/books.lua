@@ -110,6 +110,25 @@ function M.resolve(state, id)
     table.insert(lines, 1, "Decoded at the lab bench:")
     return { title = "Echo " .. num .. " transcript", kind = "clue", pages = { lines } }
   end
+  -- add-wider-dark: a Xenoarchive lore page (25% of a civ's catalog)
+  local lore = id:match("^lore:(.+)$")
+  if lore then
+    local c = require("sim.civs").by_id(state.seed, lore)
+    local text = c and string.format("The %s were %s builders of %s shape. They prized %s and %s, kept a %s temper, and their story ended in %s.",
+      c.name, c.body, c.shape, c.domains[1], c.domains[2], c.temperament, c.fate) or "(an unknown hand)"
+    local lines = M.wrap(text)
+    table.insert(lines, 1, "")
+    table.insert(lines, 1, "From your Xenoarchive:")
+    return { title = (c and c.name or lore) .. " lore page", kind = "lore", pages = { lines } }
+  end
+  if id == "ending" then
+    local m = state.mystery
+    local e = m.ending and require("sim.mystery").ending_of(m, m.ending)
+    local lines = M.wrap(e and (e.title .. ". " .. e.text) or "(the Heart is still beating)")
+    table.insert(lines, 1, "")
+    table.insert(lines, 1, "What we chose at the Heart:")
+    return { title = "The Heart", kind = "clue", pages = { lines } }
+  end
   if id == "memory" then
     local v = M.vars(state)
     local text = string.format("The %s remember %s. Their %s still sings: its next voice waits at site %d.",

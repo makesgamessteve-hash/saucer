@@ -55,7 +55,7 @@ describe("snap turning", function()
   it("binds the snap actions to the engine's derived xr controls", function()
     local b = require("lib.data").load("input/default.lua")
     expect(b.buttons.snap_left[1]).to_be("xr:snap_l")
-    expect(b.button_order[#b.button_order]).to_be("snap_right")
+    expect(b.button_order[15]).to_be("snap_right")
   end)
 end)
 

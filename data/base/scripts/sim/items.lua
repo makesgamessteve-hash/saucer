@@ -16,10 +16,8 @@ end
 M.type_of = type_of
 
 local function civ_name(id)
-  for _, c in ipairs(data.load("civs/civs.lua")) do
-    if c.id == id then return c.name end
-  end
-  return "Unknown"
+  local c = id and require("sim.civs").by_id(nil, id)
+  return c and c.name or "Unknown"
 end
 M.civ_name = civ_name
 

@@ -191,7 +191,7 @@ TEST(input_actions_claims_pads) {
   CHECK(sx_input_bind(&in, 1, lift, "touch:lift") && sx_input_bind(&in, 1, lift, "xr:stick_ry"));
   CHECK(!sx_input_bind(&in, 0, fire, "key:A") && !sx_input_bind(&in, 1, 999, "key:A"));
   CHECK(!sx_input_bind(&in, 1, fire, "key:Nope"));
-  for (i = 0; i < 4; i++) sx_input_bind(&in, 1, fire, "key:F1");
+  for (i = 0; i < 7; i++) sx_input_bind(&in, 1, fire, "key:F1");
   CHECK(!sx_input_bind(&in, 1, fire, "key:F2"));
   sx_input_clear_bindings(&in, 1, 999);
   sx_input_clear_bindings(&in, 1, fire);
@@ -249,7 +249,9 @@ TEST(input_actions_claims_pads) {
   CHECK(n == 1); /* co-op off: no join */
   in.coop_enabled = 1;
   sx_input_build(&in, 8, cmds, &n);
-  CHECK(n == 2 && sx_input_owner(&in, SX_DEV_PAD0 + 1) == 2 && in.nplayers == 2);
+  /* co-op on: a frame for every slot, empty ones zeroed */
+  CHECK(n == SX_MAX_PLAYERS && sx_input_owner(&in, SX_DEV_PAD0 + 1) == 2 && in.nplayers == 2);
+  CHECK(cmds[2].player == 3 && cmds[2].buttons == 0);
   sx_input_pad_connected(&in, 1, 0);
   CHECK(sx_input_owner(&in, SX_DEV_PAD0 + 1) == 0 && in.raw.pad_btn[1][0] == 0);
   sx_input_pad_connected(&in, 2, 1); /* P1 already has a pad: offer */
@@ -259,4 +261,58 @@ TEST(input_actions_claims_pads) {
   sx_input_release(&in, -1);
   CHECK_STR(sx_input_device_mode(&in, 0), "kbm");
   CHECK_STR(sx_input_device_mode(&in, 2), "kbm");
+}
+
+/* add-wider-dark: a split keyboard, F2 joins, XR refuses joins, side-by-side split */
+TEST(split_keyboard_and_coop_layout) {
+  static sx_input in;
+  sx_cmd cmds[SX_MAX_PLAYERS];
+  sx_binding b;
+  char buf[64];
+  int n, use, mx, rects[SX_MAX_VIEWPORTS][4];
+  sx_input_init(&in, 1);
+  use = sx_input_define_action(&in, "use", SX_ACT_BUTTON);
+  mx = sx_input_define_action(&in, "move_x", SX_ACT_AXIS);
+  for (n = 1; n <= SX_MAX_PLAYERS; n++) {
+    CHECK(sx_input_bind(&in, n, use, "key:Return") && sx_input_bind(&in, n, use, "key:G"));
+    CHECK(sx_input_bind(&in, n, use, "key2:Return") && sx_input_bind(&in, n, mx, "key2:L:1"));
+  }
+  CHECK(sx_binding_parse("key2:Semicolon", &b) && b.src == SX_SRC_KEY2 && b.code == 51);
+  sx_binding_format(&b, buf, sizeof buf);
+  CHECK_STR(buf, "key2:Semicolon");
+  CHECK(!sx_binding_parse("key2:Nope", &b));
+  /* without co-op F2 does nothing; with an XR session it is refused */
+  in.raw.keys[SX_KEY_JOIN2] = 1;
+  sx_input_build(&in, 1, cmds, &n);
+  CHECK(n == 1 && sx_input_owner(&in, SX_DEV_KEYS2) == 0);
+  in.raw.keys[SX_KEY_JOIN2] = 0;
+  sx_input_build(&in, 2, cmds, &n);
+  in.coop_enabled = 1;
+  in.xr_active = 1;
+  in.raw.keys[SX_KEY_JOIN2] = 1;
+  sx_input_build(&in, 3, cmds, &n);
+  CHECK(n == SX_MAX_PLAYERS && sx_input_owner(&in, SX_DEV_KEYS2) == 0);
+  in.raw.keys[SX_KEY_JOIN2] = 0;
+  sx_input_build(&in, 4, cmds, &n);
+  in.xr_active = 0;
+  in.raw.keys[SX_KEY_JOIN2] = 1;
+  sx_input_build(&in, 5, cmds, &n);
+  CHECK(sx_input_owner(&in, SX_DEV_KEYS2) == 2 && in.nplayers == 2);
+  /* Return is the right half's now: P1 keeps G only */
+  in.raw.keys[40] = 1; /* Return */
+  sx_input_build(&in, 6, cmds, &n);
+  CHECK(!(cmds[0].buttons & (1u << use)) && (cmds[1].buttons & (1u << use)));
+  in.raw.keys[40] = 0;
+  in.raw.keys[10] = 1;  /* G */
+  in.raw.keys[15] = 1;  /* L */
+  sx_input_build(&in, 7, cmds, &n);
+  CHECK((cmds[0].buttons & (1u << use)) && !(cmds[1].buttons & (1u << use)) && cmds[1].axes[0] > 0);
+  CHECK(sx_input_split_keyboard(&in, 2) && !sx_input_split_keyboard(&in, 3));
+  /* two players side by side, or stacked */
+  sx_viewport_layout_split(2, 100, 50, 1, rects);
+  CHECK(rects[0][2] == 50 && rects[1][0] == 50 && rects[1][3] == 50);
+  sx_viewport_layout_split(2, 100, 50, 0, rects);
+  CHECK(rects[1][1] == 25 && rects[1][2] == 100);
+  sx_viewport_layout_split(4, 100, 50, 1, rects);
+  CHECK(rects[3][0] == 50 && rects[3][1] == 25);
 }

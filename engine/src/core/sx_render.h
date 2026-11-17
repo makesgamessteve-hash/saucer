@@ -81,6 +81,7 @@ typedef struct sx_viewport {
 typedef struct sx_render_settings {
   int width, height; /* low-res target */
   int vertex_snap, dither, affine;
+  int split_horizontal; /* add-wider-dark: 2 players stacked (default side by side) */
 } sx_render_settings;
 
 typedef struct sx_render {
@@ -115,6 +116,7 @@ int sx_render_fallback_font(sx_render *r);
 
 /* Viewport layout: count 1, 2 (top/bottom), 3-4 (quad). */
 void sx_viewport_layout(int count, int w, int h, int out[][4]);
+void sx_viewport_layout_split(int count, int w, int h, int vertical, int out[][4]);
 void sx_render_begin_frame(sx_render *r, int nviews);
 void sx_view_mesh(sx_viewport *v, const sx_draw_mesh *d);
 void sx_view_billboard(sx_viewport *v, const sx_draw_billboard *b);
