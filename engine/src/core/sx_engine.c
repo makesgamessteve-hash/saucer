@@ -7,6 +7,7 @@
 #include "lualib.h"
 #include "sx_fs.h"
 #include "sx_log.h"
+#include "sx_net.h"
 #include "sx_rng.h"
 #include "sx_ser.h"
 
@@ -30,6 +31,9 @@ void sx_options_default(sx_options *o) {
   o->width = 1280;
   o->height = 720;
   o->screenshot_tick = 120;
+  o->net_port = 47800;
+  o->net_players = 2;
+  o->net_delay = 3;
 }
 
 const char *sx_usage(void) {
@@ -57,6 +61,12 @@ const char *sx_usage(void) {
          "  --coop                allow extra devices to join as P2-P4 (gamepad A, F2)\n"
          "  --split-keyboard      P2 plays on the right half of the keyboard\n"
          "  --split horizontal|vertical  two-player split (default vertical)\n"
+         "  --host [PORT]         host a network game (UDP, default port 47800)\n"
+         "  --join HOST[:PORT]    join a network game\n"
+         "  --net-players N       network players the host waits for (2-4, default 2)\n"
+         "  --net-delay N         lockstep input delay in ticks (1-12, default 3)\n"
+         "  --net-web host|guest  network game over the web shell's WebRTC data channel\n"
+         "  --hardcore            a new game starts in Hardcore\n"
          "  --test                enable test/debug checks\n"
          "  --quiet               less logging\n";
 }
@@ -97,6 +107,23 @@ int sx_options_parse(sx_options *o, int argc, char **argv, char *err, int errlen
     else if (strcmp(a, "--coop") == 0) o->coop = 1;
     else if (strcmp(a, "--split-keyboard") == 0) o->split_keyboard = 1;
     else if (strcmp(a, "--split") == 0) { NEEDV(); o->split_horizontal = strcmp(v, "horizontal") == 0; }
+    else if (strcmp(a, "--host") == 0) {
+      o->net_role = SX_NET_HOST;
+      if (v && v[0] >= '0' && v[0] <= '9') { o->net_port = atoi(v); i++; }
+    } else if (strcmp(a, "--join") == 0) {
+      char *colon;
+      NEEDV();
+      o->net_role = SX_NET_GUEST;
+      copy_str(o->net_addr, sizeof o->net_addr, v);
+      colon = strrchr(o->net_addr, ':');
+      if (colon) { o->net_port = atoi(colon + 1); *colon = 0; }
+    } else if (strcmp(a, "--net-players") == 0) { NEEDV(); o->net_players = atoi(v); }
+    else if (strcmp(a, "--net-delay") == 0) { NEEDV(); o->net_delay = atoi(v); }
+    else if (strcmp(a, "--net-web") == 0) {
+      NEEDV();
+      o->net_web = 1;
+      o->net_role = strcmp(v, "guest") == 0 ? SX_NET_GUEST : SX_NET_HOST;
+    } else if (strcmp(a, "--hardcore") == 0) o->hardcore = 1;
     else if (strcmp(a, "--test") == 0) o->test_mode = 1;
     else if (strcmp(a, "--quiet") == 0) o->quiet = 1;
     else if (strcmp(a, "--windowed") == 0) o->windowed = 1;
@@ -110,6 +137,15 @@ int sx_options_parse(sx_options *o, int argc, char **argv, char *err, int errlen
   if (o->windowed) o->headless = 0;
   if (o->local_players < 1 || o->local_players > SX_MAX_PLAYERS) {
     snprintf(err, (size_t)errlen, "--local-players must be 1-4");
+    return 0;
+  }
+  if (o->net_role && (o->net_players < 2 || o->net_players > SX_MAX_PLAYERS || o->net_delay < 1 ||
+                      o->net_delay > 12 || o->net_port <= 0 || o->net_port > 65535)) {
+    snprintf(err, (size_t)errlen, "--net-players must be 2-4, --net-delay 1-12 and the port 1-65535");
+    return 0;
+  }
+  if (o->net_role && (o->play[0] || o->local_players > 1 || o->coop)) {
+    snprintf(err, (size_t)errlen, "a network game has one local player (no --play, --coop or --local-players)");
     return 0;
   }
   if (o->viewports < 1 || o->viewports > SX_MAX_VIEWPORTS) {
@@ -315,6 +351,48 @@ static void start_coverage(lua_State *L) {
   }
 }
 
+/* add-home-among-stars: open the transport; a desktop guest learns the
+ * host's seed (and its slot) before the sim is built */
+static int start_net(sx_engine *e) {
+  char err[160] = "";
+  sx_net_transport tr;
+  sx_options *o = &e->opt;
+  if (o->net_web) tr = sx_net_web_transport();
+  else if (o->net_role == SX_NET_HOST) tr = sx_net_udp_host(o->net_port, err, sizeof err);
+  else tr = sx_net_udp_join(o->net_addr, o->net_port, err, sizeof err);
+  if (!tr.send) {
+    SX_ERROR("network: %s", err);
+    return 0;
+  }
+  sx_net_init(&e->net, o->net_role, tr, SX_NET_API, e->modset_hash);
+  if (o->net_role == SX_NET_HOST) {
+    sx_net_host_config(&e->net, o->seed, o->net_players, o->net_delay);
+    SX_INFO("network: hosting on port %d for %d players (seed %llu)", o->net_port, o->net_players,
+            (unsigned long long)o->seed);
+  } else if (!o->net_web) {
+    int64_t t0 = sx_net_clock_ms();
+    SX_INFO("network: joining %s:%d", o->net_addr, o->net_port);
+    while (!e->net.local_slot && e->net.state == SX_NET_WAITING && sx_net_clock_ms() - t0 < 20000) {
+      sx_net_poll(&e->net, sx_net_clock_ms());
+      if (!e->net.local_slot) sx_net_sleep_ms(5);
+    }
+    if (!e->net.local_slot) {
+      SX_ERROR("network: %s", e->net.state == SX_NET_REJECTED ? e->net.status : "no answer from the host");
+      sx_net_close(&e->net);
+      return 0;
+    }
+    o->seed = e->net.seed;
+    SX_INFO("network: joined as player %d (seed %llu)", e->net.local_slot, (unsigned long long)o->seed);
+  } else {
+    /* the web guest's seed comes with the host's offer code (--seed); the
+     * WELCOME is checked against it */
+    e->net.seed = o->seed;
+  }
+  e->net_on = 1;
+  e->net_wait_since = sx_net_clock_ms();
+  return 1;
+}
+
 sx_engine *sx_engine_create(const sx_options *o) {
   sx_engine *e = (sx_engine *)calloc(1, sizeof(sx_engine));
   char *base, *mods;
@@ -380,6 +458,10 @@ sx_engine *sx_engine_create(const sx_options *o) {
     if (o->coop) e->rec.slots = SX_MAX_PLAYERS;
     e->recording = 1;
   }
+  if (e->opt.net_role && !start_net(e)) {
+    sx_engine_destroy(e);
+    return NULL;
+  }
   /* on_init(ctx) */
   lua_createtable(e->L, 0, 4);
   lua_rawgeti(e->L, LUA_REGISTRYINDEX, e->state_ref);
@@ -390,6 +472,12 @@ sx_engine *sx_engine_create(const sx_options *o) {
   lua_setfield(e->L, -2, "players");
   lua_pushboolean(e->L, e->opt.headless);
   lua_setfield(e->L, -2, "headless");
+  lua_pushboolean(e->L, e->opt.hardcore);
+  lua_setfield(e->L, -2, "hardcore");
+  if (e->net_on) {
+    lua_pushinteger(e->L, e->net.local_slot);
+    lua_setfield(e->L, -2, "net_slot");
+  }
   sx_script_call_hook(e, "on_init", 1, 1LL << 40);
   for (i = 1; i <= e->opt.local_players; i++) sx_engine_load_bindings(e, i);
   if (o->split_keyboard) sx_input_split_keyboard(&e->input, 2);
@@ -400,6 +488,7 @@ sx_engine *sx_engine_create(const sx_options *o) {
 
 void sx_engine_destroy(sx_engine *e) {
   if (!e) return;
+  if (e->net_on) sx_net_close(&e->net);
   sx_script_close(e);
   sx_render_free(&e->render);
   sx_phys_free(&e->phys);
@@ -434,26 +523,82 @@ static void apply_injection(sx_engine *e, sx_cmd *cmds, int n) {
   }
 }
 
+static void sample_devices(sx_engine *e, sx_cmd *cmds, int *n) {
+  int i;
+  sx_touch_apply(&e->touch, &e->input.raw);
+  {
+    float xv[SX_XR_COUNT];
+    sx_xr_filter(&e->xr, xv);
+    for (i = 0; i < SX_XR_COUNT; i++) e->input.raw.xr[i] = xv[i];
+  }
+  /* the head pose only steers anything while an immersive session runs */
+  if (e->xr.session) sx_xr_aim(&e->xr, e->input.raw.aim);
+  else memset(e->input.raw.aim, 0, sizeof e->input.raw.aim);
+  e->input.xr_active = e->xr.session != 0;
+  sx_input_build(&e->input, e->tick, cmds, n);
+}
+
+/* add-home-among-stars: one lockstep tick. The local frame sampled now runs
+ * `delay` ticks later on every machine; the tick waits for everyone's frame. */
+static int net_tick(sx_engine *e) {
+  sx_net *n = &e->net;
+  sx_cmd cmds[SX_MAX_PLAYERS];
+  int cnt = 0;
+  int64_t now = sx_net_clock_ms();
+  sx_net_poll(n, now);
+  if (n->role == SX_NET_GUEST && n->local_slot && n->seed != e->opt.seed) {
+    fail(e, "network: the host plays a different seed");
+    return 0;
+  }
+  if (n->state == SX_NET_RUNNING && n->local_slot && n->upto[n->local_slot - 1] < e->tick + n->delay) {
+    sx_cmd local;
+    sample_devices(e, cmds, &cnt);
+    if (cnt) local = cmds[0];
+    else memset(&local, 0, sizeof local);
+    local.player = n->local_slot;
+    apply_injection(e, &local, 1);
+    /* a guest's first frame presses Use: that joins its slot in the sim */
+    if (n->local_slot > 1 && !e->net_joined) {
+      int a = sx_input_find_action(&e->input, "use");
+      if (a >= 0) {
+        local.buttons |= 1u << e->input.actions[a].slot;
+        local.edges |= 1u << e->input.actions[a].slot;
+      }
+      e->net_joined = 1;
+    }
+    sx_net_push_local(n, e->tick + n->delay, &local);
+  }
+  sx_net_flush(n);
+  if (n->state == SX_NET_DESYNC) {
+    if (e->opt.test_mode) {
+      fail(e, n->status);
+      return 0;
+    }
+    if (!n->abandoned) SX_WARN("network: %s - the session ends, play goes on alone", n->status);
+    sx_net_abandon(n);
+  }
+  if (!sx_net_ready(n, e->tick)) {
+    e->net_stalled = 1;
+    n->stalls++;
+    if (e->opt.test_mode && now - e->net_wait_since > 60000) fail(e, "network: waited 60 s for the other players");
+    return !e->failed;
+  }
+  e->net_stalled = 0;
+  e->net_wait_since = now;
+  cnt = sx_net_frames(n, e->tick, cmds);
+  return sx_engine_step(e, cmds, cnt);
+}
+
 int sx_engine_tick(sx_engine *e) {
   sx_cmd cmds[SX_MAX_PLAYERS];
   int n;
+  if (e->net_on) return net_tick(e);
   if (e->playing) {
     n = e->play.slots > e->play.players ? e->play.slots : e->play.players;
     if (n < 1 || n > SX_MAX_PLAYERS) n = 1;
     sx_replay_frames_for(&e->play, e->tick, cmds, n);
   } else {
-    int i;
-    sx_touch_apply(&e->touch, &e->input.raw);
-    {
-      float xv[SX_XR_COUNT];
-      sx_xr_filter(&e->xr, xv);
-      for (i = 0; i < SX_XR_COUNT; i++) e->input.raw.xr[i] = xv[i];
-    }
-    /* the head pose only steers anything while an immersive session runs */
-    if (e->xr.session) sx_xr_aim(&e->xr, e->input.raw.aim);
-    else memset(e->input.raw.aim, 0, sizeof e->input.raw.aim);
-    e->input.xr_active = e->xr.session != 0;
-    sx_input_build(&e->input, e->tick, cmds, &n);
+    sample_devices(e, cmds, &n);
     apply_injection(e, cmds, n);
   }
   return sx_engine_step(e, cmds, n);
@@ -491,6 +636,7 @@ int sx_engine_step(sx_engine *e, const sx_cmd *cmds, int n) {
   lua_newtable(L);
   lua_rawseti(L, LUA_REGISTRYINDEX, e->events_ref);
   e->tick++;
+  if (e->net_on && e->tick % SX_NET_HASH_EVERY == 0) sx_net_add_hash(&e->net, e->tick, sx_engine_state_hash(e));
   if (e->tick % SX_HASH_INTERVAL == 0) {
     uint64_t h = sx_engine_state_hash(e), want = 0;
     if (e->recording) sx_replay_add_hash(&e->rec, e->tick, h);
@@ -525,7 +671,7 @@ void sx_engine_render(sx_engine *e, double alpha) {
   uint64_t before = 0;
   /* add-wider-dark: split screen follows the players in the game (a third
    * player gets a quad; the spare quarter shows the sector map) */
-  if (!e->xr.session) {
+  if (!e->xr.session && !e->net_on) {
     nsim = sx_engine_sim_players(e);
     if (nsim == 3) nsim = 4;
     if (nsim > nviews) nviews = nsim;
@@ -545,6 +691,10 @@ void sx_engine_render(sx_engine *e, double alpha) {
       v->w = e->xr.views[i].w;
       v->h = e->xr.views[i].h;
     }
+  } else if (e->net_on) {
+    /* a network player sees their own saucer (player 1 until the slot joins) */
+    int me = e->net.local_slot && e->net.local_slot <= sx_engine_sim_players(e) ? e->net.local_slot : 1;
+    for (i = 0; i < nviews; i++) e->render.views[i].player = me;
   } else {
     int np = sx_engine_sim_players(e);
     if (np < e->input.nplayers) np = e->input.nplayers;
@@ -582,6 +732,10 @@ int sx_run_headless(const sx_options *o) {
   while (!e->failed && e->tick < limit) {
     if (o->script[0] && e->test_done) break;
     sx_engine_tick(e);
+    if (e->net_on && e->net_stalled) {
+      sx_net_sleep_ms(1); /* waiting for a peer's frame */
+      continue;
+    }
     /* headless renders still run the view code (it must not touch the sim);
      * with three or four split views every sixth tick is plenty */
     if (e->tick % (sx_engine_sim_players(e) > 2 ? 6 : 2) == 0) sx_engine_render(e, 1.0);
@@ -591,6 +745,13 @@ int sx_run_headless(const sx_options *o) {
   status = sx_engine_finish(e);
   printf("ticks %lld final_hash %016llx %s\n", (long long)e->tick, (unsigned long long)sx_engine_state_hash(e),
          status ? "FAIL" : "OK");
+  if (e->net_on) {
+    /* stderr too: the loopback test runs two of these in one pipeline */
+    fprintf(stderr, "net slot %d ticks %lld final_hash %016llx checks %lld stalls %lld sent %lld received %lld %s\n",
+            e->net.local_slot, (long long)e->tick, (unsigned long long)sx_engine_state_hash(e),
+            (long long)e->net.checks, (long long)e->net.stalls, (long long)e->net.sent, (long long)e->net.received,
+            status ? "FAIL" : "OK");
+  }
   if (status) fprintf(stderr, "%s\n", e->fail_msg);
   sx_engine_destroy(e);
   return status;

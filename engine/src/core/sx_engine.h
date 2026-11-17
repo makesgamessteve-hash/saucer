@@ -7,6 +7,7 @@
 #include "lua.h"
 #include "sx_input.h"
 #include "sx_mod.h"
+#include "sx_net.h"
 #include "sx_phys.h"
 #include "sx_render.h"
 #include "sx_replay.h"
@@ -44,6 +45,14 @@ typedef struct sx_options {
   int split_horizontal; /* two players: stacked instead of side by side */
   int quiet;
   int test_mode; /* debug checks: render mutation guard, saucer.test */
+  /* add-home-among-stars: networked co-op (lockstep) */
+  int net_role;        /* SX_NET_OFF / SX_NET_HOST / SX_NET_GUEST */
+  int net_web;         /* the transport is the web shell's data channel */
+  char net_addr[256];  /* --join HOST */
+  int net_port;
+  int net_players;     /* host: players in the session (2-4) */
+  int net_delay;       /* input delay in ticks */
+  int hardcore;        /* --hardcore: a new game starts in Hardcore */
   int show_help;
 } sx_options;
 
@@ -116,6 +125,12 @@ typedef struct sx_engine {
   /* screenshots requested by scripts */
   char shot_path[512];
   int shot_pending;
+  /* add-home-among-stars: networked co-op */
+  sx_net net;
+  int net_on;
+  int net_stalled;     /* the last tick call waited for a peer */
+  int net_joined;      /* a guest's first frame presses Use (joins its slot) */
+  int64_t net_wait_since;
   /* events */
   int events_ref;
   int ticks_called;

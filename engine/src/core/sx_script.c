@@ -1614,6 +1614,42 @@ static int l_mods_list(lua_State *L) {
   return 1;
 }
 
+/* add-home-among-stars: the network session as the view and menus see it
+ * (client-side: never feeds the sim) */
+static int l_net_status(lua_State *L) {
+  sx_engine *e = get_engine(L);
+  const sx_net *n = &e->net;
+  if (!e->net_on) return 0;
+  lua_createtable(L, 0, 12);
+  lua_pushstring(L, n->role == SX_NET_HOST ? "host" : "guest");
+  lua_setfield(L, -2, "role");
+  lua_pushstring(L, sx_net_state_name(n->state));
+  lua_setfield(L, -2, "state");
+  lua_pushinteger(L, n->local_slot);
+  lua_setfield(L, -2, "slot");
+  lua_pushinteger(L, n->nslots);
+  lua_setfield(L, -2, "players");
+  lua_pushinteger(L, n->max_slots);
+  lua_setfield(L, -2, "max_players");
+  lua_pushinteger(L, n->delay);
+  lua_setfield(L, -2, "delay");
+  lua_pushinteger(L, (lua_Integer)n->rtt_ms);
+  lua_setfield(L, -2, "rtt");
+  lua_pushinteger(L, (lua_Integer)n->checks);
+  lua_setfield(L, -2, "checks");
+  lua_pushinteger(L, (lua_Integer)n->desync_tick);
+  lua_setfield(L, -2, "desync_tick");
+  lua_pushstring(L, n->status);
+  lua_setfield(L, -2, "status");
+  lua_pushinteger(L, e->opt.net_port);
+  lua_setfield(L, -2, "port");
+  lua_pushboolean(L, e->opt.net_web);
+  lua_setfield(L, -2, "web");
+  lua_pushboolean(L, e->net_stalled);
+  lua_setfield(L, -2, "waiting");
+  return 1;
+}
+
 static int l_events_emit(lua_State *L) {
   sx_engine *e = get_engine(L);
   luaL_checktype(L, 1, LUA_TTABLE);
@@ -1928,6 +1964,7 @@ static void build_saucer_api(lua_State *L, sx_engine *e) {
   static const luaL_Reg save_f[] = {{"write", l_save_write}, {"read", l_save_read}, {NULL, NULL}};
   static const luaL_Reg time_f[] = {{"tick", l_time_tick}, {"sim_seconds", l_time_seconds}, {NULL, NULL}};
   static const luaL_Reg mods_f[] = {{"list", l_mods_list}, {NULL, NULL}};
+  static const luaL_Reg net_f[] = {{"status", l_net_status}, {NULL, NULL}};
   static const luaL_Reg events_f[] = {{"emit", l_events_emit}, {NULL, NULL}};
   static const luaL_Reg test_f[] = {{"state", l_test_state},           {"state_hash", l_test_state_hash},
                                     {"snapshot", l_test_snapshot},     {"restore", l_test_restore},
@@ -1944,7 +1981,7 @@ static void build_saucer_api(lua_State *L, sx_engine *e) {
               {"math", math_f},       {"util", util_f},     {"players", players_f}, {"input", input_f},
               {"physics", phys_f},    {"procgen", procgen_f}, {"mesh", mesh_f},   {"render", render_f},
               {"xr", xr_f},           {"audio", audio_f},   {"save", save_f},    {"time", time_f},
-              {"mods", mods_f},       {"events", events_f}, {NULL, NULL}};
+              {"mods", mods_f},       {"events", events_f}, {"net", net_f},       {NULL, NULL}};
   int i;
   lua_newtable(L);
   for (i = 0; libs[i].name; i++) {

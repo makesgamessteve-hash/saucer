@@ -40,6 +40,7 @@ endif()
 set(CORE_SOURCES
   engine/src/core/sx_engine.c engine/src/core/sx_fs.c engine/src/core/sx_input.c
   engine/src/core/sx_log.c engine/src/core/sx_math.c engine/src/core/sx_mesh.c
+  engine/src/core/sx_net.c engine/src/core/sx_net_udp.c
   engine/src/core/sx_mod.c engine/src/core/sx_phys.c engine/src/core/sx_procgen.c
   engine/src/core/sx_render.c engine/src/core/sx_replay.c engine/src/core/sx_rng.c
   engine/src/core/sx_script.c engine/src/core/sx_ser.c engine/src/core/sx_touch.c
@@ -49,6 +50,9 @@ add_library(saucer_stb STATIC engine/src/core/sx_stb.c)
 target_include_directories(saucer_stb PUBLIC third_party/stb)
 target_include_directories(saucer_core PUBLIC engine/src/core third_party/stb)
 target_link_libraries(saucer_core PUBLIC saucer_lua saucer_stb)
+if(WIN32)
+  target_link_libraries(saucer_core PUBLIC ws2_32)
+endif()
 if(NOT MSVC)
   target_compile_options(saucer_core PRIVATE -Wall -Wextra -Wno-unused-parameter)
 endif()

@@ -303,8 +303,10 @@ end
 
 function M.draw(v, state, p, target)
   local W, H = v.width, v.height
-  -- add-wider-dark: a four-way split-screen quarter keeps only the essentials
-  local compact = H < 200
+  -- add-wider-dark: a split-screen view keeps only the essentials (a quarter
+  -- of a four-way split, and since add-home-among-stars the narrow halves of
+  -- a two-way split too: the full Seat HUD stacked on itself there)
+  local compact = H < 200 or W < 640
   local function fit(t) return t:sub(1, (W - 8) // 8) end
   local ship = p.ship
   local c = configs.get(ship.size)
@@ -368,7 +370,8 @@ function M.draw(v, state, p, target)
   v:text(8, 46, where, CYAN)
   if hint then
     hint = fit(hint)
-    v:text(W // 2 - #hint * 4, H // 2 + (compact and 24 or 40), hint, AMBER)
+    -- (in a split view it sits above the messages, clear of the beam scope)
+    v:text(W // 2 - #hint * 4, compact and H - 36 or H // 2 + 40, hint, AMBER)
   end
   -- navigation
   local site, d = M.nav(state, p)
@@ -392,7 +395,8 @@ function M.draw(v, state, p, target)
     if (p.scan_until or 0) > state.tick then nav(40, 10, "SCANNING", CYAN) end
   end
   -- the belly beam's alignment indicator (add-tractor-beam)
-  if not compact then M.beam(v, state, p, target) end
+  -- (a two-way split half still has room for the scope: the beam needs it)
+  if not compact or H >= 200 then M.beam(v, state, p, target) end
   -- mystery
   local m = state.mystery
   if compact then -- no room
