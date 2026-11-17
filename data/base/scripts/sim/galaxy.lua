@@ -315,17 +315,17 @@ function M.warning(state, p, to)
   if not s or s.danger < 2 or s.danger <= (p.braved or 1) then return {} end
   local lines = {}
   if s.danger == 2 then
-    lines[1] = "Danger 2: Watchers lock on to a Villa and drain the hull."
-    lines[2] = "Dive guarded sites in the Seat (2 or Q): Watchers can't see it."
+    lines[1] = "Danger 2: Watchers lock on to a Villa's hull."
+    lines[2] = "Dive guarded sites in the Seat (2 or Q)."
   else
-    lines[1] = string.format("Danger %d: Clamps, Lockdowns and a Warden in the deepest halls.", s.danger)
-    lines[2] = "Seat dives, Decoys (B) and the Jammer (T) keep you in one piece."
+    lines[1] = string.format("Danger %d: Clamps, Lockdowns and a Warden.", s.danger)
+    lines[2] = "The Seat, Decoys (B) and the Jammer (T) help."
   end
-  if (p.seat_dives or 0) == 0 then lines[#lines + 1] = "You haven't dived in the Seat yet: try it in a home site first." end
-  if (p.fold_tier or 1) < 2 then lines[#lines + 1] = "Fold Core T1: one hop at a time, so the way home is slow." end
+  if (p.seat_dives or 0) == 0 then lines[#lines + 1] = "No Seat dive yet: try one in a home site first." end
+  if (p.fold_tier or 1) < 2 then lines[#lines + 1] = "Fold Core T1: one hop at a time, slow way home." end
   local bill = (data.load("sentries/sentries.lua").retreat_bill or {})[s.danger] or 0
   if (p.credits or 0) < M.WARN_CREDITS then
-    lines[#lines + 1] = string.format("You have %d c. A Fold Retreat there costs a %d c tow bill.", p.credits or 0, bill)
+    lines[#lines + 1] = string.format("You have %d c; a Fold Retreat there: %d c tow bill.", p.credits or 0, bill)
   end
   return lines
 end

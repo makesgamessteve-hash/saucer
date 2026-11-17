@@ -251,7 +251,8 @@ function M.panel(v, state, p)
   local title = panel.title(state, p)
   -- long lists (the trade terminal) show a window of rows around the selection
   local all, first = rows, 1
-  local maxr = math.max(4, (H - 60) // 11)
+  -- (add-playtest-recs: leaves room for the nav, the row hint and two message lines)
+  local maxr = math.max(4, (H - 110) // 11)
   if #all > maxr then
     first = vec.clamp(p.panel.sel - maxr // 2, 1, #all - maxr + 1)
     rows = {}
@@ -550,7 +551,8 @@ function M.draw(v, state, p, target)
   end
   -- messages
   -- add-playtest-recs: wrapped, repeats folded, the most urgent first
-  local lines = M.message_lines(state, p, (W - 12) // 8, compact and 2 or 5)
+  -- (two lines under an open panel, so the two never overlap)
+  local lines = M.message_lines(state, p, (W - 12) // 8, (compact or p.panel) and 2 or 5)
   local y = H - 12 - (#lines - 1) * 10
   for _, l in ipairs(lines) do
     v:text(6, y, l[1], l[2] == 3 and RED or (l[2] == 2 and AMBER or WHITE))
@@ -578,7 +580,7 @@ function M.draw(v, state, p, target)
     hs = { key = ctxk, tick = state.tick }
     hint_seen[v.player or 0] = hs
   end
-  if not compact and state.tick - hs.tick < M.HINT_TICKS then
+  if not compact and not p.panel and state.tick - hs.tick < M.HINT_TICKS then
     local hl = M.wrap(M.hint_for(p, mode), (W - 12) // 8, 2)
     for i, l in ipairs(hl) do v:text(6, H - 14 - 10 * #lines - 10 * (#hl - i + 1), l, DIM) end
   end

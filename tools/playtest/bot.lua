@@ -408,7 +408,7 @@ local function dive(pl, site, opts)
   ev(pl, "arrived", string.format("site %d after %d ticks", site, tick() - t_travel))
   local function visit(list, size)
     for _, room in ipairs(list) do
-      if B.time_up() or hold_free(pl) <= 0 or retreats(pl) > r0 then return false end
+      if B.time_up() or (hold_free(pl) <= 0 and not opts.twin) or retreats(pl) > r0 then return false end
       local wps = path_between(ruin, origin, cur, room, size)
       local tf = tick()
       local ok, leg = ap.follow(B, pl, get, wps, 1500)
@@ -644,7 +644,7 @@ local function twin_hold(pl, max_wait)
       ap.wait_until(B, pl, function()
         local e = S().twins and S().twins[twin.key(site)]
         return (e and e.done) or twin.holder(S(), site) ~= get()
-      end, max_wait or 60 * 240)
+      end, max_wait or 60 * 600)
     end })
   local e = S().twins and S().twins[twin.key(site)]
   ev(pl, "twin_hold_end", string.format("site %d done %s ticks %d", site, tostring(e and e.done), tick() - t0))

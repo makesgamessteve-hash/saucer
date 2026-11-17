@@ -48,7 +48,7 @@ local twin = require("sim.twin")
 local M = {}
 
 M.SITE_PAD = 30
-M.MAX_MSGS = 4
+M.MAX_MSGS = 8 -- add-playtest-recs: room for a tip next to a lock cycle
 M.MAX_FX = 8
 
 local rt = { ruins = {}, bounds = {}, sentries = {}, shutters = {}, seals = {} } -- derived, rebuilt on restore
