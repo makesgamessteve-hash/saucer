@@ -27,6 +27,7 @@ typedef struct sx_options {
   uint64_t seed;
   int headless;
   int windowed; /* --windowed: run a --script in the window (screenshot tours) */
+  int ticks_per_frame; /* --ticks-per-frame: windowed scripts simulate this many ticks a frame (default 1) */
   char script[512];   /* game test script (VFS-independent path) */
   char test_lua[512]; /* folder with runner.lua + *_spec.lua */
   char filter[128];   /* only run spec files containing this */

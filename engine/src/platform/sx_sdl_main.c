@@ -178,9 +178,14 @@ static void frame(void) {
   while (SDL_PollEvent(&ev)) handle_event(&ev);
   if (e->xr.session) return; /* the XR frame loop drives the game while immersive */
   now = SDL_GetPerformanceCounter();
-  n = A.fixed_step ? 1 : sx_ticks_for_frame(&A.acc, (double)(now - A.last) / (double)SDL_GetPerformanceFrequency());
+  /* playtest-1: long windowed playtests draw one frame every few ticks; a
+   * screenshot a script asks for is still taken right after its tick */
+  n = A.fixed_step ? (e->opt.ticks_per_frame > 1 ? e->opt.ticks_per_frame : 1) : sx_ticks_for_frame(&A.acc, (double)(now - A.last) / (double)SDL_GetPerformanceFrequency());
   A.last = now;
-  for (i = 0; i < n; i++) sx_engine_tick(e);
+  for (i = 0; i < n; i++) {
+    if (i > 0 && (e->shot_pending || e->test_done || e->failed)) break;
+    sx_engine_tick(e);
+  }
   sx_engine_render(e, A.fixed_step ? 1.0 : A.acc * SX_TICK_HZ);
   sx_audio_flush(e);
   present();

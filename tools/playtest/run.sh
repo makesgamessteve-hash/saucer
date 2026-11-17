@@ -38,7 +38,7 @@ if [ "$MODE" = "net" ]; then
 elif [ "$MODE" = "shots" ]; then
   cd "$OUT"
   xvfb-run -a -s "-screen 0 1600x900x24" "$BUILD/saucer" --root "$ROOT" --user-dir "$UD" --seed "$SEED" \
-    --windowed --width 1280 --height 720 --script "$SCRIPT" --ticks ${STOP_TICKS:-$((LIMIT + 60000))} "$@" > "$OUT/$RUN.shots.log" 2>&1
+    --windowed --width 1280 --height 720 --ticks-per-frame ${TPF:-1} --script "$SCRIPT" --ticks ${STOP_TICKS:-$((LIMIT + 60000))} "$@" > "$OUT/$RUN.shots.log" 2>&1
 else
   T0=$(date +%s.%N)
   "$BUILD/saucer_headless" --root "$ROOT" --user-dir "$UD" --seed "$SEED" --script "$SCRIPT" --ticks $((LIMIT + 60000)) "$@" > "$OUT/$RUN.log" 2>&1 || RC=$?
