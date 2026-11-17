@@ -263,7 +263,7 @@ static void on_input(sx_net *n, int peer, const unsigned char *b, int len) {
     int64_t t = (int64_t)get64(b + o);
     uint64_t h = get64(b + o + 8);
     int i, matched = 0;
-    for (i = 0; i < n->nown; i++) {
+    for (i = 0; i < n->nown && i < SX_NET_HASHES; i++) {
       if (n->own_tick[i] == t) {
         matched = 1;
         if (n->own_hash[i] != h) {
@@ -384,7 +384,9 @@ static void send_input(sx_net *n, int pi) {
 
 void sx_net_flush(sx_net *n) {
   int i;
-  if (n->state != SX_NET_RUNNING) return;
+  /* after a desync we still send (our hashes let the others see it too)
+   * until the session is abandoned */
+  if (n->state != SX_NET_RUNNING && !(n->state == SX_NET_DESYNC && !n->abandoned)) return;
   for (i = 0; i < SX_NET_PEERS; i++)
     if (n->peers[i].used && !n->peers[i].gone) send_input(n, i);
   n->last_send_ms = n->now_ms;

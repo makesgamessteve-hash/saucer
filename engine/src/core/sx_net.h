@@ -39,8 +39,7 @@ enum {
   SX_NET_DESYNC,    /* state hashes differ: the session stops */
   SX_NET_REJECTED   /* guest: the host refused (version, mods or full) */
 };
-enum { SX_NETP_HELLO = 1, SX_NETP_WELCOME = 2, SX_NETP_REJECT = 3, SX_NETP_INPUT = 4, SX_NETP_BYE = 5,
-       SX_NETP_START = 6 };
+enum { SX_NETP_HELLO = 1, SX_NETP_WELCOME = 2, SX_NETP_REJECT = 3, SX_NETP_INPUT = 4, SX_NETP_BYE = 5 };
 
 /* a datagram transport: send to peer `peer` (host: 0..PEERS-1, guest: 0 = host);
  * recv returns the length (0 = nothing waiting, <0 error) and the peer it came
