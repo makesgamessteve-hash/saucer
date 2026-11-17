@@ -178,11 +178,18 @@ end
 function M.register_panels(game, ctx)
   panel.register("title", {
     title = "SAUCER",
-    rows = function()
-      return {
+    rows = function(st)
+      local rows = {
         { text = "Get up", act = function(state, p) M.get_up(state, p, ctx) end },
         { text = "Load saved game", act = function(state, p) M.load(state, p, ctx, game) end },
       }
+      -- add-home-among-stars: Hardcore is chosen before anyone gets up
+      local hc = require("sim.hardcore")
+      if st and hc.can_choose(st) then
+        rows[#rows + 1] = { text = hc.on(st) and "Hardcore: ON (choose again for Standard)" or "Hardcore: off",
+          act = function(state, p) hc.toggle(state, p, ctx) end }
+      end
+      return rows
     end,
   })
   panel.register("lab", {
@@ -211,12 +218,14 @@ function M.register_panels(game, ctx)
   })
   panel.register("bed", {
     title = "BED",
-    rows = function()
-      return {
-        { text = "Sleep until morning (save)", act = function(state, p) M.sleep(state, p, ctx) end },
-        { text = "Load saved game", act = function(state, p) M.load(state, p, ctx, game) end },
-        { text = "Close", act = function(_, p) panel.close(p) end },
-      }
+    rows = function(state)
+      local rows = { { text = "Sleep until morning (save)", act = function(st, p) M.sleep(st, p, ctx) end } }
+      -- add-home-among-stars: no loading from the bed in Hardcore
+      if not require("sim.hardcore").on(state) then
+        rows[#rows + 1] = { text = "Load saved game", act = function(st, p) M.load(st, p, ctx, game) end }
+      end
+      rows[#rows + 1] = { text = "Close", act = function(_, p) panel.close(p) end }
+      return rows
     end,
   })
 end

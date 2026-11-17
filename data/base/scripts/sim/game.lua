@@ -237,6 +237,7 @@ function M.init(state, ctx)
     state.players[i] = M.new_player(i, { x, door[2], door[3] - 120 }, 0)
   end
   for i = 1, n do msg(state, state.players[i], "You wake up in your saucer. Press Use to get up.") end
+  if ctx.hardcore then state.hardcore = true end
   requests.ensure(state)
 end
 
@@ -757,6 +758,8 @@ local function world_step(state, p, dt)
     if cache then
       msg(state, p, string.format("%d hot item%s stayed behind as a cache at site %d.", #cache.items,
         #cache.items == 1 and "" or "s", from))
+    elseif require("sim.hardcore").on(state) and (p.lost_for_good or 0) > 0 then
+      msg(state, p, "HARDCORE: the cargo in your hold is lost for good.")
     end
     fx(state, p, "grow")
   end

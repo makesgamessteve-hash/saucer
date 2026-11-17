@@ -337,6 +337,8 @@ function M.draw(v, state, p, target)
   v:rect(128, 12, 60, 4, { 0.15, 0.15, 0.2, 1 })
   v:rect(128, 12, 60 * math.max(0, hu), 4, hu > 0.3 and GREEN or RED)
   v:text(128, 19, string.format("%dc", p.credits or 0), AMBER)
+  -- add-home-among-stars: Hardcore is always on screen
+  if state.hardcore then v:text(196, 7, W < 400 and "HC" or "HARDCORE", RED) end
   local ls = M.lab_status(state, p)
   if ls and not compact then v:text(8, 56, ls, DIM) end
   local alarm = M.alarm(state, p)

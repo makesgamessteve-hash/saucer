@@ -46,9 +46,14 @@ end
 -- to the trader. -> the cache (or nil when nothing was hot)
 function M.retreat(state, p, trader_pos)
   local ship = p.ship
-  local lost = items.losable(p)
+  local hc = require("sim.hardcore")
+  local lost = hc.retreat_losses(state, p)
   local cache
-  if #lost > 0 then
+  if #lost > 0 and hc.on(state) then
+    -- add-home-among-stars: Hardcore keeps no cache; the cargo is gone
+    for _, it in ipairs(lost) do items.remove(p, it.uid) end
+    p.lost_for_good = (p.lost_for_good or 0) + #lost
+  elseif #lost > 0 then
     cache = { site = p.site, pos = { ship.pos[1], ship.pos[2], ship.pos[3] }, owner = p.record_index, items = {} }
     for _, it in ipairs(lost) do
       items.remove(p, it.uid)

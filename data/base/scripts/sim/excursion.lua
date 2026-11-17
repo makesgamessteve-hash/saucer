@@ -283,7 +283,11 @@ function M.lifeline(state, p, ctx)
     if it.echo or it.unique then keep[#keep + 1] = it else cache.items[#cache.items + 1] = it end
   end
   p.hands = keep
-  if #cache.items > 0 then
+  if #cache.items > 0 and require("sim.hardcore").on(state) then
+    -- add-home-among-stars: Hardcore keeps no cache
+    p.lost_for_good = (p.lost_for_good or 0) + #cache.items
+    cache = nil
+  elseif #cache.items > 0 then
     state.caches = state.caches or {}
     state.caches[#state.caches + 1] = cache
   else
