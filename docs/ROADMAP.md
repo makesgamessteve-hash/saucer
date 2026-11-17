@@ -250,7 +250,7 @@ co-op players see each other on foot but the thief only targets one coin at
 a time; unpocketing in open space outside a station is not exposed yet
 (the hook exists for milestone 7).
 
-## 6. Presentation and packaging — next
+## 6. Presentation and packaging — done
 
 **Goal.** It looks and ships like the retro-3D game in the concept.
 
@@ -261,7 +261,38 @@ touch polish; a Windows package.
 **Done when.** `artpipe lint` is clean, a Windows zip or installer is
 published, and XR seated + standing has been checked.
 
-## 7. On-foot excursions — post-MVP
+**Status (2026-11-17).** Done in OpenSpec change `add-presentation-packaging`.
+Art: 17 new Grok Imagine sources (22 prompts logged in total) go through
+`tools/artpipe` into 23 retro textures and four new palettes: wood, fabric,
+tile, floor, metal and panel materials on the Villa's furniture, floors,
+walls and stairs; floor grating, tiles and hex paving on derelict floors
+and glyph inscriptions in big rooms; textured station walls, floor and
+ceiling with shop and bar signs and a crowd of folk sprites; a second
+nebula, a planet and a galaxy in the sky; the title emblem. `artpipe lint`
+is clean. Audio: 13 synthesized sounds (five loops: engine hum, beam,
+holodeck, station, derelict; door, scan, jam, alert, locked, hit, click and
+coin), looping voices with handles in the engine (`saucer.audio.play` with
+`loop`, `saucer.audio.set`, `saucer.audio.stop`) and a render-side director
+(`view/audio.lua`). WebXR: snap turning by default (a right-stick flick is
+one 30° turn, sent as the new `snap_left` / `snap_right` commands so
+replays stay exact; smooth turning when switched off), a comfort vignette
+while the view moves, seated (`local`) and standing (`local-floor`) sessions
+with their own buttons in the web shell, tracked controllers drawn as hands
+and a wrist panel (charge, hold, beam lock) in place of the flat HUD.
+Touch: near-miss presses, held highlights, short labels, a floating stick,
+the lift level and a vibration tick on presses. Packaging:
+`.github/workflows/release.yml` builds and smoke-tests a Windows zip
+(windows-msvc), a Linux tarball and a web zip on a `v*` tag and attaches
+them to the release: [v0.1.0](https://github.com/makesgamessteve-hash/saucer/releases/tag/v0.1.0).
+XR seated and standing were checked with automated tests
+(`tests/game/xr.lua` drives both sessions through `saucer.test.xr` the way
+`web/saucer_xr.js` does; `tests/lua/presentation_spec.lua`), not on a
+headset or the WebXR emulator. Screenshot tour: `tools/shots/m6.lua`. Known
+gaps: hands are boxes posed by yaw only (no pitch or roll yet); the wrist
+panel is bars, not text; no teleport locomotion; no music; no installer
+(zip only); Windows and Linux builds are unsigned.
+
+## 7. On-foot excursions — next (post-MVP)
 
 **Goal.** Step out of the saucer into a derelict for crawlspaces and
 hand-locks. Cut from the MVP in v0.4 (was Pocket mode); builds on the

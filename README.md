@@ -15,7 +15,8 @@ the two decks, take the helm, fly the Villa into a derelict's great halls,
 hover over loot, walk down to the Tractor Room and beam it up (it shrinks on
 the way into the hold), fold down to the Seat for a duct, come back
 out, unfold, and leave the site to bank it. Keyboard/mouse, gamepad, touch
-(mobile web) and basic WebXR are supported. The implementation plan is
+(mobile web) and WebXR (seated or standing, snap or smooth turning, comfort
+vignette) are supported. The implementation plan is
 [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 | | |
@@ -41,6 +42,22 @@ out, unfold, and leave the site to bank it. Keyboard/mouse, gamepad, touch
 
 [Play in browser](https://makesgamessteve-hash.github.io/saucer/) — the live
 web build on GitHub Pages, rebuilt on every push to `main`.
+
+**Download:** [Saucer v0.1.0](https://github.com/makesgamessteve-hash/saucer/releases/tag/v0.1.0)
+has a Windows x64 zip (unzip and run `saucer.exe`), a Linux x64 tarball
+and a web zip (serve the folder over HTTP and open `index.html`). Releases
+are built by `.github/workflows/release.yml` whenever a `v*` tag is pushed.
+
+| Before milestone 6 | After the art pass |
+|---|---|
+| ![Before: the station market](docs/shots/m6_before_07_station_market.png) | ![After: textured hall, signs and a crowd](docs/shots/m6_after_07_station_market.png) |
+| ![Before: a derelict hall](docs/shots/m6_before_05b_derelict_hall_chase.png) | ![After: floor grating and glyph inscriptions](docs/shots/m6_after_05b_derelict_hall_chase.png) |
+| ![Before: a city plaza](docs/shots/m6_before_06b_city_plaza.png) | ![After: hex paving](docs/shots/m6_after_06b_city_plaza.png) |
+| ![Before: space](docs/shots/m6_before_09_space_sky.png) | ![After: nebulae, a planet and a galaxy](docs/shots/m6_after_09_space_sky.png) |
+| ![Before: the title](docs/shots/m6_before_01_title.png) | ![After: the title emblem](docs/shots/m6_after_01_title.png) |
+| ![Before: the bedroom](docs/shots/m6_before_04_lower_deck_bedroom.png) | ![After: wood, fabric and wall panels](docs/shots/m6_after_04_lower_deck_bedroom.png) |
+| ![Before: the Drift bar](docs/shots/m6_before_08_bar_npcs.png) | ![After: folk sprites and the bar sign](docs/shots/m6_after_08_bar_npcs.png) |
+| ![Before: the touch overlay](docs/shots/m6_before_10_touch_hud.png) | ![After: highlights, short labels, the floating stick](docs/shots/m6_after_10_touch_hud.png) |
 
 ## Layout
 
@@ -91,7 +108,7 @@ macOS is not a target for now.
 | Walk (on foot) / fly (at the helm) | W A S D | left stick | left stick | left stick (walks where you look) |
 | Fly up / down (at the helm) | Space / Ctrl, or R / Z | right / left trigger | right slider, or the **up** / **dn** buttons | right stick (up / down) |
 | Climb / dive | look up or down and fly forward (thrust follows your view) | right stick + left stick | drag + stick | right stick + left stick |
-| Turn / look | mouse (click to capture, Esc releases), arrows | right stick | drag right half | head, right stick |
+| Turn / look | mouse (click to capture, Esc releases), arrows | right stick | drag right half | head; right stick snap-turns 30° (smooth if snap is off) |
 | Use: take the helm / stand up / furniture / pick a menu row | G / Return | X | Use button | left trigger |
 | Menu up / down (title, bed) | W / S | left stick | left stick | left stick |
 | Fold to the Seat / unfold the Villa | Q / E, wheel, 1–2 | LB / RB | buttons | A / B, or grip + stick (size lever) |
@@ -271,9 +288,22 @@ free of mutable sim state.
 
 Low-poly geometry built entirely by Lua mesh recipes (`data/base/meshes`),
 palette-locked textures, sprites and a low-res target with nearest-neighbour
-upscaling. Two textures were generated with Grok Imagine; every prompt is in
-`art/prompts/log.jsonl`. `python3 tools/artpipe/artpipe.py build` rebuilds
-the processed assets and `ATTRIBUTION.md`; `lint` checks licenses and prompts.
+upscaling. The textures, sprites, signs, glyphs, sky backdrops and the title
+emblem were generated with Grok Imagine (22 prompts, every one in
+`art/prompts/log.jsonl`) and then downscaled and quantized to small
+palettes. Sounds are synthesized in code (`artpipe` writes the `.wav`s).
+`python3 tools/artpipe/artpipe.py build` rebuilds the processed assets and
+`ATTRIBUTION.md`; `lint` checks licenses and prompts.
+
+### WebXR comfort
+
+"VR seated" uses the `local` space with your eyes at the cockpit eye;
+"VR standing" uses `local-floor` and your real height. The right stick
+snap-turns 30° per flick by default; `saucer.xr.set_comfort({snap = false})`
+switches to smooth turning and `{vignette = 0..1}` sets the comfort
+vignette. The flat HUD is off in the headset: your controllers show as
+hands, and the left wrist panel shows charge, hold and beam lock. Seated
+and standing sessions are covered by `tests/game/xr.lua`.
 
 ## License
 

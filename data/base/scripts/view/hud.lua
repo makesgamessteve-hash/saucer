@@ -477,8 +477,9 @@ end
 -- add-presentation-packaging: touch overlay. Held widgets light up, labels
 -- sit centred, the stick shows where the thumb landed and where it is now,
 -- and the lift slider shows its level.
-M.TOUCH_LABEL = { stick = "MOVE", lift = "LIFT", up = "UP", dn = "DN", shrink = "-SZ", grow = "+SZ",
-                  tractor = "BEAM", scan = "SCAN", use = "USE", boost = "BST", jam = "JAM" }
+-- (three letters fit the smallest buttons at the 512 x 288 target)
+M.TOUCH_LABEL = { stick = "MOVE", lift = "LFT", up = "UP", dn = "DN", shrink = "-SZ", grow = "+SZ",
+                  tractor = "BM", scan = "SCN", use = "USE", boost = "BST", jam = "JAM" }
 local TOUCH_FILL, TOUCH_EDGE = { 0.4, 0.8, 1, 0.22 }, { 0.6, 0.9, 1, 0.55 }
 local TOUCH_HELD, TOUCH_KNOB = { 0.6, 1, 1, 0.5 }, { 0.8, 1, 1, 0.75 }
 
@@ -504,7 +505,7 @@ function M.touch(v)
         v:rect(x + 2, math.min(mid, mid - lv), ww - 4, math.max(1, math.abs(lv)), TOUCH_KNOB)
       end
       local label = M.TOUCH_LABEL[w.name] or w.name:upper()
-      label = label:sub(1, math.max(1, (ww - 2) // 8))
+      label = label:sub(1, math.max(1, math.floor(ww / 8)))
       local tw = #label * 8
       v:text(x + math.max(1, (ww - tw) / 2), y + (w.kind == 1 and 2 or (hh - 8) / 2), label, WHITE)
       n = n + 1
