@@ -19,10 +19,12 @@ return {
            stars = true },
   gates = gates,
   props = function(ctx)
-    local out = { { kind = "plane", at = { 0, 0 }, w = ctx.size * 2, d = ctx.size * 2, color = { 0.05, 0.05, 0.08 } } }
-    for i, g in ipairs(gates(ctx)) do
-      local nxt = gates(ctx)[i + 1] or g
-      out[#out + 1] = { kind = "ring", at = { g[1], g[3] }, y = g[2], r = g.r, yaw = saucer.math.atan2(nxt[1] - g[1], nxt[3] - g[3]) }
+    local out = { { kind = "plane", at = { 0, 0 }, w = ctx.size * 2, d = ctx.size * 2, color = { 0.07, 0.09, 0.15 } } }
+    -- each ring faces the way you fly into it (from the start or the ring before)
+    local gs = gates(ctx)
+    for i, g in ipairs(gs) do
+      local prev = gs[i - 1] or { 0, 0, -ctx.size + 2.0 }
+      out[#out + 1] = { kind = "ring", at = { g[1], g[3] }, y = g[2], r = g.r, yaw = saucer.math.atan2(g[1] - prev[1], g[3] - prev[3]) }
     end
     return out
   end,

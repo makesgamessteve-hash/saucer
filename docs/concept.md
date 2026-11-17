@@ -116,6 +116,8 @@ Cut in v0.4: Cruiser, Pod, and Pocket. Mods can add sizes back through `saucer/c
 - **Lab bench:** identifies artifacts (§6.2).
 - **Workshop:** installs or removes modules, repairs the hull using materials, and runs the fabricator (later).
 - **Display slots:** shelves and plinths where you place identified Curios. Each displayed piece adds a small passive "Comfort" bonus (faster Charge regen), and it counts toward Xenoarchive sets.
+- **Holodeck (milestone 4):** the starboard-aft room of the lower deck, behind a lit arch from the engine room. Programs are Lua data files under `holo/` (any mod can add one): relax scenes, a Seat flight course, replays of explored derelicts (the route recorded while inside), and recreations of decoded alien places that point at the mystery. They come as starters, from data cores found in vaults (the lab decodes them) or from traders. Modules add space, detail and co-op guest slots. A program runs in its own simulated space while the saucer holds station.
+- **Galley, bookshelf and TV (milestone 4):** the stove cooks recipes from trader groceries and alien ingredients for small timed buffs (Charge regen, Scanner/Jammer cooldowns, Scanner reveal, hull regen). The living-room bookshelf fills with found books and logs, Echo transcripts and holodeck memories; a clue's first read marks a lead on the radar. The TV picks up channels from nearby stations and cities and works as a gentle hint system.
 - **Garden (post-MVP):** plants grown from alien seeds, which give slow, cozy progression.
 - **Rule:** hostile entities, hazards, and damage volumes are culled at the dome boundary. When the hull takes damage you get alarms, lighting changes, and a camera shake (haptics in XR). There's no player health stat at all.
 
@@ -922,6 +924,7 @@ Format follows OpenSpec (`### Requirement:` + `#### Scenario:` with WHEN/THEN). 
 20. `add-mystery-clue-chain-mvp`
 21. `add-save-system`
 22. `add-walkable-saucer-interior` (first-person avatar, two-deck Villa, two sizes, derelict scale; defers `on-foot`)
+23. `add-holodeck-home-life` (holodeck programs and modules, cooking buffs, bookshelf, TV hints; roadmap milestone 4)
 
 Changes 1–8 are the architectural spine. Determinism, command frames, and viewports have to land before any gameplay, so co-op and XR aren't retrofitted later. Change 22 reworks 12 and 13 around the v0.4 fantasy. The living implementation plan is `docs/ROADMAP.md`.
 

@@ -31,6 +31,10 @@ out, unfold, and leave the site to bank it. Keyboard/mouse, gamepad, touch
 | ![Detail pass: kitchen props under the dome frame](docs/shots/detail_02_kitchen.png) | ![Detail pass: engine room machinery](docs/shots/detail_03_engine_room.png) |
 | ![Detail pass: a starship hall with panels, pipes and lit strips](docs/shots/detail_07c_derelict_hall_chase.png) | ![Detail pass: a station hall with hazard frames and glyphs](docs/shots/detail_08b_station_hall.png) |
 | ![Detail pass: city towers with window grids](docs/shots/detail_09_city_towers.png) | ![Detail pass: a city plaza with paths, planters and a fountain](docs/shots/detail_10_city_plaza.png) |
+| ![The holodeck: arch, panel and grid room](docs/shots/m4_holodeck_room.png) | ![Holodeck program: Sunset Beach](docs/shots/m4_program_beach.png) |
+| ![Holodeck program: the Seat flight course](docs/shots/m4_program_seat_course.png) | ![Holodeck program: the decoded alien memory](docs/shots/m4_program_memory.png) |
+| ![Cooking ember-spiced noodles](docs/shots/m4_cooking.png) | ![Reading a found log at the bookshelf](docs/shots/m4_bookshelf_reading.png) |
+| ![The TV gives a hint](docs/shots/m4_tv.png) | |
 
 [Play in browser](https://makesgamessteve-hash.github.io/saucer/) — the live
 web build on GitHub Pages, rebuilt on every push to `main`.
@@ -92,13 +96,14 @@ macOS is not a target for now.
 | Beam console: trim position / height / heading | W A S D / Space, Ctrl / mouse, arrows | left stick / triggers / right stick | left stick / slider / drag | left stick / right stick |
 | Scanner / Jammer | V / T | Y / right stick click | SCAN / JAM buttons | X / Y |
 | Run/boost, camera, help | Shift, C, H | LS, Back, Start | buttons | left grip, —, menu |
+| Holodeck program: use a spot / leave at the arch / end a flight run | G / Return | X | Use button | left trigger |
+| TV next channel, book next page (on the sofa / at the shelf); get up | G / Return; W A S D | X; left stick | Use; stick | left trigger; left stick |
 
 You wake up in the bedroom on the lower deck. The title card offers **Get
 up** or **Load saved game**. Doors slide open as you walk up to them. Take
 the stairs to the dome deck and walk to the helm at the front, then press
 Use to fly. Press Use again to stand up (the saucer holds station). Use
-also works at the kitchen (a meal makes Charge recharge faster for five
-minutes), the shower, the engine console, the lab bench and the trade
+also works at the stove (cook a meal for a buff), the shower, the engine console, the lab bench and the trade
 terminal. At the bed, Use offers sleep until morning, which refills Charge
 and **saves the game**, or loading the last save. Folding on foot forms
 the Seat around wherever you stand and seats you in it. The rooms visibly
@@ -128,6 +133,27 @@ Villa, and Snatchers in the ducts siphon hot loot from a Seat and carry it
 to their nest. **V** scans, **T** jams. Nothing is lethal: at hull 0 you
 Fold Retreat to the trader and your hot loot waits as a cache. Follow the
 optional Echoes (Who → Where → Key) to the Resonant vault.
+
+**Home life** (milestone 4). The **holodeck** is the starboard-aft room on
+the lower deck, through the lit arch from the engine room; its panel stands
+beside the arch. Pick a program and you step into a simulated space: Sunset
+Beach and Quiet Forest (lie back for Calm), the Seat Flight Course (fly a
+simulated Seat through seven rings against the clock; the first clear pays
+25 c), Derelict Replay (walk round a hologram of a site you explored, with
+your route and pick-ups) and Resonant Memory (a decoded alien place that
+points at the next Echo). Use at a spot does its thing; Use at the arch you
+came in by (or anywhere while flying) ends the program. More programs come
+from **data cores** in derelict vaults (decode them at the lab bench) or the
+trader's shop, and modules found or bought there add space, detail and
+co-op guest slots (install them at the panel). The **stove** cooks recipes
+from trader groceries and alien ingredients found in vaults for small timed
+buffs (well fed, calm, keen, steady; shown top right). The **bookshelf**
+fills with found books and logs, Echo transcripts and holodeck memories; a
+clue's first read marks a lead (a teal marker on the radar). The **TV** on
+the sofa picks up channels from the nearest trader, station and city in
+range, each with a gentle hint about what to do next. Holodeck programs are
+Lua files under `holo/`, so a mod adds one by dropping in a file (see
+`tests/fixtures/mods/holo_garden`).
 
 Press A on a second gamepad (with `--coop`) to join as player 2; each player
 lives in and flies their own saucer. `--local-players 2 --viewports 2` starts split screen.
@@ -166,9 +192,11 @@ tools/coverage.sh                            # coverage gate: >= 95% lines, C (g
   formula, and saves and loads the economy; `sentries.lua` plays a sentry
   encounter (Watcher lock, Snatcher latch, Jammer, nest, Fold Retreat and the
   cache); `mystery.lua` plays the whole Echo chain to the vault's Curio and
-  reloads it;
+  reloads it; `holodeck.lua` runs the beach and the flight course, loots a
+  data core, decodes it, runs the replay and the alien memory, reads a found
+  log, watches the TV, cooks for a buff and installs a bought module;
   `boot.lua` covers touch, XR and rendering; `coop.lua` runs two players;
-  `mods.lua` loads the fixture mods.
+  `mods.lua` loads the fixture mods (one adds a holodeck program).
 - **Replays** (`tests/replays/*.srep`): recorded command frames with a state
   hash every 60 ticks; they must reproduce bit-for-bit on Linux, Windows and
   wasm. Re-record after an intended sim change with

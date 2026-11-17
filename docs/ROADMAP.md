@@ -173,7 +173,7 @@ ring and keel line. Tests: `tests/game/tractor.lua` and unit specs.
 Screenshot tour: `tools/shots/tractor.lua`. Known gaps: sentries ignore the
 beam; the Tractor Room has no own sound loop (it reuses the tractor sounds).
 
-## 4. Holodeck and home life — next
+## 4. Holodeck and home life — done
 
 **Goal.** Steve: a holodeck with different programs that can be extended
 and upgraded later, plus cooking, reading and watching TV in the saucer.
@@ -192,7 +192,26 @@ as a gentle hint system.
 an upgrade, cooks a meal for a buff, reads a found log and gets a hint from
 the TV; a mod adds a program without engine changes.
 
-## 5. Pocket saucer and station visits — after 4
+**Status (2026-11-17).** Done in OpenSpec change `add-holodeck-home-life`.
+The Holodeck is the starboard-aft room of the lower deck behind a lit arch
+from the engine room, with its panel by the arch (`sim/holo.lua`,
+`view/holo.lua`). Programs are files under `holo/` found through the VFS in
+base and every mod: Sunset Beach and Quiet Forest (Calm), the Seat Flight
+Course (seven rings, best time, first-clear bonus), Derelict Replay (a
+hologram of an explored site with the recorded route and pick-ups) and
+Resonant Memory (a decoded alien place that marks the next Echo's site).
+Vault finds per kit bring data cores (decoded at the lab), modules (space
+6/10/15, detail, guest slots), books and alien ingredients; the trader sells
+groceries, a program, modules and books. The stove cooks for timed buffs,
+the bookshelf reads books, logs and transcripts (clues mark radar leads) and
+the TV gives hints from the nearest stations. Tests:
+`tests/game/holodeck.lua`, the `holo_garden` fixture mod in
+`tests/game/mods.lua`, `tests/lua/homelife_spec.lua`. Screenshot tour:
+`tools/shots/m4.lua`. Known gaps: co-op guests see the host's program but
+there is no shared game in it yet; programs have no sound of their own; the
+TV picture is a simple animated card, not a rendered scene.
+
+## 5. Pocket saucer and station visits — next
 
 **Goal.** Steve: travel to a space station, shrink the saucer to the size
 of a big coin, put it in your pocket and explore the station on foot.

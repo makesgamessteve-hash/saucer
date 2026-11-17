@@ -138,9 +138,16 @@ function B.obelisk(out, q)
 end
 function B.ring(out, q)
   -- a vertical ring gate facing +z (or yaw), centre at height y
+  -- built from glowing beads in the plane facing yaw (no rotation order to get wrong)
   local r = q.r or 1.5
-  out[#out + 1] = { kind = "ring", c = { 0, -0.1, 0 }, rin = r - 0.18, r = r, h = 0.2, seg = 20, color = q.color or GRID,
-                    emissive = 1, pos = { q.at[1], q.y or 2, q.at[2] }, yaw = q.yaw or 0, pitch = 1.5708 }
+  local yaw = q.yaw or 0
+  local rx, rz = saucer.math.cos(yaw), -saucer.math.sin(yaw)
+  local n = 18
+  for k = 0, n - 1 do
+    local a = k * 6.2832 / n
+    local u, w = saucer.math.cos(a) * r, saucer.math.sin(a) * r
+    out[#out + 1] = sphere(q.at[1] + rx * u, (q.y or 2) + w, q.at[2] + rz * u, 0.13, q.color or GRID, 1, 1, 1, 1)
+  end
 end
 function B.tower(out, q)
   local x, z, h, w = q.at[1], q.at[2], q.h or 10, q.w or 2

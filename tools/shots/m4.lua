@@ -68,7 +68,7 @@ if want("03") then
   local craft = function() return { ship = get().holo_run.craft } end
   for i = 1, 2 do local g = sc.gates[i] ap.fly(T, 1, craft, { g[1], g[2], g[3] }, 0.8, 900) end
   local g = sc.gates[3]
-  for _ = 1, 40 do ap.hold(T, 1, (ap.steer(get().holo_run.craft, { g[1], g[2], g[3] }))) end
+  for _ = 1, 30 do ap.hold(T, 1, (ap.steer(get().holo_run.craft, { g[1], g[2], g[3] }))) end
   shot("03_program_seat_course")
   use()
 end
