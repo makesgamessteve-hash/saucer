@@ -305,8 +305,9 @@ with "DESYNC at tick N" if they ever differ. In the **browser**, press
 **Online co-op** on the start page (or open `saucer.html?net=1`): the host
 picks Host and copies the offer code to the guest by any chat, the guest
 pastes it and sends the answer code back, and the game starts over a WebRTC
-data channel (no server of ours in between; STUN only). A browser and a
-desktop cannot play together yet. A player in a WebXR headset can host or
+data channel (no server of ours in between; STUN only). The web transport
+is tested headless; a session between two real browsers is not verified
+yet. A browser and a desktop cannot play together yet. A player in a WebXR headset can host or
 join; their headset shows their own saucer.
 
 **The dome is yours**: traders sell furniture (lamps, rugs, an aquarium, a
