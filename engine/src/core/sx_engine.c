@@ -58,6 +58,7 @@ const char *sx_usage(void) {
          "  --screenshot-tick N   tick for --screenshot (default 120)\n"
          "  --windowed            run a --script in the game window (screenshot tours)\n"
          "  --ticks-per-frame N   windowed scripts: N ticks per drawn frame (1-600, default 1)\n"
+         "  --realtime            windowed scripts: pace to wall clock, 60 ticks a second (env SAUCER_REALTIME=1)\n"
          "  --width W --height H  window size\n"
          "  --coop                allow extra devices to join as P2-P4 (gamepad A, F2)\n"
          "  --split-keyboard      P2 plays on the right half of the keyboard\n"
@@ -136,6 +137,7 @@ int sx_options_parse(sx_options *o, int argc, char **argv, char *err, int errlen
         return 0;
       }
     }
+    else if (strcmp(a, "--realtime") == 0) o->realtime = 1;
     else if (strcmp(a, "--help") == 0 || strcmp(a, "-h") == 0) o->show_help = 1;
     else {
       snprintf(err, (size_t)errlen, "unknown option %s", a);
@@ -143,6 +145,7 @@ int sx_options_parse(sx_options *o, int argc, char **argv, char *err, int errlen
     }
 #undef NEEDV
   }
+  if (sx_env_flag(getenv("SAUCER_REALTIME"))) o->realtime = 1;
   if (o->windowed) o->headless = 0;
   if (o->local_players < 1 || o->local_players > SX_MAX_PLAYERS) {
     snprintf(err, (size_t)errlen, "--local-players must be 1-4");
@@ -167,6 +170,26 @@ int sx_options_parse(sx_options *o, int argc, char **argv, char *err, int errlen
     free(d);
   }
   return 1;
+}
+
+int sx_env_flag(const char *value) {
+  return value != NULL && value[0] != 0 && strcmp(value, "0") != 0;
+}
+
+double sx_pace_wait(sx_pace *p, double now, int ticks) {
+  double wait;
+  if (ticks < 1) ticks = 1;
+  if (!p->started) {
+    p->started = 1;
+    p->due = now;
+  }
+  p->due += (double)ticks / SX_TICK_HZ;
+  wait = p->due - now;
+  if (wait < -SX_PACE_MAX_LAG) { /* the machine cannot keep up: restart the schedule, no catch-up burst */
+    p->due = now;
+    return 0;
+  }
+  return wait > 0 ? wait : 0;
 }
 
 int sx_ticks_for_frame(double *acc, double elapsed) {

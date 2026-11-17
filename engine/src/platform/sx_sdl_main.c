@@ -24,6 +24,7 @@ typedef struct app {
   sx_engine *e;
   Uint64 last;
   double acc;
+  sx_pace pace;            /* --realtime: wall clock schedule of a fixed-step run */
   int running, status;
   int fixed_step;          /* one tick per frame (screenshots, slow CI GPUs) */
   int shot_done;
@@ -170,11 +171,20 @@ static void present(void) {
   SDL_GL_SwapWindow(A.win);
 }
 
+/* --realtime: a fixed-step scripted run sleeps off the rest of each frame's
+ * n/60 s, so a recording plays at the speed of the game, not of the GPU. */
+static void pace_frame(int ticks) {
+  double wait;
+  if (!A.fixed_step || !A.e->opt.realtime) return;
+  wait = sx_pace_wait(&A.pace, (double)SDL_GetPerformanceCounter() / (double)SDL_GetPerformanceFrequency(), ticks);
+  if (wait > 0) SDL_DelayNS((Uint64)(wait * 1e9));
+}
+
 static void frame(void) {
   sx_engine *e = A.e;
   SDL_Event ev;
   Uint64 now;
-  int n, i;
+  int n, i, ran = 0;
   while (SDL_PollEvent(&ev)) handle_event(&ev);
   if (e->xr.session) return; /* the XR frame loop drives the game while immersive */
   now = SDL_GetPerformanceCounter();
@@ -185,10 +195,12 @@ static void frame(void) {
   for (i = 0; i < n; i++) {
     if (i > 0 && (e->shot_pending || e->test_done || e->failed)) break;
     sx_engine_tick(e);
+    ran++;
   }
   sx_engine_render(e, A.fixed_step ? 1.0 : A.acc * SX_TICK_HZ);
   sx_audio_flush(e);
   present();
+  pace_frame(ran);
   if (e->opt.max_ticks > 0 && e->tick >= e->opt.max_ticks) A.running = 0;
   if (e->playing && e->tick >= e->play.end_tick && !e->opt.screenshot[0]) A.running = 0;
   if (e->failed && e->playing) A.running = 0;

@@ -27,6 +27,7 @@ typedef struct sx_options {
   uint64_t seed;
   int headless;
   int windowed; /* --windowed: run a --script in the window (screenshot tours) */
+  int realtime;        /* --realtime / SAUCER_REALTIME=1: windowed scripts run at 60 ticks a second of wall clock */
   int ticks_per_frame; /* --ticks-per-frame: windowed scripts simulate this many ticks a frame (default 1) */
   char script[512];   /* game test script (VFS-independent path) */
   char test_lua[512]; /* folder with runner.lua + *_spec.lua */
@@ -152,6 +153,15 @@ int sx_engine_step(sx_engine *e, const sx_cmd *cmds, int n);
 void sx_engine_render(sx_engine *e, double alpha);
 int sx_engine_sim_players(sx_engine *e);
 uint64_t sx_engine_state_hash(sx_engine *e);
+/* Wall-clock pacing for scripted windowed runs (--realtime). Each frame that
+ * simulated `ticks` ticks is due ticks/60 s after the previous one; the call
+ * returns how many seconds to sleep so the run is not faster than real time. A
+ * run that falls more than SX_PACE_MAX_LAG behind restarts its schedule. */
+#define SX_PACE_MAX_LAG 0.25
+typedef struct sx_pace { double due; int started; } sx_pace;
+double sx_pace_wait(sx_pace *p, double now, int ticks);
+/* SAUCER_REALTIME style switch: set and not "" or "0". */
+int sx_env_flag(const char *value);
 /* Fixed-step scheduler: accumulate elapsed seconds and return ticks to run. */
 int sx_ticks_for_frame(double *accumulator, double elapsed);
 /* Snapshot/restore the sim state (returns malloc'd bytes). */

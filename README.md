@@ -361,7 +361,23 @@ before they are sold, and the HUD keeps its messages and alerts short.
 --record FILE.srep  --play FILE.srep  --restore-every-tick
 --screenshot FILE.png --screenshot-tick N     (exits after the capture)
 --windowed            (with --script: run a scripted tour in a real window, e.g. tools/shots/m3.lua)
+--ticks-per-frame N   (windowed scripts: simulate N ticks per drawn frame, 1-600)
+--realtime            (windowed scripts: pace to the wall clock, 60 ticks a second; env SAUCER_REALTIME=1)
 --headless --ticks N  --script tests/game/slice.lua  --test-lua tests/lua
+```
+
+### Recording a scripted tour in real time
+
+A windowed script (`--windowed --script ...`) steps one tick per drawn frame as fast as the machine draws,
+which on a fast GPU or a software renderer (Xvfb + llvmpipe, about 100 fps) plays the game faster than
+60 ticks a second. For screen recordings add `--realtime` (or set `SAUCER_REALTIME=1`): every frame then
+sleeps off the rest of its 1/60 s. With `--ticks-per-frame N` a frame is due N/60 s after the previous one.
+A machine too slow to keep 60 ticks a second just runs as fast as it can (the schedule restarts after a
+quarter second of lag, with no catch-up burst). The simulation, and so the replay hash, is the same either way.
+
+```sh
+xvfb-run -a -s "-screen 0 1280x720x24" build/saucer --windowed --realtime --width 1280 --height 720 \
+  --script tools/shots/m4.lua
 ```
 
 ## Tests
