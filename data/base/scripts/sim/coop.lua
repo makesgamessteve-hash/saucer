@@ -93,8 +93,8 @@ end
 
 -- a gift was beamed up: ownership moves to p
 function M.receive(state, p, index, ctx)
+  if not (state.gifts or {})[index] then return nil end
   local gf = table.remove(state.gifts, index)
-  if not gf then return nil end
   local it = gf.item
   p.next_uid = (p.next_uid or 0) + 1
   it.uid = p.next_uid

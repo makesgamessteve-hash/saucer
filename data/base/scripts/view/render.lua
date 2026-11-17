@@ -67,10 +67,9 @@ function M.draw_sentries(v, A, state, p)
           v:billboard(A.tex.beam, { def.pos[1], def.pos[2] + 1.1, def.pos[3] }, show and 1.4 or 0.7,
             { palette = A.pal.base, tint = tint })
           -- sealed doors: a glowing slab across each
-          for bi, b in ipairs(def.boxes or {}) do
-            if dyn.sealed and dyn.sealed[bi] then
-              v:mesh(A.seal, { pos = b[1], scale = vec.sub(b[2], b[1]), ghost = true })
-            end
+          for _, bi in ipairs(dyn.sealed or {}) do
+            local b = def.boxes[bi]
+            if b then v:mesh(A.seal, { pos = b[1], scale = vec.sub(b[2], b[1]), ghost = true }) end
           end
         else
           local pos = dyn.pos or def.pos

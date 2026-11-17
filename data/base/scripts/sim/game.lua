@@ -116,6 +116,13 @@ function M.seal(def, dyn, on, only)
   end
 end
 
+-- live seal barriers of a Lockdown node (tests and the view)
+function M.sealed_count(def)
+  local n = 0
+  for _ in pairs(rt.seals[def.site .. ":" .. def.id] or {}) do n = n + 1 end
+  return n
+end
+
 function M.box_has_hull(state, b)
   for _, p in ipairs(state.players) do
     local r, hh = shipm.dims(p.ship)

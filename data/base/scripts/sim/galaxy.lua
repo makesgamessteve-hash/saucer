@@ -147,7 +147,7 @@ end
 
 function M.cancel(state, p, ctx)
   if not state.jump then return false end
-  state.jump = nil
+  state.jump = false
   for _, o in ipairs(state.players) do
     ctx.msg(state, o, p and string.format("P%d called off the fold jump", p.index) or "The fold jump was called off")
     ctx.fx(state, o, "denied")
@@ -191,7 +191,7 @@ function M.step(state, dt, ctx, enter)
   end
   j.spool = j.spool - dt
   if j.spool <= 1e-9 then
-    state.jump = nil
+    state.jump = false
     enter(state, j.to)
   end
 end
