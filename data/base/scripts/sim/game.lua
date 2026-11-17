@@ -31,23 +31,26 @@ local finds = require("sim.finds")
 local buffs = require("sim.buffs")
 -- add-pocket-station-visits
 local visit = require("sim.visit")
+-- add-on-foot-excursions
+local excursion = require("sim.excursion")
 local M = {}
 
 M.SITE_PAD = 30
 M.MAX_MSGS = 4
 M.MAX_FX = 8
 
-local rt = { ruins = {}, bounds = {}, sentries = {} } -- derived, rebuilt on restore
+local rt = { ruins = {}, bounds = {}, sentries = {}, shutters = {} } -- derived, rebuilt on restore
 
 function M.ruin(i) return rt.ruins[i] end
 function M.site_bounds(i) return rt.bounds[i] end
 function M.sentries(i) return rt.sentries[i] or {} end
 
 local function civ_of(site) return data.load("civs/civs.lua")[site.civ] end
+M.civ_of = civ_of
 
 function M.rebuild(state)
   saucer.physics.clear()
-  rt.ruins, rt.bounds, rt.sentries = {}, {}, {}
+  rt.ruins, rt.bounds, rt.sentries, rt.shutters = {}, {}, {}, {}
   for i, site in ipairs(state.sector.sites) do
     local r = ruinm.generate(site.seed, site.kit, civ_of(site), site.pos, nil, site.first)
     rt.ruins[i] = r
@@ -57,8 +60,24 @@ function M.rebuild(state)
     for _, b in ipairs(r.walls) do saucer.physics.add_box(b[1], b[2], 1) end
     for _, b in ipairs(r.debris) do saucer.physics.add_box(b[1], b[2], 1) end
     for _, b in ipairs(r.solids or {}) do saucer.physics.add_box(b[1], b[2], 1) end
+    -- add-on-foot-excursions: sealed shutters stay solid until their hand-lock turns
+    rt.shutters[i] = {}
+    for _, sh in ipairs(r.foot and r.foot.shutters or {}) do
+      if not excursion.lock_open(state, i, sh.id) then rt.shutters[i][sh.id] = saucer.physics.add_box(sh.min, sh.max, 1) end
+    end
   end
 end
+
+-- a hand-lock turned: its shutter stops being solid
+function M.open_shutter(site, id)
+  local list = rt.shutters[site]
+  local box = list and list[id]
+  if not box then return false end
+  saucer.physics.remove(box)
+  list[id] = nil
+  return true
+end
+function M.shutter_closed(site, id) return rt.shutters[site] ~= nil and rt.shutters[site][id] ~= nil end
 
 local function msg(state, p, text)
   local list = p.msgs
@@ -95,6 +114,8 @@ function M.new_player(index, pos, yaw)
     holo_run = false, tv = false, reading = false, cooking = false,
     buffs = {}, trails = {}, leads = {},
     msgs = {}, fx = {},
+    -- add-on-foot-excursions: the suit (the only meter on foot) and 4 hand slots
+    excursion = false, suit = 100, hands = {},
   }
   holo.ensure(p)
   kitchen.ensure(p)
@@ -105,7 +126,7 @@ end
 
 function M.init(state, ctx)
   local seed = ctx.seed
-  state.version = 7   -- v7: pocket saucer and station visits (add-pocket-station-visits)
+  state.version = 8   -- v8: on-foot excursions (add-on-foot-excursions); v7: station visits
   state.seed = seed
   state.tick = 0
   state.sector = sector.generate(seed)
@@ -119,6 +140,7 @@ function M.init(state, ctx)
   state.vault = { pos = vec.copy(state.sector.vault.pos), taken = false }
   state.clock = clock.new()
   state.bolts = {}
+  state.locks, state.grids = {}, {} -- add-on-foot-excursions: turned hand-locks, grids shut down
   M.rebuild(state)
   state.sentries = {}
   for i = 1, #state.sector.sites do state.sentries[i] = sentry.new_state(rt.sentries[i]) end
@@ -143,6 +165,7 @@ function M.viewpoint(p)
   end
   if p.holo_run then return holo.viewpoint(nil, p) end
   if p.mode == "foot" and p.station then return visit.viewpoint(p) end
+  if p.mode == "foot" and p.excursion then return excursion.viewpoint(p) end
   local L0 = avatar.layout()
   local seat = (p.mode == "walk") and ((p.tv and L0.sofa) or (p.reading and L0.shelf) or (p.cooking and L0.stove))
   if seat then
@@ -224,7 +247,8 @@ local function size_request(state, p, to)
   -- add-pocket-station-visits: the coin size steps you out into the station
   local tc = configs.get(to)
   if tc and tc.pocket then
-    visit.pocket(state, p, to, ctx_fns)
+    -- add-on-foot-excursions: inside a derelict the Pocket means stepping out
+    if p.site ~= 0 then excursion.step_out(state, p, ctx_fns) else visit.pocket(state, p, to, ctx_fns) end
     return
   end
   local eye, yaw
@@ -491,12 +515,18 @@ local function jam(state, p)
     fx(state, p, "denied")
     return
   end
-  if p.ship.charge < t.charge then
+  local on_foot = p.mode == "foot" and p.excursion
+  if on_foot and (p.suit or 0) <= (t.suit or 15) then
+    msg(state, p, "Not enough Suit Charge to jam")
+    fx(state, p, "denied")
+    return
+  end
+  if not on_foot and p.ship.charge < t.charge then
     msg(state, p, "Not enough Charge to jam")
     fx(state, p, "denied")
     return
   end
-  p.ship.charge = p.ship.charge - t.charge
+  if on_foot then p.suit = p.suit - (t.suit or 15) else p.ship.charge = p.ship.charge - t.charge end
   p.jam_ready = state.tick + math.floor(t.cooldown * buffs.factor(state, p, "jam_cooldown") * 60)
   p.jam_flash = state.tick + 20
   local eye, yaw, pitch = M.viewpoint(p)
@@ -519,6 +549,7 @@ local function world_step(state, p, dt)
   local ship = p.ship
   local site = M.site_at(ship.pos)
   if site ~= p.site then
+    if p.site ~= 0 then excursion.left_site(state, p, p.site, ctx_fns) end
     if site == 0 then bank(state, p) else msg(state, p, "Entering derelict site " .. site) end
     p.site = site
   end
@@ -592,6 +623,15 @@ function M.step_player(state, p, cmd, dt)
   -- your pocket; walking, trading and the pickpocket live in sim/visit.lua
   if p.mode == "foot" and p.station then
     visit.step(state, p, cmd, dt, ctx_fns)
+    world_step(state, p, dt)
+    return
+  end
+  -- add-on-foot-excursions: on foot in a derelict (sim/excursion.lua); the
+  -- Scanner and the Jammer go with you
+  if p.mode == "foot" and p.excursion then
+    if cmd:pressed("scan") then scan(state, p) end
+    if cmd:pressed("jam") then jam(state, p) end
+    excursion.step(state, p, cmd, dt, ctx_fns)
     world_step(state, p, dt)
     return
   end

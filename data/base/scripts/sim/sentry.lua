@@ -105,10 +105,19 @@ local function dir_of(yaw, pitch)
 end
 M.dir_of = dir_of
 
--- can this Watcher see player p's hull right now?
+-- add-on-foot-excursions: a person walking a derelict (the coin in their pocket)
+local function on_foot(p) return p.mode == "foot" and p.excursion and true or false end
+M.on_foot = on_foot
+
+-- can this Watcher see player p's hull (or p, on foot) right now?
 function M.watcher_sees(def, dyn, p, tick, t)
   local ship = p.ship
   if p.site ~= def.site then return false end
+  if on_foot(p) then
+    -- whatever its size band, a turret sees a person on foot (closer in)
+    local dir = dir_of(dyn.yaw, dyn.pitch or def.pitch)
+    return saucer.physics.cone_visible(def.pos, dir, sm.cos(t.watcher.half_angle), t.watcher.foot_range or 45, ship.pos, 1)
+  end
   local cls = configs.get(ship.size).class
   if cls < def.band[1] or cls > def.band[2] then return false end
   local yaw = dyn.yaw
@@ -178,8 +187,29 @@ local function step_watcher(state, def, dyn, dt, ctx, t)
   end
 end
 
--- the Seat is the only hull a Snatcher can latch onto
-local function seat(p) return not configs.get(p.ship.size).interior and configs.get(p.ship.size).class <= 1 end
+-- the Seat is the only hull a Snatcher can latch onto (and, on foot, you)
+local function seat(p)
+  return on_foot(p) or (not configs.get(p.ship.size).interior and configs.get(p.ship.size).class <= 1)
+end
+
+-- what a Snatcher can take: hot items in the hold, or on foot in your hands
+local function losable(p)
+  if not on_foot(p) then return items.losable(p) end
+  local out = {}
+  for _, it in ipairs(p.hands or {}) do
+    if it.hot and not it.echo and not it.unique then out[#out + 1] = it end
+  end
+  return out
+end
+M.losable = losable
+
+local function take(p, it)
+  if not on_foot(p) then return items.remove(p, it.uid) end
+  for i, h in ipairs(p.hands) do
+    if h.uid == it.uid then return table.remove(p.hands, i) end
+  end
+  return nil
+end
 
 local function move_to(pos, goal, speed, dt)
   local d = vec.sub(goal, pos)
@@ -195,9 +225,9 @@ local function in_box(b, q)
 end
 
 function M.snatcher_wants(def, dyn, p, t)
-  if p.site ~= def.site or not seat(p) or #items.losable(p) == 0 then return false end
+  if p.site ~= def.site or not seat(p) or #losable(p) == 0 then return false end
   if def.leash and not in_box(def.leash, p.ship.pos) then return false end
-  return vec.dist(dyn.pos, p.ship.pos) <= t.snatcher.sense
+  return vec.dist(dyn.pos, p.ship.pos) <= (on_foot(p) and t.snatcher.foot_sense or t.snatcher.sense)
 end
 
 local function step_snatcher(state, def, dyn, dt, ctx, t)
@@ -232,15 +262,16 @@ local function step_snatcher(state, def, dyn, dt, ctx, t)
     dyn.t = dyn.t + dt
     target.latched_by = { site = def.site, id = def.id, t = dyn.t }
     if dyn.t >= s.latch_time then
-      local lost = items.losable(target)
+      local lost = losable(target)
       local it = lost[#lost]
       target.latched_by = nil
       if it then
-        items.remove(target, it.uid)
+        take(target, it)
         dyn.carry, dyn.carry_owner = { item = it, owner = target.record_index }, target.index
         dyn.st, dyn.t, dyn.target = "flee", 0, 0
         ctx.fx(state, target, "denied")
-        ctx.msg(state, target, "A Snatcher siphoned " .. items.label(it) .. " and flees to its nest")
+        ctx.msg(state, target, (on_foot(target) and "A Snatcher tore " .. items.label(it) .. " out of your hands"
+          or "A Snatcher siphoned " .. items.label(it)) .. " and flees to its nest")
       else
         dyn.st, dyn.t, dyn.target = "dormant", 0, 0
       end
@@ -293,11 +324,43 @@ local function step_snatcher(state, def, dyn, dt, ctx, t)
   end
 end
 
+-- add-on-foot-excursions: a grid console shut this site's grid down. Every
+-- sentry goes Disabled and stays so (its reboot timer held full) until the
+-- grid comes back, then reboots as after a Jammer pulse. -> count
+function M.grid_down(state, site_idx)
+  local t = M.tune()
+  local n = 0
+  for _, dyn in ipairs(state.sentries[site_idx] or {}) do
+    if dyn.st == "latched" and dyn.target > 0 and state.players[dyn.target] then state.players[dyn.target].latched_by = nil end
+    dyn.st, dyn.t, dyn.target, dyn.lost = "disabled", t.disabled_time, 0, 0
+    n = n + 1
+  end
+  return n
+end
+
+function M.grid_up(state, site_idx)
+  return #(state.sentries[site_idx] or {})
+end
+
+-- is a Watcher Locked onto player p?
+function M.locked_on(state, p)
+  for _, list in pairs(state.sentries or {}) do
+    for _, dyn in ipairs(list) do
+      if dyn.st == "locked" and dyn.target == p.index and dyn.fire ~= nil then return true end
+    end
+  end
+  return false
+end
+
 -- one tick for every sentry of a site, then the bolts
 function M.step(state, site_idx, defs, dt, ctx)
   local t = M.tune()
   local dyns = state.sentries[site_idx]
   if not dyns then return end
+  if state.grids and state.grids[tostring(site_idx)] then
+    for _, dyn in ipairs(dyns) do dyn.st, dyn.t = "disabled", t.disabled_time end
+    return
+  end
   for i, def in ipairs(defs) do
     local dyn = dyns[i]
     if def.kind == "watcher" then step_watcher(state, def, dyn, dt, ctx, t)
@@ -320,8 +383,17 @@ function M.step_bolts(state, dt)
         local s = p.ship
         local c = configs.get(s.size)
         local dx, dz = b.pos[1] - s.pos[1], b.pos[3] - s.pos[3]
-        local rr = c.diameter / 2 + t.watcher.bolt_radius
-        if alive and dx * dx + dz * dz <= rr * rr and math.abs(b.pos[2] - s.pos[2]) <= c.height / 2 + t.watcher.bolt_radius then
+        local foot = on_foot(p)
+        local rr = (foot and 0.35 or c.diameter / 2) + t.watcher.bolt_radius
+        local hh = foot and 0.9 or c.height / 2
+        if alive and foot and b.site == p.site and dx * dx + dz * dz <= rr * rr
+            and math.abs(b.pos[2] - s.pos[2]) <= hh + t.watcher.bolt_radius then
+          -- on foot a bolt bites the suit, never anything else
+          require("sim.excursion").bolt(state, p)
+          p.hits = (p.hits or 0) + 1
+          p.fx[#p.fx + 1] = { tick = state.tick, sound = "hit" }
+          alive = false
+        elseif alive and not foot and dx * dx + dz * dz <= rr * rr and math.abs(b.pos[2] - s.pos[2]) <= c.height / 2 + t.watcher.bolt_radius then
           hull.damage(s, t.watcher.bolt_damage)
           p.hits = (p.hits or 0) + 1
           p.fx[#p.fx + 1] = { tick = state.tick, sound = "hit" }

@@ -599,4 +599,50 @@ function M.wait_until(t, pl, cond, max_ticks)
   return cond()
 end
 
+-- add-on-foot-excursions drivers ----------------------------------------
+
+-- walk (or crawl) the excursion body toward a world point's x, z
+function M.ex_to(t, pl, get, pos, tol, max_ticks, run)
+  for _ = 1, max_ticks or 2400 do
+    local p = get()
+    if p.mode ~= "foot" or not p.excursion then return false end
+    local b = p.excursion.body
+    local dx, dz = pos[1] - b.pos[1], pos[3] - b.pos[3]
+    local left = saucer.math.sqrt(dx * dx + dz * dz)
+    if left < (tol or 0.4) then
+      M.hold(t, pl, {})
+      return true
+    end
+    local diff = saucer.math.wrap(saucer.math.atan2(dx, dz) - b.yaw)
+    local fwd = math.abs(diff) < 0.4 and 1 or (math.abs(diff) < 0.9 and 0.3 or 0)
+    if left < 1.0 then fwd = math.min(fwd, math.max(0.25, left)) end
+    for _, a in ipairs(M.AXES) do t.axis(pl, a, 0, 1, true) end
+    t.axis(pl, "turn", vec.clamp(-diff * 3, -1, 1), 1, true)
+    t.axis(pl, "move_z", fwd, 1, true)
+    if run then t.press(pl, "boost", 1, true) end
+    t.wait(1)
+  end
+  return false
+end
+
+function M.ex_path(t, pl, get, pts, tol, max_ticks)
+  for _, q in ipairs(pts) do
+    if not M.ex_to(t, pl, get, q, tol, max_ticks) then return false end
+  end
+  return true
+end
+
+-- turn the body on foot to a yaw / pitch
+function M.ex_look(t, pl, get, yaw, pitch, max_ticks)
+  local body = function() return { mode = "walk", body = get().excursion.body } end
+  return M.look(t, pl, body, yaw, pitch, max_ticks)
+end
+
+-- Use, then wait (standing still) until cond() or max_ticks
+function M.ex_work(t, pl, get, cond, max_ticks)
+  t.press(pl, "use")
+  t.wait(1)
+  return M.wait_until(t, pl, cond, max_ticks or 400)
+end
+
 return M

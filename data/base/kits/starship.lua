@@ -19,6 +19,7 @@ return {
   shaft = { 10, 26, 10 },  -- vertical shaft: 40 x 104 x 40 m
   chamber = { 3, 1, 3 },   -- class-1 cache room at the end of some ducts
   doors = {
+    [0] = { 1.0, 1.0 },   -- add-on-foot-excursions: a crawlspace mouth (on foot only)
     [1] = { 2.6, 2.1 },
     [4] = { 34.0, 20.0 },
   },
@@ -35,6 +36,11 @@ return {
   min_span = 14,           -- the layout must span at least 56 m vertically
   min_levels = 2,          -- and put big rooms on at least two floor levels
   solids = { kind = "spine", min = 2, max = 5, w = { 2, 4 }, h = { 3, 10 } },
+  -- add-on-foot-excursions: what the suit finds off a great hall (sim/footgen.lua):
+  -- a 1 m crawlspace (cells { along, 1, 1 }) into a standing-room chamber with
+  -- a hand-lock and a grid console, and a sealed Seat-sized strongroom the
+  -- hand-lock opens
+  foot = { crawl_len = { 2, 3 }, crawl = { 1.0, 1.0 }, chamber = { 2, 1, 2 }, strong = { 3, 1, 3 } },
   debris = 3,
   color = { 0.80, 0.86, 0.92 },  -- multiplies the kit wall texture (add-detail-pass)
   uv = 0.25,                 -- texture repeats per meter on walls

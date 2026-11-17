@@ -15,6 +15,7 @@ return {
   shaft = { 10, 30, 10 },
   chamber = { 3, 1, 2 },
   doors = {
+    [0] = { 1.0, 1.0 },   -- add-on-foot-excursions: a crawlspace mouth (on foot only)
     [1] = { 2.6, 2.1 },
     [4] = { 34.0, 20.0 },
   },
@@ -31,6 +32,7 @@ return {
   min_span = 18,
   min_levels = 2,
   solids = { kind = "truss", min = 4, max = 8, w = { 1, 3 }, h = { 6, 20 } },
+  foot = { crawl_len = { 2, 4 }, crawl = { 1.0, 1.0 }, chamber = { 2, 1, 2 }, strong = { 3, 1, 3 } },
   debris = 5,
   color = { 0.84, 0.86, 0.90 },  -- multiplies the kit wall texture (add-detail-pass)
   uv = 0.125,                 -- texture repeats per meter on walls
