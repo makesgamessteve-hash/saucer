@@ -37,7 +37,8 @@ TEST(options_parse_all) {
   char *lp[] = {"x", "--local-players", "5"};
   char *vp[] = {"x", "--viewports", "0"};
   char *h[] = {"x", "-h", "--root", "rr"};
-  char *win[] = {"x", "--script", "s.lua", "--windowed"};
+  char *win[] = {"x", "--script", "s.lua", "--windowed", "--ticks-per-frame", "20"};
+  char *tpf[] = {"x", "--ticks-per-frame", "0"};
   CHECK(parse(&o, (int)(sizeof all / sizeof *all), all));
   CHECK(o.seed == 9 && o.local_players == 2 && o.coop && o.show_help && o.max_ticks == 5 && o.width == 640);
   CHECK(o.screenshot_tick == 3 && o.restore_every_tick && o.coverage && o.height == 360);
@@ -46,7 +47,8 @@ TEST(options_parse_all) {
   CHECK(!parse(&o, 2, one) && !parse(&o, 2, unk) && !parse(&o, 3, lp) && !parse(&o, 3, vp));
   CHECK(parse(&o, 4, h) && strcmp(o.user_dir, "rr/.saucer-user") == 0);
   sx_options_default(&o);
-  CHECK(parse(&o, 4, win) && o.windowed && !o.headless && o.test_mode);
+  CHECK(parse(&o, 6, win) && o.windowed && !o.headless && o.test_mode && o.ticks_per_frame == 20);
+  CHECK(!parse(&o, 3, tpf));
   CHECK(strstr(sx_usage(), "--seed") != NULL);
 }
 

@@ -750,7 +750,7 @@ local function world_step(state, p, dt)
   p.docked = docked or false
   lab.step(state, p, dt, ctx_fns)
   kitchen.step(state, p, dt, ctx_fns)
-  hull.regen(ship, dt * buffs.factor(state, p, "hull_regen"))
+  hull.regen(ship, dt * buffs.factor(state, p, "hull_regen"), p.site == 0)
   if ship.hull <= 0 then
     local from = p.site
     local cache = hull.retreat(state, p, trader_pos(state, p))
@@ -762,6 +762,7 @@ local function world_step(state, p, dt)
     elseif require("sim.hardcore").on(state) and (p.lost_for_good or 0) > 0 then
       msg(state, p, "HARDCORE: the cargo in your hold is lost for good.")
     end
+    msg(state, p, "The hull mends slowly in open space; the trade terminal repairs it at once.")
     fx(state, p, "grow")
   end
   local m = state.mystery

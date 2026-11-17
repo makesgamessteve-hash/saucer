@@ -33,12 +33,19 @@ function M.damage(ship, amount)
   ship.hull = math.max(0, ship.hull - rest)
 end
 
-function M.regen(ship, dt)
+-- regen(ship, dt, open_space): shields recharge after shield_delay without
+-- hits; in open space (outside every site) the hull also mends slowly, at
+-- hull_regen per second (playtest-1: before this the hull never mended, so
+-- the Steady buff, which scales dt, did nothing for it)
+function M.regen(ship, dt, open_space)
   M.ensure(ship)
   local t = tune()
   ship.since_hit = ship.since_hit + dt
   if ship.since_hit >= t.shield_delay and not ship.morph then
     ship.shield = math.min(100, ship.shield + t.shield_regen * dt)
+    if open_space and ship.hull > 0 then
+      ship.hull = math.min(100, ship.hull + (t.hull_regen or 0) * dt)
+    end
   end
 end
 

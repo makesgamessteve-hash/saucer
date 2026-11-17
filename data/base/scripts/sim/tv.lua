@@ -170,7 +170,9 @@ function M.rows(state, p, ctx)
   local rows = {}
   for i, ch in ipairs(M.received(state, p)) do
     local _, d = M.source(state, ch, p.ship.pos)
-    rows[#rows + 1] = { text = string.format("Watch %s (%s, %d km)", ch.name, ch.source, math.floor(d / 1000 + 0.5)),
+    local far = d < 1000 and string.format("%d m", math.floor(d / 10 + 0.5) * 10)
+      or string.format("%d km", math.floor(d / 1000 + 0.5))
+    rows[#rows + 1] = { text = string.format("Watch %s (%s, %s)", ch.name, ch.source, far),
       act = function(st, pl) M.tune(st, pl, i, ctx) end }
   end
   if #rows == 0 then rows[1] = { text = "No signal out here. Fly nearer a station or city.", enabled = false } end

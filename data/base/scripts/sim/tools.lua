@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: MIT
 -- Suit tools on foot (OpenSpec add-home-among-stars, concept §8.3):
---   * Grapple (Scan on foot): fires along your view; when it hooks a wall,
+--   * Grapple (the Shroud key on foot): fires along your view; when it hooks a wall,
 --     floor or ceiling within 25 m it reels you there (around the derelict's
 --     geometry, never through it). Costs suit charge.
 --   * Cutter (hold the Override spike where there is no sentry to spike): 6 s

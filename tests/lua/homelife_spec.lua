@@ -94,6 +94,22 @@ describe("buffs", function()
   end)
 end)
 
+describe("Steady", function()
+  it("makes the hull mend twice as fast in open space (playtest-1)", function()
+    local a, b = new_state(), new_state()
+    for _, st in ipairs({ a, b }) do
+      local sh = st.players[1].ship
+      sh.hull, sh.since_hit = 50, 99
+    end
+    buffs.give(b, b.players[1], "steady", 5)
+    run(a, nil, 600)
+    run(b, nil, 600)
+    local ga, gb = a.players[1].ship.hull - 50, b.players[1].ship.hull - 50
+    expect(ga).to_be_greater(0.5)
+    expect(math.abs(gb - 2 * ga) < 0.01).to_be(true)
+  end)
+end)
+
 describe("kitchen", function()
   it("cooks from the pantry and reports what is missing", function()
     local st = new_state()

@@ -57,6 +57,7 @@ const char *sx_usage(void) {
          "  --screenshot FILE     save a PNG of the frame at --screenshot-tick (windowed)\n"
          "  --screenshot-tick N   tick for --screenshot (default 120)\n"
          "  --windowed            run a --script in the game window (screenshot tours)\n"
+         "  --ticks-per-frame N   windowed scripts: N ticks per drawn frame (1-600, default 1)\n"
          "  --width W --height H  window size\n"
          "  --coop                allow extra devices to join as P2-P4 (gamepad A, F2)\n"
          "  --split-keyboard      P2 plays on the right half of the keyboard\n"
@@ -127,6 +128,14 @@ int sx_options_parse(sx_options *o, int argc, char **argv, char *err, int errlen
     else if (strcmp(a, "--test") == 0) o->test_mode = 1;
     else if (strcmp(a, "--quiet") == 0) o->quiet = 1;
     else if (strcmp(a, "--windowed") == 0) o->windowed = 1;
+    else if (strcmp(a, "--ticks-per-frame") == 0) {
+      NEEDV();
+      o->ticks_per_frame = atoi(v);
+      if (o->ticks_per_frame < 1 || o->ticks_per_frame > 600) {
+        snprintf(err, (size_t)errlen, "--ticks-per-frame must be 1-600");
+        return 0;
+      }
+    }
     else if (strcmp(a, "--help") == 0 || strcmp(a, "-h") == 0) o->show_help = 1;
     else {
       snprintf(err, (size_t)errlen, "unknown option %s", a);
