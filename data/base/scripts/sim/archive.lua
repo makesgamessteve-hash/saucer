@@ -112,13 +112,12 @@ end
 
 -- panel rows: one line per civ met (percent and traits), then Close
 function M.rows(state, p)
-  M.ensure(p)
   local rows = {}
   for _, civ in ipairs(civs.universe(state.seed)) do
-    if p.met[civ.id] then
+    if (p.met or {})[civ.id] then
       local pct = M.percent(state, p, civ.id)
       local cat = M.catalog(civ)
-      local have = p.archive[civ.id] or {}
+      local have = (p.archive or {})[civ.id] or {}
       local got = {}
       for _, t in ipairs(cat) do got[#got + 1] = have[t] and t or "?" end
       rows[#rows + 1] = { text = string.format("%-8s %3d%%  %s", civ.name, pct, table.concat(got, " ")), enabled = false }

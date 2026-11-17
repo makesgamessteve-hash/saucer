@@ -21,7 +21,7 @@ return {
   -- add-wider-dark (concept §8.2-8.3): in danger 2+ sectors only
   clamp = { sense = 30, chase_speed = 9.0, drain = 1.5, shake_time = 2.0, grip = 1.0, per_site = 2 },
   lockdown = { seal_time = 60.0, rest = 10.0, thickness = 1.0 },
-  decoy = { life = 8.0, range = 80, ahead = 8, start = 3 },
+  decoy = { life = 8.0, range = 80, ahead = 8, start = 3, price = 60 },
   shroud = { drain = 1.2, still = 0.6 },
   spike = { time = 3.0, reach = 3.0 },
   scanner = { charge = 2, cooldown = 5.0, reveal = 10.0 },

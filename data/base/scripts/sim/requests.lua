@@ -103,6 +103,16 @@ function M.rows(state, p, ti, ctx)
         require("sim.save").write(st)
       end }
   end
+  -- add-wider-dark: restock decoy flares
+  local dt = require("sim.sentry").tune().decoy
+  local price = dt.price or 60
+  rows[#rows + 1] = { text = string.format("Decoy flares x%d - %d c (you have %d)", dt.start, price, p.decoys or 0),
+    enabled = (p.credits or 0) >= price and (p.decoys or 0) < dt.start * 3, act = function(st, pl)
+      pl.credits = pl.credits - price
+      pl.decoys = (pl.decoys or 0) + dt.start
+      ctx.msg(st, pl, string.format("Bought %d decoy flares", dt.start))
+      ctx.fx(st, pl, "bank")
+    end }
   local galaxy = require("sim.galaxy")
   local tiers = galaxy.tune().core
   local nxt = tiers[(p.fold_tier or 1) + 1]
