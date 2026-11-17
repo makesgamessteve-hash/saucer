@@ -142,6 +142,14 @@ if(SAUCER_BUILD_TESTS)
   # milestone 4: holodeck programs, an upgrade, cooking, the bookshelf and the TV (saves at the trader)
   add_test(NAME game_holodeck COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-holo --quiet
            --seed 42 --script tests/game/holodeck.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  # milestone 5: pocket the saucer at a station, walk it, trade on foot, chase the pickpocket, unfold in a hangar
+  add_test(NAME game_station COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-station --quiet
+           --seed 42 --ticks 40000 --script tests/game/station.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  add_test(NAME game_station_restore_every_tick COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR}
+           --user-dir ${USERDIR}-station-ret --quiet --seed 42 --ticks 40000 --script tests/game/station.lua
+           --restore-every-tick WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  add_test(NAME game_station_seed7 COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-station7
+           --quiet --seed 7 --ticks 40000 --script tests/game/station.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   # true 3D flight: vertical flight and a multi-level derelict traversal
   add_test(NAME game_vertical COMMAND ${HL} --seed 42 --script tests/game/vertical.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_derelict3d COMMAND ${HL} --seed 42 --script tests/game/derelict3d.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})

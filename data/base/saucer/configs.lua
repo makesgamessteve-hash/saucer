@@ -20,6 +20,13 @@ return {
     -- the Seat's mini beam: short, weak (class 1), fired straight from the seat
     beam = { emitter = { 0, -0.7, 0 }, half_angle = 0.5, min = 0.1, pull_speed = 4.0, shrink = 0.35,
              still = 1.0, level = 0.07, yaw_tol = 0.35, console = false } },
+  -- add-pocket-station-visits: the coin. Only while docked at a station: you
+  -- step out into its arrival hangar and the saucer shrinks into your hand.
+  -- It grows back only in a hangar (or open space). Never flown.
+  { id = "pocket", name = "Pocket", class = 0, diameter = 0.05, height = 0.014,
+    speed = 0.0, accel = 0.0, turn = 0.0, hull = 0.05, shield = 0.05, tractor_class = 0, tractor_range = 0.0,
+    enter_cost = 10, interior = false, pocket = true, dock_only = true, pilot_eye = { 0, 0, 0 },
+    rooms = {}, morph_time = 2.4, unmorph_time = 2.2 },
   shrink_time = 1.5,       -- v0.5: rooms pack away one by one (0.75 s), then the hull shrinks
   grow_time = 1.8,         -- v0.5: the hull grows (0.9 s), then the rooms unpack
   grow_margin = 0.5,

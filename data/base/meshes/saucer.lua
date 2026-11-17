@@ -157,6 +157,14 @@ return setmetatable(M, { __call = function(_, params, rng)
                                          color = { 0.55, 0.85, 1.0 }, emissive = 0.15 }) } }
   end
   if params.config == "villa" then return { parts = villa_hull() } end
+  if params.config == "pocket" then
+    -- add-pocket-station-visits: the coin is the whole Villa, shrunk to fit a
+    -- palm (a big coin, five centimetres across) with its glass dome on top
+    local k = R / 13.0
+    local parts = kit.merge(villa_hull(), { P("hemisphere", { c = { 0, 0.5, 0 }, r = 10.6, h = 5.2, seg = 20, rings = 5,
+                                                             color = { 0.55, 0.85, 1.0 }, emissive = 0.25 }) })
+    return { parts = kit.transform(parts, { scale = k }) }
+  end
   if params.config == "seat" then return { parts = seat_hull() } end
   return { parts = generic_hull(R, H) }
 end })

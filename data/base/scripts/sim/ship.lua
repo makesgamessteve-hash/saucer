@@ -74,7 +74,8 @@ end
 -- only asked when growing.
 function M.request(ship, to, blocked, eye, yaw)
   local all = configs.all()
-  if to < 1 or to > #all then return false, "range" end
+  -- the Pocket coin is not a flight size: sim/visit.lua pockets and unpockets it
+  if to < 1 or to > #all or all[to].pocket or all[ship.size].pocket then return false, "range" end
   if to == ship.size then return false, "same" end
   if ship.morph then return false, "busy" end
   local cost = M.cost(ship.size, to)

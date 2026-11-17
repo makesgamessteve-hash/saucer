@@ -18,6 +18,7 @@ return {
     grow   = { "key:E", "mouse:wheel:1", "pad:rightshoulder", "touch:grow", "xr:lever_up", "xr:b" },
     size1  = { "key:1" },
     size2  = { "key:2" },
+    size3  = { "key:3" },   -- add-pocket-station-visits: the Pocket (docked only)
     tractor = { "mouse:left", "key:F", "pad:a", "touch:tractor", "xr:trigger_r" },
     scan   = { "key:V", "pad:y", "touch:scan", "xr:x" },
     boost  = { "key:LShift", "pad:leftstick", "touch:boost", "xr:grip_l" },
@@ -30,5 +31,5 @@ return {
   -- stable order so action slots (and therefore replays) never depend on table order
   axis_order = { "move_x", "move_z", "lift", "turn", "look" },
   button_order = { "shrink", "grow", "size1", "size2", "tractor", "scan", "boost", "use",
-                   "camera", "menu", "jam", "mystery_mode" },
+                   "camera", "menu", "jam", "mystery_mode", "size3" },
 }

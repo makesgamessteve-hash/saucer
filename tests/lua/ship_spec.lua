@@ -8,8 +8,11 @@ local always = function() return true end
 local function near(a, b) return math.abs(a - b) < 1e-9 end
 
 describe("saucer configurations", function()
-  it("has two sizes: the Villa with rooms and the one-seat car", function()
-    expect(configs.count()).to_be(2)
+  it("has three sizes: the Villa with rooms, the one-seat car and the Pocket coin", function()
+    expect(configs.count()).to_be(3)
+    expect(configs.get(3).id).to_be("pocket")
+    expect(configs.get(3).pocket and configs.get(3).dock_only).to_be(true)
+    expect(configs.get(3).diameter).to_be_less(0.1)
     expect(configs.get(1).id).to_be("villa")
     expect(configs.get(1).interior).to_be(true)
     expect(configs.get(2).id).to_be("seat")
@@ -51,7 +54,8 @@ describe("size changes", function()
   end)
   it("rejects invalid, same, busy and unaffordable requests", function()
     expect(select(2, ship.request(s, 0, never))).to_be("range")
-    expect(select(2, ship.request(s, 3, never))).to_be("range")
+    expect(select(2, ship.request(s, 3, never))).to_be("range") -- the coin is not a flight size
+    expect(select(2, ship.request(s, 4, never))).to_be("range")
     expect(select(2, ship.request(s, 1, never))).to_be("same")
     ship.request(s, 2, never)
     expect(select(2, ship.request(s, 1, never))).to_be("busy")

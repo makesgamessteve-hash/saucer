@@ -28,6 +28,8 @@ local books = require("sim.books")
 local tv = require("sim.tv")
 local finds = require("sim.finds")
 local buffs = require("sim.buffs")
+-- add-pocket-station-visits
+local visit = require("sim.visit")
 local M = {}
 
 M.SITE_PAD = 30
@@ -75,7 +77,8 @@ M.ctx = ctx_fns
 
 -- A player is a person (body) living in their own saucer (ship). mode is
 -- "wake" (just woke up, the title panel is open), "walk" (on foot inside the
--- Villa) or "helm" (seated, flying it; the Seat has room for nothing else).
+-- Villa), "helm" (seated, flying it; the Seat has room for nothing else) or
+-- "foot" (walking a trader station with the saucer in your pocket: p.station).
 function M.new_player(index, pos, yaw)
   local L = avatar.layout()
   local p = {
@@ -101,7 +104,7 @@ end
 
 function M.init(state, ctx)
   local seed = ctx.seed
-  state.version = 6   -- v6: holodeck and home life (add-holodeck-home-life)
+  state.version = 7   -- v7: pocket saucer and station visits (add-pocket-station-visits)
   state.seed = seed
   state.tick = 0
   state.sector = sector.generate(seed)
@@ -138,6 +141,7 @@ function M.viewpoint(p)
     return { ship.pos[1] + e[1], ship.pos[2] + e[2], ship.pos[3] + e[3] }, ship.yaw + L.wake.yaw, L.wake.pitch
   end
   if p.holo_run then return holo.viewpoint(nil, p) end
+  if p.mode == "foot" and p.station then return visit.viewpoint(p) end
   local L0 = avatar.layout()
   local seat = (p.mode == "walk") and ((p.tv and L0.sofa) or (p.reading and L0.shelf) or (p.cooking and L0.stove))
   if seat then
@@ -216,6 +220,12 @@ local REASONS = {
 local function size_request(state, p, to)
   local ship = p.ship
   local from = ship.size
+  -- add-pocket-station-visits: the coin size steps you out into the station
+  local tc = configs.get(to)
+  if tc and tc.pocket then
+    visit.pocket(state, p, to, ctx_fns)
+    return
+  end
   local eye, yaw
   if p.mode == "walk" then eye, yaw = M.viewpoint(p) end
   local blocked = function(pos, r, hh, margin) return M.blocked(state, p, pos, r, hh, margin) end
@@ -571,11 +581,19 @@ function M.step_player(state, p, cmd, dt)
     panel.step(state, p, cmd)
     if state.players[p.index] ~= p then return end -- a save was loaded
     if p.mode == "wake" and not p.panel then home.get_up(state, p, ctx_fns) end
-    flight.step(ship, STILL, dt, mover(state, p))
+    if p.mode ~= "foot" then flight.step(ship, STILL, dt, mover(state, p))
+    elseif p.station then visit.panel_step(state, p, dt, ctx_fns) end
     world_step(state, p, dt)
     return
   end
   if p.mode == "wake" then home.get_up(state, p, ctx_fns) end
+  -- add-pocket-station-visits: on foot in a station the saucer is a coin in
+  -- your pocket; walking, trading and the pickpocket live in sim/visit.lua
+  if p.mode == "foot" and p.station then
+    visit.step(state, p, cmd, dt, ctx_fns)
+    world_step(state, p, dt)
+    return
+  end
   -- add-holodeck-home-life: inside a holodeck program the stick moves you
   -- through the simulated space (or flies the simulated Seat); the saucer
   -- holds station meanwhile. On the sofa, in a book or at the stove you sit still.
@@ -667,6 +685,7 @@ function M.step(state, cmds, dt)
 end
 
 home.register_panels(M, ctx_fns)
+visit.register_panels(ctx_fns)
 
 function M.on_event(ev, state)
   -- base keeps no extra bookkeeping; mods listen for "size_change"/"loot"

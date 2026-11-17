@@ -58,6 +58,12 @@ function M.init()
     { kind = "box", min = { -0.3, -0.005, 0.6 }, max = { 0.3, 0.0, 0.66 }, color = { 0.95, 0.75, 0.1 }, emissive = 0.5 },
   } })
   cache.person = kit.build("person", {}, 1)
+  -- add-pocket-station-visits: station folk (one mesh per species) and your hand
+  cache.npc = {}
+  for i, sp in ipairs(require("sim.stationgen").folk().species) do
+    cache.npc[i] = kit.build("npc", { skin = sp.skin, suit = sp.suit, head = sp.head, tall = sp.tall, glow = sp.glow }, i)
+  end
+  cache.hand = kit.build("hand", {}, 1)
   -- milestone 2: one mesh per fold group so rooms can pack away one by one,
   -- the sliding door leaves, and a white unit cube for live console readouts
   local fold = require("sim.fold")

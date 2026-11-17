@@ -11,9 +11,12 @@ local M = {}
 function M.config_for_class(c)
   local best
   for i, cfg in ipairs(configs.all()) do
-    if cfg.class <= c and not best then best = i end
+    if cfg.class <= c and not cfg.pocket and not best then best = i end
   end
-  return best or configs.count()
+  if best then return best end
+  for i = configs.count(), 1, -1 do
+    if not configs.get(i).pocket then return i end
+  end
 end
 
 -- centre of a door hole (world). Side doors sit on the higher of the two
@@ -526,6 +529,66 @@ function M.holo_course(t, pl, get, max_ticks)
     if not M.fly(t, pl, craft, { g[1], g[2], g[3] }, (g.r or 1.5) * 0.5, max_ticks or 900) then return false end
   end
   return get().holo_run.done == true
+end
+
+-- On-foot drivers in a trader station (add-pocket-station-visits): walk the
+-- body to a station-local point along the station's walk graph (sprinting
+-- when run), or run down the fleeing pickpocket.
+function M.foot_to(t, pl, get, x, z, tol, max_ticks, run)
+  local sg = require("sim.stationgen")
+  local visit = require("sim.visit")
+  for _ = 1, max_ticks or 2400 do
+    local p = get()
+    if p.mode ~= "foot" then return false end
+    local b = p.station.body
+    local L = visit.layout(t.state(), p)
+    local here = { b.pos[1], b.pos[3] }
+    local dx, dz = x - here[1], z - here[2]
+    if dx * dx + dz * dz < (tol or 0.4) ^ 2 then
+      M.hold(t, pl, {})
+      return true
+    end
+    local q = sg.route(L, here, { x, z })[1]
+    local diff = saucer.math.wrap(saucer.math.atan2(q[1] - here[1], q[2] - here[2]) - b.yaw)
+    local fwd = math.abs(diff) < 0.5 and 1 or (math.abs(diff) < 1.0 and 0.3 or 0)
+    local left = saucer.math.sqrt(dx * dx + dz * dz)
+    if left < 1.2 then fwd = math.min(fwd, math.max(0.2, left)) end
+    for _, a in ipairs(M.AXES) do t.axis(pl, a, 0, 1, true) end
+    t.axis(pl, "turn", vec.clamp(-diff * 3, -1, 1), 1, true)
+    t.axis(pl, "move_z", fwd, 1, true)
+    if run then t.press(pl, "boost", 1, true) end
+    t.wait(1)
+  end
+  return false
+end
+
+-- walk up to a market stall (by vendor id) or the bar, and press Use
+function M.foot_use(t, pl, get, spot)
+  if not M.foot_to(t, pl, get, spot[1], spot[2], 0.5) then return false end
+  t.press(pl, "use")
+  t.wait(1)
+  return get().panel ~= false
+end
+
+function M.chase(t, pl, get, max_ticks)
+  local sg = require("sim.stationgen")
+  local visit = require("sim.visit")
+  for _ = 1, max_ticks or 3600 do
+    local p = get()
+    if p.mode ~= "foot" or p.station.thief.mode ~= "flee" then return p.station and p.station.coin ~= "thief" end
+    local b = p.station.body
+    local L = visit.layout(t.state(), p)
+    local here = { b.pos[1], b.pos[3] }
+    local th = p.station.thief.pos
+    local q = sg.route(L, here, th)[1]
+    local diff = saucer.math.wrap(saucer.math.atan2(q[1] - here[1], q[2] - here[2]) - b.yaw)
+    for _, a in ipairs(M.AXES) do t.axis(pl, a, 0, 1, true) end
+    t.axis(pl, "turn", vec.clamp(-diff * 3, -1, 1), 1, true)
+    t.axis(pl, "move_z", math.abs(diff) < 0.7 and 1 or 0.2, 1, true)
+    t.press(pl, "boost", 1, true)
+    t.wait(1)
+  end
+  return false
 end
 
 function M.wait_until(t, pl, cond, max_ticks)

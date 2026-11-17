@@ -650,6 +650,8 @@ function M.thruster_glow(v, A, o, d, c)
 end
 
 local function draw_saucer(v, A, o, own_eyes, state, xr, cam)
+  -- add-pocket-station-visits: a pocketed saucer is a coin inside a station
+  if o.mode == "foot" then return end
   local d = M.pose(o.ship, xr)
   local c = configs.get(d.size)
   local m = A.saucer[d.size]
@@ -746,6 +748,13 @@ function M.render(v, state, alpha)
   local p = state.players[v.player]
   if not p then return end
   local A = assets.init()
+  if p.mode == "foot" and p.station then
+    -- add-pocket-station-visits: on foot you see the station's inside
+    require("view.station").render(v, state, p)
+    if not v.xr then hud.draw(v, state, p, nil) end
+    if v.index == v.player then M.audio(state, p) end
+    return
+  end
   if p.holo_run then
     -- add-holodeck-home-life: inside a program you only see the simulation
     require("view.holo").render(v, state, p)

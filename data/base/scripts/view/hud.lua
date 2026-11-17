@@ -60,6 +60,7 @@ function M.status(p, state)
     local pr = host and host.holo_run and holo.program(host.holo_run.id)
     return "HOLODECK: " .. (pr and pr.name:upper() or "PROGRAM"), state and holo.hint(state, p) or nil
   end
+  if p.mode == "foot" and p.station and state then return require("sim.visit").status(state, p) end
   if p.tv then return "LIVING ROOM - TV", "USE: NEXT CHANNEL  MOVE: GET UP" end
   if p.reading then return "BOOKSHELF", nil end
   if p.cooking then return "KITCHEN", nil end
@@ -153,6 +154,9 @@ function M.panel(v, state, p)
   for _, r in ipairs(rows) do w = math.max(w, #r.text + 4) end
   w = math.min(math.max(w, #title + 4) * 8, W - 16)
   local x, y = W // 2 - w // 2, H // 2 - (#rows * 11 + 24) // 2
+  -- add-pocket-station-visits: face to face, the menu sits low so you can
+  -- still see who you are talking to
+  if p.mode == "foot" then y = math.max(y, math.min(H // 2 + 20, H - 46 - #rows * 11 - 24)) end
   local is_title = p.panel.kind == "title"
   if is_title then
     v:text(W // 2 - 6 * 8 * 3 // 2, y - 46, "SAUCER", AMBER, 3)
@@ -323,7 +327,8 @@ function M.draw(v, state, p, target)
   if hint then v:text(W // 2 - #hint * 4, H // 2 + 40, hint, AMBER) end
   -- navigation
   local site, d = M.nav(state, p)
-  if p.holo_run then site = nil end
+  if p.holo_run or p.mode == "foot" then site = nil end
+  if p.mode == "foot" and p.station then M.station(v, state, p) end
   if site then
     local c = M.site_center(state, site)
     v:text(W // 2 - 60, 6, string.format("%s SITE %d %dm", M.bearing(p, c), site.id, vec.dist(c, p.ship.pos) // 1), CYAN)
@@ -353,7 +358,7 @@ function M.draw(v, state, p, target)
     end
   end
   M.home(v, state, p)
-  local fs = M.fold_status(p)
+  local fs = p.mode ~= "foot" and M.fold_status(p) or nil
   if fs then v:text(W // 2 - #fs * 4, H // 2 - 30, fs, CYAN) end
   if p.slept_tick and state.tick - p.slept_tick < 120 then
     v:rect(0, 0, W, H, { 0, 0, 0.02, 1 - (state.tick - p.slept_tick) / 120 })
@@ -435,6 +440,30 @@ function M.home(v, state, p)
     n = n + 1
   end
   return n
+end
+
+-- add-pocket-station-visits: on foot in a station, where the coin is and,
+-- while the pickpocket runs, which way and how far he is
+function M.station(v, state, p)
+  local visit = require("sim.visit")
+  local W, H = v.width, v.height
+  local text, kind = visit.coin_text(p)
+  v:text(8, 66, text, kind == "alarm" and RED or (kind == "busy" and AMBER or GREEN))
+  local pos, d, mode = visit.thief_info(p)
+  if mode == "flee" then
+    local b = p.station.body
+    local a = saucer.math.wrap(saucer.math.atan2(pos[1] - b.pos[1], pos[2] - b.pos[3]) - b.yaw)
+    local dir = math.abs(a) < 0.4 and "AHEAD" or (math.abs(a) > 2.6 and "BEHIND" or (a > 0 and "LEFT" or "RIGHT"))
+    local t = string.format("THIEF %s %dm  SPRINT: SHIFT", dir, d // 1)
+    v:text(W // 2 - #t * 4, 30, t, RED)
+    local left = math.max(0, visit.tune().escape - (p.station.thief.t or 0))
+    v:rect(W // 2 - 50, 40, 100, 3, { 0.15, 0.15, 0.2, 1 })
+    v:rect(W // 2 - 50, 40, 100 * left / visit.tune().escape, 3, RED)
+  elseif mode == "stalk" and d < 5 then
+    local t = "SOMEONE IS CROWDING YOU"
+    v:text(W // 2 - #t * 4, 30, t, AMBER)
+  end
+  return 1
 end
 
 function M.touch(v)
