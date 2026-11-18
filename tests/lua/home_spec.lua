@@ -191,8 +191,8 @@ describe("home", function()
     save.read = function() return nil, "corrupt" end
     home.load(st, p, ctx, game)
     expect(texts(p)).to_contain("could not be read")
+    st.players[1].sleeps = 7
     local rec = save.record(st)
-    rec.players[1].sleeps = 7
     save.read = function() return rec end
     save.mods = function() return { { id = "other", version = "9" } } end
     expect(home.load(st, p, ctx, game)).to_be(false)

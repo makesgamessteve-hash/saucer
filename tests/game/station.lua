@@ -139,7 +139,8 @@ T.assert(get().station.coin == "hand" or get().station.coin == "pocket", "the co
 -- save mid-visit and load it back: the visit survives
 require("sim.save").write(T.state())
 local rec = require("sim.save").read()
-T.assert(rec and rec.players[1].mode == "foot" and rec.players[1].station.coin, "the save holds the visit")
+local saved = rec and require("sim.save").player(rec, 1)
+T.assert(saved and saved.mode == "foot" and saved.station.coin, "the save holds the visit")
 
 -- 7. the far hangar: unfold the Villa on the pad and fly away
 local far = sg.hangars(L)[2]

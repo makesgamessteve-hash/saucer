@@ -198,10 +198,12 @@ function M.new_player(index, pos, yaw)
   return p
 end
 
+M.VERSION = 11 -- state version; saves made by a newer game are refused
+
 function M.init(state, ctx)
   M.state_ref = state
   local seed = ctx.seed
-  state.version = 10  -- v10: playtest recommendations (add-playtest-recs); v9: the wider dark (add-wider-dark); v8: on-foot excursions; v7: station visits
+  state.version = M.VERSION  -- v11: seed-plus-diff saves (save format 3); v10: playtest recommendations (add-playtest-recs); v9: the wider dark (add-wider-dark); v8: on-foot excursions; v7: station visits
   state.seed = seed
   state.tick = 0
   civs.use(seed)

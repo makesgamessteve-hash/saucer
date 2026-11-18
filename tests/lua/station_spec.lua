@@ -521,7 +521,7 @@ describe("saves and the views", function()
     local st, p, L = on_foot()
     place(p, 0, 12, 0.5)
     local rec = save.record(st)
-    expect(rec.players[1].station.coin).to_be("pocket")
+    expect(save.player(rec, 1).station.coin).to_be("pocket")
     local st2 = { players = { {} } }
     save.apply(st2, rec, game)
     local q = st2.players[1]

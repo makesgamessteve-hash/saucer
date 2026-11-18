@@ -149,8 +149,8 @@ function M.load(state, p, ctx, game)
   end
   local rec, why = save.read()
   if not rec then
-    say(ctx, state, p, why == "none" and "No saved game yet. Sleep in your bed to save." or "The save could not be read.",
-      "denied")
+    say(ctx, state, p, why == "none" and "No saved game yet. Sleep in your bed to save."
+      or why == "newer" and "That save was made by a newer version of the game." or "The save could not be read.", "denied")
     return false
   end
   if not save.same_mods(rec.mods, save.mods()) and not (p.panel and p.panel.confirm) then
