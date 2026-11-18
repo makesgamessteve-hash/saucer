@@ -18,6 +18,8 @@
 -- sentries in state.overrides (both kept per sector).
 local vec = require("lib.vec")
 local ruinm = require("sim.ruin")
+local meshkit = require("lib.meshkit")
+local volume = require("lib.volume")
 local configs = require("sim.config")
 local M = {}
 
@@ -256,8 +258,8 @@ local HIT_RECIPE = { watcher = "watcher", snatcher = "snatcher" }
 function M.reach(def, dyn, p)
   local id = HIT_RECIPE[def.kind]
   if not id then return vec.dist(M.pos_of(def, dyn), p) end
-  local vols = require("lib.meshkit").volumes(id, {}, def.glyph or 1)
-  return (require("lib.volume").nearest(vols, { pos = M.pos_of(def, dyn), yaw = dyn.yaw or def.yaw or 0 }, p))
+  local vols = meshkit.volumes(id, nil, def.glyph or 1)
+  return (volume.nearest(vols, { pos = M.pos_of(def, dyn), yaw = dyn.yaw or def.yaw or 0 }, p))
 end
 
 -- Override spike target for p on foot: the nearest Disabled sentry or any

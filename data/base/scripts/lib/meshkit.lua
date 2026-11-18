@@ -267,12 +267,23 @@ local function param_key(t)
   for _, k in ipairs(keys) do out[#out + 1] = k .. "=" .. param_key(t[k] ~= nil and t[k] or t[tonumber(k)]) end
   return "{" .. table.concat(out, ",") .. "}"
 end
+local plain = {} -- id -> seed -> volumes, for the usual call without params (the sim asks every tick)
 function M.volumes(id, params, seed)
+  local byseed = params == nil or next(params) == nil
+  if byseed then
+    local row = plain[id]
+    local hit = row and row[seed or 1]
+    if hit then return hit end
+  end
   local key = id .. "|" .. tostring(seed or 1) .. "|" .. param_key(params or {})
   local v = vol_cache[key]
   if not v then
     v = M.recipe(id, params, seed).collision or {}
     vol_cache[key] = v
+  end
+  if byseed then
+    plain[id] = plain[id] or {}
+    plain[id][seed or 1] = v
   end
   return v
 end
@@ -305,21 +316,20 @@ end
 
 -- draw a rig into a view: the base and every node under its pose. opts (tint, tex...) go to every mesh.
 function M.draw(v, rig, xf, pose, opts)
-  local function o(t)
-    local out = {}
-    for k, val in pairs(opts or {}) do out[k] = val end
-    for k, val in pairs(t) do out[k] = val end
-    if xf.scale then out.scale = xf.scale end
-    return out
-  end
+  local sc = xf.scale
+  local pos, yaw = xf.pos, xf.yaw or 0
   local n = 0
   if rig.base then
-    v:mesh(rig.base, o({ pos = xf.pos, yaw = xf.yaw or 0 }))
+    local o = { pos = pos, yaw = yaw, scale = sc }
+    if opts then for k, val in pairs(opts) do o[k] = val end end
+    v:mesh(rig.base, o)
     n = 1
   end
   for _, name in ipairs(rig.order) do
-    local np = M.node_pose(rig, name, xf, pose)
-    v:mesh(rig.nodes[name].mesh, o(np))
+    local o = M.node_pose(rig, name, xf, pose)
+    o.scale = sc
+    if opts then for k, val in pairs(opts) do o[k] = val end end
+    v:mesh(rig.nodes[name].mesh, o)
     n = n + 1
   end
   return n

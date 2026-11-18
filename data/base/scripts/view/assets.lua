@@ -12,11 +12,16 @@ M.cache = cache
 
 -- the rig of a recipe, built once per (recipe, params, seed) -> rig (see lib/meshkit.lua)
 function M.rig(A, id, params, seed)
-  local key = id .. "|" .. (params.kind or "") .. "|" .. tostring(seed)
-  local r = A.rigs[key]
+  -- nested tables, not a built key: the renderer asks for every sentry every frame
+  local a = A.rigs[id]
+  if not a then a = {}; A.rigs[id] = a end
+  local kind = params.kind or ""
+  local b = a[kind]
+  if not b then b = {}; a[kind] = b end
+  local r = b[seed]
   if not r then
     r = kit.rig(id, params, seed)
-    A.rigs[key] = r
+    b[seed] = r
   end
   return r
 end
