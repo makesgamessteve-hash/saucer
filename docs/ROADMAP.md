@@ -661,7 +661,7 @@ network lag compensation of claims is untested over a real link.
   `openspec validate --all --strict` passes (56 specs and the 2 open changes).
 - **Task ticks.** 2.1 ("every scenario is covered by a named test that passes in
   CI on linux-gcc, linux-clang, windows-msvc and emscripten") is ticked at suite
-  level against main CI run @RUN@, which is green on all four platforms plus lint;
+  level against main CI run 44391736871 (merge 88e7b05), which is green on all four platforms plus lint;
   the scenarios were not individually re-mapped, and each task says so. Items that
   were "partial" because a platform had not been checked were ticked from CI
   evidence: the Windows MSVC job runs every `replay_*` ctest against the Linux
