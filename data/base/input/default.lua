@@ -34,6 +34,9 @@ return {
     -- add-presentation-packaging: XR snap turns (the comfort filter derives them from the right stick)
     snap_left  = { "xr:snap_l" },
     snap_right = { "xr:snap_r" },
+    -- add-webxr-cockpit: the snap angle rides along on the snap tick: none = 30 degrees, a = 45, b = 60, both = 15
+    snap_a = { "xr:snap_a" },
+    snap_b = { "xr:snap_b" },
     -- add-wider-dark: the sector map (fold jumps, party, Xenoarchive) and the new tools
     map    = { "key:Tab", "pad:dpright", "touch:map", "xr:grip_r", "key2:Backslash" },
     decoy  = { "key:B", "pad:dpdown", "touch:decoy", "key2:LeftBracket" },
@@ -46,5 +49,5 @@ return {
   axis_order = { "move_x", "move_z", "lift", "turn", "look" },
   button_order = { "shrink", "grow", "size1", "size2", "tractor", "scan", "boost", "use",
                    "camera", "menu", "jam", "mystery_mode", "size3", "snap_left", "snap_right",
-                   "map", "decoy", "shroud", "spike", "grapple" },
+                   "map", "decoy", "shroud", "spike", "grapple", "snap_a", "snap_b" },
 }

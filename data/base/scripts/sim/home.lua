@@ -190,6 +190,7 @@ function M.register_panels(game, ctx)
           act = function(state, p) hc.toggle(state, p, ctx) end }
       end
       rows[#rows + 1] = { text = "Mod browser", act = function(_, p) panel.open(p, "mods") end }
+      rows[#rows + 1] = { text = "Comfort settings", act = function(_, p) require("sim.comfort").open(p) end }
       return rows
     end,
   })
@@ -226,11 +227,13 @@ function M.register_panels(game, ctx)
         rows[#rows + 1] = { text = "Load saved game", act = function(st, p) M.load(st, p, ctx, game) end }
       end
       rows[#rows + 1] = { text = "Mod browser", act = function(_, p) panel.open(p, "mods") end }
+      rows[#rows + 1] = { text = "Comfort settings", act = function(_, p) require("sim.comfort").open(p) end }
       rows[#rows + 1] = { text = "Close", act = function(_, p) panel.close(p) end }
       return rows
     end,
   })
   require("sim.modbrowser").register(ctx)
+  require("sim.comfort").register(ctx)
 end
 
 return M

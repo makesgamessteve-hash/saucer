@@ -10,6 +10,7 @@
 --    panel (charge, hold, beam lock) because the flat HUD is off in XR.
 local avatar = require("sim.avatar")
 local configs = require("sim.config")
+local panel = require("sim.panel")
 local M = {}
 
 M.STAND_EYE = 1.62         -- interior eye height (saucer/interior.lua eye)
@@ -19,11 +20,13 @@ M.SNAP_JUMP = 0.3          -- a yaw step this big is a snap turn: no vignette
 M.EASE = 0.25
 
 local last = {}            -- per view index: { pos, yaw, k }
-M.stats = { frames = 0, vignettes = 0, hands = 0 }
+local fb = { morph = false, hit = 99 } -- what the haptics saw last frame
+M.stats = { frames = 0, vignettes = 0, hands = 0, panels = 0, pulses = 0 }
 
 function M.reset()
   last = {}
-  M.stats = { frames = 0, vignettes = 0, hands = 0 }
+  fb = { morph = false, hit = 99 }
+  M.stats = { frames = 0, vignettes = 0, hands = 0, panels = 0, pulses = 0 }
 end
 
 -- the headset's reference space for this view: "seated", "standing" or nil
@@ -55,9 +58,11 @@ function M.motion(i, cam, strength)
   return k * strength
 end
 
--- cockpit-frame point -> world
+-- A headset-space point -> world. The engine keeps head, hands and joints flipped (x, z negated, see
+-- sx_sdl_main.c) so that +z is forward; the eye matrices stay in the WebXR frame (forward is -z) and
+-- sit rigidly on the cockpit, so what we draw must be un-flipped before the cockpit's yaw.
 function M.world(cam, p)
-  local r = avatar.rot(cam.yaw, p)
+  local r = avatar.rot(cam.yaw, { -p[1], p[2], -p[3] })
   return { cam.pos[1] + r[1], cam.pos[2] + r[2], cam.pos[3] + r[3] }
 end
 
@@ -95,7 +100,7 @@ function M.hands(v, A, cam, p, scan)
   local eye = head and M.world(cam, head) or cam.pos
   for _, h in ipairs(saucer.xr.hands()) do
     local pos = M.world(cam, h.pos)
-    local f = avatar.rot(cam.yaw, h.fwd)
+    local f = avatar.rot(cam.yaw, { -h.fwd[1], h.fwd[2], -h.fwd[3] })
     local yaw = saucer.math.atan2(f[1], f[3])
     box(v, A, pos, yaw, 0.05, 0.03, 4, FRAME)
     n = n + 1
@@ -118,10 +123,77 @@ function M.hands(v, A, cam, p, scan)
   return n
 end
 
--- everything XR adds to a view after the scene: hands, then the vignette
-function M.overlay(v, A, cam, p, scan)
+-- the size lever's handle by your right hip, where a pinch grabs it
+function M.lever(v, A, cam)
+  local pos, held = saucer.xr.lever()
+  if not pos then return 0 end
+  local w = M.world(cam, pos)
+  box(v, A, { w[1], w[2] - 0.05, w[3] }, cam.yaw, 0.03, 0.12, 2, FRAME)
+  box(v, A, w, cam.yaw, 0.07, 0.035, 3, held and LOCK or HOLD)
+  return 2
+end
+
+-- haptics: one pulse when the fold starts, one when debris strikes the hull
+-- (only ever a pulse: the camera never shakes or rolls in XR)
+function M.feedback(p)
+  local ship = p.ship
+  local morphing = ship.morph and true or false
+  local hit = ship.since_hit or 99
+  if morphing and not fb.morph then
+    saucer.xr.haptic("both", 0.6, 80)
+    M.stats.pulses = M.stats.pulses + 1
+  end
+  if hit < fb.hit then
+    saucer.xr.haptic("both", 1, 120)
+    M.stats.pulses = M.stats.pulses + 1
+  end
+  fb.morph, fb.hit = morphing, hit
+end
+
+local WHITE, GREEN, AMBER, DIMC, CYANC = { 1, 1, 1, 1 }, { 0.4, 1, 0.5, 1 }, { 1, 0.75, 0.2, 1 }, { 0.5, 0.55, 0.6, 1 },
+  { 0.4, 0.9, 1, 1 }
+
+-- an open menu (title card, bed, comfort settings...) drawn head-locked in the middle of
+-- each eye, big enough to read: the flat HUD is off in the headset -> rows drawn
+function M.panel(v, state, p)
+  if not p.panel then return 0 end
+  local rows, title = panel.rows(state, p), panel.title(state, p)
+  local s = math.max(1, math.min(v.width // 360, v.height // 240))
+  local cw, rh = 8 * s, 11 * s
+  local all, first = rows, 1
+  local maxr = 9
+  if #all > maxr then
+    first = math.max(1, math.min(p.panel.sel - maxr // 2, #all - maxr + 1))
+    rows = {}
+    for i = first, first + maxr - 1 do rows[#rows + 1] = all[i] end
+  end
+  local chars = #title + 2
+  for _, r in ipairs(rows) do chars = math.max(chars, #r.text + 4) end
+  chars = math.min(chars, v.width // cw - 2)
+  local w, h = chars * cw, (#rows + 3) * rh
+  local x, y = v.width // 2 - w // 2, v.height // 2 - h // 2
+  v:rect(x - cw, y - rh, w + 2 * cw, h + 2 * rh, { 0, 0.02, 0.06, 0.88 })
+  v:text(x, y, title, AMBER, s)
+  for i, r in ipairs(rows) do
+    local sel = i + first - 1 == p.panel.sel
+    local ry = y + (i + 1) * rh
+    if sel then v:rect(x - cw // 2, ry - s, w + cw, rh - s, { 0.2, 0.5, 0.3, 0.6 }) end
+    v:text(x, ry, ((sel and "> " or "  ") .. r.text):sub(1, chars), r.enabled == false and DIMC or (sel and GREEN or WHITE), s)
+  end
+  local cur = all[p.panel.sel]
+  local foot = y + (#rows + 2) * rh
+  v:text(x, foot, "STICK UP/DOWN  L TRIGGER: PICK", DIMC, math.max(1, s - 1))
+  if cur and cur.hint then v:text(x, foot + rh, cur.hint:sub(1, chars * 2), CYANC, math.max(1, s - 1)) end
+  M.stats.panels = M.stats.panels + 1
+  return #rows
+end
+
+-- everything XR adds to a view after the scene: hands, the lever, a menu, then the vignette
+function M.overlay(v, A, cam, p, scan, state)
   if not v.xr then return 0 end
-  local n = M.hands(v, A, cam, p, scan)
+  local n = M.hands(v, A, cam, p, scan) + M.lever(v, A, cam)
+  if v.index == 1 then M.feedback(p) end
+  if state and p.panel then M.panel(v, state, p) end
   local k = M.motion(v.index, cam, saucer.xr.comfort().vignette)
   M.stats.frames = M.stats.frames + 1
   M.stats.hands = M.stats.hands + n

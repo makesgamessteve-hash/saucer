@@ -1398,8 +1398,8 @@ static int l_xr_session(lua_State *L) {
 }
 static int l_xr_comfort(lua_State *L) {
   sx_engine *e = get_engine(L);
-  lua_createtable(L, 0, 3);
-  lua_pushnumber(L, e->xr.snap_turn_deg);
+  lua_createtable(L, 0, 5);
+  lua_pushnumber(L, sx_xr_snap_deg(&e->xr));
   lua_setfield(L, -2, "snap_turn");
   lua_pushnumber(L, e->xr.vignette);
   lua_setfield(L, -2, "vignette");
@@ -1407,21 +1407,45 @@ static int l_xr_comfort(lua_State *L) {
   lua_setfield(L, -2, "xr_safe_retro");
   lua_pushboolean(L, e->xr.snap);
   lua_setfield(L, -2, "snap");
+  lua_pushstring(L, e->xr.pref_mode == 1 ? "seated" : "standing");
+  lua_setfield(L, -2, "mode");
   return 1;
 }
-/* add-presentation-packaging: comfort is a client setting (never in the sim) */
+/* may this script change the client's own settings? Not in a replay, and on a
+ * network only for the local player (every peer runs every player's menus) */
+static int comfort_allowed(sx_engine *e, lua_Integer player) {
+  return !(e->opt.play[0] || (e->net_on && player != e->net.local_slot));
+}
+/* add-presentation-packaging, add-webxr-cockpit: comfort is a client setting (never in the sim).
+ * set_comfort({snap =, vignette =, snap_turn =, mode = "seated"|"standing"}, player) -> applied */
 static int l_xr_set_comfort(lua_State *L) {
   sx_engine *e = get_engine(L);
   luaL_checktype(L, 1, LUA_TTABLE);
+  if (!comfort_allowed(e, luaL_optinteger(L, 2, 1))) {
+    lua_pushboolean(L, 0);
+    return 1;
+  }
   lua_getfield(L, 1, "snap");
   if (!lua_isnil(L, -1)) e->xr.snap = lua_toboolean(L, -1);
   lua_pop(L, 1);
   e->xr.snap_latch = 0;
-  e->xr.vignette = (float)field_num(L, 1, "vignette", e->xr.vignette);
-  if (e->xr.vignette < 0) e->xr.vignette = 0;
-  if (e->xr.vignette > 1) e->xr.vignette = 1;
-  e->xr.snap_turn_deg = (float)field_num(L, 1, "snap_turn", e->xr.snap_turn_deg);
-  return 0;
+  sx_xr_set_vignette(&e->xr, (float)field_num(L, 1, "vignette", e->xr.vignette));
+  sx_xr_set_snap_deg(&e->xr, (float)field_num(L, 1, "snap_turn", sx_xr_snap_deg(&e->xr)));
+  lua_getfield(L, 1, "mode");
+  if (lua_isstring(L, -1)) {
+    const char *m = lua_tostring(L, -1);
+    if (strcmp(m, "seated") == 0) e->xr.pref_mode = 1;
+    else if (strcmp(m, "standing") == 0) e->xr.pref_mode = 2;
+  }
+  lua_pop(L, 1);
+  lua_pushboolean(L, 1);
+  return 1;
+}
+/* saucer.xr.save_comfort(player): writes <user-dir>/comfort.txt */
+static int l_xr_save_comfort(lua_State *L) {
+  sx_engine *e = get_engine(L);
+  lua_pushboolean(L, comfort_allowed(e, luaL_optinteger(L, 1, 1)) && sx_engine_save_comfort(e));
+  return 1;
 }
 static void push_vec3f(lua_State *L, const float *v) {
   int i;
@@ -1447,9 +1471,15 @@ static int l_xr_hands(lua_State *L) {
   if (!e->xr.session) return 1;
   for (i = 0; i < 2; i++) {
     if (!e->xr.hand_ok[i]) continue;
-    lua_createtable(L, 0, 3);
+    lua_createtable(L, 0, 6);
     lua_pushstring(L, i == 0 ? "left" : "right");
     lua_setfield(L, -2, "hand");
+    lua_pushboolean(L, e->xr.joint_ok[i]);
+    lua_setfield(L, -2, "tracked");
+    lua_pushboolean(L, e->xr.pinch[i]);
+    lua_setfield(L, -2, "pinch");
+    lua_pushboolean(L, e->xr.grab[i]);
+    lua_setfield(L, -2, "grab");
     push_vec3f(L, e->xr.hands[i]);
     lua_setfield(L, -2, "pos");
     push_vec3f(L, e->xr.hands[i] + 3);
@@ -1458,8 +1488,22 @@ static int l_xr_hands(lua_State *L) {
   }
   return 1;
 }
+/* saucer.xr.lever() -> pos, held: the size lever's handle (head relative, same frame as head()) */
+static int l_xr_lever(lua_State *L) {
+  sx_engine *e = get_engine(L);
+  float p[3];
+  if (!e->xr.session) return 0;
+  sx_xr_lever_pos(&e->xr, p);
+  push_vec3f(L, p);
+  lua_pushboolean(L, e->xr.lever_hand >= 0);
+  return 2;
+}
+/* saucer.xr.haptic(hand, strength, ms): hand "left", "right" or "both" (default) */
 static int l_xr_haptic(lua_State *L) {
-  (void)L; /* forwarded by the web glue in a later change; accepted and ignored here */
+  sx_engine *e = get_engine(L);
+  const char *h = luaL_optstring(L, 1, "both");
+  int hand = strcmp(h, "left") == 0 ? 0 : (strcmp(h, "right") == 0 ? 1 : -1);
+  if (e->xr.session) sx_xr_haptic(&e->xr, hand, (float)luaL_optnumber(L, 2, 0.5), (int)luaL_optinteger(L, 3, 40));
   return 0;
 }
 
@@ -1829,6 +1873,34 @@ static int l_test_set_xr(lua_State *L) {
     }
   }
   lua_pop(L, 1);
+  lua_getfield(L, 1, "joints");
+  if (lua_istable(L, -1)) {
+    static const char *hn[2] = {"left", "right"};
+    static const char *jn[SX_XR_JOINTS] = {"wrist", "thumb", "index", "middle", "ring", "pinky"};
+    int i, k;
+    for (i = 0; i < 2; i++) {
+      float j[SX_XR_JOINTS * 3];
+      lua_getfield(L, -1, hn[i]);
+      if (lua_istable(L, -1)) {
+        memset(j, 0, sizeof j);
+        for (k = 0; k < SX_XR_JOINTS; k++) field_vec(L, lua_gettop(L), jn[k], j + k * 3, 3);
+        sx_xr_set_joints(&e->xr, i, 1, j);
+      } else if (!lua_isnil(L, -1)) {
+        sx_xr_set_joints(&e->xr, i, 0, NULL);
+      }
+      lua_pop(L, 1);
+    }
+  }
+  lua_pop(L, 1);
+  lua_getfield(L, 1, "mock_views");
+  if (lua_toboolean(L, -1)) {
+    sx_xr_mock_views(&e->xr, e->render.settings.width, e->render.settings.height, (float)field_num(L, 1, "ipd", 0.064f),
+                     (float)field_num(L, 1, "fov", 90.0f));
+    /* a headset's eye matrices carry the head's height (a standing session starts on the floor) */
+    e->xr.views[0].view[13] -= e->xr.head_pos[1];
+    e->xr.views[1].view[13] -= e->xr.head_pos[1];
+  }
+  lua_pop(L, 1);
   lua_getfield(L, 1, "controls");
   if (lua_istable(L, -1)) {
     lua_pushnil(L);
@@ -1840,6 +1912,15 @@ static int l_test_set_xr(lua_State *L) {
   }
   lua_pop(L, 1);
   return 0;
+}
+
+/* test.xr_haptics() -> pulses requested so far, left pending strength, right pending strength */
+static int l_test_xr_haptics(lua_State *L) {
+  sx_engine *e = get_engine(L);
+  lua_pushinteger(L, e->xr.haptic_total);
+  lua_pushnumber(L, e->xr.haptic_strength[0]);
+  lua_pushnumber(L, e->xr.haptic_strength[1]);
+  return 3;
 }
 
 static int l_test_viewports(lua_State *L) {
@@ -2003,7 +2084,8 @@ static void build_saucer_api(lua_State *L, sx_engine *e) {
       {"texture", l_r_texture}, {"palette", l_r_palette}, {"settings", l_r_settings}, {"stats", l_r_stats}, {NULL, NULL}};
   static const luaL_Reg xr_f[] = {
       {"available", l_xr_available}, {"session", l_xr_session}, {"comfort", l_xr_comfort}, {"haptic", l_xr_haptic},
-      {"set_comfort", l_xr_set_comfort}, {"head", l_xr_head}, {"hands", l_xr_hands},
+      {"set_comfort", l_xr_set_comfort}, {"save_comfort", l_xr_save_comfort}, {"head", l_xr_head},
+      {"hands", l_xr_hands}, {"lever", l_xr_lever},
       {NULL, NULL}};
   static const luaL_Reg audio_f[] = {
       {"play", l_audio_play}, {"set", l_audio_set}, {"stop", l_audio_stop}, {NULL, NULL}};
@@ -2022,6 +2104,7 @@ static void build_saucer_api(lua_State *L, sx_engine *e) {
                                     {"screenshot", l_test_screenshot}, {"audio_count", l_test_audio_count},
                                     {"audio_loops", l_test_audio_loops}, {"audio_flush", l_test_audio_flush},
                                     {"touch", l_test_set_touch},       {"xr", l_test_set_xr},
+                                    {"xr_haptics", l_test_xr_haptics},
                                     {"viewports", l_test_viewports},   {NULL, NULL}};
   struct {
     const char *name;

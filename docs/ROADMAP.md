@@ -518,6 +518,25 @@ Tests: `tests/lua/save_spec.lua`, `tests/fixtures/saves/v10_format2.lua`, game
 tests `game_saves_write` and `game_saves_load`. Saves made by a newer game are refused with their own message. Known gap: no
 player-record export for networked play (the host stores everything).
 
+### WebXR — done
+
+**Status (2026-11-18).** Done in OpenSpec change `add-webxr-cockpit`. **Hand
+tracking:** the web glue requests `hand-tracking` and sends six joints per hand;
+in C a pinch is the trigger, a fist is the grip, and a pinch on the size lever
+(by the right hip) plus one 8 cm detent down or up is Shrink or Grow.
+**Constant scale:** verified without a headset by mocked XR poses (a C test over
+five cockpit poses through the real camera composition, and a game test where
+the pilot's eye is bit-identical through a fold and back with exactly one haptic
+pulse). **Comfort settings:** a "Comfort settings" page (title card and bed,
+flat or in XR) for snap or smooth turn, snap angle 15/30/45/60, vignette and
+seated/standing, saved in `comfort.txt`; the snap angle rides in the command
+frame (`snap_a`/`snap_b`), so replays stay valid. Haptics are real (fold and
+hull hit), drawn hands are no longer mirrored, and an open menu is visible in
+the headset. Tests: `tests/c/test_xr.c`, `tests/lua/webxr_spec.lua`, game test
+`game_xr_hands`, `tests/web/xr_web.test.js`; shots in `tools/shots/webxr.lua`.
+**Still manual:** a physical-headset check of felt scale and comfort.
+**Deferred:** teleport locomotion, a seated height offset, reduced flashing.
+
 ## Later / maybe
 
 Rivals, planet-surface cities, a fabricator, and a macOS port.

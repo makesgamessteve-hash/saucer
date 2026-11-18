@@ -291,6 +291,30 @@ int sx_engine_save_bindings(sx_engine *e, int player) {
   return ok;
 }
 
+static char *comfort_path(sx_engine *e) { return sx_path_join(e->opt.user_dir, "comfort.txt"); }
+
+int sx_engine_save_comfort(sx_engine *e) {
+  char text[160], *path;
+  int n, ok;
+  n = sx_xr_comfort_format(&e->xr, text, sizeof text);
+  sx_fs_mkdirs(e->opt.user_dir);
+  path = comfort_path(e);
+  ok = sx_fs_write_atomic(path, text, (size_t)n);
+  free(path);
+  return ok;
+}
+
+int sx_engine_load_comfort(sx_engine *e) {
+  char *path = comfort_path(e), *text;
+  int n;
+  text = sx_fs_read(path, NULL);
+  free(path);
+  if (!text) return 0;
+  n = sx_xr_comfort_parse(&e->xr, text);
+  free(text);
+  return n;
+}
+
 int sx_engine_load_bindings(sx_engine *e, int player) {
   char *path = bindings_path(e, player), *text, *p;
   int cleared[SX_MAX_ACTIONS] = {0};
@@ -575,6 +599,7 @@ sx_engine *sx_engine_create(const sx_options *o) {
   }
   sx_script_call_hook(e, "on_init", 1, 1LL << 40);
   for (i = 1; i <= e->opt.local_players; i++) sx_engine_load_bindings(e, i);
+  sx_engine_load_comfort(e);
   if (o->split_keyboard) sx_input_split_keyboard(&e->input, 2);
   e->render.settings.split_horizontal = o->split_horizontal;
   if (o->script[0] && start_test_script(e)) resume_test(e);

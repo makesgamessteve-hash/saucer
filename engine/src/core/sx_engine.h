@@ -170,6 +170,9 @@ int sx_engine_restore(sx_engine *e, const unsigned char *data, size_t len);
 /* Persisted per-player binding overrides. */
 int sx_engine_save_bindings(sx_engine *e, int player);
 int sx_engine_load_bindings(sx_engine *e, int player);
+/* add-webxr-cockpit: XR comfort settings in <user-dir>/comfort.txt (client side, never in the sim) */
+int sx_engine_save_comfort(sx_engine *e);
+int sx_engine_load_comfort(sx_engine *e);
 int sx_engine_finish(sx_engine *e); /* flush recordings; returns exit status */
 /* add-home-among-stars: the mod browser's choices (<user-dir>/mods.txt lists
  * the folders switched off; they apply on the next start) */

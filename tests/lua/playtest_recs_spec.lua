@@ -608,7 +608,7 @@ describe("controls and the HUD (recommendation 10)", function()
     expect(table.concat(g, " ")).to_contain("key:Y")
     expect(table.concat(g, " ")).to_contain("pad:dpup")
     expect(table.concat(g, " ")).to_contain("touch:grapple")
-    expect(def.button_order[#def.button_order]).to_be("grapple")
+    expect(def.button_order[#def.button_order - 2]).to_be("grapple")
     for _, b in ipairs(def.buttons.shroud) do expect(b ~= "key:Y").to_be(true) end
     expect(hud.TOUCH_LABEL.grapple).to_be("GRP")
   end)

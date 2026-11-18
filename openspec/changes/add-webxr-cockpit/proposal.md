@@ -14,4 +14,4 @@ Change 11 of 0–21 in the order of concept v0.3 §16.2.
 ## Impact
 
 - Capability `webxr` (`openspec/specs/webxr/spec.md` once archived)
-- Milestone 1 status: **partial** (1/4 requirements fully met)
+- Milestone 1 status: **done** (4/4 requirements met, except the manual physical-headset check of scale and the deferred teleport, seated height offset and reduced flashing); the archive step and CI on all four platforms are still to be ticked in tasks.md section 2

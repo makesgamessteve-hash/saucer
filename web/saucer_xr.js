@@ -47,11 +47,53 @@ addToLibrary({
       for (var k = 0; k < 15; k++) _saucer_xr_set_control(k, v[k]);
     }
 
+    // add-webxr-cockpit: hand tracking. The six joints the engine's gestures need
+    // (wrist, thumb tip, index tip, middle, ring, pinky tips), in the order of sx_xr.h.
+    var JOINTS = ['wrist', 'thumb-tip', 'index-finger-tip', 'middle-finger-tip', 'ring-finger-tip', 'pinky-finger-tip'];
+    function joints(session, frame, space, buf) {
+      var tracked = [0, 0];
+      for (var i = 0; i < session.inputSources.length; i++) {
+        var src = session.inputSources[i], h = src.handedness === 'left' ? 0 : 1;
+        if (!src.hand || !frame.getJointPose) continue;
+        var good = 1, o = buf >> 2;
+        for (var k = 0; k < JOINTS.length && good; k++) {
+          var js = src.hand.get(JOINTS[k]), jp = js && frame.getJointPose(js, space);
+          if (!jp) { good = 0; break; }
+          HEAPF32[o + k * 3] = jp.transform.position.x;
+          HEAPF32[o + k * 3 + 1] = jp.transform.position.y;
+          HEAPF32[o + k * 3 + 2] = jp.transform.position.z;
+        }
+        if (good) { _saucer_xr_set_joints(h, 1, buf); tracked[h] = 1; }
+      }
+      for (var n = 0; n < 2; n++) if (!tracked[n]) _saucer_xr_set_joints(n, 0, 0);
+      return tracked;
+    }
+
+    // haptic pulses the game asked for (controllers only; tracked hands have no actuator)
+    function haptics(session) {
+      for (var h = 0; h < 2; h++) {
+        var s = _saucer_xr_haptic_take(h);
+        if (!(s > 0)) continue;
+        var ms = _saucer_xr_haptic_ms(h);
+        for (var i = 0; i < session.inputSources.length; i++) {
+          var src = session.inputSources[i], gp = src.gamepad;
+          if (!gp || (src.handedness === 'left' ? 0 : 1) !== h) continue;
+          var act = gp.hapticActuators && gp.hapticActuators[0];
+          try {
+            if (act && act.pulse) act.pulse(s, ms);
+            else if (gp.vibrationActuator && gp.vibrationActuator.playEffect)
+              gp.vibrationActuator.playEffect('dual-rumble', { duration: ms, strongMagnitude: s, weakMagnitude: s });
+          } catch (e) { /* a controller that cannot rumble is fine */ }
+        }
+      }
+    }
+
     // grip poses for the diegetic hands / wrist panel (0 left, 1 right)
-    function hands(session, frame, space) {
+    function hands(session, frame, space, tracked) {
       var ok = [0, 0];
       for (var i = 0; i < session.inputSources.length; i++) {
         var src = session.inputSources[i], h = src.handedness === 'left' ? 0 : 1;
+        if (tracked && tracked[h]) { ok[h] = 1; continue; } // the joints already gave this hand its pose
         if (!src.gripSpace) continue;
         var gp = frame.getPose(src.gripSpace, space);
         if (!gp) continue;
@@ -67,10 +109,12 @@ addToLibrary({
     // back to 'local' when the device has no floor.
     Module.saucerEnterVR = function (mode) {
       if (XR.session) { XR.session.end(); return; }
+      // no mode given: the comfort settings' choice (comfort.txt "mode")
+      if (!mode) mode = _saucer_xr_pref_mode() === 1 ? 'seated' : 'standing';
       var gl = GL.currentContext && GL.currentContext.GLctx;
       if (!gl) return;
       var seated = mode === 'seated';
-      navigator.xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor'] }).then(function (session) {
+      navigator.xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor', 'hand-tracking'] }).then(function (session) {
         XR.session = session;
         return gl.makeXRCompatible().then(function () {
           session.updateRenderState({ baseLayer: new XRWebGLLayer(session, gl, { antialias: false }) });
@@ -78,7 +122,7 @@ addToLibrary({
           if (seated) return local();
           return session.requestReferenceSpace('local-floor').then(function (s) { return [s, 2]; }, local);
         }).then(function (res) {
-          var space = res[0], viewBuf = _malloc(64), projBuf = _malloc(64), lastFb = null, fbId = 0, last = 0;
+          var space = res[0], viewBuf = _malloc(64), projBuf = _malloc(64), jointBuf = _malloc(72), lastFb = null, fbId = 0, last = 0;
           _saucer_xr_begin(res[1]);
           function onFrame(t, frame) {
             if (!XR.session) return;
@@ -102,7 +146,8 @@ addToLibrary({
             var p = pose.transform.position, m = pose.transform.matrix;
             _saucer_xr_set_head(p.x, p.y, p.z, -m[8], -m[9], -m[10]);
             controls(session);
-            hands(session, frame, space);
+            hands(session, frame, space, joints(session, frame, space, jointBuf));
+            haptics(session);
             var dt = last ? t - last : 1000 / 72;
             last = t;
             _saucer_xr_frame(fbId, n, dt);
@@ -110,7 +155,7 @@ addToLibrary({
           session.addEventListener('end', function () {
             XR.session = null;
             _saucer_xr_end();
-            _free(viewBuf); _free(projBuf);
+            _free(viewBuf); _free(projBuf); _free(jointBuf);
             if (Module.onXREnd) Module.onXREnd();
           });
           session.requestAnimationFrame(onFrame);
