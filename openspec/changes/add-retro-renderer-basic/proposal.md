@@ -14,4 +14,4 @@ Change 8 of 0–21 in the order of concept v0.3 §16.2.
 ## Impact
 
 - Capability `retro-renderer` (`openspec/specs/retro-renderer/spec.md` once archived)
-- Milestone 1 status: **partial** (3/4 requirements fully met)
+- Milestone 1 status: **done** (4/4 requirements met; CI on the merge confirms 2.1)

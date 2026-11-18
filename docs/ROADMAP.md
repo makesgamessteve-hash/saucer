@@ -567,6 +567,26 @@ scenarios), the existing `game_sentries` and `game_xr*` runs; shots in
 `lod` param; there is one detail level), a per-civ body scale beyond the glyph
 seed, and measured (not just asserted) web build times, which need a browser.
 
+### Renderer — done
+
+**Status (2026-11-18).** Done in OpenSpec change `add-retro-renderer-basic`
+(task 1.4). The optional **affine (PS1-style) texture warp** is in: the mesh
+vertex shader hands the fragment shader `(uv * w, w)`, whose perspective-correct
+interpolation divides back to the screen-linear uv, so large near polygons make
+textures swim and shear the way a 1996 console did (no `noperspective` needed,
+so the same shader runs on desktop GL and WebGL2). It is a setting,
+`saucer.render.settings{ affine = 1 }`, **off by default**; vertex snapping and
+dithering keep their own toggles. Like snapping, the warp is **forced off for
+XR views** (it shimmers per eye) and the flat setting comes back when the
+session ends: one function, `sx_render_effects()`, decides this for the GL
+renderer and for the settings query (`affine`, `snap`, `dither` report what is
+in force). Tests: C `retro_effects_xr_safe`, Lua "XR session starts: snapping
+and the affine warp are off for the headset and restored after"; shots with the
+warp off and on in `tools/shots/renderer.lua`. **Not covered by CI:** the pixels
+themselves (the GL shaders need a GPU; the windowed smoke test only proves they
+compile and run). **Deferred:** an in-game menu entry for the warp (it is a
+settings call and a mod/console toggle for now) and reducing dithering in XR.
+
 ## Later / maybe
 
 Rivals, planet-surface cities, a fabricator, and a macOS port.

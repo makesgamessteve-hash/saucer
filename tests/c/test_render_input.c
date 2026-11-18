@@ -14,6 +14,33 @@ static unsigned char *load(const char *p, int *len) {
   return d;
 }
 
+/* add-retro-renderer-basic, "Retro effects are optional and XR-safe" */
+TEST(retro_effects_xr_safe) {
+  static sx_render r;
+  sx_effects fx;
+  sx_render_init(&r);
+  /* the defaults: snapping and dithering on, the PS1 texture warp opt-in */
+  fx = sx_render_effects(&r.settings, 0);
+  CHECK(fx.snap == 1 && fx.dither == 1 && fx.affine == 0);
+  /* each effect toggles on its own on a flat screen */
+  r.settings.affine = 1;
+  fx = sx_render_effects(&r.settings, 0);
+  CHECK(fx.snap == 1 && fx.affine == 1 && fx.dither == 1);
+  r.settings.vertex_snap = 0;
+  r.settings.dither = 0;
+  fx = sx_render_effects(&r.settings, 0);
+  CHECK(fx.snap == 0 && fx.affine == 1 && fx.dither == 0);
+  /* XR session starts with everything on: snapping and the warp are off for the headset's views, dithering stays */
+  r.settings.vertex_snap = 1;
+  r.settings.dither = 1;
+  fx = sx_render_effects(&r.settings, 1);
+  CHECK(fx.snap == 0 && fx.affine == 0 && fx.dither == 1);
+  /* the flat-screen settings were never touched: they are back when the session ends */
+  CHECK(r.settings.vertex_snap == 1 && r.settings.affine == 1);
+  fx = sx_render_effects(&r.settings, 0);
+  CHECK(fx.snap == 1 && fx.affine == 1);
+}
+
 TEST(render_resources) {
   static sx_render r;
   unsigned char *png;

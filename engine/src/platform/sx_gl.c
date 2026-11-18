@@ -157,19 +157,22 @@ SX_GL_FUNCS(SX_GL_DECL)
 /* ---------------------------------------------------------------- shaders */
 static const char *mesh_vs =
     "in vec3 a_pos; in vec3 a_nrm; in vec2 a_uv; in vec3 a_col; in float a_emi;\n"
-    "uniform mat4 u_mvp; uniform mat4 u_mv; uniform mat4 u_model; uniform vec2 u_snap;\n"
-    "out vec2 v_uv; out vec3 v_col; out float v_emi; out float v_dist; out vec3 v_nrm;\n"
+    "uniform mat4 u_mvp; uniform mat4 u_mv; uniform mat4 u_model; uniform vec2 u_snap; uniform int u_affine;\n"
+    "out vec3 v_uv; out vec3 v_col; out float v_emi; out float v_dist; out vec3 v_nrm;\n"
     "void main() {\n"
     "  vec4 c = u_mvp * vec4(a_pos, 1.0);\n"
     "  if (u_snap.x > 0.0 && c.w > 0.0) c.xy = floor(c.xy / c.w * u_snap + 0.5) / u_snap * c.w;\n"
     "  gl_Position = c;\n"
-    "  v_uv = a_uv; v_col = a_col; v_emi = a_emi;\n"
+    "  // affine warp: (uv * w, w) interpolates perspective-correctly to (sum l_i uv_i / s, 1 / s), whose ratio\n"
+    "  // is the screen-linear uv; with the warp off the third component is 1 and the division changes nothing\n"
+    "  v_uv = u_affine == 1 ? vec3(a_uv * c.w, c.w) : vec3(a_uv, 1.0);\n"
+    "  v_col = a_col; v_emi = a_emi;\n"
     "  v_nrm = mat3(u_model) * a_nrm;\n"
     "  v_dist = length((u_mv * vec4(a_pos, 1.0)).xyz);\n"
     "}\n";
 
 static const char *mesh_fs =
-    "in vec2 v_uv; in vec3 v_col; in float v_emi; in float v_dist; in vec3 v_nrm;\n"
+    "in vec3 v_uv; in vec3 v_col; in float v_emi; in float v_dist; in vec3 v_nrm;\n"
     "uniform sampler2D u_idx; uniform sampler2D u_pal; uniform int u_palrow; uniform int u_tex;\n"
     "uniform vec4 u_tint; uniform vec3 u_light; uniform float u_ambient; uniform int u_lit;\n"
     "uniform vec3 u_fogcol; uniform float u_fog; uniform int u_dither;\n"
@@ -179,7 +182,7 @@ static const char *mesh_fs =
     "void main() {\n"
     "  vec4 base = vec4(1.0);\n"
     "  if (u_tex == 1) {\n"
-    "    int i = int(texture(u_idx, v_uv).r * 255.0 + 0.5);\n"
+    "    int i = int(texture(u_idx, v_uv.xy / v_uv.z).r * 255.0 + 0.5);\n"
     "    if (i == 0) discard;\n"
     "    base = texelFetch(u_pal, ivec2(i, u_palrow), 0);\n"
     "  }\n"
@@ -230,7 +233,7 @@ static const char *ui_fs =
 
 typedef struct prog {
   GLuint id;
-  GLint mvp, mv, model, snap, idx, pal, palrow, tex, tint, light, ambient, lit, fogcol, fog, dither, size, color;
+  GLint mvp, mv, model, snap, affine, idx, pal, palrow, tex, tint, light, ambient, lit, fogcol, fog, dither, size, color;
 } prog;
 
 static struct {
@@ -289,7 +292,7 @@ static int link_prog(prog *p, const char *vs, const char *fs, int ui) {
     return 0;
   }
 #define U(n) p->n = glGetUniformLocation(p->id, "u_" #n)
-  U(mvp); U(mv); U(model); U(snap); U(idx); U(pal); U(palrow); U(tex); U(tint); U(light); U(ambient); U(lit);
+  U(mvp); U(mv); U(model); U(snap); U(affine); U(idx); U(pal); U(palrow); U(tex); U(tint); U(light); U(ambient); U(lit);
   U(fogcol); U(fog); U(dither); U(size); U(color);
 #undef U
   glUseProgram(p->id);
@@ -467,12 +470,14 @@ typedef struct frame_mats {
   float right[3], up[3];
 } frame_mats;
 
-static void set_common(const sx_viewport *v, const sx_render *r, int snap_ok) {
+static void set_common(const sx_viewport *v, const sx_render *r, int xr) {
+  sx_effects fx = sx_render_effects(&r->settings, xr);
   glUniform3f(G.mesh.light, v->light_dir[0], v->light_dir[1], v->light_dir[2]);
   glUniform1f(G.mesh.ambient, v->ambient);
   glUniform3f(G.mesh.fogcol, v->fog_color[0], v->fog_color[1], v->fog_color[2]);
-  glUniform1i(G.mesh.dither, r->settings.dither ? 1 : 0);
-  if (snap_ok && r->settings.vertex_snap) glUniform2f(G.mesh.snap, (float)v->w * 0.5f, (float)v->h * 0.5f);
+  glUniform1i(G.mesh.dither, fx.dither);
+  glUniform1i(G.mesh.affine, fx.affine);
+  if (fx.snap) glUniform2f(G.mesh.snap, (float)v->w * 0.5f, (float)v->h * 0.5f);
   else glUniform2f(G.mesh.snap, 0, 0);
 }
 
@@ -619,7 +624,7 @@ static void draw_view(const sx_render *r, const sx_viewport *v, int fb_h, int xr
   glUseProgram(G.mesh.id);
   glActiveTexture(GL_TEXTURE1);
   glBindTexture(GL_TEXTURE_2D, G.pal_tex);
-  set_common(v, r, !xr);
+  set_common(v, r, xr);
   glEnable(GL_DEPTH_TEST);
   glDepthFunc(GL_LEQUAL);
   glDisable(GL_CULL_FACE);
