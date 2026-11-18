@@ -88,6 +88,49 @@ function M.sell(state, p, trader_idx, uid)
   return true, price, it
 end
 
+-- add-trading-mvp 1.2 (gameplay gaps): the trader's modules. The shelf is a pure function of the world seed, the
+-- sector, the trader and the hour of the clock (so it needs no stored list and saves nothing until something is
+-- bought); state.traders[i].sold = { epoch = n, [slot] = true } remembers what has gone this restock.
+-- -> list of { slot, item, price, sold }
+function M.epoch(state) return clock.minutes(state) // econ().stock_minutes end
+
+function M.stock(state, trader_idx)
+  local e = econ()
+  local epoch = M.epoch(state)
+  local tr = state.traders and state.traders[trader_idx]
+  local sold = tr and tr.sold and tr.sold.epoch == epoch and tr.sold or {}
+  local tier = math.min(3, 1 + ((state.sector_id or 1) - 1) // 2)
+  local base = saucer.seed_child(saucer.seed_child(state.seed or 0, "stock", (state.sector_id or 1) * 64 + trader_idx), "epoch", epoch)
+  local out = {}
+  for k = 1, e.stock_count do
+    local item = require("sim.loot").roll(saucer.seed_child(base, "slot", k), 2, tier, "module")
+    item.quirk = false -- the trader vouches for what it sells
+    item.tier = tier
+    local t = items.type_of(item.type)
+    local price = math.floor((t and t.value or item.value) * (e.tier_mult[tier] or 1) * (1 + M.affix_sum(item)) * e.stock_markup + 0.5)
+    out[k] = { slot = k, item = item, price = price, sold = sold[k] == true }
+  end
+  return out
+end
+
+-- buy_stock(state, p, trader_idx, slot) -> ok, why ("gone", "sold", "hold full", "credits"), item
+function M.buy_stock(state, p, trader_idx, slot)
+  local entry = M.stock(state, trader_idx)[slot]
+  if not entry then return false, "gone" end
+  if entry.sold then return false, "sold" end
+  if #p.hold >= require("sim.upgrades").hold_slots(p) then return false, "hold full" end
+  if (p.credits or 0) < entry.price then return false, "credits" end
+  p.credits = p.credits - entry.price
+  local tr = state.traders[trader_idx]
+  if not tr.sold or tr.sold.epoch ~= M.epoch(state) then tr.sold = { epoch = M.epoch(state) } end
+  tr.sold[slot] = true
+  local it = items.stamp(p, entry.item, entry.item.tier, nil)
+  it.ident, it.hot = true, false
+  p.hold[#p.hold + 1] = it
+  p.bought = (p.bought or 0) + 1
+  return true, nil, it
+end
+
 -- add-playtest-recs (recommendation 11): story items warn before a sale.
 -- -> the warning, or nil for ordinary loot
 function M.story_warning(it)
@@ -123,7 +166,7 @@ function M.sell_text(p, it, price)
 end
 
 function M.refill_cost(p)
-  return math.ceil((configs.all().max_charge - p.ship.charge) * econ().charge_price)
+  return math.ceil((require("sim.ship").max_charge(p.ship) - p.ship.charge) * econ().charge_price)
 end
 
 function M.repair_cost(p)
@@ -132,7 +175,7 @@ end
 
 -- buy as much as the credits allow; -> points bought
 function M.refill(p)
-  local max = configs.all().max_charge
+  local max = require("sim.ship").max_charge(p.ship)
   local need = max - p.ship.charge
   local price = econ().charge_price
   local cost = math.ceil(need * price)
@@ -248,6 +291,23 @@ function M.rows(state, p, ctx)
   end
   -- add-wider-dark: the trader's requests, reputation and Fold Core upgrades
   for _, r in ipairs(require("sim.requests").rows(state, p, tr, ctx)) do rows[#rows + 1] = r end
+  -- gameplay gaps: the trader's shelf of saucer modules (identified, no quirks), then your own upgrades
+  for _, e in ipairs(M.stock(state, tr)) do
+    local it, slot = e.item, e.slot
+    local text = e.sold and string.format("%s - sold", it.name) or string.format("Buy module %s%s - %d c", it.name,
+      require("sim.modules").effects(it), e.price)
+    local why = e.sold and "sold" or (#p.hold >= require("sim.upgrades").hold_slots(p) and "hold full")
+      or ((p.credits or 0) < e.price and "credits") or nil
+    rows[#rows + 1] = { text = text, enabled = why == nil, hint = why and ("Cannot buy: " .. why) or "Install it at the lab bench",
+      act = function(st, pl)
+        local ok, _, bought = M.buy_stock(st, pl, tr, slot)
+        if ok then
+          local saved = require("sim.save").write(st)
+          ctx.msg(st, pl, string.format("Bought %s%s: install it at the lab bench", bought.name, saved and " (saved)" or ""))
+          ctx.fx(st, pl, "bank")
+        end
+      end }
+  end
   -- add-playtest-recs: saucer upgrades (beam relay, coils, racks, cells, a second bench)
   for _, r in ipairs(require("sim.upgrades").rows(state, p, ctx)) do rows[#rows + 1] = r end
   for _, e in ipairs(M.shop()) do

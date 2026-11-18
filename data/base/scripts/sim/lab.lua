@@ -6,7 +6,11 @@ local data = require("lib.data")
 local configs = require("sim.config")
 local items = require("sim.items")
 local mystery = require("sim.mystery")
+local modules = require("sim.modules")
 local M = {}
+
+-- a hold item, or a module already fitted to the saucer (the bench identifies both)
+local function find(p, uid) return items.find(p, uid) or modules.find(p, uid) end
 
 local function econ() return data.load("economy/economy.lua") end
 
@@ -38,7 +42,7 @@ function M.slots(p) return require("sim.upgrades").lab_slots(p) end
 -- enqueue(p, uid) -> ok, reason
 function M.enqueue(state, p, uid)
   p.lab = p.lab or M.new()
-  local it = items.find(p, uid)
+  local it = find(p, uid)
   if not it then return false, "gone" end
   if queued(p, uid) then return false, "queued" end
   if it.echo then
@@ -85,7 +89,7 @@ function M.step(state, p, dt, ctx)
   end
   if not done then return nil end
   local job = table.remove(lab.queue, done)
-  local it = items.find(p, job.uid)
+  local it = find(p, job.uid)
   if not it then return nil end
   if job.kind == "core" then
     local holo = require("sim.holo")
@@ -98,6 +102,7 @@ function M.step(state, p, dt, ctx)
     ctx.fx(state, p, "echo")
   elseif job.kind == "identify" then
     it.ident = true
+    if modules.find(p, it.uid) then modules.refresh(p) end
     local q = it.quirk and (" (quirk: " .. it.quirk .. ")") or ""
     ctx.msg(state, p, "Identified: " .. it.name .. q)
     ctx.fx(state, p, "bank")
@@ -131,7 +136,7 @@ function M.rows(state, p, ctx)
   local rows = {}
   local lab = p.lab or M.new()
   for k, j in ipairs(lab.queue) do
-    local it = items.find(p, j.uid)
+    local it = find(p, j.uid)
     local name = it and items.label(it) or "?"
     local pct = math.floor((1 - j.left / j.total) * 100)
     local live = k <= M.slots(p)
@@ -156,6 +161,37 @@ function M.rows(state, p, ctx)
       end
     end
   end
+  -- gameplay gaps: saucer modules (add-items-identification-tractor 1.2). Install what the hold carries into
+  -- a free slot, identify or take out what is fitted. A fitted quirk bites at once, identified or not.
+  for _, it in ipairs(p.hold) do
+    if modules.installable(it) then
+      local uid = it.uid
+      local full = #(p.modules or {}) >= modules.SLOTS
+      rows[#rows + 1] = { text = string.format("Install %s (slot %d/%d)", items.label(it), #(p.modules or {}) + (full and 0 or 1), modules.SLOTS),
+        enabled = not full, hint = it.ident and "Its affixes apply" or "Unidentified: its quirks apply at once, its affixes only once identified",
+        act = function(st, pl)
+          local ok, why = modules.install(st, pl, uid, ctx)
+          if not ok then ctx.msg(st, pl, "Cannot install: " .. why) ctx.fx(st, pl, "denied") end
+        end }
+    end
+  end
+  for _, it in ipairs(p.modules or {}) do
+    local uid = it.uid
+    rows[#rows + 1] = { text = string.format("Remove %s%s", items.label(it), it.ident and modules.effects(it) or ""),
+      hint = it.ident and "Back into the hold" or "Unknown effect",
+      act = function(st, pl)
+        local ok, why = modules.remove(st, pl, uid, ctx)
+        if not ok then
+          ctx.msg(st, pl, why == "bonded" and "It is Bonded to the saucer: it will not come out" or ("Cannot remove: " .. why))
+          ctx.fx(st, pl, "denied")
+        end
+      end }
+    if not it.ident and not queued(p, uid) then
+      rows[#rows + 1] = { text = string.format("Identify fitted %s (%ds, %d CHG)", items.label(it),
+        econ().identify_seconds * (it.tier or 1), econ().identify_charge),
+        act = function(st, pl) M.pick(st, pl, uid, ctx) end }
+    end
+  end
   if #rows == 0 then rows[1] = { text = "Nothing to identify or decode", enabled = false } end
   rows[#rows + 1] = { text = "Close", act = function(_, pl) pl.panel = false end }
   return rows
@@ -164,12 +200,12 @@ end
 function M.pick(state, p, uid, ctx)
   local ok, why = M.enqueue(state, p, uid)
   if ok then
-    local it = items.find(p, uid)
+    local it = find(p, uid)
     ctx.msg(state, p, ((it.echo or M.is_core(it)) and "Decoding " or "Identifying ") .. items.label(it) .. " at the lab bench")
   else
     local text = why == "charge" and "Not enough Charge to run the lab" or ("Lab: " .. why)
     if why == "translation" then
-      local e = state.mystery.echoes[items.find(p, uid).echo]
+      local e = state.mystery.echoes[find(p, uid).echo]
       local c = require("sim.civs").by_id(state.seed, e.gate_civ)
       text = string.format("The Witness won't translate: your Xenoarchive needs %d%% of the %s", e.gate, c and c.name or "?")
     end

@@ -465,10 +465,13 @@ function M.draw(v, state, p, target)
   v:rect(4, 4, 120, 28, { 0, 0, 0, 0.45 })
   v:text(8, 7, c.name:upper(), WHITE)
   M.ladder(v, p, 70, 6)
-  local charge = ship.charge / configs.all().max_charge
+  local charge = ship.charge / require("sim.ship").max_charge(ship)
   v:rect(8, 18, 100, 5, { 0.15, 0.15, 0.2, 1 })
   v:rect(8, 18, 100 * charge, 5, charge > 0.3 and CYAN or RED)
   v:text(8, 25, string.format("CHG %d", ship.charge // 1), DIM)
+  -- gameplay gaps: fitted saucer modules (an unidentified one is an "Unknown effect")
+  local ml = require("sim.modules").line(p)
+  if ml then v:text(64, 25, ml:sub(1, (v.width - 68) // 8), require("sim.modules").unknown(p) and AMBER or DIM) end
   -- hold
   local hot = 0
   for _, it in ipairs(p.hold) do if it.hot then hot = hot + 1 end end

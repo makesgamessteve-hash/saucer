@@ -14,12 +14,13 @@ function M.instance_seed(slot_seed, record_index)
   return saucer.seed_child(slot_seed, "owner", record_index)
 end
 
-function M.roll(seed, max_size, tier)
+-- category (optional): only base types of that category (a trader's stock of modules)
+function M.roll(seed, max_size, tier, category)
   local types, aff = data.load("items/types.lua"), data.load("affixes/affixes.lua")
   local rng = saucer.rng.new(seed)
   local pool = {}
   for _, t in ipairs(types) do
-    if t.size <= max_size then pool[#pool + 1] = t end
+    if t.size <= max_size and (not category or t.category == category) then pool[#pool + 1] = t end
   end
   local t = rng:pick(pool) or types[1]
   local rar = {}

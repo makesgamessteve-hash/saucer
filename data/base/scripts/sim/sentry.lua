@@ -18,6 +18,10 @@ local adv = require("sim.advsentry")
 local sm = saucer.math
 local M = {}
 
+-- gameplay gaps: a Loud saucer module is heard from farther (metres, per module)
+M.LOUD_WATCHER = 25
+M.LOUD_SNATCHER = 8
+
 function M.tune() return data.load("sentries/sentries.lua") end
 
 -- add-wider-dark: the tuning with the mystery ending's universe changes
@@ -158,7 +162,7 @@ function M.watcher_sees(def, dyn, p, tick, t)
   local yaw = dyn.yaw
   local dir = dir_of(yaw, dyn.pitch or def.pitch)
   local r = configs.get(ship.size).diameter / 2
-  return saucer.physics.cone_visible(def.pos, dir, sm.cos(t.watcher.half_angle), t.watcher.range + r, ship.pos, 1)
+  return saucer.physics.cone_visible(def.pos, dir, sm.cos(t.watcher.half_angle), t.watcher.range + r + (ship.loud or 0) * M.LOUD_WATCHER, ship.pos, 1)
 end
 
 local function sweep_yaw(def, tick, t)
@@ -276,7 +280,7 @@ function M.snatcher_wants(def, dyn, p, t)
   if def.leash and not in_box(def.leash, p.ship.pos) then return false end
   -- add-home-among-stars: a Warden's alarm wakes them (twice the sense)
   local woke = dyn.woke and require("sim.game").state_ref and dyn.woke > (require("sim.game").state_ref.tick or 0)
-  return vec.dist(dyn.pos, p.ship.pos) <= (on_foot(p) and t.snatcher.foot_sense or t.snatcher.sense) * (woke and 2 or 1)
+  return vec.dist(dyn.pos, p.ship.pos) <= (on_foot(p) and t.snatcher.foot_sense or (t.snatcher.sense + (p.ship.loud or 0) * M.LOUD_SNATCHER)) * (woke and 2 or 1)
 end
 
 local function step_snatcher(state, def, dyn, dt, ctx, t)

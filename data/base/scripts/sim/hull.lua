@@ -47,7 +47,7 @@ function M.regen(ship, dt, open_space)
   local t = tune()
   ship.since_hit = ship.since_hit + dt
   if ship.since_hit >= t.shield_delay and not ship.morph then
-    ship.shield = math.min(100, ship.shield + t.shield_regen * dt)
+    ship.shield = math.min(100, ship.shield + t.shield_regen * require("sim.ship").mult(ship, "shield_regen") * dt)
     if open_space and ship.hull > 0 then
       ship.hull = math.min(100, ship.hull + (t.hull_regen or 0) * dt)
     end

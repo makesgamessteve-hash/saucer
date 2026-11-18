@@ -711,7 +711,7 @@ local function scan(state, p)
   end
   p.ship.charge = p.ship.charge - t.charge
   p.scan_ready = state.tick + math.floor(t.cooldown * buffs.factor(state, p, "scan_cooldown") * 60)
-  p.scan_until = state.tick + math.floor(t.reveal * buffs.factor(state, p, "scan_reveal") * 60)
+  p.scan_until = state.tick + math.floor(t.reveal * buffs.factor(state, p, "scan_reveal") * shipm.mult(p.ship, "scan_range") * 60)
   local site = p.site
   if site == 0 then
     local best, bd

@@ -11,6 +11,12 @@ local configs = require("sim.config")
 local sm = saucer.math
 local M = {}
 
+-- gameplay gaps: installed saucer modules (sim/modules.lua) leave their summed, identified affixes in
+-- ship.mods (stat -> percent), the Charge drain of an Unstable module in ship.drain and the noise of a Loud
+-- one in ship.loud. All three stay nil with no module fitted, so a ship without one is unchanged.
+function M.mult(ship, stat) return 1 + ((ship.mods and ship.mods[stat]) or 0) / 100 end
+function M.max_charge(ship) return configs.all().max_charge * M.mult(ship, "max_charge") end
+
 function M.new(pos, yaw, size)
   return {
     pos = { pos[1], pos[2], pos[3] },
@@ -119,8 +125,9 @@ function M.update(ship, dt, regen)
   elseif regen then
     local all = configs.all()
     local k = type(regen) == "number" and regen or 1
-    ship.charge = math.min(all.max_charge, ship.charge + all.charge_regen * k * dt)
+    ship.charge = math.min(M.max_charge(ship), ship.charge + all.charge_regen * k * M.mult(ship, "charge_regen") * dt)
   end
+  if ship.drain and not ship.morph then ship.charge = math.max(0, ship.charge - ship.drain * dt) end
   return nil
 end
 
