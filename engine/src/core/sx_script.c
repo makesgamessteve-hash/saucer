@@ -1161,16 +1161,23 @@ static int l_r_settings(lua_State *L) {
     if (h >= 36 && h <= 2160) e->render.settings.height = h;
     e->render.settings.vertex_snap = (int)field_num(L, 1, "snap", (float)e->render.settings.vertex_snap);
     e->render.settings.dither = (int)field_num(L, 1, "dither", (float)e->render.settings.dither);
+    e->render.settings.affine = (int)field_num(L, 1, "affine", (float)e->render.settings.affine);
   }
-  lua_createtable(L, 0, 4);
+  lua_createtable(L, 0, 5);
   lua_pushinteger(L, e->render.settings.width);
   lua_setfield(L, -2, "width");
   lua_pushinteger(L, e->render.settings.height);
   lua_setfield(L, -2, "height");
-  lua_pushboolean(L, e->render.settings.vertex_snap && !e->xr.session);
-  lua_setfield(L, -2, "snap");
-  lua_pushboolean(L, e->render.settings.dither);
-  lua_setfield(L, -2, "dither");
+  {
+    /* what is in force now: snapping and the affine warp are off during an XR session */
+    sx_effects fx = sx_render_effects(&e->render.settings, e->xr.session);
+    lua_pushboolean(L, fx.snap);
+    lua_setfield(L, -2, "snap");
+    lua_pushboolean(L, fx.dither);
+    lua_setfield(L, -2, "dither");
+    lua_pushboolean(L, fx.affine);
+    lua_setfield(L, -2, "affine");
+  }
   return 1;
 }
 

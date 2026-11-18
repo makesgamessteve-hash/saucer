@@ -14,6 +14,14 @@ static void copy_str(char *dst, size_t cap, const char *src) {
   dst[n] = 0;
 }
 
+sx_effects sx_render_effects(const sx_render_settings *s, int xr) {
+  sx_effects e;
+  e.snap = s->vertex_snap != 0 && !xr;
+  e.affine = s->affine != 0 && !xr;
+  e.dither = s->dither != 0;
+  return e;
+}
+
 void sx_render_init(sx_render *r) {
   int i;
   memset(r, 0, sizeof *r);
@@ -21,6 +29,7 @@ void sx_render_init(sx_render *r) {
   r->settings.height = 270;
   r->settings.vertex_snap = 1;
   r->settings.dither = 1;
+  r->settings.affine = 0; /* the PS1 texture warp is opt-in */
   /* palette 0: built-in neutral fallback (black, white, magenta, grey ramp) */
   copy_str(r->palette_names[0], sizeof r->palette_names[0], "fallback");
   for (i = 0; i < SX_PALETTE_W; i++) {

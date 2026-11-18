@@ -84,6 +84,13 @@ typedef struct sx_render_settings {
   int split_horizontal; /* add-wider-dark: 2 players stacked (default side by side) */
 } sx_render_settings;
 
+/* add-retro-renderer-basic: the retro effects in force for one view. Vertex snapping and affine
+ * texture warping shimmer per eye, so both are forced off when drawing for a headset (the flat
+ * settings come back when the session ends); dithering stays as set. */
+typedef struct sx_effects {
+  int snap, affine, dither;
+} sx_effects;
+
 typedef struct sx_render {
   sx_texture textures[SX_MAX_TEXTURES];
   sx_rmesh meshes[SX_MAX_MESHES];
@@ -99,6 +106,7 @@ typedef struct sx_render {
 } sx_render;
 
 void sx_render_init(sx_render *r);
+sx_effects sx_render_effects(const sx_render_settings *s, int xr);
 void sx_render_free(sx_render *r);
 /* Load an index map (grayscale PNG where value = palette index) from memory.
  * Returns texture id (>0). On failure returns the error texture id. */
