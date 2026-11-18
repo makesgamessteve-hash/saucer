@@ -825,6 +825,7 @@ end
 M.FOG = 0.0009
 M.DETAIL_DIST = 480   -- add-detail-pass: chunks nearer than this also draw their detail mesh
 M.DETAIL_BUILDS = 6   -- at most this many detail meshes are built per frame (no hitches)
+M.CITY_DETAIL_DIST = 200 -- a city's rooms are many: only the nearest get their detail pass
 M.GATE_DIST = 420
 M.CITY_NEAR = 560     -- add-cities: a district nearer than this draws its chunks, else one coarse mesh
 M.LOD_DIST = 1100     -- beyond this a site is drawn as its coarse silhouette
@@ -865,7 +866,7 @@ end
 function M.draw_ruins(v, A, state, cam, xr)
   local st = { chunks = 0, culled = 0, lod = 0, detail = 0, built = 0 }
   local function draw_detail(set, ch)
-    if vec.dist(ch.center, cam.pos) - ch.radius > M.DETAIL_DIST then return end
+    if vec.dist(ch.center, cam.pos) - ch.radius > (set.ruin.city and M.CITY_DETAIL_DIST or M.DETAIL_DIST) then return end
     for _, g in ipairs(ch.glyphs or {}) do
       assets.decal(v, A, A.tex.glyphs, A.pal.sprites, g.c, g.yaw, g.w, g.w, { 0.8, 1, 1, 1 })
       st.glyphs = (st.glyphs or 0) + 1

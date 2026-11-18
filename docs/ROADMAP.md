@@ -499,6 +499,29 @@ by a twin anchor in vain. (The Tractor Room target queue and the twin spots
 were closed under "Gameplay gaps — done" below, the waiting follower under
 "Co-op — done".)
 
+## 11. Cities on asteroids, moons and planets — in progress
+
+**Goal.** Steve: "Please build the cities now. Please make them vast and interesting."
+Cities on asteroids, moons and planets that the saucer flies into, between and through.
+
+**Status (2026-11-18).** OpenSpec change `add-cities`. Three kits (`city_planet`, `city_moon`,
+`city_asteroid`) and `sim/citygen.lua` generate a ruin-shaped table (so physics, the beam, sentries, saves
+and the renderer work unchanged): a city of 9 to 16 districts (3 x 3 lots), blocks of hall stacks the Villa
+flies through, an undercity of up to three layers with tunnels, towers up to 400 m, sky-bridges, and
+landmark districts (spaceport hangar as the entrance, reactor heart with the vault, archive, foundry, garden
+arcology, palace). Planet: a horizon-wide skyline, fog, a day and night, 1.2 g (hovering costs Charge, the
+hangar is free). Moon: a crater dome and terraced districts, earthlight, no air, a light pull. Asteroid: a
+carved rock shell with a mouth, two tiers of lots and a spin drum at the heart, no pull. Sectors 2 to 4 each
+hold one city (one of every body), later far sectors a coin toss; the sector map tags them. A district power
+grid: every district but the spaceport is dark (shut gates, sleeping sentries) until its power coupling is
+beamed home (lazy entries in `state.locks`, so saves, fold jumps and replays are unchanged). The map key opens
+a city map; the HUD names the body and district and points a beacon at the next coupling, then the vault.
+Render streaming: per-district coarse meshes, culled chunks, a 200 m detail range, a 160 m beam-sense limit on
+the loot rolled; the mesh table went from 1024 to 4096. Tests: `tests/lua/city_spec.lua` (31 scenarios),
+`tests/game/city.lua`. Screenshots: `tools/shots/cities.sh`. Frame time: `tools/shots/cities_perf.sh`.
+Not built (follow-ups): lazy district generation, transit rails and canals, collapsing structures and storms
+as dynamics, a flooded undercity, mystery tie-ins, on-foot hand-locks for the grid, trader stations near cities.
+
 ## Remaining work after milestone 10
 
 Steve asked for the leftover items of the plan to be worked through in
@@ -688,6 +711,4 @@ Open, none scheduled (OpenSpec changes `later-followups` and
 
 ## Later / maybe
 
-Rivals, planet-surface cities, a fabricator, and a macOS port. Steve has asked for
-cities on asteroids, moons and planets: that is the next milestone after
-housekeeping.
+Rivals, a fabricator, and a macOS port. (Cities are milestone 11 above.)
