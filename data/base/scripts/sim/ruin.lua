@@ -434,6 +434,8 @@ local function layout_hash(rooms, doors, solids)
   return saucer.hash64(table.concat(parts, ";"))
 end
 
+M.layout_hash = layout_hash
+
 local function finish(seed, kit, rooms, doors, slots, reach, rng, grid, origin)
   local solids = rng and M.solids(rng, rooms, kit, grid, origin) or {}
   local debris = rng and M.debris(rng, rooms, doors, kit, origin) or {}
@@ -504,10 +506,23 @@ function M.fallback(seed, kit, origin)
   return r
 end
 
+-- add-cities: a body city (kits/city_<body>.lua) comes from sim/citygen.lua, memoized the same way
+local cmemo = {}
+function M.generate_city(seed, kit, civ, origin)
+  local key = string.format("%s|%s|%s|%g,%g,%g", tostring(seed), kit.id, civ and civ.id or "?", origin[1], origin[2], origin[3])
+  if cmemo[key] then return cmemo[key] end
+  local out, why = require("sim.citygen").generate(seed, kit, civ, origin)
+  if not out then error("city generation failed: " .. tostring(why)) end
+  cmemo = { [key] = out }
+  return out
+end
+
 -- generation is pure: memoize per (seed, kit, civ, origin, first class) so a
 -- restore (which rebuilds derived data every time) does not redo the work
 local memo, memo_n = {}, 0
 function M.generate(seed, kit_id, civ, origin, tries, first_class)
+  local ckit = kit_of(kit_id)
+  if ckit.city then return M.generate_city(seed, ckit, civ, origin) end
   local key = string.format("%s|%s|%s|%g,%g,%g|%s|%s", tostring(seed), kit_id, civ and civ.id or "?", origin[1], origin[2],
     origin[3], tostring(tries), tostring(first_class))
   if not M.GRID and memo[key] then return memo[key] end
