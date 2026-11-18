@@ -52,7 +52,8 @@ out of scope. Touch controls for mobile web ship in milestone 1.
 
 ## Process
 Every feature starts as a change in `openspec/changes/<id>/` (proposal, tasks,
-spec deltas). A change is archived into `openspec/specs/` only when all of its
-scenarios pass in CI. Milestones 0–1 (engine spine and the walkable-home
-vertical slice) implemented parts of many changes; each `tasks.md` marks what
-is done and what is still open. See `docs/ROADMAP.md`.
+spec deltas). A change is archived (`openspec archive <id>`) into
+`openspec/specs/` only when all of its scenarios pass in CI; the change itself
+moves to `openspec/changes/archive/`. Work a change did not finish is moved to
+an open change (`add-tooling-followups`, `later-followups`) before archiving.
+See `docs/ROADMAP.md`.

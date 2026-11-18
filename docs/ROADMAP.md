@@ -2,7 +2,9 @@
 
 > 2026-11-15. Adapts concept v0.3 §17 (MVP / M2 / M3) to the v0.4 first-person,
 > interior-centric design. Design source: [`concept.md`](concept.md). OpenSpec
-> changes live in `openspec/changes/`. This file is the living roadmap.
+> changes live in `openspec/changes/` (open ones) and `openspec/changes/archive/`
+> (finished ones); the live specs are in `openspec/specs/`. This file is the
+> living roadmap.
 
 You play as a person inside the saucer. The Villa is a walkable glass-dome
 home (kitchen, living room and helm on the dome deck; bedroom, bathroom and
@@ -648,6 +650,44 @@ consecutive ticks only (a player who taps the stick never reaches 2 s); the
 claim covers single-tick ties, a later grab simply finds the object gone;
 network lag compensation of claims is untested over a real link.
 
+### Housekeeping — done
+
+**Status (2026-11-18).** Done on the `remaining-housekeeping` branch.
+- **Archived.** All 37 finished OpenSpec changes were archived with
+  `openspec archive` (in the order they were created) into
+  `openspec/changes/archive/2026-11-18-<name>/`. Their requirements now live in
+  `openspec/specs/` as 56 capabilities with 239 requirements (every delta was an
+  ADDED one, so none were merged or lost; each spec got a real Purpose line).
+  `openspec validate --all --strict` passes (56 specs and the 2 open changes).
+- **Task ticks.** 2.1 ("every scenario is covered by a named test that passes in
+  CI on linux-gcc, linux-clang, windows-msvc and emscripten") is ticked at suite
+  level against main CI run 44391736871 (merge 88e7b05), which is green on all four platforms plus lint;
+  the scenarios were not individually re-mapped, and each task says so. Items that
+  were "partial" because a platform had not been checked were ticked from CI
+  evidence: the Windows MSVC job runs every `replay_*` ctest against the Linux
+  hashes, so the MSVC determinism check is already in CI.
+- **Moved out of the archived changes.** Open tooling items: `add-tooling-followups`
+  (`artpipe verify`, size lint, generated `REUSE.toml`, a Lua rng vector, a
+  luacheck rule, the ruin time budget, lazy web loading). Deferred features from
+  the groups above: `later-followups`, listed below.
+
+### Follow-ups
+
+Open, none scheduled (OpenSpec changes `later-followups` and
+`add-tooling-followups` hold them as checklists):
+- Saves: a save summary on the title card; player-record export for networked play.
+- WebXR: a physical-headset check; teleport locomotion; a seated height offset;
+  reduced flashing.
+- Meshes and renderer: a Watcher LOD; per-civ body scale; measured web build
+  times; an in-game menu entry for the texture warp and less dithering in XR; a
+  GPU pixel check.
+- Gameplay: modules fitted away from the bench; module slots as an upgrade; quirk
+  trials; saving the beam queue; upgrade prices tried with people.
+- Co-op: the push timer counts consecutive ticks only; claims over a laggy link.
+- Tooling: see `add-tooling-followups`.
+
 ## Later / maybe
 
-Rivals, planet-surface cities, a fabricator, and a macOS port.
+Rivals, planet-surface cities, a fabricator, and a macOS port. Steve has asked for
+cities on asteroids, moons and planets: that is the next milestone after
+housekeeping.
