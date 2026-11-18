@@ -397,6 +397,12 @@ function M.beam(v, state, p, scan)
   local n = 0
   -- at the console the view looks down the beam: keep the middle clear
   local y0 = p.beam_console and H // 2 + 58 or H // 2 + 10
+  -- gameplay gaps: the Tractor Room target queue
+  local ql = require("sim.beamqueue").line(p)
+  if ql then
+    v:text(W // 2 - #ql * 4, y0 + 36, #ql * 8 > W - 8 and ql:sub(1, (W - 8) // 8) or ql, CYAN)
+    n = n + 1
+  end
   if p.tractor then
     local f = vec.clamp(p.tractor.t / p.tractor.total, 0, 1)
     local t = f < 0.75 and "BEAM PULLING - SHRINKING TO FIT" or "INTO THE HOLD"

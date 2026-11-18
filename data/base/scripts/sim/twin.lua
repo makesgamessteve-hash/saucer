@@ -19,20 +19,63 @@ local function game() return require("sim.game") end
 -- active at all? (two or more players in the game)
 function M.on(state) return #(state.players or {}) >= 2 end
 
--- layout(ruin) -> { vault = slot, anchor = slot } or nil (derived, cached)
+-- add-playtest-recs (gameplay gaps): the vault and the anchor stand on their own spots, never on a
+-- loot slot. A spot is one of M.SPOTS (fractions of the slot's room, from its middle) that is
+-- farthest from everything else the room holds: its loot slots, the Echo's quarter and the three
+-- home-find quarters of a vault (sim/finds.lua). M.SPOT_CLEAR is the least gap the tests accept.
+M.SPOTS = { { 0, 0.31 }, { 0, -0.31 }, { 0.38, 0 }, { -0.38, 0 }, { 0, 0.42 }, { 0, -0.42 }, { 0.38, 0.38 }, { -0.38, -0.38 } }
+M.SPOT_CLEAR = 1.5
+local QUARTERS = { { 1, 1 }, { -1, -1 }, { -1, 1 }, { 1, -1 } } -- the Echo, then the home finds
+local function spot_of(ruin, s)
+  local ruinm = require("sim.ruin")
+  local room
+  for _, r in ipairs(ruin.rooms) do if r.id == s.room then room = r end end
+  if not room or not ruin.origin then return nil end
+  local kit = ruinm.kit_of(ruin.kit)
+  local mn, mx = ruinm.room_box(room, kit, ruin.origin)
+  local w, d = mx[1] - mn[1], mx[3] - mn[3]
+  local cx, cz = (mn[1] + mx[1]) / 2, (mn[3] + mx[3]) / 2
+  local taken = {}
+  for _, o in ipairs(ruin.slots) do
+    if o.room == s.room then taken[#taken + 1] = { o.pos[1], o.pos[3] } end
+  end
+  for _, q in ipairs(QUARTERS) do taken[#taken + 1] = { cx + q[1] * w / 4, cz + q[2] * d / 4 } end
+  local best, bd
+  for _, f in ipairs(M.SPOTS) do
+    local x, z = cx + f[1] * w, cz + f[2] * d
+    local m = 1e9
+    for _, t in ipairs(taken) do
+      local dx, dz = x - t[1], z - t[2]
+      m = math.min(m, math.sqrt(dx * dx + dz * dz))
+    end
+    if not bd or m > bd + 1e-9 then best, bd = { x, s.pos[2], z }, m end
+  end
+  return best
+end
+M.spot_of = spot_of
+
+-- layout(ruin) -> { vault = spot, anchor = spot } or nil (derived, cached); a spot is
+-- { pos, room, tier, seed } (the tier and seed of the loot slot whose room it borrows)
 local memo = setmetatable({}, { __mode = "k" })
 function M.layout(ruin)
   if not ruin then return nil end
   local c = memo[ruin]
   if c ~= nil then return c or nil end
-  local best
+  local spots = {}
   for _, s in ipairs(ruin.slots or {}) do
-    if not s.strong and (not best or s.tier > best.tier) then best = s end
+    if not s.strong then
+      local pos = spot_of(ruin, s)
+      if pos then spots[#spots + 1] = { pos = pos, room = s.room, tier = s.tier, seed = s.seed } end
+    end
+  end
+  local best
+  for _, s in ipairs(spots) do
+    if not best or s.tier > best.tier then best = s end
   end
   local anchor, ad
   if best then
-    for _, s in ipairs(ruin.slots) do
-      if s ~= best and not s.strong then
+    for _, s in ipairs(spots) do
+      if s ~= best then
         local dx, dz = s.pos[1] - best.pos[1], s.pos[3] - best.pos[3]
         local d = dx * dx + dz * dz
         if d >= M.MIN_GAP * M.MIN_GAP and (not ad or d < ad) then anchor, ad = s, d end

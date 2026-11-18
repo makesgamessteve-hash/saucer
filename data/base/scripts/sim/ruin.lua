@@ -455,7 +455,7 @@ local function finish(seed, kit, rooms, doors, slots, reach, rng, grid, origin)
     foot.slot = #slots
   end
   return { seed = seed, kit = kit.id, rooms = rooms, doors = doors, slots = slots, walls = walls,
-           debris = debris, solids = solids, foot = foot,
+           debris = debris, solids = solids, foot = foot, origin = origin,
            hash = layout_hash(rooms, doors, solids), reach = reach }
 end
 

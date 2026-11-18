@@ -45,6 +45,7 @@ local decor = require("sim.decor")
 -- add-playtest-recs
 local upgrades = require("sim.upgrades")
 local twin = require("sim.twin")
+local beamqueue = require("sim.beamqueue")
 local M = {}
 
 M.SITE_PAD = 30
@@ -537,12 +538,60 @@ local function tractor_step(state, p, cmd, dt)
     end
     return
   end
-  if not cmd:pressed("tractor") then return end
   local b = tractor.beam_of(ship)
   local _, heading = M.viewpoint(p)
-  local sc = tractor.scan(state, p, p.site, rt.ruins[p.site], heading)
+  local ruin = rt.ruins[p.site]
+  -- add-tractor-beam (gameplay gaps): a queued find that comes into lock is pulled by itself, by whoever
+  -- may pull it from where they are (the console for any size, the helm for what the relay lifts)
+  local function may(cand)
+    if not b.console then return true end
+    if p.beam_console then return true end
+    return p.mode == "helm" and upgrades.relay(p, cand.item)
+  end
+  if not cmd:pressed("tractor") then
+    if p.beam_queue then
+      local qc, qi = beamqueue.next(state, p, ruin, heading, may)
+      if qc then
+        if #p.hold >= upgrades.hold_slots(p) and qc.kind ~= "cache" and qc.kind ~= "anchor" then
+          if not p.beam_queue.warned then
+            p.beam_queue.warned = true
+            msg(state, p, "Hold is full: the beam queue waits")
+          end
+        else
+          beamqueue.remove(p, qc.key)
+          local relay = b.console and not p.beam_console and p.mode == "helm" and upgrades.relay(p, qc.item) or nil
+          p.tractor = { key = qc.key, site = p.site, t = 0,
+                        total = tractor.pull_time(ship, qi.depth) * upgrades.pull_factor(p),
+                        from = vec.copy(qc.pos), size = ship.size, console = b.console and not relay, item_size = qc.item.size,
+                        kind = qc.kind, relay = relay }
+          msg(state, p, "Queued find in lock: pulling up " .. items.label(qc.item))
+          fx(state, p, "tractor")
+        end
+      end
+    end
+    return
+  end
+  local sc = tractor.scan(state, p, p.site, ruin, heading)
   -- add-playtest-recs: with the helm beam relay the helm pulls small finds itself
   local relay = b.console and not p.beam_console and p.mode == "helm" and sc and upgrades.relay(p, sc.cand.item)
+  -- a find that is not in lock yet, or that needs the Tractor Room's console, joins the queue
+  local locked_here = sc and sc.status == "lock" and (not b.console or p.beam_console or relay)
+  if sc and not locked_here and (p.beam_console or p.mode == "helm") and sc.status ~= "big" and sc.status ~= "sealed"
+      and (b.console or sc.status ~= "lock") then
+    local what = beamqueue.toggle(p, sc.cand.key, items.label(sc.cand.item))
+    if what == "added" then
+      msg(state, p, string.format("%sQueued %s (%d/%d): the beam takes it when it is in lock%s",
+        sc.status ~= "lock" and ("Beam: " .. sc.info.hint:lower() .. ". ") or "", items.label(sc.cand.item),
+        #beamqueue.keys(p), beamqueue.MAX, (b.console and not p.beam_console) and " - from the Tractor Room console" or ""))
+      fx(state, p, "scan")
+    elseif what == "removed" then
+      msg(state, p, "Took " .. items.label(sc.cand.item) .. " off the beam queue")
+    else
+      msg(state, p, string.format("The beam queue is full (%d)", beamqueue.MAX))
+      fx(state, p, "denied")
+    end
+    return
+  end
   if b.console and not p.beam_console and not relay then
     if p.mode == "helm" and sc and sc.status == "lock" and upgrades.level(p, "beam_relay") > 0 then
       msg(state, p, "Too big for the helm relay: pull it from the Tractor Room console.")
@@ -565,6 +614,7 @@ local function tractor_step(state, p, cmd, dt)
     fx(state, p, "denied")
   else
     local cand = sc.cand
+    beamqueue.remove(p, cand.key)
     p.tractor = { key = cand.key, site = p.site, t = 0,
                   total = tractor.pull_time(ship, sc.info.depth) * upgrades.pull_factor(p),
                   from = vec.copy(cand.pos), size = ship.size, console = b.console and not relay, item_size = cand.item.size,

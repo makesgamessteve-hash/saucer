@@ -24,7 +24,7 @@ M.SKIP = { msgs = true, fx = true, panel = true, tractor = true, ghost = true, g
            help = true, latched_by = true, jam_flash = true, scan_until = true, docked = true,
            beam_console = true, hatch = true, holo_run = true, tv = true, reading = true, cooking = true,
            lifeline = true, spike = true, visiting = true, vbody = true, shake = true, clamped_by = true,
-           cut = true }
+           cut = true, beam_queue = true }
 -- world state saved as diffs (filled by later systems)
 M.WORLD_KEYS = { "traders", "nests", "caches", "vault", "clock", "locks", "grids",
                  -- add-wider-dark: the sector you are in, the ones you left, overrides, decoys, gifts
