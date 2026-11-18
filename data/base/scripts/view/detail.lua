@@ -47,7 +47,7 @@ M.STYLES = {
 
 function M.style(k)
   local s = {}
-  for key, v in pairs(M.STYLES[k.id] or M.STYLES.starship) do s[key] = v end
+  for key, v in pairs(M.STYLES[k.style or k.id] or M.STYLES.starship) do s[key] = v end
   for key, v in pairs(k.detail or {}) do s[key] = v end
   return s
 end

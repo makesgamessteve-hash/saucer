@@ -45,6 +45,7 @@ local decor = require("sim.decor")
 -- add-playtest-recs
 local upgrades = require("sim.upgrades")
 local twin = require("sim.twin")
+local cities = require("sim.cities")
 local beamqueue = require("sim.beamqueue")
 local claims = require("sim.claims")
 local M = {}
@@ -53,7 +54,7 @@ M.SITE_PAD = 30
 M.MAX_MSGS = 8 -- add-playtest-recs: room for a tip next to a lock cycle
 M.MAX_FX = 8
 
-local rt = { ruins = {}, bounds = {}, sentries = {}, shutters = {}, seals = {} } -- derived, rebuilt on restore
+local rt = { ruins = {}, bounds = {}, sentries = {}, shutters = {}, seals = {}, gates = {} } -- derived, rebuilt on restore
 
 function M.ruin(i) return rt.ruins[i] end
 function M.site_bounds(i) return rt.bounds[i] end
@@ -67,7 +68,7 @@ function M.rebuild(state)
   M.state_ref = state
   saucer.physics.clear()
   civs.use(state.seed)
-  rt.ruins, rt.bounds, rt.sentries, rt.shutters, rt.seals = {}, {}, {}, {}, {}
+  rt.ruins, rt.bounds, rt.sentries, rt.shutters, rt.seals, rt.gates = {}, {}, {}, {}, {}, {}
   for i, site in ipairs(state.sector.sites) do
     local r = ruinm.generate(site.seed, site.kit, civ_of(site), site.pos, nil, site.first)
     rt.ruins[i] = r
@@ -81,6 +82,13 @@ function M.rebuild(state)
     rt.shutters[i] = {}
     for _, sh in ipairs(r.foot and r.foot.shutters or {}) do
       if not excursion.lock_open(state, i, sh.id) then rt.shutters[i][sh.id] = saucer.physics.add_box(sh.min, sh.max, 1) end
+    end
+    -- add-cities: the gates of every dark district stay solid until its power coupling is restored
+    rt.gates[i] = {}
+    for _, g in ipairs(r.city and r.city.gates or {}) do
+      if not cities.powered(state, i, r, g.district) then
+        rt.gates[i][g.id] = { box = saucer.physics.add_box(g.box[1], g.box[2], 1), district = g.district }
+      end
     end
   end
   -- add-wider-dark: doors a Lockdown node holds sealed right now
@@ -148,6 +156,25 @@ function M.open_shutter(site, id)
   list[id] = nil
   return true
 end
+-- add-cities: a district's power came back: its gates stop being solid
+function M.open_gates(site, district)
+  local n = 0
+  for id, g in pairs(rt.gates[site] or {}) do
+    if g.district == district then
+      saucer.physics.remove(g.box)
+      rt.gates[site][id] = nil
+      n = n + 1
+    end
+  end
+  return n
+end
+function M.gates(site) return rt.gates[site] or {} end
+function M.gates_closed(site, district)
+  local n = 0
+  for _, g in pairs(rt.gates[site] or {}) do if district == nil or g.district == district then n = n + 1 end end
+  return n
+end
+
 function M.shutter_closed(site, id) return rt.shutters[site] ~= nil and rt.shutters[site][id] ~= nil end
 
 local function msg(state, p, text)
@@ -599,7 +626,7 @@ local function tractor_step(state, p, cmd, dt)
     if p.beam_queue then
       local qc, qi = beamqueue.next(state, p, ruin, heading, may)
       if qc then
-        if #p.hold >= upgrades.hold_slots(p) and qc.kind ~= "cache" and qc.kind ~= "anchor" then
+        if #p.hold >= upgrades.hold_slots(p) and qc.kind ~= "cache" and qc.kind ~= "anchor" and qc.kind ~= "coupling" then
           if not p.beam_queue.warned then
             p.beam_queue.warned = true
             msg(state, p, "Hold is full: the beam queue waits")
@@ -659,7 +686,7 @@ local function tractor_step(state, p, cmd, dt)
   elseif sc.status ~= "lock" then
     msg(state, p, "Beam: " .. sc.info.hint:lower())
     fx(state, p, "denied")
-  elseif sc.cand.kind ~= "cache" and sc.cand.kind ~= "anchor" and #p.hold >= upgrades.hold_slots(p) then
+  elseif sc.cand.kind ~= "cache" and sc.cand.kind ~= "anchor" and sc.cand.kind ~= "coupling" and #p.hold >= upgrades.hold_slots(p) then
     msg(state, p, "Hold is full")
     fx(state, p, "denied")
   else
@@ -700,6 +727,20 @@ function M.pick_up(state, p, cand, site_idx)
     if twin.hold(state, p, site_idx, ctx_fns) then fx(state, p, "tractor") end
   elseif cand.kind == "twin" then
     twin.take(state, p, site_idx, ctx_fns)
+  elseif cand.kind == "coupling" then
+    -- add-cities: the coupling is beamed home: the district wakes and its gates open
+    local r = rt.ruins[site_idx]
+    if not cities.powered(state, site_idx, r, cand.district) then
+      cities.restore(state, site_idx, cand.district)
+      local n = M.open_gates(site_idx, cand.district)
+      local on, total = cities.grid(state, site_idx, r)
+      msg(state, p, string.format("Power restored: %s district live (%d gate%s open), grid %d/%d", r.city.districts[cand.district].label,
+        n, n == 1 and "" or "s", on, total))
+      for _, o in ipairs(state.players) do
+        if o ~= p and o.site == site_idx then msg(state, o, string.format("P%d restored the %s district", p.index, r.city.districts[cand.district].label)) end
+      end
+      fx(state, p, "echo")
+    end
   elseif cand.kind == "nest" then
     local n = table.remove(state.nests, cand.index)
     n.item.hot = true
@@ -828,6 +869,12 @@ end
 -- add-playtest-recs (recommendation 4): entering a guarded site in the Villa
 -- says that Watchers are about and the Seat slips past them
 function M.entry_text(state, p, site)
+  local cr = rt.ruins[site]
+  if cities.is_city(cr) then
+    local g = cities.gravity(cr)
+    return string.format("Entering a %s city (grid %s): %s", cr.city.body, select(2, cities.summary(state, site, cr)),
+      g > 1 and string.format("%.1f g, hovering costs Charge - the hangar refills it", g) or "free flight")
+  end
   local w = sentry.summary(rt.sentries[site] or {})
   if w > 0 and p.ship.size == 1 then
     return string.format("Entering derelict site %d: %d Watcher%s here lock on to a Villa - the Seat slips past", site, w,
@@ -851,7 +898,16 @@ local function world_step(state, p, dt)
     end
   end
   if site ~= 0 then M.record_trail(state, p, site) end
-  if shipm.update(ship, dt, site == 0 and home.regen_factor(state, p)) == "done" then
+  -- add-cities: a body's pull above 1 g costs Charge to hover against (the spaceport hangar is free
+  -- and refills it); with the Charge gone the hull settles at a walking pace - never a trap
+  local cr = site ~= 0 and rt.ruins[site] or nil
+  local hangar = cities.is_city(cr) and cities.in_hangar(cr, ship.pos)
+  if cities.is_city(cr) and not hangar and not ship.morph and p.mode ~= "foot" then
+    local cost, sink = cities.pull(cr, ship.charge, dt)
+    ship.charge = ship.charge - cost
+    if sink then ship.pos = mover(state, p)(ship, { 0, -cities.SINK * dt, 0 }) end
+  end
+  if shipm.update(ship, dt, (site == 0 or hangar) and home.regen_factor(state, p)) == "done" then
     msg(state, p, "Configuration: " .. configs.get(ship.size).name)
   end
   if p.ghost > 0 then p.ghost = p.ghost - 1 end
@@ -1001,8 +1057,11 @@ function M.step_player(state, p, cmd, dt)
   if cmd:held("boost") and p.clamped_by then p.shake = (p.shake or 0) + dt end
   if cmd:pressed("map") and p.mode ~= "wake" then
     local k = p.panel and p.panel.kind
-    if k == "map" or k == "party" or k == "archive" or k == "fold_warn" then p.panel = false
-    elseif not p.panel then panel.open(p, "map") end
+    if k == "map" or k == "citymap" or k == "party" or k == "archive" or k == "fold_warn" then p.panel = false
+    elseif not p.panel then
+      local cr = p.site ~= 0 and rt.ruins[p.site] or nil
+      panel.open(p, cities.is_city(cr) and "citymap" or "map")
+    end
   end
   if cmd:pressed("camera") then p.cam = p.cam == "first" and "chase" or "first" end
   if cmd:pressed("menu") then p.help = not p.help end
@@ -1166,6 +1225,8 @@ home.register_panels(M, ctx_fns)
 decor.register(home, ctx_fns)
 visit.register_panels(ctx_fns)
 -- add-wider-dark panels
+panel.register("citymap", { title = function(state, p) return "CITY MAP" end,
+  rows = function(state, p) return cities.panel_rows(state, p, p.site, rt.ruins[p.site], panel) end })
 panel.register("map", { title = "SECTOR MAP", rows = function(state, p) return galaxy.rows(state, p, ctx_fns) end })
 panel.register("fold_warn", { title = "FOLD WARNING", rows = function(state, p) return galaxy.warn_rows(state, p, ctx_fns) end })
 panel.register("party", { title = "PARTY", rows = function(state, p) return coop.rows(state, p, ctx_fns) end })

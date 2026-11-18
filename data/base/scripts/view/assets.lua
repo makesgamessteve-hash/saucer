@@ -449,22 +449,44 @@ function M.ruin_chunks(ruin, origin)
   for _, b in ipairs(ruin.debris) do add(by_room[b.room or 1], b, { 0.55, 0.45, 0.32 }, 0.5) end
   local out = { chunks = {} }
   local coarse = {}
+  -- add-cities: a city's coarse silhouette is also kept per district, so a far district costs one draw
+  local dparts = {}
+  local function dpart(d, b)
+    if not ruin.city then return end
+    local g = dparts[d or 0] or { parts = {}, mn = { 1e9, 1e9, 1e9 }, mx = { -1e9, -1e9, -1e9 } }
+    dparts[d or 0] = g
+    g.parts[#g.parts + 1] = b
+    for a = 1, 3 do
+      g.mn[a] = math.min(g.mn[a], b.min[a])
+      g.mx[a] = math.max(g.mx[a], b.max[a])
+    end
+  end
   for _, r in ipairs(ruin.rooms) do
     local parts = by_room[r.id]
     for _, p in ipairs(M.room_decor(ruin, r, k, origin)) do parts[#parts + 1] = p end
     local c, rad = sphere_of(parts)
     local fl = floors[r.id]
-    out.chunks[#out.chunks + 1] = { mesh = saucer.mesh.build({ parts = parts }), center = c, radius = rad, room = r.id,
+    out.chunks[#out.chunks + 1] = { district = r.district, mesh = saucer.mesh.build({ parts = parts }), center = c, radius = rad, room = r.id,
                                     floor = #fl > 0 and saucer.mesh.build({ parts = fl }) or nil,
                                     glyphs = M.room_glyphs(r, k, origin) }
     local mn, mx = ruinm.room_box(r, k, origin)
     coarse[#coarse + 1] = { kind = "box", min = mn, max = mx, color = k.color, uv = 0.25 }
+    dpart(r.district, coarse[#coarse])
   end
   for i, s in ipairs(ruin.solids or {}) do
     local parts = M.solid_parts(s, k, detail.hanging(ruin, s, k, origin))
     local c, rad = sphere_of(parts)
-    out.chunks[#out.chunks + 1] = { mesh = saucer.mesh.build({ parts = parts }), center = c, radius = rad, solid = i }
+    local sd = not s.global and (s.district or (s.room and ruin.rooms[s.room] and ruin.rooms[s.room].district)) or nil
+    out.chunks[#out.chunks + 1] = { district = sd, mesh = saucer.mesh.build({ parts = parts }), center = c, radius = rad, solid = i }
     coarse[#coarse + 1] = { kind = "box", min = s[1], max = s[2], color = k.solid_color or k.color, uv = 0.25 }
+    dpart(sd, coarse[#coarse])
+  end
+  for d, g in pairs(dparts) do
+    if d ~= 0 then
+      local c, rad = sphere_of(g.parts)
+      out.districts = out.districts or {}
+      out.districts[d] = { mesh = saucer.mesh.build({ parts = g.parts }), center = c, radius = rad, mn = g.mn, mx = g.mx }
+    end
   end
   local c, rad = sphere_of(coarse)
   out.lod = { mesh = saucer.mesh.build({ parts = coarse }), center = c, radius = rad }

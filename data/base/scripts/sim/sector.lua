@@ -57,6 +57,24 @@ function M.generate(seed, sid, info)
   return { id = 1, sites = sites, trader = { pos = { -260, 30, -140 } }, vault = vault, arrival = { 0, 0, -120 } }
 end
 
+-- add-cities: some far sectors hold a body city (a planet, a moon or an asteroid) in addition to
+-- their other sites, far out so its km-wide mass clears them. Own seed child: the other sites and
+-- every sector that has no city come out exactly as before. -> kit id, rng (or nil)
+M.CITY_CHANCE = 45
+M.CITY_NEAR = 4 -- sectors 2..4
+M.CITY_DISTANCE = 4600
+function M.city_of(seed, sid)
+  if not sid or sid == 1 then return nil end
+  local crng = saucer.rng.new(saucer.seed_child(seed, "city", sid))
+  local roll, shift = crng:int(1, 100), crng:int(0, 2)
+  -- the three nearest far sectors always hold one city each, one of every body, so every body is
+  -- within a few folds of home in every universe; farther ones are a coin toss
+  local near = sid <= M.CITY_NEAR
+  if not near and roll > M.CITY_CHANCE then return nil end
+  local bodies = require("sim.citygen").BODIES
+  return "city_" .. bodies[(sid + (near and 0 or shift)) % #bodies + 1], crng
+end
+
 -- add-wider-dark: a far sector. 3-4 sites (4 in the Heart sector: the Heart
 -- site is its first) drawn from the sector's civs, each site in a kit its
 -- civ builds, spread round the trader in every direction. info is the
@@ -83,6 +101,18 @@ function M.far(seed, sid, info)
     sites[i] = { id = i, pos = pos, seed = saucer.seed_child(seed, "site", sid * 100 + i), kit = kit, civ = ci,
                  heart = (info and info.heart and i == 1) or nil, tutorial = false,
                  danger = info and info.danger or 2 }
+  end
+  local ckit, crng = M.city_of(seed, sid)
+  if ckit then
+    local ext = M.extent(ckit)
+    local a = crng:float() * saucer.math.tau
+    local d = M.CITY_DISTANCE + crng:int(0, 300)
+    local cy = crng:int(-200, 200)
+    local ci = list[crng:int(1, #list)]
+    sites[#sites + 1] = { id = #sites + 1, pos = { (saucer.math.sin(a) * d - ext[1] / 2) // 1, cy - ext[2] // 2,
+                                                  (saucer.math.cos(a) * d - ext[3] / 2) // 1 },
+                          seed = saucer.seed_child(seed, "site", sid * 100 + #sites + 1), kit = ckit, civ = ci, city = true, tutorial = false,
+                          danger = info and info.danger or 2 }
   end
   local tp = { rng:int(-200, 200), rng:int(-60, 60), rng:int(-200, 200) }
   return { id = sid, sites = sites, trader = { pos = tp }, arrival = { tp[1] + 60, tp[2] + 20, tp[3] - 260 } }

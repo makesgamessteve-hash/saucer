@@ -45,14 +45,14 @@ function M.layout(out, site, ruin, kit, t)
   local big = kit.big or 4
   local clamps, best, bestn = 0, nil, 0
   for _, r in ipairs(ruin.rooms) do
-    if r.class >= big and r.kind ~= "entrance" and r.kind ~= "shaft" then
+    if r.class >= big and r.kind ~= "entrance" and r.kind ~= "shaft" and not r.calm then
       local mn, mx = ruinm.room_box(r, kit, site.pos)
       if clamps < t.clamp.per_site then
         clamps = clamps + 1
         local home = { (mn[1] + mx[1]) / 2 + (mx[1] - mn[1]) / 5, (mn[2] + mx[2]) / 2, (mn[3] + mx[3]) / 2 }
         local lo, hi = vec.sub(mn, { 6, 6, 6 }), vec.add(mx, { 6, 6, 6 })
         out[#out + 1] = { id = #out + 1, kind = "clamp", site = site.id, room = r.id, pos = home, leash = { lo, hi },
-                          floor = mn[2] + kit.wall + 0.5 }
+                          floor = mn[2] + kit.wall + 0.5, district = r.district, dark = require("sim.cities").dark(ruin, r) }
       end
       local n = 0
       for _, d in ipairs(ruin.doors) do
@@ -72,7 +72,7 @@ function M.layout(out, site, ruin, kit, t)
     -- the node sits on the hall's -x wall, at standing height above its floor
     local pos = { mn[1] + kit.wall + 0.4, mn[2] + kit.wall + 2.0, (mn[3] + mx[3]) / 2 }
     out[#out + 1] = { id = #out + 1, kind = "lockdown", site = site.id, room = best.id, pos = pos, boxes = boxes,
-                      floor = mn[2] + kit.wall }
+                      floor = mn[2] + kit.wall, district = best.district, dark = require("sim.cities").dark(ruin, best) }
   end
 end
 

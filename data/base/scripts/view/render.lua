@@ -14,6 +14,7 @@ local avatar = require("sim.avatar")
 local fold = require("sim.fold")
 local panelm = require("sim.panel")
 local sm = saucer.math
+local ruinm = require("sim.ruin")
 local M = {}
 
 -- add-presentation-packaging: sounds live in view/audio.lua (kept here for mods)
@@ -824,6 +825,9 @@ end
 M.FOG = 0.0009
 M.DETAIL_DIST = 480   -- add-detail-pass: chunks nearer than this also draw their detail mesh
 M.DETAIL_BUILDS = 6   -- at most this many detail meshes are built per frame (no hitches)
+M.CITY_DETAIL_DIST = 200 -- a city's rooms are many: only the nearest get their detail pass
+M.GATE_DIST = 420
+M.CITY_NEAR = 560     -- add-cities: a district nearer than this draws its chunks, else one coarse mesh
 M.LOD_DIST = 1100     -- beyond this a site is drawn as its coarse silhouette
 M.CULL_DIST = 3200    -- beyond this (fog) nothing of a site is drawn
 M.VIEW_HALF = 1.15    -- radians: half of the widest view angle plus slack
@@ -841,10 +845,28 @@ function M.visible(cam, c, r, xr)
   return cosang >= sm.cos(math.min(3.14159, M.VIEW_HALF + slack))
 end
 
+-- add-cities: inside a body city the air, the light and the clock belong to the body. A planet has
+-- a day (CITY_DAY seconds) that fades its fog and sky; a moon sits in earthlight; an asteroid is dark
+-- rock lit by its own lamps. Render only: a pure function of the tick. -> a fog table (+ .day) or nil
+M.CITY_DAY = 360
+function M.city_env(state, p)
+  if not p or p.site == 0 then return nil end
+  local r = game.ruin(p.site)
+  if not (r and r.city) then return nil end
+  local e = ruinm.kit_of(r.kit).city.env
+  if not e then return nil end
+  local day = 1
+  if e.night then day = 0.5 + 0.5 * sm.sin(state.tick / 60 / M.CITY_DAY * sm.tau) end
+  local k = 0.18 + 0.82 * day
+  local function mix(c, f) return { c[1] * f, c[2] * f, c[3] * f } end
+  return { color = mix(e.fog, k), density = M.FOG * e.density, clear = mix(e.clear, k), light = mix(e.light, 0.45 + 0.55 * day),
+           ambient = e.ambient * (0.6 + 0.4 * day), day = e.night and day or 0 }
+end
+
 function M.draw_ruins(v, A, state, cam, xr)
   local st = { chunks = 0, culled = 0, lod = 0, detail = 0, built = 0 }
   local function draw_detail(set, ch)
-    if vec.dist(ch.center, cam.pos) - ch.radius > M.DETAIL_DIST then return end
+    if vec.dist(ch.center, cam.pos) - ch.radius > (set.ruin.city and M.CITY_DETAIL_DIST or M.DETAIL_DIST) then return end
     for _, g in ipairs(ch.glyphs or {}) do
       assets.decal(v, A, A.tex.glyphs, A.pal.sprites, g.c, g.yaw, g.w, g.w, { 0.8, 1, 1, 1 })
       st.glyphs = (st.glyphs or 0) + 1
@@ -875,8 +897,25 @@ function M.draw_ruins(v, A, state, cam, xr)
           st.culled = st.culled + #set.chunks
         end
       else
+        -- add-cities: districts farther than CITY_NEAR are one coarse mesh each
+        local dnear = {}
+        if set.districts then
+          for d, dm in pairs(set.districts) do
+            local dx = math.max(dm.mn[1] - cam.pos[1], 0, cam.pos[1] - dm.mx[1])
+            local dy = math.max(dm.mn[2] - cam.pos[2], 0, cam.pos[2] - dm.mx[2])
+            local dz = math.max(dm.mn[3] - cam.pos[3], 0, cam.pos[3] - dm.mx[3])
+            if dx * dx + dy * dy + dz * dz < M.CITY_NEAR * M.CITY_NEAR then
+              dnear[d] = true
+            elseif M.visible(cam, dm.center, dm.radius, xr) then
+              v:mesh(dm.mesh, { tex = tex, palette = A.pal.base })
+              st.lod = st.lod + 1
+            end
+          end
+        end
         for _, ch in ipairs(set.chunks) do
-          if M.visible(cam, ch.center, ch.radius, xr) then
+          if ch.district and set.districts and not dnear[ch.district] then
+            st.culled = st.culled + 1
+          elseif M.visible(cam, ch.center, ch.radius, xr) then
             v:mesh(ch.mesh, { tex = tex, palette = A.pal.base })
             if ch.floor then v:mesh(ch.floor, { tex = ftex or tex, palette = ftex and A.pal.kits or A.pal.base }) end
             st.chunks = st.chunks + 1
@@ -886,6 +925,18 @@ function M.draw_ruins(v, A, state, cam, xr)
           end
         end
         if set.links and M.visible(cam, set.links.center, set.links.radius, xr) then draw_detail(set, set.links) end
+        -- add-cities: the gates of dark districts, a shutter in each shut door
+        if r.city then
+          for id, g in pairs(game.gates(i)) do
+            local b = r.city.gates[id].box
+            local c = { (b[1][1] + b[2][1]) / 2, (b[1][2] + b[2][2]) / 2, (b[1][3] + b[2][3]) / 2 }
+            if vec.dist(c, cam.pos) < M.GATE_DIST then
+              v:mesh(A.foot.shutter, { pos = c, scale = { b[2][1] - b[1][1], b[2][2] - b[1][2], b[2][3] - b[1][3] },
+                                       tex = A.tex.hull, palette = A.pal.base, tint = { 1, 0.45, 0.35, 1 } })
+              st.gates = (st.gates or 0) + 1
+            end
+          end
+        end
       end
     end
   end
@@ -919,10 +970,11 @@ function M.render(v, state, alpha)
   end
   local cam = xrv.adjust(v, M.camera(p, v.xr))
   v:camera(cam)
-  v:fog({ color = { 0.02, 0.02, 0.06 }, density = M.FOG, clear = { 0.0, 0.0, 0.025 }, light = { 0.35, 0.8, 0.45 },
+  local cenv = M.city_env(state, p)
+  v:fog(cenv or { color = { 0.02, 0.02, 0.06 }, density = M.FOG, clear = { 0.0, 0.0, 0.025 }, light = { 0.35, 0.8, 0.45 },
           ambient = 0.55 })
-  v:mesh(A.stars, { pos = cam.pos, sky = true })
-  M.sky(v, A, cam.pos)
+  if not (cenv and cenv.day > 0.55) then v:mesh(A.stars, { pos = cam.pos, sky = true }) end
+  if not (cenv and cenv.day > 0.55) then M.sky(v, A, cam.pos) end
   -- derelicts, in chunks: culled against the view, far sites as one silhouette
   M.draw_ruins(v, A, state, cam, v.xr)
   v:mesh(A.station, { pos = state.sector.trader.pos, yaw = state.tick * 0.002 })
@@ -947,7 +999,12 @@ function M.render(v, state, alpha)
         v:billboard(A.tex.beam, pos, (0.6 + cand.item.size * 0.35) * k * 1.8, { palette = A.pal.base,
                     tint = { 0.8, 1, 0.9, 0.55 } })
       end
-      if cand.echo or cand.kind == "curio" then
+      if cand.kind == "coupling" then
+        -- add-cities: a district's power coupling, a tall glowing pylon head
+        local pulse = 0.65 + 0.35 * sm.sin(state.tick * 0.07)
+        v:mesh(A.foot.lock, { pos = { pos[1], pos[2] - 1.2, pos[3] }, yaw = spin, scale = 2.4 * k, palette = A.pal.base })
+        v:billboard(A.tex.glow, pos, 7 * k, { palette = A.pal.base, tint = { 1, 0.7, 0.2, 0.9 * pulse } })
+      elseif cand.echo or cand.kind == "curio" then
         v:billboard(A.tex.echo, pos, (cand.kind == "curio" and 2.4 or 1.6) * k, { palette = A.pal.base })
       else
         v:billboard(A.tex.loot, pos, s * k, { palette = A.pal.base })

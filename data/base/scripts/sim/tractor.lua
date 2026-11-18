@@ -145,9 +145,13 @@ function M.candidates(state, p, site_idx, ruin)
   local out = {}
   if ruin then
     local civ = civ_id(state, site_idx)
+    local near = ruin.city ~= nil
+    local sp = p.ship.pos
     for _, s in ipairs(ruin.slots) do
       local key = site_idx .. ":" .. s.id
-      if not p.looted[key] then
+      -- add-cities: a city holds hundreds of slots; only those within beam sense are rolled
+      local far = near and (math.abs(s.pos[1] - sp[1]) > 160 or math.abs(s.pos[3] - sp[3]) > 160 or math.abs(s.pos[2] - sp[2]) > 160)
+      if not far and not p.looted[key] then
         local iseed = loot.instance_seed(s.seed, p.record_index)
         local item = loot.roll(iseed, s.max_size, s.tier)
         item.tier, item.civ = s.tier, civ
@@ -159,6 +163,7 @@ function M.candidates(state, p, site_idx, ruin)
     end
     -- add-holodeck-home-life: data cores, modules, books and ingredients in vaults
     for _, c in ipairs(require("sim.finds").candidates(state, p, site_idx, ruin)) do out[#out + 1] = c end
+    for _, c in ipairs(require("sim.cities").candidates(state, p, site_idx, ruin)) do out[#out + 1] = c end
     local echo = mystery.echo_at(state.mystery, site_idx, state.sector_id)
     if echo then
       for _, r in ipairs(ruin.rooms) do

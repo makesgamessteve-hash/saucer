@@ -277,6 +277,12 @@ function M.panel(v, state, p)
     v:text(W // 2 - 13 * 8 // 2, y - 18, "a cozy salvage", DIM)
   end
   -- add-wider-dark: the sector map sits left of its rows when there is room
+  if p.panel.kind == "citymap" and W >= 360 then
+    local mw = math.min(W // 2 - 20, 220)
+    require("view.map").city(v, state, 6, 40, mw, math.min(H - 80, 200), p)
+    x = math.max(x, mw + 16)
+    w = math.min(w, W - 8 - x)
+  end
   if p.panel.kind == "map" and W >= 360 then
     local mw = math.min(W // 3, 200)
     require("view.map").draw(v, state, 6, 40, mw, math.min(H - 80, 160), p)
@@ -542,8 +548,26 @@ function M.draw(v, state, p, target)
     nav(60, 10, M.elevation_cue(p, c), CYAN)
     if p.docked then nav(60, 20, W < 400 and "DOCKED" or "DOCKED AT THE TRADER", GREEN) end
   elseif p.site ~= 0 then
-    nav(40, 0, "IN DERELICT " .. p.site, AMBER)
-    if (p.scan_until or 0) > state.tick then nav(40, 10, "SCANNING", CYAN) end
+    local cr = require("sim.game").ruin(p.site)
+    if cr and cr.city then
+      -- add-cities: the body, the district under you, the grid and the beacon to follow
+      local cities = require("sim.cities")
+      local pd = cities.district_at(cr, p.ship.pos)
+      local on, n = cities.grid(state, p.site, cr)
+      local lines = { string.format("%s CITY GRID %d/%d", cr.city.body:upper(), on, n), pd.label:upper() }
+      local b = cities.beacon(state, p.site, cr, p.ship.pos)
+      if b then
+        lines[3] = string.format("%s %s %dM %s", M.bearing(p, b.pos), b.short, b.dist // 1, M.elevation_cue(p, b.pos))
+      end
+      for i, t in ipairs(lines) do
+        if compact then nav(70, 0, t, i == 3 and CYAN or AMBER) elseif W < 400 then nav(70, (i - 1) * 10, t, i == 3 and CYAN or AMBER)
+        else v:text(8, 76 + (i - 1) * 10, t, i == 3 and CYAN or AMBER) end
+      end
+      if (p.scan_until or 0) > state.tick then v:text(8, 106, "SCANNING", CYAN) end
+    else
+      nav(40, 0, "IN DERELICT " .. p.site, AMBER)
+      if (p.scan_until or 0) > state.tick then nav(40, 10, "SCANNING", CYAN) end
+    end
   end
   -- the belly beam's alignment indicator (add-tractor-beam)
   -- (a two-way split half still has room for the scope: the beam needs it)
