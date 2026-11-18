@@ -9,7 +9,7 @@
 
 #define SX_MAX_VIEWPORTS 4
 #define SX_MAX_TEXTURES 256
-#define SX_MAX_MESHES 1024
+#define SX_MAX_MESHES 4096
 #define SX_PALETTE_W 256
 #define SX_MAX_PALETTES 64
 

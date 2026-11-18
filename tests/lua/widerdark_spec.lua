@@ -96,7 +96,8 @@ describe("galaxy", function()
     local g = galaxy.generate(42)
     local far = require("sim.sector").generate(42, g.spine[4], g.sectors[g.spine[4]])
     expect(far.sites[1].heart).to_be(true)
-    expect(#far.sites).to_be(4)
+    -- add-cities: a far sector may carry one extra site, its body city
+    expect(#far.sites - (far.sites[#far.sites].city and 1 or 0)).to_be(4)
     for _, s in ipairs(far.sites) do
       expect(s.tutorial).to_be(false)
       expect(s.danger).to_be(g.sectors[g.spine[4]].danger)

@@ -47,6 +47,12 @@ function M.tuned(state)
   return c
 end
 
+-- add-cities: a sentry of a district whose power is out starts dark and wakes when it is restored
+local function dark_of(ruin, r)
+  local pd = ruin.city and r.district and ruin.city.districts[r.district]
+  return (pd and not pd.powered) or nil
+end
+
 -- layout(site, ruin, civ) -> list of sentry definitions (derived data).
 -- The tutorial derelict (site 1) is unguarded.
 function M.layout(site, ruin, civ)
@@ -58,7 +64,9 @@ function M.layout(site, ruin, civ)
   local band = t.watcher.band[civ and civ.body or "human"] or { 2, 4 }
   for _, r in ipairs(ruin.rooms) do
     local mn, mx = ruinm.room_box(r, kit, site.pos)
-    if r.class >= big and r.kind ~= "entrance" then
+    if r.calm then
+      -- add-cities: a quiet hall of a city keeps no sentry
+    elseif r.class >= big and r.kind ~= "entrance" then
       -- a ceiling turret at the far end of the hall, looking back at the door you
       -- come in by; in a vertical shaft it hangs at the top and looks down the shaft
       local door
@@ -80,7 +88,8 @@ function M.layout(site, ruin, civ)
       end
       local yaw = sm.atan2(tgt[1] - pos[1], tgt[3] - pos[3])
       out[#out + 1] = { id = #out + 1, kind = "watcher", site = site.id, room = r.id, pos = pos, yaw = yaw,
-                        pitch = pitch, band = band, glyph = civ and civ.glyph or nil }
+                        pitch = pitch, band = band, glyph = civ and civ.glyph or nil, district = r.district,
+                        dark = dark_of(ruin, r) }
     elseif r.class < big and r.kind == "duct" or (r.class < big and r.kind == "side" and ruin.rooms[r.parent]
         and ruin.rooms[r.parent].class >= big) then
       -- a Snatcher in the duct; its nest at the deepest small room of the branch
@@ -109,7 +118,8 @@ function M.layout(site, ruin, civ)
         hi[k] = math.max(mx[k], dmx[k]) + 2
       end
       out[#out + 1] = { id = #out + 1, kind = "snatcher", site = site.id, room = r.id, pos = { cx, cy, cz },
-                        patrol = { a, b }, nest = nest, nest_room = deepest.id, leash = { lo, hi }, glyph = civ and civ.glyph or nil }
+                        patrol = { a, b }, nest = nest, nest_room = deepest.id, leash = { lo, hi }, glyph = civ and civ.glyph or nil,
+                        district = r.district, dark = dark_of(ruin, r) }
     end
   end
   -- add-wider-dark: deeper sectors add Clamps and a Lockdown node
@@ -453,7 +463,9 @@ function M.step(state, site_idx, defs, dt, ctx)
   end
   for i, def in ipairs(defs) do
     local dyn = dyns[i]
-    if def.kind == "watcher" then step_watcher(state, def, dyn, dt, ctx, t)
+    if def.dark and not (state.locks and state.locks[site_idx .. ":power" .. def.district]) then
+      -- add-cities: its district is dark: it sits dormant until the grid comes back
+    elseif def.kind == "watcher" then step_watcher(state, def, dyn, dt, ctx, t)
     elseif def.kind == "clamp" then adv.step_clamp(state, def, dyn, dt, ctx, t)
     elseif def.kind == "lockdown" then adv.step_lockdown(state, def, dyn, dt, ctx, t, ctx.seal)
     elseif def.kind == "warden" then require("sim.warden").step(state, def, dyn, dt, ctx, t)

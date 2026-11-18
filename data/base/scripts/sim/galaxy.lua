@@ -276,6 +276,8 @@ function M.rows(state, p, ctx)
     local tags = {}
     if s.id == cur then tags[#tags + 1] = "HERE" end
     if res[s.id] then tags[#tags + 1] = s.heart and "HEART" or "RESONANT" end
+    local ck = require("sim.sector").city_of(state.seed, s.id)
+    if ck then tags[#tags + 1] = "CITY:" .. ck:sub(6) end
     if state.visited and state.visited[tostring(s.id)] then tags[#tags + 1] = "visited" end
     local names = {}
     for _, ci in ipairs(s.civs) do names[#names + 1] = civs.get(state.seed, ci).name end

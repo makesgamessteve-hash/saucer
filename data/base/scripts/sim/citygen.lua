@@ -415,7 +415,7 @@ function M.generate(seed, kit, civ, origin)
   local rd = nil
   for _, d in ipairs(districts) do if d.kind == "reactor" then rd = d end end
   for _, lot in ipairs(bybuilding) do
-    if lot.d == rd.id and lot.landmark == "reactor" then
+    if rd and lot.d == rd.id and lot.landmark == "reactor" then
       vault = lot.stack[-lot.umax]
       if lot.umax == 0 then vault = lot.stack[lot.hmax] end
     end
