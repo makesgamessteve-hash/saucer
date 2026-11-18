@@ -10,6 +10,22 @@ local M = {}
 local cache = { saucer = {}, ruin = {} }
 M.cache = cache
 
+-- the rig of a recipe, built once per (recipe, params, seed) -> rig (see lib/meshkit.lua)
+function M.rig(A, id, params, seed)
+  -- nested tables, not a built key: the renderer asks for every sentry every frame
+  local a = A.rigs[id]
+  if not a then a = {}; A.rigs[id] = a end
+  local kind = params.kind or ""
+  local b = a[kind]
+  if not b then b = {}; a[kind] = b end
+  local r = b[seed]
+  if not r then
+    r = kit.rig(id, params, seed)
+    b[seed] = r
+  end
+  return r
+end
+
 function M.palette(name) return saucer.render.palette(name) end
 
 -- add-presentation-packaging: every texture of the art pass (see tools/artpipe)
@@ -71,8 +87,13 @@ function M.init()
   cache.station = kit.build("station", {}, 11)
   cache.cache_mesh = kit.build("loot_cache", { size = 1 }, 1)
   -- milestone 3: sentries, nests and the Resonant vault (closed and open)
-  cache.watcher = kit.build("sentry", { kind = "watcher" }, 1)
-  cache.snatcher = kit.build("sentry", { kind = "snatcher" }, 1)
+  -- add-mesh-builder: rigs (a base mesh, named nodes to animate, declared collision volumes); the
+  -- builder civ's glyph is the seed, so each civ has its own Watchers and Snatchers (M.rig)
+  cache.rigs = {}
+  cache.watcher = M.rig(cache, "watcher", {}, 1)
+  cache.snatcher = M.rig(cache, "snatcher", {}, 1)
+  cache.lever = M.rig(cache, "cockpit", { kind = "lever" }, 1)
+  cache.orb = M.rig(cache, "cockpit", { kind = "orb" }, 1)
   cache.nest = kit.build("sentry", { kind = "nest" }, 1)
   cache.vault = kit.build("sentry", { kind = "vault", open = 0 }, 1)
   cache.vault_open = kit.build("sentry", { kind = "vault", open = 1 }, 1)

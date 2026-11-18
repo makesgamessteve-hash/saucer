@@ -11,6 +11,9 @@
 local avatar = require("sim.avatar")
 local configs = require("sim.config")
 local panel = require("sim.panel")
+local assets = require("view.assets")
+local kit = require("lib.meshkit")
+local volume = require("lib.volume")
 local M = {}
 
 M.STAND_EYE = 1.62         -- interior eye height (saucer/interior.lua eye)
@@ -123,14 +126,28 @@ function M.hands(v, A, cam, p, scan)
   return n
 end
 
--- the size lever's handle by your right hip, where a pinch grabs it
+-- the size lever by your right hip, where a pinch grabs it: the cockpit lever rig (meshes/cockpit.lua)
+-- stands with its knob on the grab point; its handle leans when held, and the whole lever lights when a
+-- hand is inside its declared "grab" volume (the lever recipe's 12 cm sphere, the engine's reach)
+M.LEVER_KNOB = 0.18  -- the knob's height over the lever base in the recipe
+M.LEVER_NEAR = 0.06  -- a hand this close to the grab volume lights the lever
 function M.lever(v, A, cam)
   local pos, held = saucer.xr.lever()
   if not pos then return 0 end
-  local w = M.world(cam, pos)
-  box(v, A, { w[1], w[2] - 0.05, w[3] }, cam.yaw, 0.03, 0.12, 2, FRAME)
-  box(v, A, w, cam.yaw, 0.07, 0.035, 3, held and LOCK or HOLD)
-  return 2
+  local rig = assets.rig(A, "cockpit", { kind = "lever" }, 1)
+  local base = { pos[1], pos[2] - M.LEVER_KNOB, pos[3] }
+  local near = false
+  for _, grab in ipairs(rig.collision) do
+    if grab.name == "grab" then
+      for _, h in ipairs(saucer.xr.hands()) do
+        if volume.dist(grab, { pos = base, yaw = 0 }, h.pos) <= M.LEVER_NEAR then near = true end
+      end
+    end
+  end
+  local w = M.world(cam, base)
+  -- the recipe faces away from the operator, who looks toward -z in the headset's frame
+  return kit.draw(v, rig, { pos = w, yaw = cam.yaw + saucer.math.pi }, { handle = { pitch = held and 0.35 or 0 } },
+                  { tint = held and LOCK or (near and HOLD or nil) })
 end
 
 -- haptics: one pulse when the fold starts, one when debris strikes the hull

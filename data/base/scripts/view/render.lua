@@ -3,6 +3,7 @@
 -- The camera is the player's own eyes: on foot under the dome, or seated at
 -- the helm with the interior around them. A chase view is a toggle away.
 local assets = require("view.assets")
+local kit = require("lib.meshkit")
 local hud = require("view.hud")
 local configs = require("sim.config")
 local vec = require("lib.vec")
@@ -43,8 +44,10 @@ function M.draw_sentries(v, A, state, p)
         local tint = M.STATE_TINT[dyn.st] or M.STATE_TINT.dormant
         local show = scanned and p.site == site
         if def.kind == "watcher" then
-          v:mesh(A.watcher, { pos = def.pos, yaw = dyn.yaw })
+          -- add-mesh-builder: the base hangs still, the head turns to dyn.yaw and the eye tilts to its pitch
           local pitch = dyn.pitch or def.pitch
+          kit.draw(v, assets.rig(A, "watcher", {}, def.glyph or 1), { pos = def.pos, yaw = def.yaw },
+                   { head = { yaw = dyn.yaw - def.yaw }, eye = { pitch = pitch } })
           local f = sentry.dir_of(dyn.yaw, pitch)
           v:billboard(A.tex.beam, vec.add(def.pos, vec.scale(f, 1.9)), 1.0, { palette = A.pal.base, tint = tint })
           if show then
@@ -81,7 +84,10 @@ function M.draw_sentries(v, A, state, p)
           end
         else
           local pos = dyn.pos or def.pos
-          v:mesh(A.snatcher, { pos = pos, yaw = state.tick * 0.05 })
+          -- the pincers open while it hunts, the sensor stalk sweeps
+          local hunting = dyn.st == "chase" or dyn.st == "latched" or dyn.st == "hunt"
+          kit.draw(v, assets.rig(A, "snatcher", {}, def.glyph or 1), { pos = pos, yaw = state.tick * 0.05 },
+                   { claws = { pitch = hunting and -0.45 or 0 }, eye = { yaw = sm.sin(state.tick * 0.1) * 0.7 } })
           v:billboard(A.tex.beam, { pos[1], pos[2] + 0.55, pos[3] }, show and 1.4 or 0.5,
             { palette = A.pal.base, tint = tint })
           if def.nest then v:mesh(A.nest, { pos = def.nest }) end

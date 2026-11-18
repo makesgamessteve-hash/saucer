@@ -18,6 +18,8 @@
 -- sentries in state.overrides (both kept per sector).
 local vec = require("lib.vec")
 local ruinm = require("sim.ruin")
+local meshkit = require("lib.meshkit")
+local volume = require("lib.volume")
 local configs = require("sim.config")
 local M = {}
 
@@ -250,6 +252,16 @@ end
 
 function M.pos_of(def, dyn) return dyn.pos or def.pos end
 
+-- add-mesh-builder: how far point p is from a sentry's declared hit volumes (meshes/watcher.lua and
+-- meshes/snatcher.lua: 0 inside them). Sentries without a recipe of their own count from their centre.
+local HIT_RECIPE = { watcher = "watcher", snatcher = "snatcher" }
+function M.reach(def, dyn, p)
+  local id = HIT_RECIPE[def.kind]
+  if not id then return vec.dist(M.pos_of(def, dyn), p) end
+  local vols = meshkit.volumes(id, nil, def.glyph or 1)
+  return (volume.nearest(vols, { pos = M.pos_of(def, dyn), yaw = dyn.yaw or def.yaw or 0 }, p))
+end
+
 -- Override spike target for p on foot: the nearest Disabled sentry or any
 -- Lockdown node within reach -> site, index
 function M.spike_target(state, p, t)
@@ -260,7 +272,7 @@ function M.spike_target(state, p, t)
   for i, def in ipairs(game.sentries(p.site)) do
     local dyn = state.sentries[p.site] and state.sentries[p.site][i]
     if dyn and dyn.st ~= "off" and (dyn.st == "disabled" or def.kind == "lockdown") then
-      local d = vec.dist(M.pos_of(def, dyn), eye)
+      local d = M.reach(def, dyn, eye)
       if d <= t.spike.reach and (not bd or d < bd) then best, bd = i, d end
     end
   end

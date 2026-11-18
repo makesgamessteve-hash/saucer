@@ -537,6 +537,36 @@ the headset. Tests: `tests/c/test_xr.c`, `tests/lua/webxr_spec.lua`, game test
 **Still manual:** a physical-headset check of felt scale and comfort.
 **Deferred:** teleport locomotion, a seated height offset, reduced flashing.
 
+### Meshes — done
+
+**Status (2026-11-18).** Done in OpenSpec change `add-mesh-builder`.
+**Hero meshes:** the Watcher (`meshes/watcher.lua`: ceiling plate, bellows stem,
+a yawing head, a pitching eye with a civ-coloured lens), the Snatcher
+(`meshes/snatcher.lua`: shell, four jointed legs, open-and-close pincers, a
+scanning eye) and the cockpit props (`meshes/cockpit.lua`: the helm console, the
+size lever, the throttle orb) are code-generated in the retro low-poly style of
+the saucer and station; the old placeholder boxes are gone. The Villa's helm desk
+is now the cockpit console with the lever and the orb baked on. **Rigs:** a
+recipe may declare `nodes` (a pivot, an axis and optionally a parent) and tag
+parts with `node`; `kit.rig` builds the base and one mesh per node, `kit.draw`
+poses them (the Watcher's head turns to its target and its eye pitches; the
+Snatcher's pincers open when it hunts; the XR lever's handle pitches when held).
+**Collision:** recipes declare `collision` volumes (sphere, box, vertical
+cylinder; `lib/volume.lua`), independent of pose; the Jammer's range and the
+Override spike's reach now measure to a Watcher's or Snatcher's volumes instead
+of its centre, and the XR lever lights when a hand is near its "grab" volume
+(12 cm, the engine's `SX_XR_LEVER_REACH`). **Budget:** a hero mesh has at most 3k
+triangles and 5 ms (20 ms on the web); bigger recipes (the Villa's hull, the
+interior) are listed with their own ceilings in `meshes/budgets.lua`. Over the
+triangle budget, tests and tools (`kit.strict`) fail, and the game shows a
+magenta box of the same size, logs a warning and records it in `kit.violations`;
+build time over its limit only warns (it is wall-clock, so never a hard
+failure). Tests: `tests/lua/mesh_rigs_spec.lua` (named after the spec's
+scenarios), the existing `game_sentries` and `game_xr*` runs; shots in
+`tools/shots/meshes.lua`. **Deferred:** a LOD variant of the Watcher (the spec's
+`lod` param; there is one detail level), a per-civ body scale beyond the glyph
+seed, and measured (not just asserted) web build times, which need a browser.
+
 ## Later / maybe
 
 Rivals, planet-surface cities, a fabricator, and a macOS port.

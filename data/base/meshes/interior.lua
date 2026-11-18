@@ -233,14 +233,19 @@ end
 -- well in the middle, and two angled wing screens; live readouts are drawn on
 -- top of these by the renderer (view/render.lua console())
 function BUILD.helm_desk(out, f, y)
+  -- add-mesh-builder: the cockpit console recipe (meshes/cockpit.lua), with the size lever
+  -- and the throttle orb standing on it at their neutral poses
   local b = f.box
-  out[#out + 1] = box(b[1], y, b[2], b[3], y + f.h - 0.05, b[4], f.color)
-  out[#out + 1] = box(b[1] - 0.05, y + f.h - 0.05, b[2] - 0.1, b[3] + 0.05, y + f.h, b[4] + 0.02, darker(f.color, 0.75))
+  local cockpit = data.load("meshes/cockpit.lua")
   local cx, cz = (b[1] + b[3]) / 2, (b[2] + b[4]) / 2
-  out[#out + 1] = P("cylinder", { c = { cx, y + f.h, cz }, r = 0.24, h = 0.012, seg = 16, color = { 0.05, 0.12, 0.1 },
-                                  emissive = 0.6 })
-  out[#out + 1] = P("ring", { c = { cx, y + f.h, cz }, rin = 0.24, r = 0.27, h = 0.02, seg = 16, color = { 0.3, 1.0, 0.7 },
-                              emissive = 1 })
+  local con = cockpit({ kind = "console", w = b[3] - b[1], d = b[4] - b[2], h = f.h, color = f.color })
+  local all = kit.transform(con.parts, { pos = { cx, y, cz } })
+  all = kit.merge(all, kit.transform(cockpit({ kind = "lever" }).parts, { pos = { cx + 0.85, y + f.h, cz } }),
+                  kit.transform(cockpit({ kind = "orb" }).parts, { pos = { cx - 0.85, y + f.h, cz } }))
+  for _, p in ipairs(all) do
+    p.node = nil -- the props are baked at their neutral pose here; the nodes are for the rigs
+    out[#out + 1] = p
+  end
 end
 function BUILD.helm_wing(out, f, y)
   local b = f.box
