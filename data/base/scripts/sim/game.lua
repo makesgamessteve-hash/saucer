@@ -343,6 +343,8 @@ M.PHASE_SECONDS = 3
 local function pair_key(a, b) return math.min(a.index, b.index) .. ":" .. math.max(a.index, b.index) end
 function M.phased(state, a, b)
   if a.ship.morph or b.ship.morph then return true end
+  -- the party has agreed to a fold jump: nobody's hull may hold the others' fold back
+  if state.jump and state.jump ~= false and galaxy.agreed(state) then return true end
   local e = state.phase and state.phase[pair_key(a, b)]
   return e ~= nil and (e.untl or 0) > state.tick
 end
@@ -573,7 +575,13 @@ local function tractor_step(state, p, cmd, dt)
     t.t = t.t + dt
     if t.t >= t.total - 1e-9 then
       p.tractor = false
-      M.pick_up(state, p, cand, t.site)
+      local owner = claims.is_shared(cand.kind) and claims.claimed_by(state, t.site, t.key) or nil
+      if owner and owner ~= p.index then
+        msg(state, p, string.format("P%d already claimed that", owner))
+        fx(state, p, "denied")
+      else
+        M.pick_up(state, p, cand, t.site)
+      end
     end
     return
   end

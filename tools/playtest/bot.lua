@@ -649,10 +649,11 @@ local function twin_hold(pl, max_wait)
       ap.wait_until(B, pl, function()
         local e = S().twins and S().twins[twin.key(site)]
         return (e and e.done) or twin.holder(S(), site) ~= get()
-      end, max_wait or 60 * 600)
+      end, max_wait or (twin.HOLD_TIME + 120)) -- the sim lets an untaken hold go after HOLD_TIME
     end })
   local e = S().twins and S().twins[twin.key(site)]
-  ev(pl, "twin_hold_end", string.format("site %d done %s ticks %d", site, tostring(e and e.done), tick() - t0))
+  ev(pl, "twin_hold_end", string.format("site %d done %s ticks %d%s", site, tostring(e and e.done), tick() - t0,
+    (e and e.waited and not e.done) and " (nobody came: released)" or ""))
   return e and e.done
 end
 

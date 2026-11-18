@@ -12,6 +12,7 @@ local M = {}
 
 M.MIN_GAP = 30     -- metres between the anchor and the vault (two Villas fit)
 M.HOLD_RANGE = 55  -- the holder must stay this close to the anchor
+M.HOLD_TIME = 90 * 60 -- ticks: a hold nobody takes up lets go after 90 s (add-multiplayer-foundation 1.6)
 M.TIER_BONUS = 2   -- the prize is this many tiers above the vault's slot
 
 local function game() return require("sim.game") end
@@ -178,7 +179,7 @@ end
 -- the anchor was beamed: p holds the shutter open while it stays close
 function M.hold(state, p, site, ctx)
   local e = M.entry(state, site)
-  e.by = p.index
+  e.by, e.at = p.index, state.tick
   ctx.msg(state, p, "You hold the shutter anchor. Stay close: a partner can now beam up the twin vault.")
   for _, o in ipairs(state.players) do
     if o ~= p then
@@ -229,6 +230,15 @@ function M.step(state, ctx)
       local h = state.players[e.by]
       e.by = 0
       if h then ctx.msg(state, h, "You let go of the shutter anchor: the twin vault closes.") end
+    elseif e and (e.by or 0) > 0 and not e.done and state.tick - (e.at or state.tick) >= M.HOLD_TIME then
+      -- nobody came for the vault: let the holder go on with the day (a bot or a human alike)
+      local who = e.by
+      local h = state.players[who]
+      e.by, e.waited = 0, (e.waited or 0) + 1
+      if h then ctx.msg(state, h, "Nobody took the twin vault: the shutter closes. Ask a partner to come back with you, or move on.") end
+      for _, o in ipairs(state.players) do
+        if o ~= h then ctx.msg(state, o, string.format("The twin vault at site %d closed again: ask P%d to hold it once more", site, who)) end
+      end
     end
   end
 end
