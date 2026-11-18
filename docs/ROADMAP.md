@@ -497,6 +497,27 @@ twin anchors and vaults sit on loot slots, so the find on the slot comes up
 first; upgrade prices are untested with people; the follower bot can wait by
 a twin anchor in vain.
 
+## Remaining work after milestone 10
+
+Steve asked for the leftover items of the plan to be worked through in
+order: Saves, WebXR, Meshes, Renderer, Gameplay gaps, Co-op, Housekeeping.
+
+### Saves — done
+
+**Status (2026-11-18).** Done in OpenSpec change `add-save-system` (state
+version 11, save format 3). Saves now store the universe seed, the mod set
+and **diffs**: the world (`traders`, `vault`, `clock`, caches, locks, grids,
+decoys, gifts, visited sectors, and now also `twins`, `lockdowns` and
+Hardcore, which were never saved before) and each player record are diffed
+(`sim/diff.lua`) against what the seed alone regenerates, so a fresh universe
+is a few lines and no geometry is stored. Records are keyed by `record_index`
+in join order; a single-player save loaded with `--local-players 2` keeps
+record 0 and starts record 1 with a starter saucer. Format 2 saves (state
+version 10) migrate on load and are re-written as format 3 at the next sleep.
+Tests: `tests/lua/save_spec.lua`, `tests/fixtures/saves/v10_format2.lua`, game
+tests `game_saves_write` and `game_saves_load`. Saves made by a newer game are refused with their own message. Known gap: no
+player-record export for networked play (the host stores everything).
+
 ## Later / maybe
 
 Rivals, planet-surface cities, a fabricator, and a macOS port.

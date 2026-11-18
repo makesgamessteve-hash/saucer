@@ -137,6 +137,13 @@ if(SAUCER_BUILD_TESTS)
   add_test(NAME game_home_restore_every_tick COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR}
            --user-dir ${USERDIR}-home-ret --quiet --seed 42 --script tests/game/home.lua --restore-every-tick
            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  # saves: write a seed-plus-diff save with one player, then load it into a two-player game (own user dir, ordered)
+  add_test(NAME game_saves_write COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-saves --quiet
+           --seed 42 --script tests/game/saves_write.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  add_test(NAME game_saves_load COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-saves --quiet
+           --seed 7 --local-players 2 --viewports 2 --script tests/game/saves_load.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  set_tests_properties(game_saves_write PROPERTIES FIXTURES_SETUP saves_slot)
+  set_tests_properties(game_saves_load PROPERTIES FIXTURES_REQUIRED saves_slot)
   # milestone 3: identify + trade, a sentry encounter, the mystery chain (trade and mystery save and load)
   add_test(NAME game_trade COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-trade --quiet
            --seed 42 --script tests/game/trade.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})

@@ -81,8 +81,9 @@ T.assert(ap.ex_work(T, 1, get, function() return ex.grid_down(T.state(), 1) end,
 -- save mid-excursion: the visit, the suit, the hands and the lock are kept
 require("sim.save").write(T.state())
 local rec = require("sim.save").read()
-T.assert(rec and rec.players[1].mode == "foot" and rec.players[1].excursion and #rec.players[1].hands == 1, "the save holds the excursion")
-T.assert(rec.world.locks and rec.world.locks["1:1"], "and the turned hand-lock")
+local saved = rec and require("sim.save").player(rec, 1)
+T.assert(saved and saved.mode == "foot" and saved.excursion and #saved.hands == 1, "the save holds the excursion")
+T.assert(require("sim.save").world(rec, T.state().sector).locks["1:1"], "and the turned hand-lock")
 
 -- 7. back out to the hall, then let the suit run dry: the Lifeline
 T.assert(ap.ex_path(T, 1, get, { f.route[3], f.route[2], f.route[1] }, 0.3, 2000), "crawled back out")
