@@ -46,6 +46,7 @@ local decor = require("sim.decor")
 local upgrades = require("sim.upgrades")
 local twin = require("sim.twin")
 local beamqueue = require("sim.beamqueue")
+local claims = require("sim.claims")
 local M = {}
 
 M.SITE_PAD = 30
@@ -332,13 +333,47 @@ function M.viewpoint(p, state)
   return shipm.eye_world(ship.pos, ship.yaw, ship.size), ship.yaw, ship.pitch
 end
 
+-- add-multiplayer-foundation 1.4 (anti-blocking fold-phase): two saucers that are already overlapping
+-- (a spawn, a fold) or that one of them is folding pass through each other instead of pinning the pair,
+-- and a player who pushes into another saucer for PUSH_SECONDS without getting anywhere phases through
+-- that saucer for PHASE_SECONDS. state.phase[<low>:<high>] = { n = ticks pushed, last = tick, untl = tick }
+-- exists only once two saucers have actually bumped, so a game without co-op contact is unchanged.
+M.PUSH_SECONDS = 2
+M.PHASE_SECONDS = 3
+local function pair_key(a, b) return math.min(a.index, b.index) .. ":" .. math.max(a.index, b.index) end
+function M.phased(state, a, b)
+  if a.ship.morph or b.ship.morph then return true end
+  -- the party has agreed to a fold jump: nobody's hull may hold the others' fold back
+  if state.jump and state.jump ~= false and galaxy.agreed(state) then return true end
+  local e = state.phase and state.phase[pair_key(a, b)]
+  return e ~= nil and (e.untl or 0) > state.tick
+end
+local function pushed(state, p, o)
+  state.phase = state.phase or {}
+  local k = pair_key(p, o)
+  local e = state.phase[k] or { n = 0, last = 0, untl = 0 }
+  state.phase[k] = e
+  if e.last ~= state.tick then
+    e.n = (e.last == state.tick - 1) and e.n + 1 or 1
+    e.last = state.tick
+  end
+  if e.n >= M.PUSH_SECONDS * 60 then
+    e.n, e.untl = 0, state.tick + M.PHASE_SECONDS * 60
+    msg(state, p, string.format("You have been pushing P%d for a while: your saucers phase through each other for %d s", o.index, M.PHASE_SECONDS))
+    msg(state, o, string.format("P%d is stuck against you: your saucers phase through each other for %d s", p.index, M.PHASE_SECONDS))
+    fx(state, p, "grow")
+  end
+end
+
 -- hull blocked by walls or by other players' saucers?
 function M.blocked(state, self, pos, r, hh, margin)
   if not saucer.physics.clearance(pos, r, hh, margin, 1) then return true end
   for _, o in ipairs(state.players) do
     if o ~= self then
       local orr, ohh = shipm.dims(o.ship)
-      if vec.hulls_overlap(pos, r, hh, o.ship.pos, orr, ohh, margin) then return true end
+      if vec.hulls_overlap(pos, r, hh, o.ship.pos, orr, ohh, margin) and not (self and M.phased(state, self, o)) then
+        return true
+      end
     end
   end
   return false
@@ -351,7 +386,13 @@ local function mover(state, p)
     for _, o in ipairs(state.players) do
       if o ~= p then
         local orr, ohh = shipm.dims(o.ship)
-        if vec.hulls_overlap(np, r, hh, o.ship.pos, orr, ohh, 0) then return vec.copy(ship.pos), blocked + 1 end
+        if vec.hulls_overlap(np, r, hh, o.ship.pos, orr, ohh, 0) then
+          -- already inside each other (a spawn, a fold) or phasing: nothing to collide with
+          if not (M.phased(state, p, o) or vec.hulls_overlap(ship.pos, r, hh, o.ship.pos, orr, ohh, 0)) then
+            pushed(state, p, o)
+            return vec.copy(ship.pos), blocked + 1
+          end
+        end
       end
     end
     return np, blocked
@@ -534,7 +575,13 @@ local function tractor_step(state, p, cmd, dt)
     t.t = t.t + dt
     if t.t >= t.total - 1e-9 then
       p.tractor = false
-      M.pick_up(state, p, cand, t.site)
+      local owner = claims.is_shared(cand.kind) and claims.claimed_by(state, t.site, t.key) or nil
+      if owner and owner ~= p.index then
+        msg(state, p, string.format("P%d already claimed that", owner))
+        fx(state, p, "denied")
+      else
+        M.pick_up(state, p, cand, t.site)
+      end
     end
     return
   end
@@ -650,8 +697,7 @@ function M.pick_up(state, p, cand, site_idx)
     fx(state, p, "pickup")
   elseif cand.kind == "anchor" then
     -- add-playtest-recs: the anchor stays put; the beam latches the shutter open
-    twin.hold(state, p, site_idx, ctx_fns)
-    fx(state, p, "tractor")
+    if twin.hold(state, p, site_idx, ctx_fns) then fx(state, p, "tractor") end
   elseif cand.kind == "twin" then
     twin.take(state, p, site_idx, ctx_fns)
   elseif cand.kind == "nest" then
@@ -1095,6 +1141,7 @@ function M.step(state, cmds, dt)
   for i = #state.players + 1, math.min(#cmds, 4) do
     if cmds[i] and coop.wants_join(cmds[i]) then coop.join(state, i, ctx_fns) else break end
   end
+  claims.resolve(state, dt, ctx_fns)
   for i = 1, #state.players do
     local p = state.players[i]
     if p and cmds[i] then M.step_player(state, p, cmds[i], dt) end

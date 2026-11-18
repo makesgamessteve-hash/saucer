@@ -494,7 +494,8 @@ were rerun: `docs/playtest/2026-11-17-after.md` has the before/after numbers.
 Screenshot tours: `tools/shots/recs.lua`, `tools/shots/recs_coop.lua`.
 Known gaps: upgrade prices are untested with people; the follower bot can wait
 by a twin anchor in vain. (The Tractor Room target queue and the twin spots
-were closed under "Gameplay gaps — done" below.)
+were closed under "Gameplay gaps — done" below, the waiting follower under
+"Co-op — done".)
 
 ## Remaining work after milestone 10
 
@@ -617,6 +618,35 @@ OpenSpec tasks they belonged to.
 Tests: `tests/lua/gameplay_gaps_spec.lua`. **Deferred:** installing modules from
 the Seat or away from the bench; module slots as an upgrade; quirk trials
 ("use it to learn what it does").
+
+### Co-op — done
+
+**Status (2026-11-18).** Done on the `remaining-coop` branch, in OpenSpec
+change `add-multiplayer-foundation` (tasks 1.4 and 1.6).
+- **Anti-blocking fold-phase** (`sim/game.lua`): saucers that already overlap
+  (a shared spawn, a fold) are never pinned by each other, so the autopilot
+  can leave a spawn where the other player's Villa sits; a saucer that is
+  morphing is not a wall; once the party has agreed to a fold jump nobody's
+  hull can hold it back; and a player who pushes into another saucer for
+  2 s without getting anywhere phases through it for 3 s, after which both
+  collide again (both are told). Growing next to a friend is still refused.
+  `state.phase["<low>:<high>"]` exists only after two saucers actually bumped.
+- **Shared-object claims** (`sim/claims.lua`): Echoes, the Resonant Curio,
+  gifts, twin vaults and anchors exist once. When beams of two players finish
+  on the same one in the same tick, the lowest `(record_index + tick) mod n`
+  gets it; the others' beams let go with "P2 got there first". The claim is
+  written to `state.claims[<site>|<key>]`, only after a contest, and a pull
+  that finishes on something someone else claimed is refused. Per-player loot
+  slots stay per player (task 1.5).
+- **Waiting in vain**: a twin anchor hold that nobody takes up lets go after
+  90 s (`twin.HOLD_TIME`) with a message to both players; the playtest
+  follower bot waits that long at most, then asks to fold and moves on.
+Tests: `tests/lua/coop_gaps_spec.lua` (named after the scenarios). No state
+version bump: the new state is lazy and the replays pass unchanged.
+Screenshot tour: `tools/shots/coop.lua`. Known gaps: the push timer counts
+consecutive ticks only (a player who taps the stick never reaches 2 s); the
+claim covers single-tick ties, a later grab simply finds the object gone;
+network lag compensation of claims is untested over a real link.
 
 ## Later / maybe
 

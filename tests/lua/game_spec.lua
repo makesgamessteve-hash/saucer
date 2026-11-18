@@ -180,8 +180,9 @@ describe("game", function()
     local a, b = st.players[1], st.players[2]
     a.mode = "helm"
     b.ship.pos = { a.ship.pos[1], a.ship.pos[2], a.ship.pos[3] + 30 }
-    for _ = 1, 200 do game.step(st, { cmd({ axes = { move_z = 1 } }), cmd() }, 1 / 60) end
+    for _ = 1, 150 do game.step(st, { cmd({ axes = { move_z = 1 } }), cmd() }, 1 / 60) end
     expect(a.ship.pos[3] < b.ship.pos[3] - 25).to_be(true)
+    st.phase = nil -- (a few seconds of pushing would have phased them: see gameplay_gaps_spec)
     expect(game.blocked(st, a, b.ship.pos, 1, 1, 0)).to_be(true)
   end)
   it("tells the pilot where the beam runs from and when nothing is under it", function()
