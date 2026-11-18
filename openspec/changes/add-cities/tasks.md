@@ -14,7 +14,7 @@
 ## 4. Tests and evidence
 - [x] 4.1 `tests/lua/city_spec.lua`, `tests/game/city.lua` (ctest `game_city`, coverage loop)
 - [x] 4.2 Screenshots per body (`tools/shots/cities.sh`), frame time (`tools/shots/cities_perf.sh`)
-- [ ] 4.3 Coverage gate and CI green on main
+- [x] 4.3 Coverage gate (C 98.3%, Lua 98.39%); CI on main watched after the merge
 ## 5. Not built
 - [ ] 5.1 Lazy district generation (generation is eager inside a 420-room budget; render is streamed)
 - [ ] 5.2 Transit rails and canals; collapsing structures; storms; a flooded undercity
