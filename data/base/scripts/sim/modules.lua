@@ -12,7 +12,7 @@ local items = require("sim.items")
 local M = {}
 
 M.SLOTS = 2
-M.DRAIN = 0.8 -- Charge per second per Unstable module
+M.DRAIN = 1.0 -- Charge per second per Unstable module
 
 function M.list(p) return p.modules or {} end
 

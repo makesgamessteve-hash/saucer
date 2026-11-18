@@ -400,7 +400,7 @@ function M.beam(v, state, p, scan)
   -- gameplay gaps: the Tractor Room target queue
   local ql = require("sim.beamqueue").line(p)
   if ql then
-    v:text(W // 2 - #ql * 4, y0 + 36, #ql * 8 > W - 8 and ql:sub(1, (W - 8) // 8) or ql, CYAN)
+    v:text(W // 2 - math.min(#ql, (W - 8) // 8) * 4, y0 + 21, #ql * 8 > W - 8 and ql:sub(1, (W - 8) // 8) or ql, CYAN)
     n = n + 1
   end
   if p.tractor then

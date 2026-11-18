@@ -31,7 +31,7 @@
 ## 5½. Gameplay gaps (after milestone 10)
 
 - [x] 5.3 Tractor Room target queue (`sim/beamqueue.lua`, `tractor_step`): a find not in lock joins a queue of four from the helm or the console and is pulled the moment it locks, so L and XL finds can be lined up for the console; HUD "BEAM QUEUE"
-- [x] 5.4 Twin vaults and anchors stand on their own spots in their room (`twin.spot_of`, `twin.SPOTS`), at least `twin.SPOT_CLEAR` from every loot slot, the Echo quarter and the home-find quarters, so the find on the slot no longer comes up first
+- [x] 5.4 Twin vaults and anchors stand on their own spots in their room (`twin.spot_of` picks the point of the room farthest from its loot slots, the Echo and home-find quarters, off the walls so a saucer can hover over it; at least `twin.SPOT_CLEAR` from every loot slot), so the find on the slot no longer comes up first
 - [x] 5.5 Saucer modules and a trader's shelf (see `add-items-identification-tractor` 1.2 and `add-trading-mvp` 1.2)
 
 ## 6. Verification

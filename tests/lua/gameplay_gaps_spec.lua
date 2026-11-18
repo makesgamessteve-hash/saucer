@@ -210,7 +210,7 @@ describe("twin vaults and anchors on their own spots (gameplay gaps)", function(
           expect(lay.vault.pos ~= lay.anchor.pos).to_be(true)
           for _, sp in ipairs({ lay.vault, lay.anchor }) do
             for _, s in ipairs(ruin.slots) do
-              if s.room == sp.room then worst = math.min(worst, vec.dist(s.pos, sp.pos)) end
+              if s.room == sp.room then worst = math.min(worst, math.sqrt((s.pos[1] - sp.pos[1]) ^ 2 + (s.pos[3] - sp.pos[3]) ^ 2)) end
             end
           end
         end
@@ -233,10 +233,14 @@ describe("twin vaults and anchors on their own spots (gameplay gaps)", function(
         for _, sp in ipairs({ lay.vault, lay.anchor }) do
           local rm = ruin.rooms[sp.room]
           local a, b = ruinm.room_box(rm, ruinm.kit_of(ruin.kit), ruin.origin)
-          expect(sp.pos[1]).to_be_greater(a[1])
-          expect(sp.pos[1]).to_be_less(b[1])
-          expect(sp.pos[3]).to_be_greater(a[3])
-          expect(sp.pos[3]).to_be_less(b[3])
+          -- inside the room and off its walls: the Seat can hover over it, the Villa too where the room allows
+          local wall = ruinm.kit_of(ruin.kit).wall
+          local mx_ = math.min(twin.WALL_SEAT, (b[1] - a[1]) / 2 - wall - 0.2) - 1e-6
+          local mz_ = math.min(twin.WALL_SEAT, (b[3] - a[3]) / 2 - wall - 0.2) - 1e-6
+          expect(sp.pos[1] - a[1] - wall).to_be_greater(mx_)
+          expect(b[1] - sp.pos[1] - wall).to_be_greater(mx_)
+          expect(sp.pos[3] - a[3] - wall).to_be_greater(mz_)
+          expect(b[3] - sp.pos[3] - wall).to_be_greater(mz_)
         end
         expect(mn[1] < mx[1]).to_be(true)
         expect(vec.dist(lay.vault.pos, lay.anchor.pos)).to_be_greater(twin.MIN_GAP - 1e-6)
@@ -244,9 +248,46 @@ describe("twin vaults and anchors on their own spots (gameplay gaps)", function(
     end
   end)
 
-  it("a ruin without an origin or a room has no spot, and so no twin pair", function()
+  it("a ruin without an origin or a room has no spot, and a closet too small to clear the loot holds no twin", function()
     expect(twin.spot_of({ rooms = {}, slots = {} }, { room = 1, pos = { 0, 0, 0 } })).to_be(nil)
     expect(twin.spot_of({ rooms = { { id = 1 } }, slots = {} }, { room = 1, pos = { 0, 0, 0 } })).to_be(nil)
+    -- a real ruin whose rooms are squeezed to closets: the post cannot stand clear of the loot
+    local st = new_state(2)
+    local ruin = game.ruin(1)
+    local ruinm = require("sim.ruin")
+    local kit = ruinm.kit_of(ruin.kit)
+    local rooms, slots = {}, {}
+    for i, sl in ipairs(ruin.slots) do
+      local room = ruin.rooms[sl.room]
+      rooms[i] = { id = sl.room, class = 1, kind = "side", cell = room.cell, size = { 0.1, 1, 0.1 }, faces = {} }
+      slots[i] = { room = sl.room, pos = { 0, 0, 0 }, tier = 1, seed = sl.seed }
+    end
+    local closet = { rooms = rooms, slots = slots, kit = ruin.kit, origin = ruin.origin }
+    expect(twin.spot_of(closet, slots[1])).to_be(nil)
+    expect(twin.layout(closet)).to_be(nil)
+    expect(kit.wall > 0).to_be(true)
+    -- and a low room (no head room for the post and a saucer over it) holds none either
+    for i, r in ipairs(rooms) do r.size = { 1, 0.1, 1 }; slots[i].pos = { 0, 0, 0 } end
+    expect(twin.spot_of(closet, slots[1])).to_be(nil)
+  end)
+
+  it("every twin spot has head room for the post and the saucer hovering over it", function()
+    local ruinm = require("sim.ruin")
+    local st = new_state(2)
+    local n = 0
+    for i = 1, #st.sector.sites do
+      local ruin = game.ruin(i)
+      local lay = ruin and twin.layout(ruin)
+      if lay then
+        for _, sp in ipairs({ lay.vault, lay.anchor }) do
+          local kit = ruinm.kit_of(ruin.kit)
+          local a, b = ruinm.room_box(ruin.rooms[sp.room], kit, ruin.origin)
+          expect((b[2] - a[2]) - 2 * kit.wall).to_be_greater(twin.HEAD_ROOM - 1e-6)
+          n = n + 1
+        end
+      end
+    end
+    expect(n).to_be_greater(0)
   end)
 end)
 

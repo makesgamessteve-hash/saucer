@@ -20,11 +20,16 @@ local function game() return require("sim.game") end
 function M.on(state) return #(state.players or {}) >= 2 end
 
 -- add-playtest-recs (gameplay gaps): the vault and the anchor stand on their own spots, never on a
--- loot slot. A spot is one of M.SPOTS (fractions of the slot's room, from its middle) that is
--- farthest from everything else the room holds: its loot slots, the Echo's quarter and the three
--- home-find quarters of a vault (sim/finds.lua). M.SPOT_CLEAR is the least gap the tests accept.
-M.SPOTS = { { 0, 0.31 }, { 0, -0.31 }, { 0.38, 0 }, { -0.38, 0 }, { 0, 0.42 }, { 0, -0.42 }, { 0.38, 0.38 }, { -0.38, -0.38 } }
-M.SPOT_CLEAR = 1.5
+-- loot slot. A spot is a point of the slot's room (a grid of fractions of its floor, from its middle)
+-- that is farthest from everything else the room holds: its loot slots, the Echo's quarter and the
+-- three home-find quarters of a vault (sim/finds.lua), and that the saucer which must hover over it
+-- can reach: a hall the Villa fits keeps M.WALL_VILLA metres off every wall, any other room M.WALL_SEAT.
+-- M.SPOT_CLEAR is the least gap: a room that cannot give it holds no twin spot.
+M.SPOT_STEPS = { -0.4, -0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3, 0.4 }
+M.WALL_VILLA = 13.5
+M.WALL_SEAT = 1.2
+M.SPOT_CLEAR = 1.0
+M.HEAD_ROOM = 4.5 -- least floor-to-ceiling height (m) of a room that can hold a twin spot
 local QUARTERS = { { 1, 1 }, { -1, -1 }, { -1, 1 }, { 1, -1 } } -- the Echo, then the home finds
 local function spot_of(ruin, s)
   local ruinm = require("sim.ruin")
@@ -33,24 +38,50 @@ local function spot_of(ruin, s)
   if not room or not ruin.origin then return nil end
   local kit = ruinm.kit_of(ruin.kit)
   local mn, mx = ruinm.room_box(room, kit, ruin.origin)
+  -- the walls are kit.wall thick: what a saucer has to clear is the inner box
+  mn = { mn[1] + kit.wall, mn[2], mn[3] + kit.wall }
+  mx = { mx[1] - kit.wall, mx[2], mx[3] - kit.wall }
   local w, d = mx[1] - mn[1], mx[3] - mn[3]
   local cx, cz = (mn[1] + mx[1]) / 2, (mn[3] + mx[3]) / 2
+  -- the post stands 1.5 m above the loot and the saucer hovers over it: a low room cannot hold either
+  if (mx[2] - mn[2]) - 2 * kit.wall < M.HEAD_ROOM then return nil end
   local taken = {}
   for _, o in ipairs(ruin.slots) do
     if o.room == s.room then taken[#taken + 1] = { o.pos[1], o.pos[3] } end
   end
-  for _, q in ipairs(QUARTERS) do taken[#taken + 1] = { cx + q[1] * w / 4, cz + q[2] * d / 4 } end
-  local best, bd
-  for _, f in ipairs(M.SPOTS) do
-    local x, z = cx + f[1] * w, cz + f[2] * d
-    local m = 1e9
-    for _, t in ipairs(taken) do
-      local dx, dz = x - t[1], z - t[2]
-      m = math.min(m, math.sqrt(dx * dx + dz * dz))
-    end
-    if not bd or m > bd + 1e-9 then best, bd = { x, s.pos[2], z }, m end
+  if room.kind == "vault" then
+    for _, q in ipairs(QUARTERS) do taken[#taken + 1] = { cx + q[1] * w / 4, cz + q[2] * d / 4 } end
   end
-  return best
+  local function pick(wall)
+    local wx, wz = math.max(0, math.min(wall, w / 2 - 0.2)), math.max(0, math.min(wall, d / 2 - 0.2))
+    local best, bd, bc, braw
+    for _, fx in ipairs(M.SPOT_STEPS) do
+      for _, fz in ipairs(M.SPOT_STEPS) do
+        local x, z = cx + fx * w, cz + fz * d
+        if x - mn[1] >= wx and mx[1] - x >= wx and z - mn[3] >= wz and mx[3] - z >= wz then
+          local m = 1e9
+          for _, t in ipairs(taken) do
+            local dx, dz = x - t[1], z - t[2]
+            m = math.min(m, math.sqrt(dx * dx + dz * dz))
+          end
+          local raw = m
+          m = math.min(m, 8) -- far enough is far enough: past 8 m prefer the middle of the room
+          local c = fx * fx + fz * fz
+          if not bd or m > bd + 1e-9 or (m > bd - 1e-9 and c < bc) then best, bd, bc, braw = { x, s.pos[2], z }, m, c, raw end
+        end
+      end
+    end
+    return best, braw
+  end
+  -- a hall the Villa fits wants a spot it can hover over; when the best of those still sits too close to
+  -- something, the Seat's wider choice of spots wins
+  local best, bd = pick(room.class >= (kit.big or 4) and M.WALL_VILLA or M.WALL_SEAT)
+  if not best or bd < M.SPOT_CLEAR then
+    local b2, d2 = pick(M.WALL_SEAT)
+    if b2 and (not best or d2 > bd) then best, bd = b2, d2 end
+  end
+  if not best then return nil end
+  return best, bd
 end
 M.spot_of = spot_of
 
@@ -64,8 +95,9 @@ function M.layout(ruin)
   local spots = {}
   for _, s in ipairs(ruin.slots or {}) do
     if not s.strong then
-      local pos = spot_of(ruin, s)
-      if pos then spots[#spots + 1] = { pos = pos, room = s.room, tier = s.tier, seed = s.seed } end
+      local pos, clear = spot_of(ruin, s)
+      -- a closet too small to stand the post clear of the loot keeps no twin spot
+      if pos and clear >= M.SPOT_CLEAR then spots[#spots + 1] = { pos = pos, room = s.room, tier = s.tier, seed = s.seed } end
     end
   end
   local best

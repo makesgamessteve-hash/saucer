@@ -597,7 +597,7 @@ OpenSpec tasks they belonged to.
   two slots, installed at the lab bench (Install / Remove / Identify fitted
   rows). Identified affixes apply (shield regen, Charge regen, max Charge, turn,
   scan reach, which is how long a scan pulse keeps sentries marked); quirks apply
-  at once (Unstable drains 0.8 Charge/s, Loud adds 25 m to a Watcher's sight and
+  at once (Unstable drains 1 Charge/s (more than open space gives back, so it bites inside a site), Loud adds 25 m to a Watcher's sight and
   8 m to a Snatcher's sense, Bonded will not come out and shows itself when you
   try) and the HUD says UNKNOWN EFFECT until the bench identifies the module.
   The fields live on the player and the ship and stay nil until a module is
@@ -612,7 +612,7 @@ OpenSpec tasks they belonged to.
   find that comes into lock by whoever can pull it from where they are. The queue
   is transient (not saved), per site, and cleared on a fold.
 - **Twin spots.** The vault and the anchor now stand on their own spots in
-  their rooms (`twin.spot_of`), at least 1.5 m from any loot slot, the Echo or a
+  their rooms (`twin.spot_of`), at least 1 m from any loot slot (usually far more), the Echo or a
   home-find quarter, so the find on the slot no longer comes up first.
 Tests: `tests/lua/gameplay_gaps_spec.lua`. **Deferred:** installing modules from
 the Seat or away from the bench; module slots as an upgrade; quirk trials
