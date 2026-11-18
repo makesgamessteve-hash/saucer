@@ -242,7 +242,10 @@ function BUILD.helm_desk(out, f, y)
   local all = kit.transform(con.parts, { pos = { cx, y, cz } })
   all = kit.merge(all, kit.transform(cockpit({ kind = "lever" }).parts, { pos = { cx + 0.85, y + f.h, cz } }),
                   kit.transform(cockpit({ kind = "orb" }).parts, { pos = { cx - 0.85, y + f.h, cz } }))
-  for _, p in ipairs(all) do out[#out + 1] = p end
+  for _, p in ipairs(all) do
+    p.node = nil -- the props are baked at their neutral pose here; the nodes are for the rigs
+    out[#out + 1] = p
+  end
 end
 function BUILD.helm_wing(out, f, y)
   local b = f.box

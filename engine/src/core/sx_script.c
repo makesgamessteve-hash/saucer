@@ -1906,16 +1906,9 @@ static int l_test_set_xr(lua_State *L) {
   if (lua_toboolean(L, -1)) {
     sx_xr_mock_views(&e->xr, e->render.settings.width, e->render.settings.height, (float)field_num(L, 1, "ipd", 0.064f),
                      (float)field_num(L, 1, "fov", 90.0f));
-    /* a headset's eye matrices carry the head's position (a standing session starts on the floor); the
-     * engine keeps head positions flipped (x and z negated) against the WebXR frame of the views */
-    {
-      int eye;
-      for (eye = 0; eye < 2; eye++) {
-        e->xr.views[eye].view[12] += e->xr.head_pos[0];
-        e->xr.views[eye].view[13] -= e->xr.head_pos[1];
-        e->xr.views[eye].view[14] += e->xr.head_pos[2];
-      }
-    }
+    /* a headset's eye matrices carry the head's height (a standing session starts on the floor) */
+    e->xr.views[0].view[13] -= e->xr.head_pos[1];
+    e->xr.views[1].view[13] -= e->xr.head_pos[1];
   }
   lua_pop(L, 1);
   lua_getfield(L, 1, "controls");
