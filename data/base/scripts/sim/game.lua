@@ -168,6 +168,7 @@ function M.open_gates(site, district)
   end
   return n
 end
+function M.gates(site) return rt.gates[site] or {} end
 function M.gates_closed(site, district)
   local n = 0
   for _, g in pairs(rt.gates[site] or {}) do if district == nil or g.district == district then n = n + 1 end end
@@ -1055,8 +1056,11 @@ function M.step_player(state, p, cmd, dt)
   if cmd:held("boost") and p.clamped_by then p.shake = (p.shake or 0) + dt end
   if cmd:pressed("map") and p.mode ~= "wake" then
     local k = p.panel and p.panel.kind
-    if k == "map" or k == "party" or k == "archive" or k == "fold_warn" then p.panel = false
-    elseif not p.panel then panel.open(p, "map") end
+    if k == "map" or k == "citymap" or k == "party" or k == "archive" or k == "fold_warn" then p.panel = false
+    elseif not p.panel then
+      local cr = p.site ~= 0 and rt.ruins[p.site] or nil
+      panel.open(p, cities.is_city(cr) and "citymap" or "map")
+    end
   end
   if cmd:pressed("camera") then p.cam = p.cam == "first" and "chase" or "first" end
   if cmd:pressed("menu") then p.help = not p.help end
@@ -1220,6 +1224,8 @@ home.register_panels(M, ctx_fns)
 decor.register(home, ctx_fns)
 visit.register_panels(ctx_fns)
 -- add-wider-dark panels
+panel.register("citymap", { title = function(state, p) return "CITY MAP" end,
+  rows = function(state, p) return cities.panel_rows(state, p, p.site, rt.ruins[p.site], panel) end })
 panel.register("map", { title = "SECTOR MAP", rows = function(state, p) return galaxy.rows(state, p, ctx_fns) end })
 panel.register("fold_warn", { title = "FOLD WARNING", rows = function(state, p) return galaxy.warn_rows(state, p, ctx_fns) end })
 panel.register("party", { title = "PARTY", rows = function(state, p) return coop.rows(state, p, ctx_fns) end })

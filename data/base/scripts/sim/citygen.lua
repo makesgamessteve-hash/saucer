@@ -354,12 +354,12 @@ function M.generate(seed, kit, civ, origin)
       local cx = lot.x0 + (spec.lot - w) // 2
       local cz = lot.z0 + (spec.lot - w2) // 2
       local mn, mx = world_box({ cx, lot.y - 3, cz }, { w, h + 3, w2 }, kit, origin)
-      solids[#solids + 1] = { mn, mx, kind = "tower", room = 1 }
+      solids[#solids + 1] = { mn, mx, kind = "tower", room = 1, district = d.id }
       lot.tower = { cx, cz, w, w2, h }
     elseif lot.type == "plaza" then
       local w = spec.lot - 4
       local mn, mx = world_box({ lot.x0 + 2, lot.y - 2, lot.z0 + 2 }, { w, 2, w }, kit, origin)
-      solids[#solids + 1] = { mn, mx, kind = "platform", room = 1 }
+      solids[#solids + 1] = { mn, mx, kind = "platform", room = 1, district = d.id }
       if lot.coupling then
         local cx, cz = (mn[1] + mx[1]) / 2, (mn[3] + mx[3]) / 2
         couplings[#couplings + 1] = { district = lot.coupling, pos = { cx, mx[2] + 1.4, cz }, lot = { lot.gx, lot.gz } }
@@ -367,7 +367,7 @@ function M.generate(seed, kit, civ, origin)
       end
       -- a monument in the corner of every plaza
       local bm, bx = world_box({ lot.x0 + 3, lot.y, lot.z0 + 3 }, { 3, rng:int(3, 7), 3 }, kit, origin)
-      solids[#solids + 1] = { bm, bx, kind = "monument", room = 1 }
+      solids[#solids + 1] = { bm, bx, kind = "monument", room = 1, district = d.id }
     end
   end
   -- sky-bridges between towers or buildings side by side that rise high enough
@@ -384,7 +384,7 @@ function M.generate(seed, kit, civ, origin)
         local x0 = lot.x0 + spec.lot - 2
         local gap = e.x0 + 2 - x0
         local mn, mx = world_box({ x0, yb, lot.z0 + spec.lot // 2 - 3 }, { gap, 2, 6 }, kit, origin)
-        solids[#solids + 1] = { mn, mx, kind = "bridge", room = 1 }
+        solids[#solids + 1] = { mn, mx, kind = "bridge", room = 1, district = districts[lot.d].id }
         bridges = bridges + 1
       end
     end
@@ -393,7 +393,7 @@ function M.generate(seed, kit, civ, origin)
   -- 5. the rock of an asteroid: a shell of slabs with a mouth in front of the spaceport
   if spec.shell then
     local t, S = spec.shell, ext
-    local function slab(cell, size) local mn, mx = world_box(cell, size, kit, origin) solids[#solids + 1] = { mn, mx, kind = "rock", room = 1 } end
+    local function slab(cell, size) local mn, mx = world_box(cell, size, kit, origin) solids[#solids + 1] = { mn, mx, kind = "rock", room = 1, global = true } end
     slab({ 0, 0, 0 }, { S[1], t, S[3] })
     slab({ 0, S[2] - t, 0 }, { S[1], t, S[3] })
     slab({ 0, t, 0 }, { t, S[2] - 2 * t, S[3] })

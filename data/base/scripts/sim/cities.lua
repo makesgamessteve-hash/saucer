@@ -126,4 +126,36 @@ function M.beacon(state, site, ruin, from)
   return nil
 end
 
+local COMPASS = { "N", "NE", "E", "SE", "S", "SW", "W", "NW" }
+-- compass word for the horizontal direction from a to b (north is +z)
+function M.compass(a, b)
+  local ang = saucer.math.atan2(b[1] - a[1], b[3] - a[3])
+  return COMPASS[(math.floor(ang / (saucer.math.tau / 8) + 0.5) % 8) + 1]
+end
+
+-- rows of the city-map panel: where you are, one row per district, then the way back to the sector map
+function M.panel_rows(state, p, site, ruin, panel)
+  if not M.is_city(ruin) then return { { text = "No city here", enabled = false } } end
+  local pos = p.ship.pos
+  local here = M.district_at(ruin, pos)
+  local g = M.gravity(ruin)
+  local on, n = M.grid(state, site, ruin)
+  local rows = { { text = string.format("%s CITY: %s  grid %d/%d  %s", ruin.city.body:upper(), here.label, on, n,
+    g > 1 and string.format("%.1f g, hovering costs Charge", g) or (g > 0 and "light pull" or "free flight")), enabled = false } }
+  for _, pd in ipairs(ruin.city.districts) do
+    local live = M.powered(state, site, ruin, pd.id)
+    local d = vec.dist(pos, pd.pos)
+    local hint
+    if not live then
+      for _, c in ipairs(ruin.city.couplings) do
+        if c.district == pd.id then hint = string.format("Power coupling %dm %s: beam it up to wake the district", vec.dist(pos, c.pos) // 1, M.compass(pos, c.pos)) end
+      end
+    end
+    rows[#rows + 1] = { text = string.format("%-16s %-4s %5dm %s", pd.label, live and "LIVE" or "DARK", d // 1, M.compass(pos, pd.pos)),
+                        enabled = false, hint = hint }
+  end
+  rows[#rows + 1] = { text = "Sector map", act = function(st, pl) panel.open(pl, "map") end }
+  return rows
+end
+
 return M

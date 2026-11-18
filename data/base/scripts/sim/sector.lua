@@ -61,13 +61,18 @@ end
 -- their other sites, far out so its km-wide mass clears them. Own seed child: the other sites and
 -- every sector that has no city come out exactly as before. -> kit id, rng (or nil)
 M.CITY_CHANCE = 45
+M.CITY_NEAR = 4 -- sectors 2..4
 M.CITY_DISTANCE = 4600
 function M.city_of(seed, sid)
   if not sid or sid == 1 then return nil end
   local crng = saucer.rng.new(saucer.seed_child(seed, "city", sid))
-  if crng:int(1, 100) > M.CITY_CHANCE then return nil end
+  local roll, shift = crng:int(1, 100), crng:int(0, 2)
+  -- the three nearest far sectors always hold one city each, one of every body, so every body is
+  -- within a few folds of home in every universe; farther ones are a coin toss
+  local near = sid <= M.CITY_NEAR
+  if not near and roll > M.CITY_CHANCE then return nil end
   local bodies = require("sim.citygen").BODIES
-  return "city_" .. bodies[crng:int(1, #bodies)], crng
+  return "city_" .. bodies[(sid + (near and 0 or shift)) % #bodies + 1], crng
 end
 
 -- add-wider-dark: a far sector. 3-4 sites (4 in the Heart sector: the Heart

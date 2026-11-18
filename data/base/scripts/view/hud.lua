@@ -277,6 +277,12 @@ function M.panel(v, state, p)
     v:text(W // 2 - 13 * 8 // 2, y - 18, "a cozy salvage", DIM)
   end
   -- add-wider-dark: the sector map sits left of its rows when there is room
+  if p.panel.kind == "citymap" and W >= 360 then
+    local mw = math.min(W // 2 - 20, 220)
+    require("view.map").city(v, state, 6, 40, mw, math.min(H - 80, 200), p)
+    x = math.max(x, mw + 16)
+    w = math.min(w, W - 8 - x)
+  end
   if p.panel.kind == "map" and W >= 360 then
     local mw = math.min(W // 3, 200)
     require("view.map").draw(v, state, 6, 40, mw, math.min(H - 80, 160), p)
@@ -542,8 +548,22 @@ function M.draw(v, state, p, target)
     nav(60, 10, M.elevation_cue(p, c), CYAN)
     if p.docked then nav(60, 20, W < 400 and "DOCKED" or "DOCKED AT THE TRADER", GREEN) end
   elseif p.site ~= 0 then
-    nav(40, 0, "IN DERELICT " .. p.site, AMBER)
-    if (p.scan_until or 0) > state.tick then nav(40, 10, "SCANNING", CYAN) end
+    local cr = require("sim.game").ruin(p.site)
+    if cr and cr.city then
+      -- add-cities: the body, the district under you, the grid and the beacon to follow
+      local cities = require("sim.cities")
+      local pd = cities.district_at(cr, p.ship.pos)
+      local on, n = cities.grid(state, p.site, cr)
+      nav(70, 0, string.format("%s CITY  %s  GRID %d/%d", cr.city.body:upper(), pd.label:upper(), on, n), AMBER)
+      local b = cities.beacon(state, p.site, cr, p.ship.pos)
+      if b then
+        nav(70, 10, string.format("BEACON %s %s %dM %s", M.bearing(p, b.pos), b.label:upper(), b.dist // 1, M.elevation_cue(p, b.pos)), CYAN)
+      end
+      if (p.scan_until or 0) > state.tick then nav(70, 20, "SCANNING", CYAN) end
+    else
+      nav(40, 0, "IN DERELICT " .. p.site, AMBER)
+      if (p.scan_until or 0) > state.tick then nav(40, 10, "SCANNING", CYAN) end
+    end
   end
   -- the belly beam's alignment indicator (add-tractor-beam)
   -- (a two-way split half still has room for the scope: the beam needs it)

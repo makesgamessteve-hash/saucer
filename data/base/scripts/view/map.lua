@@ -86,4 +86,57 @@ function M.spare(v, state)
   if #state.players < 4 then v:text(4, H - 9, "JOIN: gamepad A / F2 split keys", DIM) end
 end
 
+-- add-cities: the city map, a plan of the districts: green live, red dark, an amber dot on each
+-- power coupling still to beam, the spaceport ringed, every saucer an arrow of its player colour
+function M.city(v, state, x, y, w, h, viewer)
+  local site = viewer and viewer.site or 0
+  local ruin = site ~= 0 and require("sim.game").ruin(site) or nil
+  if not (ruin and ruin.city) then return end
+  local cities = require("sim.cities")
+  local ds = ruin.city.districts
+  local mn, mx = { math.huge, math.huge }, { -math.huge, -math.huge }
+  for _, d in ipairs(ds) do
+    mn[1], mn[2] = math.min(mn[1], d.pos[1]), math.min(mn[2], d.pos[3])
+    mx[1], mx[2] = math.max(mx[1], d.pos[1]), math.max(mx[2], d.pos[3])
+  end
+  local pad = 18
+  local span = math.max(mx[1] - mn[1], mx[2] - mn[2], 1)
+  local sc = (math.min(w, h) - 2 * pad - 10) / span
+  local ox = x + w / 2 - (mx[1] - mn[1]) * sc / 2
+  local oy = y + 10 + (h - 10) / 2 + (mx[2] - mn[2]) * sc / 2
+  local function at(pos) return ox + (pos[1] - mn[1]) * sc, oy - (pos[3] - mn[2]) * sc end -- +z is up the page
+  v:rect(x, y, w, h, { 0, 0.02, 0.07, 0.85 })
+  v:text(x + 4, y + 2, ruin.city.body:upper() .. " CITY MAP", AMBER)
+  local cell = span / math.max(1, math.sqrt(#ds) - 1) * sc * 0.82
+  for _, d in ipairs(ds) do
+    local px, py = at(d.pos)
+    local live = cities.powered(state, site, ruin, d.id)
+    local col = live and { 0.25, 0.7, 0.4, 0.8 } or { 0.7, 0.25, 0.25, 0.8 }
+    v:rect(px - cell / 2, py - cell / 2, cell, cell, { col[1] * 0.35, col[2] * 0.35, col[3] * 0.35, 0.9 })
+    v:rect(px - cell / 2, py - cell / 2, cell, 1, col)
+    v:rect(px - cell / 2, py + cell / 2 - 1, cell, 1, col)
+    v:rect(px - cell / 2, py - cell / 2, 1, cell, col)
+    v:rect(px + cell / 2 - 1, py - cell / 2, 1, cell, col)
+    v:text(px - 4, py - 4, d.label:sub(1, 1):upper(), WHITE)
+    if d.kind == "spaceport" then v:rect(px - 2, py + cell / 2 - 6, 4, 3, CYAN) end
+  end
+  for _, c in ipairs(ruin.city.couplings) do
+    if not cities.powered(state, site, ruin, c.district) then
+      local px, py = at(c.pos)
+      if state.tick % 40 < 28 then v:rect(px - 2, py - 2, 4, 4, AMBER) end
+    end
+  end
+  for _, pl in ipairs(state.players) do
+    if pl.site == site then
+      local px, py = at(pl.ship.pos)
+      local col = M.PCOL[pl.index] or WHITE
+      v:rect(px - 2, py - 2, 5, 5, col)
+      local a = pl.ship.yaw
+      v:rect(px + saucer.math.sin(a) * 5, py - saucer.math.cos(a) * 5, 2, 2, WHITE)
+    end
+  end
+  local on, n = cities.grid(state, site, ruin)
+  v:text(x + 4, y + h - 10, string.format("GRID %d/%d   N UP", on, n), DIM)
+end
+
 return M
