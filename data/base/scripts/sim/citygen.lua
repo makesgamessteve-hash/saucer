@@ -84,8 +84,15 @@ function M.plan(rng, kit)
   end
   -- body-specific heart: the drum of an asteroid, the crater dome of a moon
   local mid = district_of(spec, (nx + 1) // 2, (nz + 1) // 2 + 1)
-  if spec.body == "asteroid" and mid ~= pd then districts[mid].kind, districts[mid].drum = "reactor", true end
-  if spec.body == "moon" and mid ~= pd then districts[mid].kind, districts[mid].crater = "garden", true end
+  -- (the district that held that kind swaps with it, so every landmark stays in the city once)
+  local function give(di, kind)
+    for _, o in ipairs(districts) do
+      if o.kind == kind and o ~= districts[di] then o.kind = districts[di].kind end
+    end
+    districts[di].kind = kind
+  end
+  if spec.body == "asteroid" and mid ~= pd then give(mid, "reactor") districts[mid].drum = true end
+  if spec.body == "moon" and mid ~= pd then give(mid, "garden") districts[mid].crater = true end
   for _, d in ipairs(districts) do
     d.landmark = d.kind == "spaceport" or d.kind == "reactor" or d.kind == "archive" or d.kind == "foundry"
       or d.kind == "garden" or d.kind == "palace"

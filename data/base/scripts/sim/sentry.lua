@@ -47,11 +47,7 @@ function M.tuned(state)
   return c
 end
 
--- add-cities: a sentry of a district whose power is out starts dark and wakes when it is restored
-local function dark_of(ruin, r)
-  local pd = ruin.city and r.district and ruin.city.districts[r.district]
-  return (pd and not pd.powered) or nil
-end
+local function dark_of(ruin, r) return require("sim.cities").dark(ruin, r) end
 
 -- layout(site, ruin, civ) -> list of sentry definitions (derived data).
 -- The tutorial derelict (site 1) is unguarded.

@@ -107,7 +107,17 @@ function M.city(v, state, x, y, w, h, viewer)
   local function at(pos) return ox + (pos[1] - mn[1]) * sc, oy - (pos[3] - mn[2]) * sc end -- +z is up the page
   v:rect(x, y, w, h, { 0, 0.02, 0.07, 0.85 })
   v:text(x + 4, y + 2, ruin.city.body:upper() .. " CITY MAP", AMBER)
-  local cell = span / math.max(1, math.sqrt(#ds) - 1) * sc * 0.82
+  -- squares as wide as the districts' spacing (the spaceport sits off the grid: left out of the spacing)
+  local gap = span
+  for _, a in ipairs(ds) do
+    for _, b in ipairs(ds) do
+      if a.kind ~= "spaceport" and b.kind ~= "spaceport" then
+        local m = math.max(math.abs(a.pos[1] - b.pos[1]), math.abs(a.pos[3] - b.pos[3]))
+        if m > 1 and m < gap then gap = m end
+      end
+    end
+  end
+  local cell = gap * sc * 0.86
   for _, d in ipairs(ds) do
     local px, py = at(d.pos)
     local live = cities.powered(state, site, ruin, d.id)
@@ -117,7 +127,7 @@ function M.city(v, state, x, y, w, h, viewer)
     v:rect(px - cell / 2, py + cell / 2 - 1, cell, 1, col)
     v:rect(px - cell / 2, py - cell / 2, 1, cell, col)
     v:rect(px + cell / 2 - 1, py - cell / 2, 1, cell, col)
-    v:text(px - 4, py - 4, d.label:sub(1, 1):upper(), WHITE)
+    v:text(px - 4, py - 4, d.kind:sub(1, 1):upper(), WHITE)
     if d.kind == "spaceport" then v:rect(px - 2, py + cell / 2 - 6, 4, 3, CYAN) end
   end
   for _, c in ipairs(ruin.city.couplings) do

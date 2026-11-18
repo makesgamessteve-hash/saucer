@@ -24,7 +24,7 @@ function M.layout(out, site, ruin, kit, t)
   local big = kit.big or 4
   local halls, by_id = {}, {}
   for _, r in ipairs(ruin.rooms) do
-    if r.class >= big and r.kind ~= "entrance" and r.kind ~= "shaft" then
+    if r.class >= big and r.kind ~= "entrance" and r.kind ~= "shaft" and not r.calm then
       halls[#halls + 1] = r
       by_id[r.id] = r
     end
@@ -57,6 +57,7 @@ function M.layout(out, site, ruin, kit, t)
   visit(halls[1])
   local pad = t.warden.leash
   out[#out + 1] = { id = #out + 1, kind = "warden", site = site.id, room = halls[1].id, pos = vec.copy(route[1]),
+                    district = halls[1].district, dark = require("sim.cities").dark(ruin, halls[1]),
                     route = route, leash = { vec.sub(lo, { pad, pad, pad }), vec.add(hi, { pad, pad, pad }) } }
 end
 

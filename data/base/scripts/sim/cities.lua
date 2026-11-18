@@ -26,6 +26,12 @@ function M.powered(state, site, ruin, d)
   return pd.powered or (state.locks ~= nil and state.locks[lockkey(site, d)] ~= nil)
 end
 
+-- add-cities: does a sentry in room r start dark (its district's power out at the start)?
+function M.dark(ruin, r)
+  local pd = ruin.city and r.district and ruin.city.districts[r.district]
+  return (pd and not pd.powered) or nil
+end
+
 function M.restore(state, site, d)
   state.locks = state.locks or {}
   state.locks[lockkey(site, d)] = state.tick
@@ -94,7 +100,7 @@ end
 -- the one-line summary of a body city for the map: "PLANET 16 districts, grid 3/16"
 function M.summary(state, site, ruin)
   local on, n = M.grid(state, site, ruin)
-  return string.format("%s CITY  grid %d/%d", string.upper(ruin.city.body), on, n)
+  return string.format("%s CITY  grid %d/%d", string.upper(ruin.city.body), on, n), string.format("%d/%d", on, n)
 end
 
 -- the city map the holotable and the TV show: one row per district with its landmark and grid state
@@ -114,13 +120,13 @@ function M.beacon(state, site, ruin, from)
     local d = vec.dist(from, c.pos)
     if not bd or d < bd then best, bd = c, d end
   end
-  if best then return { pos = best.pos, label = best.item.name, dist = bd } end
+  if best then return { pos = best.pos, label = best.item.name, short = "COUPLING", dist = bd } end
   for _, r in ipairs(ruin.rooms) do
     if r.kind == "vault" then
       local k = require("sim.ruin").kit_of(ruin.kit)
       local mn, mx = require("sim.ruin").room_box(r, k, ruin.origin)
       local c = { (mn[1] + mx[1]) / 2, (mn[2] + mx[2]) / 2, (mn[3] + mx[3]) / 2 }
-      return { pos = c, label = "Reactor vault", dist = vec.dist(from, c) }
+      return { pos = c, label = "Reactor vault", short = "VAULT", dist = vec.dist(from, c) }
     end
   end
   return nil
@@ -140,8 +146,8 @@ function M.panel_rows(state, p, site, ruin, panel)
   local here = M.district_at(ruin, pos)
   local g = M.gravity(ruin)
   local on, n = M.grid(state, site, ruin)
-  local rows = { { text = string.format("%s CITY: %s  grid %d/%d  %s", ruin.city.body:upper(), here.label, on, n,
-    g > 1 and string.format("%.1f g, hovering costs Charge", g) or (g > 0 and "light pull" or "free flight")), enabled = false } }
+  local rows = { { text = string.format("%s CITY grid %d/%d  %s", ruin.city.body:upper(), on, n,
+    g > 1 and string.format("%.1f g, hovering costs Charge", g) or (g > 0 and "light pull" or "free flight")), enabled = false, hint = "You are over: " .. here.label } }
   for _, pd in ipairs(ruin.city.districts) do
     local live = M.powered(state, site, ruin, pd.id)
     local d = vec.dist(pos, pd.pos)

@@ -26,7 +26,7 @@ return {
   city = {
     body = "moon", name = "Moon city", lots = { 9, 9 }, lot = 32, street = 24, margin = 24, approach = 24,
     ground = 40, under = { 1, 2 }, tower = { 12, 24, 16, 40 }, mix = { 15, 40, 25, 20 }, tiers = { 0 },
-    terrace = 7, crater = 2, gravity = 0,
+    terrace = 7, crater = 2, gravity = 0.16,
     env = { fog = { 0.0, 0.0, 0.0 }, clear = { 0.0, 0.0, 0.01 }, density = 0.0, light = { 0.95, 0.95, 1.0 }, ambient = 0.35, earthlight = true },
   },
   color = { 0.62, 0.64, 0.70 }, uv = 0.125, solid_color = { 0.30, 0.31, 0.36 }, window_color = { 0.8, 0.9, 1.0 },

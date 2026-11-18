@@ -554,12 +554,16 @@ function M.draw(v, state, p, target)
       local cities = require("sim.cities")
       local pd = cities.district_at(cr, p.ship.pos)
       local on, n = cities.grid(state, p.site, cr)
-      nav(70, 0, string.format("%s CITY  %s  GRID %d/%d", cr.city.body:upper(), pd.label:upper(), on, n), AMBER)
+      local lines = { string.format("%s CITY GRID %d/%d", cr.city.body:upper(), on, n), pd.label:upper() }
       local b = cities.beacon(state, p.site, cr, p.ship.pos)
       if b then
-        nav(70, 10, string.format("BEACON %s %s %dM %s", M.bearing(p, b.pos), b.label:upper(), b.dist // 1, M.elevation_cue(p, b.pos)), CYAN)
+        lines[3] = string.format("%s %s %dM %s", M.bearing(p, b.pos), b.short, b.dist // 1, M.elevation_cue(p, b.pos))
       end
-      if (p.scan_until or 0) > state.tick then nav(70, 20, "SCANNING", CYAN) end
+      for i, t in ipairs(lines) do
+        if compact then nav(70, 0, t, i == 3 and CYAN or AMBER) elseif W < 400 then nav(70, (i - 1) * 10, t, i == 3 and CYAN or AMBER)
+        else v:text(8, 76 + (i - 1) * 10, t, i == 3 and CYAN or AMBER) end
+      end
+      if (p.scan_until or 0) > state.tick then v:text(8, 106, "SCANNING", CYAN) end
     else
       nav(40, 0, "IN DERELICT " .. p.site, AMBER)
       if (p.scan_until or 0) > state.tick then nav(40, 10, "SCANNING", CYAN) end

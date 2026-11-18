@@ -871,8 +871,9 @@ end
 function M.entry_text(state, p, site)
   local cr = rt.ruins[site]
   if cities.is_city(cr) then
-    return string.format("Entering the %s - %s", cities.summary(state, site, cr):lower():gsub("^%l", string.upper), cities.gravity(cr) > 1 and
-      string.format("%.1f g: hovering costs Charge", cities.gravity(cr)) or "free flight")
+    local g = cities.gravity(cr)
+    return string.format("Entering a %s city (grid %s): %s", cr.city.body, select(2, cities.summary(state, site, cr)),
+      g > 1 and string.format("%.1f g, hovering costs Charge - the hangar refills it", g) or "free flight")
   end
   local w = sentry.summary(rt.sentries[site] or {})
   if w > 0 and p.ship.size == 1 then
