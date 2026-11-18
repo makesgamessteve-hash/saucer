@@ -19,4 +19,9 @@ return {
   identify_charge = 3,    -- Charge per item queued at the lab bench
   identify_seconds = 30,  -- x tier
   decode_seconds = 20,    -- an Echo at the lab bench
+  -- gameplay gaps (add-trading-mvp 1.2): a trader's stock of saucer modules, rolled from the trader and the
+  -- hour of the clock; bought identified and quirk-free, at stock_markup x the item's trade value
+  stock_count = 3,
+  stock_markup = 2.4,
+  stock_minutes = 240,    -- the shelf restocks every four hours
 }

@@ -41,7 +41,7 @@
   - So that the packing reads on screen, shrinking takes **1.5 s** (was 0.9 s) and growing **1.8 s** (was 1.2 s). Both values stay data in `saucer/configs.lua`.
 - **Notes from milestone 3 (v0.6), the one-sector loop:**
   - The **lab bench** keeps a job queue: identify (3 Charge, 30 s × tier) and decode Echoes (20 s). It works in flight but only as the Villa; folded, the bench is packed away and jobs pause.
-  - Docking at a trader (within 150 m) enables the **trade terminal**: sell, refill Charge (1 c per point) and repair hull (2 c per point). Trader stock and modules wait for a later milestone.
+  - Docking at a trader (within 150 m) enables the **trade terminal**: sell, refill Charge (1 c per point) and repair hull (2 c per point). Each trader also shelves three saucer **modules** (identified, no quirks, restocked every four clock hours); a module installs at the lab bench into one of two saucer slots (identified affixes apply; quirks bite at once, and the HUD says UNKNOWN EFFECT until the bench identifies it). The beam key on a find that is not in lock yet queues it (four at most) and the beam pulls it the moment it locks.
   - **Sentries are placed from the layout**, never saved: a Watcher at the far end of every great hall except the entrance, and a Snatcher per duct branch with its nest in the deepest small room. Each Snatcher is **leashed** to its branch (it only notices a Seat inside it). The tutorial derelict has none.
   - The **Jammer** also pulses 3 m all round (so a Snatcher right beside you is always hit), and jamming a Disabled sentry restarts its 12 s.
   - **Fold Retreat** lands you as the Villa 60 m from the last trader with hull 30 and shields down. The cache waits where the hull failed.

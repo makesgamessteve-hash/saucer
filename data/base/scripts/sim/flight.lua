@@ -39,7 +39,7 @@ end
 function M.step(ship, cmd, dt, move)
   local c = configs.get(ship.size)
   local turn = cmd:axis("turn")
-  ship.yaw = comfort.yaw(ship.yaw, cmd, c.turn, dt)
+  ship.yaw = comfort.yaw(ship.yaw, cmd, c.turn * require("sim.ship").mult(ship, "turn"), dt)
   ship.pitch = vec.clamp(ship.pitch + cmd:axis("look") * M.LOOK_RATE * dt, -M.PITCH_LIMIT, M.PITCH_LIMIT)
   local mx, mz, my = cmd:axis("move_x"), cmd:axis("move_z"), cmd:axis("lift")
   local speed = c.speed

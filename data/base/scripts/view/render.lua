@@ -462,7 +462,7 @@ function M.console(v, A, state, o, d)
     local x = wing_face(lw)
     local y0, y1 = fl + lw.h * 0.6, fl + lw.h * 0.95
     local vals = {
-      { ship.charge / all.max_charge, { 0.4, 0.9, 1, 1 } },
+      { ship.charge / require("sim.ship").max_charge(ship), { 0.4, 0.9, 1, 1 } },
       { (ship.hull or 100) / 100, { 0.4, 1, 0.5, 1 } },
       { (ship.shield or 100) / 100, { 0.5, 0.6, 1, 1 } },
     }

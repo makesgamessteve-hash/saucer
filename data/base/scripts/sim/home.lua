@@ -105,8 +105,8 @@ end
 
 M.USE.engine = function(state, p, _, ctx)
   local all = configs.all()
-  local s = string.format("Fold engine: Charge %d/%d, +%.1f/s in open space%s", p.ship.charge // 1, all.max_charge,
-    all.charge_regen * M.regen_factor(state, p), M.fed(state, p) and " (well fed)" or "")
+  local s = string.format("Fold engine: Charge %d/%d, +%.1f/s in open space%s", p.ship.charge // 1,
+    require("sim.ship").max_charge(p.ship), all.charge_regen * M.regen_factor(state, p) * require("sim.ship").mult(p.ship, "charge_regen"), M.fed(state, p) and " (well fed)" or "")
   say(ctx, state, p, s)
 end
 
@@ -129,7 +129,7 @@ function M.sleep(state, p, ctx)
     say(ctx, state, p, "Too restless to sleep inside a derelict. Leave the site first.", "denied")
     return false
   end
-  p.ship.charge = configs.all().max_charge
+  p.ship.charge = require("sim.ship").max_charge(p.ship)
   p.slept_tick = state.tick
   p.sleeps = (p.sleeps or 0) + 1
   clock.skip(state, M.SLEEP_MINUTES)

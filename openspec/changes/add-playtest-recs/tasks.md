@@ -28,6 +28,12 @@
 - [x] 5.1 `grapple` action (Y, D-pad up, key2 0, touch GRP), `SX_TOUCH_GRAPPLE`
 - [x] 5.2 `hud.message_lines`, `hud.alerts`, `hud.hint_for`, `hud.wrap`; station overprint fixed
 
+## 5½. Gameplay gaps (after milestone 10)
+
+- [x] 5.3 Tractor Room target queue (`sim/beamqueue.lua`, `tractor_step`): a find not in lock joins a queue of four from the helm or the console and is pulled the moment it locks, so L and XL finds can be lined up for the console; HUD "BEAM QUEUE"
+- [x] 5.4 Twin vaults and anchors stand on their own spots in their room (`twin.spot_of` picks the point of the room farthest from its loot slots, the Echo and home-find quarters, off the walls so a saucer can hover over it; at least `twin.SPOT_CLEAR` from every loot slot), so the find on the slot no longer comes up first
+- [x] 5.5 Saucer modules and a trader's shelf (see `add-items-identification-tractor` 1.2 and `add-trading-mvp` 1.2)
+
 ## 6. Verification
 
 - [x] 6.1 `tests/lua/playtest_recs_spec.lua`; game tests read the new warnings; C touch test

@@ -83,7 +83,7 @@ function M.wrist(p, scan)
     local f = w and math.min(1, w.t / w.total) or 0
     return { { s, s > 0.3 and CHARGE or HOLD }, { #(p.hands or {}) / T.hands, HOLD }, { f, f > 0 and LOCK or DIM } }
   end
-  local charge = math.max(0, math.min(1, (p.ship.charge or 0) / all.max_charge))
+  local charge = math.max(0, math.min(1, (p.ship.charge or 0) / require("sim.ship").max_charge(p.ship)))
   local hold = math.min(1, #(p.hold or {}) / require("sim.upgrades").hold_slots(p))
   local lock = scan and scan.ok and 1 or 0
   return { { charge, CHARGE }, { hold, HOLD }, { lock, lock > 0 and LOCK or DIM } }
