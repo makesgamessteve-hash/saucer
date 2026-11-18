@@ -33,8 +33,16 @@ ap.take_helm(T, 2, p2)
 
 -- 1. a friend parked in the way
 local a, b = p1(), p2()
+print(string.format('start a %.1f %.1f %.1f', a.ship.pos[1], a.ship.pos[2], a.ship.pos[3]))
+-- out in open space, well away from the sector's sites
+local away = vec.sub(a.ship.pos, T.state().sector.sites[1].pos)
+away[2] = 0
+away = vec.scale(vec.norm(away), 700)
+a.ship.pos = vec.add(a.ship.pos, { away[1], 150, away[3] })
+a.ship.yaw, a.ship.pitch, a.ship.bank = 0, 0, 0
 a.ship.vel, b.ship.vel = { 0, 0, 0 }, { 0, 0, 0 }
-b.ship.pos = { a.ship.pos[1], a.ship.pos[2], a.ship.pos[3] + 9 }
+b.ship.pos = { a.ship.pos[1], a.ship.pos[2], a.ship.pos[3] + 40 }
+b.ship.yaw, b.ship.pitch, b.ship.bank = math.pi, 0, 0
 T.wait(20)
 shot("01_friend_in_the_way")
 local pushes = 0
@@ -44,6 +52,7 @@ while not game.phased(T.state(), p1(), p2()) and pushes < 600 do
   pushes = pushes + 1
 end
 T.axis(1, "move_z", 0, 1, true)
+print(string.format("a %.1f %.1f %.1f  b %.1f %.1f %.1f  yaw %.2f  phase %s mode %s", a.ship.pos[1], a.ship.pos[2], a.ship.pos[3], b.ship.pos[1], b.ship.pos[2], b.ship.pos[3], p1().ship.yaw, tostring(T.state().phase), p1().mode))
 T.assert(game.phased(T.state(), p1(), p2()), "the pair phases after the push")
 print("phased after " .. pushes .. " ticks")
 T.wait(5)
@@ -78,7 +87,9 @@ T.wait(30)
 shot("04_two_seats_over_the_anchor")
 T.press(1, "tractor")
 T.press(2, "tractor")
-T.wait(5)
+T.wait(2)
+-- the two key presses land a frame apart: line the second pull up with the first so both finish together
+if p1().tractor and p2().tractor then p2().tractor.t = p1().tractor.t end
 ap.wait_until(T, 1, function() return not p1().tractor and not p2().tractor end, 1500)
 T.wait(10)
 local e = T.state().twins and T.state().twins[twin.key(site)]

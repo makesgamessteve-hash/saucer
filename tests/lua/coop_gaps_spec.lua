@@ -253,6 +253,24 @@ describe("twin hold timeout (a follower waiting in vain)", function()
     twin.step(st, ctx)
     expect(st.twins[twin.key(site)].by).to_be(2)
   end)
+  it("the anchor exists once: a second beam on a held anchor is refused, the holder may renew", function()
+    local st = new_state(2)
+    local p, q = st.players[1], st.players[2]
+    local site, L = twin_site(st)
+    local anchor = twin.anchor_pos(L)
+    for _, x in ipairs({ p, q }) do
+      x.ship.pos = { anchor[1], anchor[2] + 8, anchor[3] }
+      x.site, x.mode = site, "helm"
+    end
+    local ctx = ctx_of()
+    expect(twin.hold(st, q, site, ctx)).to_be_truthy()
+    expect(twin.hold(st, p, site, ctx)).to_be(nil)
+    expect(heard(p, "P2 already holds the shutter anchor")).to_be(true)
+    expect(twin.holder(st, site)).to_be(q)
+    st.tick = 100
+    expect(twin.hold(st, q, site, ctx)).to_be_truthy()
+    expect(st.twins[twin.key(site)].at).to_be(100)
+  end)
   it("a hold that is taken up in time is not cut short", function()
     local st = new_state(2)
     local p, q = st.players[1], st.players[2]

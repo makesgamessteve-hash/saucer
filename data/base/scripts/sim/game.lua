@@ -697,8 +697,7 @@ function M.pick_up(state, p, cand, site_idx)
     fx(state, p, "pickup")
   elseif cand.kind == "anchor" then
     -- add-playtest-recs: the anchor stays put; the beam latches the shutter open
-    twin.hold(state, p, site_idx, ctx_fns)
-    fx(state, p, "tractor")
+    if twin.hold(state, p, site_idx, ctx_fns) then fx(state, p, "tractor") end
   elseif cand.kind == "twin" then
     twin.take(state, p, site_idx, ctx_fns)
   elseif cand.kind == "nest" then

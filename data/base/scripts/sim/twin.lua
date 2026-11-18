@@ -179,6 +179,12 @@ end
 -- the anchor was beamed: p holds the shutter open while it stays close
 function M.hold(state, p, site, ctx)
   local e = M.entry(state, site)
+  local h = M.holder(state, site)
+  if h and h ~= p then -- the anchor exists once: whoever latched it first keeps it (multiplayer 1.6)
+    ctx.msg(state, p, string.format("P%d already holds the shutter anchor: go and beam up the twin vault", h.index))
+    ctx.fx(state, p, "denied")
+    return nil
+  end
   e.by, e.at = p.index, state.tick
   ctx.msg(state, p, "You hold the shutter anchor. Stay close: a partner can now beam up the twin vault.")
   for _, o in ipairs(state.players) do
