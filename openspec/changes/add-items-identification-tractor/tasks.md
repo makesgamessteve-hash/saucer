@@ -1,8 +1,8 @@
 ## 1. Requirements
 
 - [x] 1.1 Deterministic items: spec "each player gets an own, reproducible instance"
-- [ ] 1.2 Identification (partial, milestone 3): lab bench, `30 s × tier`, unknown labels until identified (`trade.lua` "the bench identified the item"); installing modules is deferred
-- [x] 1.3 Echoes are not sellable (milestone 3): Echoes sit in the hold, never hot; `trade.lua` "the Echo is not for sale"; `items.losable` never returns Echoes, so Fold Retreat and Snatchers cannot take them; installing waits for modules
+- [x] 1.2 Identification and modules: lab bench, `30 s × tier`, unknown labels until identified (`trade.lua` "the bench identified the item"); Module items install into two saucer slots at the lab bench (`sim/modules.lua`, lab rows Install / Remove / Identify fitted): identified affixes change shield regen, Charge regen, max Charge, turn rate and scan reach; quirks bite at once (Unstable drains Charge, Loud is heard from farther, Bonded will not come out) and the HUD says "UNKNOWN EFFECT" until identified. Tests: `tests/lua/gameplay_gaps_spec.lua` "Hidden quirk: …"
+- [x] 1.3 Echoes are not sellable (milestone 3): Echoes sit in the hold, never hot; `trade.lua` "the Echo is not for sale"; `items.losable` never returns Echoes, so Fold Retreat and Snatchers cannot take them; installing a module refuses Echoes (`modules.installable`)
 
 ## 2. Verification
 

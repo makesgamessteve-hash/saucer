@@ -112,6 +112,11 @@ T.assert(ap.to_console(T, 1, get), "at the console")
 T.press(1, "tractor")
 T.wait(1)
 T.assert(not get().tractor and said("Beam: "), "nothing taken: the target is off axis")
+-- gameplay gaps: the press queued it; a second press takes it off the queue again
+T.assert(said("Queued "), "the off-axis find joined the beam queue")
+T.press(1, "tractor")
+T.wait(1)
+T.assert(said("off the beam queue") and not get().beam_queue, "a second press took it off the queue")
 T.assert(ap.beam_up(T, 1, get, villa_t), "trimmed over it and beamed it up")
 T.assert(ap.back_to_helm(T, 1, get), "back at the helm")
 

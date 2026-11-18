@@ -580,9 +580,12 @@ local function tractor_step(state, p, cmd, dt)
       and (b.console or sc.status ~= "lock") then
     local what = beamqueue.toggle(p, sc.cand.key, items.label(sc.cand.item))
     if what == "added" then
-      msg(state, p, string.format("%sQueued %s (%d/%d): the beam takes it when it is in lock%s",
+      local where = (b.console and not p.beam_console)
+          and " The beam runs from the Tractor Room below the lower deck: go down and it takes the find when it is in lock."
+          or " The beam takes it when it is in lock."
+      msg(state, p, string.format("%sQueued %s (%d/%d).%s",
         sc.status ~= "lock" and ("Beam: " .. sc.info.hint:lower() .. ". ") or "", items.label(sc.cand.item),
-        #beamqueue.keys(p), beamqueue.MAX, (b.console and not p.beam_console) and " - from the Tractor Room console" or ""))
+        #beamqueue.keys(p), beamqueue.MAX, where))
       fx(state, p, "scan")
     elseif what == "removed" then
       msg(state, p, "Took " .. items.label(sc.cand.item) .. " off the beam queue")

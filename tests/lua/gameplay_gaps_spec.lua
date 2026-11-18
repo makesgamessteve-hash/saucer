@@ -119,7 +119,7 @@ describe("Tractor Room target queue", function()
     expect(upgrades.relay(p, big.item)).to_be_falsy()
     run(st, cmd({ pressed = { "tractor" } }))
     expect(texts(p)).to_contain("Queued")
-    expect(texts(p)).to_contain("from the Tractor Room console")
+    expect(texts(p)).to_contain("The beam runs from the Tractor Room")
     expect(p.tractor).to_be(false)
     run(st, cmd(), 20)
     expect(p.tractor).to_be(false) -- in lock, but nobody at the console
@@ -647,5 +647,29 @@ describe("a trader's shelf of modules (add-trading-mvp 1.2)", function()
     expect(select(2, trade.buy_stock(st, p, 1, 1))).to_be("hold full")
     expect(select(2, trade.buy_stock(st, p, 1, 99))).to_be("gone")
     expect(#p.hold).to_be(upgrades.hold_slots(p))
+  end)
+end)
+
+describe("grid consoles (add-sentries-and-tools-mvp 1.5)", function()
+  it("every derelict with sentries has a grid console that stands them down until you leave", function()
+    local ex = require("sim.excursion")
+    local guarded = 0
+    for seed = 1, 12 do
+      local st = new_state(1, seed)
+      local p = st.players[1]
+      for i in ipairs(st.sector.sites) do
+        local defs = game.sentries(i)
+        if #defs > 0 then
+          guarded = guarded + 1
+          expect(#game.ruin(i).foot.consoles >= 1).to_be(true)
+          expect(ex.grid_down(st, i)).to_be(false)
+          expect(ex.shut_grid(st, p, i, ctx)).to_be(#defs)
+          expect(ex.grid_down(st, i)).to_be(true)
+          expect(ex.left_site(st, p, i, ctx)).to_be(true)
+          expect(ex.grid_down(st, i)).to_be(false)
+        end
+      end
+    end
+    expect(guarded).to_be_greater(10)
   end)
 end)

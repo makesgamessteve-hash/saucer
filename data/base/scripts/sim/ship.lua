@@ -15,7 +15,11 @@ local M = {}
 -- ship.mods (stat -> percent), the Charge drain of an Unstable module in ship.drain and the noise of a Loud
 -- one in ship.loud. All three stay nil with no module fitted, so a ship without one is unchanged.
 function M.mult(ship, stat) return 1 + ((ship.mods and ship.mods[stat]) or 0) / 100 end
-function M.max_charge(ship) return configs.all().max_charge * M.mult(ship, "max_charge") end
+function M.max_charge(ship)
+  local base = configs.all().max_charge
+  if not (ship.mods and ship.mods.max_charge) then return base end -- the integer itself: hashes stay as they were
+  return base * M.mult(ship, "max_charge")
+end
 
 function M.new(pos, yaw, size)
   return {

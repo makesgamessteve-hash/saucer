@@ -492,10 +492,9 @@ version 10; replays re-recorded. Tests: `tests/lua/playtest_recs_spec.lua`,
 the station and wider-dark game tests read the new warnings. The ten playtests
 were rerun: `docs/playtest/2026-11-17-after.md` has the before/after numbers.
 Screenshot tours: `tools/shots/recs.lua`, `tools/shots/recs_coop.lua`.
-Known gaps: no Tractor Room target queue (the relay covers S and M only);
-twin anchors and vaults sit on loot slots, so the find on the slot comes up
-first; upgrade prices are untested with people; the follower bot can wait by
-a twin anchor in vain.
+Known gaps: upgrade prices are untested with people; the follower bot can wait
+by a twin anchor in vain. (The Tractor Room target queue and the twin spots
+were closed under "Gameplay gaps — done" below.)
 
 ## Remaining work after milestone 10
 
@@ -586,6 +585,38 @@ warp off and on in `tools/shots/renderer.lua`. **Not covered by CI:** the pixels
 themselves (the GL shaders need a GPU; the windowed smoke test only proves they
 compile and run). **Deferred:** an in-game menu entry for the warp (it is a
 settings call and a mod/console toggle for now) and reducing dithering in XR.
+
+### Gameplay gaps — done
+
+**Status (2026-11-18).** Done on the `remaining-gameplay` branch, in the
+OpenSpec tasks they belonged to.
+- **Grid consoles (`add-sentries-and-tools-mvp` 1.5).** They were already the
+  on-foot hand-lock of milestone 7; the task is ticked against its tests and a
+  new cross-seed spec ("every derelict with sentries has a grid console").
+- **Saucer modules (`add-items-identification-tractor` 1.2).** `sim/modules.lua`:
+  two slots, installed at the lab bench (Install / Remove / Identify fitted
+  rows). Identified affixes apply (shield regen, Charge regen, max Charge, turn,
+  scan reach, which is how long a scan pulse keeps sentries marked); quirks apply
+  at once (Unstable drains 0.8 Charge/s, Loud adds 25 m to a Watcher's sight and
+  8 m to a Snatcher's sense, Bonded will not come out and shows itself when you
+  try) and the HUD says UNKNOWN EFFECT until the bench identifies the module.
+  The fields live on the player and the ship and stay nil until a module is
+  fitted, so existing saves and replays are unchanged.
+- **Trader stock (`add-trading-mvp` 1.2).** Each trader shelves three modules,
+  rolled from the seed, trader and a four-hour restock epoch (`trade.stock`),
+  sold identified and quirk-free at 2.4× the trade value; a sale is saved in
+  `state.traders[i].sold`. `loot.roll` takes an optional category.
+- **Tractor Room target queue.** `sim/beamqueue.lua`: press the beam key on a
+  find that is not in lock and it joins a queue of four (from the helm too, so an
+  L or XL find can be lined up for the console); the beam pulls the first queued
+  find that comes into lock by whoever can pull it from where they are. The queue
+  is transient (not saved), per site, and cleared on a fold.
+- **Twin spots.** The vault and the anchor now stand on their own spots in
+  their rooms (`twin.spot_of`), at least 1.5 m from any loot slot, the Echo or a
+  home-find quarter, so the find on the slot no longer comes up first.
+Tests: `tests/lua/gameplay_gaps_spec.lua`. **Deferred:** installing modules from
+the Seat or away from the bench; module slots as an upgrade; quirk trials
+("use it to learn what it does").
 
 ## Later / maybe
 
