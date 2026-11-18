@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include "lauxlib.h"
 #include "lua.h"
 #include "lualib.h"
@@ -1055,12 +1056,20 @@ static int build_part(lua_State *L, int idx, sx_mesh *m) {
   return 1;
 }
 
-/* build{ parts = { {kind="box", min=..., max=..., color=...}, ... } } -> id, hash */
+/* wall-clock milliseconds, only for the mesh build-time budget (never read by the sim) */
+static double wall_ms(void) {
+  struct timespec ts;
+  if (!timespec_get(&ts, TIME_UTC)) return 0.0;
+  return (double)ts.tv_sec * 1000.0 + (double)ts.tv_nsec / 1.0e6;
+}
+
+/* build{ parts = { {kind="box", min=..., max=..., color=...}, ... } } -> id, hash, build milliseconds */
 static int l_mesh_build(lua_State *L) {
   sx_engine *e = get_engine(L);
   sx_mesh m;
   int i, n, id;
   uint64_t h;
+  double t0 = wall_ms();
   luaL_checktype(L, 1, LUA_TTABLE);
   sx_mesh_init(&m);
   lua_getfield(L, 1, "parts");
@@ -1081,7 +1090,8 @@ static int l_mesh_build(lua_State *L) {
   if (!id) return luaL_error(L, "too many meshes");
   lua_pushinteger(L, id);
   lua_pushinteger(L, (lua_Integer)h);
-  return 2;
+  lua_pushnumber(L, wall_ms() - t0);
+  return 3;
 }
 
 static int l_mesh_info(lua_State *L) {
