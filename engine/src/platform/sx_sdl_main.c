@@ -186,7 +186,7 @@ static void frame(void) {
   Uint64 now;
   int n, i, ran = 0;
   while (SDL_PollEvent(&ev)) handle_event(&ev);
-  if (e->xr.session) return; /* the XR frame loop drives the game while immersive */
+  if (e->xr.session && !e->xr.mocked) return; /* the XR frame loop drives the game while immersive */
   now = SDL_GetPerformanceCounter();
   /* playtest-1: long windowed playtests draw one frame every few ticks; a
    * screenshot a script asks for is still taken right after its tick */
@@ -256,6 +256,7 @@ EMSCRIPTEN_KEEPALIVE void saucer_xr_set_available(int a) {
 EMSCRIPTEN_KEEPALIVE void saucer_xr_begin(int mode) {
   if (!A.e) return;
   A.e->xr.session = mode;
+  A.e->xr.mocked = 0;
   A.e->xr.nviews = 2;
   memset(A.e->xr.values, 0, sizeof A.e->xr.values);
 }
@@ -263,6 +264,8 @@ EMSCRIPTEN_KEEPALIVE void saucer_xr_end(void) {
   if (!A.e) return;
   A.e->xr.session = 0;
   A.e->xr.hand_ok[0] = A.e->xr.hand_ok[1] = 0;
+  sx_xr_set_joints(&A.e->xr, 0, 0, NULL);
+  sx_xr_set_joints(&A.e->xr, 1, 0, NULL);
   memset(A.e->xr.values, 0, sizeof A.e->xr.values);
   A.last = SDL_GetPerformanceCounter();
 }
@@ -306,6 +309,33 @@ EMSCRIPTEN_KEEPALIVE void saucer_xr_set_hand(int i, int ok, float px, float py, 
   h[4] = fy;
   h[5] = -fz;
 }
+/* add-webxr-cockpit: hand tracking. j = wrist, thumb tip, index tip, middle tip, ring tip, pinky tip
+ * (x y z each, WebXR reference space), flipped like the head and the controllers. */
+EMSCRIPTEN_KEEPALIVE void saucer_xr_set_joints(int hand, int ok, const float *j) {
+  float f[SX_XR_JOINTS * 3];
+  int k;
+  if (!A.e) return;
+  if (ok && j) {
+    for (k = 0; k < SX_XR_JOINTS; k++) {
+      f[k * 3] = -j[k * 3];
+      f[k * 3 + 1] = j[k * 3 + 1];
+      f[k * 3 + 2] = -j[k * 3 + 2];
+    }
+  }
+  sx_xr_set_joints(&A.e->xr, hand, ok && j, f);
+}
+/* haptic pulses the game asked for: the page polls both hands every XR frame */
+static int xr_haptic_ms[2];
+EMSCRIPTEN_KEEPALIVE float saucer_xr_haptic_take(int hand) {
+  float s = 0.0f;
+  int ms = 0;
+  if (!A.e || !sx_xr_haptic_take(&A.e->xr, hand, &s, &ms)) return 0.0f;
+  xr_haptic_ms[hand] = ms;
+  return s;
+}
+EMSCRIPTEN_KEEPALIVE int saucer_xr_haptic_ms(int hand) { return hand >= 0 && hand < 2 ? xr_haptic_ms[hand] : 0; }
+/* the reference space the comfort settings ask for: 1 seated, 2 standing */
+EMSCRIPTEN_KEEPALIVE int saucer_xr_pref_mode(void) { return A.e ? A.e->xr.pref_mode : 2; }
 EMSCRIPTEN_KEEPALIVE void saucer_xr_set_control(int ctl, float v) {
   if (A.e && ctl >= 0 && ctl < SX_XR_COUNT) A.e->xr.values[ctl] = v;
 }

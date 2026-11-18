@@ -899,7 +899,7 @@ function M.render(v, state, alpha)
     -- add-pocket-station-visits: on foot you see the station's inside
     local stv = require("view.station")
     stv.render(v, state, p)
-    if v.xr then xrv.overlay(v, A, stv.cam, p, nil) else hud.draw(v, state, p, nil) end
+    if v.xr then xrv.overlay(v, A, stv.cam, p, nil, state) else hud.draw(v, state, p, nil) end
     if v.index == v.player then M.audio(state, p) end
     return
   end
@@ -907,7 +907,7 @@ function M.render(v, state, alpha)
     -- add-holodeck-home-life: inside a program you only see the simulation
     local hv = require("view.holo")
     hv.render(v, state, p)
-    if v.xr and hv.cam then xrv.overlay(v, A, hv.cam, p, nil) elseif not v.xr then hud.draw(v, state, p, nil) end
+    if v.xr and hv.cam then xrv.overlay(v, A, hv.cam, p, nil, state) elseif not v.xr then hud.draw(v, state, p, nil) end
     if v.index == v.player then M.audio(state, p) end
     return
   end
@@ -974,7 +974,7 @@ function M.render(v, state, alpha)
       M.draw_beam(v, A, o, nil, state.tick)
     end
   end
-  if v.xr then xrv.overlay(v, A, cam, p, scan) else hud.draw(v, state, p, scan) end
+  if v.xr then xrv.overlay(v, A, cam, p, scan, state) else hud.draw(v, state, p, scan) end
   if v.index == v.player then M.audio(state, p) end
 end
 

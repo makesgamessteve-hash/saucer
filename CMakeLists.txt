@@ -77,7 +77,7 @@ if(SAUCER_BUILD_GAME)
     target_compile_options(saucer PRIVATE -sUSE_SDL=3)
     target_link_options(saucer PRIVATE -sUSE_SDL=3 -sMAX_WEBGL_VERSION=2 -sMIN_WEBGL_VERSION=2
       -sALLOW_MEMORY_GROWTH=1 -sFORCE_FILESYSTEM=1 -sINVOKE_RUN=0 -sSTACK_SIZE=1048576 -sEXPORTED_RUNTIME_METHODS=FS,callMain,ccall
-      -sEXPORTED_FUNCTIONS=_main,_saucer_xr_set_available,_saucer_xr_begin,_saucer_xr_end,_saucer_xr_frame,_saucer_xr_set_view,_saucer_xr_set_head,_saucer_xr_set_control,_saucer_xr_set_hand,_saucer_net_push,_saucer_net_status,_malloc,_free
+      -sEXPORTED_FUNCTIONS=_main,_saucer_xr_set_available,_saucer_xr_begin,_saucer_xr_end,_saucer_xr_frame,_saucer_xr_set_view,_saucer_xr_set_head,_saucer_xr_set_control,_saucer_xr_set_hand,_saucer_xr_set_joints,_saucer_xr_haptic_take,_saucer_xr_haptic_ms,_saucer_xr_pref_mode,_saucer_net_push,_saucer_net_status,_malloc,_free
       --js-library ${CMAKE_SOURCE_DIR}/web/saucer_xr.js --pre-js ${CMAKE_SOURCE_DIR}/web/saucer_net.js
       --shell-file ${CMAKE_SOURCE_DIR}/web/shell.html)
     set_target_properties(saucer PROPERTIES SUFFIX ".html")
@@ -181,6 +181,8 @@ if(SAUCER_BUILD_TESTS)
   add_test(NAME game_derelict3d_seed7 COMMAND ${HL} --seed 7 --script tests/game/derelict3d.lua
            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_xr COMMAND ${HL} --seed 42 --script tests/game/xr.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  # add-webxr-cockpit: hand tracking, constant scale and haptics through the engine, mocked poses
+  add_test(NAME game_xr_hands COMMAND ${HL} --seed 42 --script tests/game/xr_hands.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_coop COMMAND ${HL} --seed 42 --local-players 2 --viewports 2 --script tests/game/coop.lua
            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_mods COMMAND ${HL} --seed 42 --mods-dir tests/fixtures/mods --script tests/game/mods.lua
@@ -189,6 +191,8 @@ if(SAUCER_BUILD_TESTS)
   find_program(NODE_EXE node)
   if(NODE_EXE)
     add_test(NAME web_net_js COMMAND ${NODE_EXE} tests/web/net_web.test.js WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+    # add-webxr-cockpit: the WebXR glue on a fake XRSession (probe, spaces, controllers, hand joints, haptics)
+    add_test(NAME web_xr_js COMMAND ${NODE_EXE} tests/web/xr_web.test.js WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   endif()
   # milestone 9: two machines on loopback (a host and an XR guest) play one universe in
   # lockstep, decorate a dome and visit it; a deliberate desync must be caught

@@ -154,7 +154,7 @@
   document.getElementById('online').addEventListener('click', function () {
     location.search = '?net=1' + (new URLSearchParams(location.search).get('seed') ? '&seed=' + new URLSearchParams(location.search).get('seed') : '');
   });
-  vrBtn.addEventListener('click', function () { if (Module.saucerEnterVR) Module.saucerEnterVR('standing'); });
+  vrBtn.addEventListener('click', function () { if (Module.saucerEnterVR) Module.saucerEnterVR(); });
   vrSeat.addEventListener('click', function () { if (Module.saucerEnterVR) Module.saucerEnterVR('seated'); });
 </script>
 {{{ SCRIPT }}}
