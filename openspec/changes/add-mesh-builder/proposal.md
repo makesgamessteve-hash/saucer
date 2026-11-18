@@ -15,4 +15,4 @@ Change 9 of 0–21 in the order of concept v0.3 §16.2.
 ## Impact
 
 - Capability `mesh-builder` (`openspec/specs/mesh-builder/spec.md` once archived)
-- Milestone 1 status: **partial** (2/5 requirements fully met)
+- Milestone 1 status: **done** (5/5 requirements met; CI on the merge confirms 2.1)
