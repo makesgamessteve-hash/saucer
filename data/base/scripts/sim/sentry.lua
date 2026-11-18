@@ -76,7 +76,7 @@ function M.layout(site, ruin, civ)
       end
       local yaw = sm.atan2(tgt[1] - pos[1], tgt[3] - pos[3])
       out[#out + 1] = { id = #out + 1, kind = "watcher", site = site.id, room = r.id, pos = pos, yaw = yaw,
-                        pitch = pitch, band = band }
+                        pitch = pitch, band = band, glyph = civ and civ.glyph or nil }
     elseif r.class < big and r.kind == "duct" or (r.class < big and r.kind == "side" and ruin.rooms[r.parent]
         and ruin.rooms[r.parent].class >= big) then
       -- a Snatcher in the duct; its nest at the deepest small room of the branch
@@ -105,7 +105,7 @@ function M.layout(site, ruin, civ)
         hi[k] = math.max(mx[k], dmx[k]) + 2
       end
       out[#out + 1] = { id = #out + 1, kind = "snatcher", site = site.id, room = r.id, pos = { cx, cy, cz },
-                        patrol = { a, b }, nest = nest, nest_room = deepest.id, leash = { lo, hi } }
+                        patrol = { a, b }, nest = nest, nest_room = deepest.id, leash = { lo, hi }, glyph = civ and civ.glyph or nil }
     end
   end
   -- add-wider-dark: deeper sectors add Clamps and a Lockdown node
@@ -507,7 +507,10 @@ function M.jam(state, site_idx, defs, eye, dir, p)
     local pos = dyn.pos or def.pos
     local d = vec.sub(pos, eye)
     local l = vec.len(d)
-    local ok = l <= (t.jammer.near or 0) or l <= t.jammer.range and ( vec.dot(d, dir) / (l * vec.len(dir)) >= sm.cos(t.jammer.half_angle))
+    -- add-mesh-builder: range is to the sentry's declared hit volumes, the cone is aimed at its centre
+    local reach = adv.reach(def, dyn, eye)
+    local ok = reach <= (t.jammer.near or 0) or reach <= t.jammer.range and
+      (l <= 1e-6 or vec.dot(d, dir) / (l * vec.len(dir)) >= sm.cos(t.jammer.half_angle))
     if p and dyn.st == "latched" and dyn.target == p.index then ok = true end
     if p and dyn.st == "clamped" and dyn.target == p.index then ok = true end
     if dyn.st == "off" then ok = false end
