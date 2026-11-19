@@ -534,6 +534,27 @@ lazy interior generation is deferred). *Slice 3 — transit and dynamics (done):
 a flooded or overgrown undercity, storms with wind and lightning, sky-bridges that fall, and roaming
 Watchers in dark districts. *Slice 4 — mystery and traders (done):* an archive record in each archive district points at the next Echo, and a trader outpost hangs off every city's spaceport mouth. *Slice 5 — polish and performance (done):* the helm hint is docked bottom-left and fades, restoring a grid is a visible moment (beacons first, a wave of light from the coupling, a `gridon` sting, a HUD banner), and the city frame cost was cut with a sentry distance cull, tuned LOD distances and generational GC; `--frame-stats` (native and `?script=&frame_stats=1` on the web) reports the real per-frame ms (see `cities2_report.md`).
 
+## 12. A story for every run — done
+
+**Goal.** Steve: "an overarching story for each new run", generated from the seed, no runtime LLM.
+
+**Status (2026-11-19).** OpenSpec change `add-run-story`, in three slices. *Slice 1, the generator:* `sim/story.lua`
+with `data/base/story/{skeletons,twists,vocab}.lua`. The universe seed picks one of five plot skeletons of 4 to 6
+beats (a civilisation vanished overnight, a war that ended both sides, a signal calling everyone home, the
+saucer's own builders, sleepers the Watchers guard), fills them from the run (the mystery's civilisation, object
+and place, a second civilisation, what the Echo really is, who betrayed whom) and may swap in one twist ("the
+Watchers were caretakers"). Every beat is bound to a real site (the tutorial derelict first, far sectors on the
+mystery's spine, a body city's archive, the Heart last) and each clue ends with a lead naming the next place.
+The text is a pure function of the seed; a save keeps only who found which beat (state version 13). *Slice 2, clues
+in the world:* wreck logs and murals in derelict great halls and archive records in city archives (readable once
+the district's grid is on) as beam targets, only the next one on offer, read in place, shared by the party and
+filed on every bookshelf. *Slice 3, codex and payoff:* the living-room table is now a holotable with a Story page
+(found clues, the next place, the Echo's truth, decoded Echoes, the ending and twist, a switch), a HUD counter and
+hints-mode pointer, a one-time notice when a clue is near, and a finale text for the ending chosen at the Heart.
+The sandbox (Mystery: off) has no story. Tests: `tests/lua/story_spec.lua`, `tests/game/story.lua`,
+`tests/game/widerdark.lua`. Screenshots: `tools/shots/story.lua`.
+Not built: painted murals (clues are glowing markers), translation of scripts, contracts, restoring cities.
+
 ## Remaining work after milestone 10
 
 Steve asked for the leftover items of the plan to be worked through in

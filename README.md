@@ -168,6 +168,12 @@ to their nest. **V** scans, **T** jams. Nothing is lethal: at hull 0 you
 Fold Retreat to the trader and your hot loot waits as a cache. Follow the
 optional Echoes (Who → Where → Key) to the Resonant vault.
 
+**A story for every run.** Each universe seed also generates a story (no network, no LLM): one of five plot
+skeletons filled with that run's civilisations, Echo and betrayals, and now and then a twist. Its clues (wreck
+logs, murals, city archive records) are beam targets that point to the next place; the **holotable** in the
+living room keeps the Story page, and the Heart ends it. Mystery: off (the sandbox) has no story. Tests:
+`tests/lua/story_spec.lua`, `tests/game/story.lua`.
+
 **Home life** (milestone 4). The **holodeck** is the starboard-aft room on
 the lower deck, through the lit arch from the engine room; its panel stands
 beside the arch. Pick a program and you step into a simulated space: Sunset

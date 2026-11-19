@@ -112,6 +112,7 @@ function M.resolve(state, id, ctx)
       ctx.msg(state, p, "You carry the " .. it.name .. " home")
     end
   end
+  require("sim.story").finish(state, id, ctx) -- add-run-story: the story is told
   saucer.events.emit({ type = "ending", ending = id })
   return true
 end

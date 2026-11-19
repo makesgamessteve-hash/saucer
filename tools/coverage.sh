@@ -43,10 +43,13 @@ pids=()
 names=()
 start() { lua_run "$@" & pids+=($!); names+=("$1"); }
 throttle() { while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do sleep 1; done; }
+# the whole spec suite is the longest single run: start it first so it overlaps the game tests
+# (started last it waited for a free slot and ended the gate)
+start specs --test-lua tests/lua
 # longest first so the slow ones overlap the rest. tests/game/widerdark.lua
 # (four views, ~47k ticks) runs in ctest only: under luacov it takes over
 # half an hour; tests/lua/widerdark_spec.lua and coop_replay cover its code.
-for s in sentries mystery station excursion holodeck slice derelict3d home trade vertical coop interior fold tractor city xr xr_hands boot coop_replay; do
+for s in sentries mystery station excursion holodeck story slice derelict3d home trade vertical coop interior fold tractor city xr xr_hands boot coop_replay; do
   extra=""
   [ "$s" = coop ] && extra="--local-players 2 --viewports 2"
   [ "$s" = coop_replay ] && extra="--coop --viewports 4"
@@ -58,8 +61,6 @@ for s in sentries mystery station excursion holodeck slice derelict3d home trade
   # shellcheck disable=SC2086
   start "$s" --seed 42 $extra --script tests/game/$s.lua
 done
-throttle
-start specs --test-lua tests/lua
 fail=0
 for i in "${!pids[@]}"; do wait "${pids[$i]}" || { echo "luacov run ${names[$i]} failed"; fail=1; }; done
 [ "$fail" = 0 ] || exit 1
