@@ -22,6 +22,11 @@ print("story:", T.state().story.title)
 ap.take_helm(T, 1, get)
 local ok, route = ap.enter(T, 1, get, ruin, origin, cand.room, nil)
 T.assert(ok, "in the hall")
+do -- stage the Villa a few metres off the clue, facing it
+  local sh = get().ship
+  sh.pos, sh.vel, sh.yaw, sh.pitch, sh.bank = { cand.pos[1], cand.pos[2] + 1, cand.pos[3] - 13 }, { 0, 0, 0 }, 0, 0, 0
+  T.wait(30)
+end
 shot("01_clue_in_the_world")
 T.assert(ap.beam_up(T, 1, get, cand), "beamed")
 shot("02_story_beat")
