@@ -108,13 +108,17 @@ return {
                room = { 4.1, -6.9, 8.6, 0.7 } },
   tv = { screen = { -3.025, 1.87, -0.2 }, w = 2.0, h = 1.1 },
   -- sliding doors on the lower-deck partitions: open on their own when a body
-  -- comes within `reach`, solid while less than `solid_below` open
+  -- comes within `reach` (fix-bedroom-door: and stay open until every body is
+  -- past reach + door_close_margin and door_min_open seconds have gone by),
+  -- solid while less than `solid_below` open
   doors = {
     { id = "bedroom",  deck = 2, box = { 2.0, 0.7, 3.4, 0.9 }, reach = 2.0, room = "Bedroom" },
     { id = "bathroom", deck = 2, box = { -3.4, 0.7, -2.0, 0.9 }, reach = 2.0, room = "Bathroom" },
   },
   door_speed = 3.0,          -- open fraction per second
   door_solid_below = 0.75,
+  door_close_margin = 0.8,   -- m beyond `reach` before an open door starts to close
+  door_min_open = 0.8,       -- s a door stays open once it has been triggered
   -- walking graph for scripted runs (autopilot.walk_to): hull-local points and links
   nav = {
     nodes = {

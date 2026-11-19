@@ -228,7 +228,7 @@ function M.step_visit(state, p, cmd, dt, ctx)
   local L = avatar.layout()
   avatar.step(p.vbody, { move_x = cmd:axis("move_x"), move_z = cmd:axis("move_z"), turn = cmd:axis("turn"),
                          look = cmd:axis("look"), run = cmd:held("boost"), aim = cmd.aim }, dt, L,
-    require("sim.home").solids(L, host))
+    require("sim.home").solids(L, host, { p.vbody }))
   if cmd:pressed("use") then
     -- add-home-among-stars: Use at a display slot admires what is on it
     local st = avatar.station(L, p.vbody)

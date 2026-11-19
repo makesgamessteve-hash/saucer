@@ -118,7 +118,7 @@ describe("home", function()
     expect(p.doors[2]).to_be(0)
     expect(#home.solids(L, p)).to_be(#L.doors - 1)
     stand(p, "kitchen")
-    run(st, cmd(), 30)
+    run(st, cmd(), 120)
     expect(p.doors[1]).to_be(0)
     -- a closed door blocks a body walking through it
     local q = { doors = home.new_doors(L) }
@@ -253,5 +253,174 @@ describe("autopilot helpers for the home", function()
     expect(ap.pick(fake, 1, get, "Close")).to_be(false) -- no panel
     panel.open(get(), "bed")
     expect(ap.pick(fake, 1, get, "Nope")).to_be(false)
+  end)
+end)
+
+-- fix-bedroom-door: the sliding doors decide with hysteresis, keep a minimum open
+-- time, ease their drawing, and never turn solid under a body standing in them
+describe("sliding doors are stable at the trigger edge", function()
+  local door = L.doors[1]
+  local cx, cz = home.door_center(door)
+  local function at_dist(p, d) p.body = avatar.new(L, { cx, L.decks[2].floor, cz - d }, 0) end
+  -- run n ticks with the body swaying by `amp` metres around distance d; returns
+  -- the number of times the open fraction turned around and of solid on/off flips
+  local function sway(st, p, d, amp, n)
+    local turns, flips, last, dir, solid = 0, 0, p.doors[1], 0, nil
+    for t = 1, n do
+      at_dist(p, d + amp * math.sin(t * 0.7))
+      run(st, cmd(), 1)
+      local cur = p.doors[1]
+      local nd = cur > last and 1 or cur < last and -1 or 0
+      if nd ~= 0 and dir ~= 0 and nd ~= dir then turns = turns + 1 end
+      if nd ~= 0 then dir = nd end
+      last = cur
+      local s = #home.solids(L, p) - #require("sim.decor").solids(p) == #L.doors
+      if solid ~= nil and s ~= solid then flips = flips + 1 end
+      solid = s
+    end
+    return turns, flips
+  end
+  local function fresh()
+    local st = new_state()
+    local p = st.players[1]
+    p.mode, p.panel = "walk", false
+    return st, p
+  end
+
+  it("a fully open door stays exactly open while a body stands still next to it", function()
+    local st, p = fresh()
+    at_dist(p, 1.0)
+    run(st, cmd(), 40)
+    for _ = 1, 120 do
+      run(st, cmd(), 1)
+      expect(p.doors[1]).to_be(1)
+    end
+    -- and a shut one stays exactly shut
+    expect(p.doors[2]).to_be(0)
+  end)
+  it("does not flap while a body sways across the open radius", function()
+    local st, p = fresh()
+    for _, amp in ipairs({ 0.005, 0.02, 0.1, 0.3 }) do
+      local turns, flips = sway(st, p, door.reach, amp, 240)
+      expect(turns).to_be_less(2)
+      expect(flips).to_be_less(2)
+    end
+    expect(p.doors[1]).to_be(1)
+  end)
+  it("does not flap while a body sways across the close radius either", function()
+    local st, p = fresh()
+    at_dist(p, 1.0)
+    run(st, cmd(), 60)
+    expect(p.doors[1]).to_be(1)
+    local edge = door.reach + L.door_close_margin
+    for _, amp in ipairs({ 0.005, 0.05, 0.2 }) do
+      local turns = sway(st, p, edge, amp, 300)
+      expect(turns).to_be_less(2)
+    end
+  end)
+  it("opens inside reach, stays open until past reach + margin, then closes", function()
+    local st, p = fresh()
+    at_dist(p, door.reach + 0.2)
+    run(st, cmd(), 90)
+    expect(p.doors[1]).to_be(0)
+    at_dist(p, door.reach - 0.05)
+    run(st, cmd(), 60)
+    expect(p.doors[1]).to_be(1)
+    at_dist(p, door.reach + L.door_close_margin - 0.05)
+    run(st, cmd(), 120)
+    expect(p.doors[1]).to_be(1)
+    at_dist(p, door.reach + L.door_close_margin + 0.05)
+    run(st, cmd(), 120)
+    expect(p.doors[1]).to_be(0)
+  end)
+  it("stays open for the minimum open time after the body is gone", function()
+    local st, p = fresh()
+    at_dist(p, 1.0)
+    run(st, cmd(), 30)
+    expect(p.doors[1]).to_be(1)
+    at_dist(p, 6.0)
+    local ticks_open = 0
+    for _ = 1, 240 do
+      run(st, cmd(), 1)
+      if p.doors[1] >= 1 then ticks_open = ticks_open + 1 end
+    end
+    expect(p.doors[1]).to_be(0)
+    expect(ticks_open / 60).to_be_greater(0)
+    -- the hold keeps it fully open for at least what was left of door_min_open
+    local st2, q = fresh()
+    at_dist(q, 1.0)
+    run(st2, cmd(), 3)
+    at_dist(q, 6.0)
+    run(st2, cmd(), 10)
+    expect(q.door_goal[1]).to_be(1)
+    run(st2, cmd(), math.ceil(L.door_min_open * 60) + 2)
+    expect(q.door_goal[1]).to_be(0)
+  end)
+  it("moves at a bounded speed: never reverses within a tick of a steady goal", function()
+    local st, p = fresh()
+    at_dist(p, 1.0)
+    local prev, maxstep = 0, 0
+    for _ = 1, 40 do
+      run(st, cmd(), 1)
+      maxstep = math.max(maxstep, math.abs(p.doors[1] - prev))
+      expect(p.doors[1]).to_be_greater(prev - 1e-9)
+      prev = p.doors[1]
+    end
+    expect(maxstep).to_be_less(L.door_speed / 60 + 1e-6)
+  end)
+  it("eases the drawn leaf: smooth in and out, ends at 0 and 1", function()
+    expect(home.door_ease(0)).to_be(0)
+    expect(home.door_ease(1)).to_be(1)
+    expect(home.door_ease(0.5)).to_be(0.5)
+    expect(home.door_ease(0.1)).to_be_less(0.1)
+    expect(home.door_ease(0.9)).to_be_greater(0.9)
+    expect(home.door_ease(-1)).to_be(0)
+    expect(home.door_ease(2)).to_be(1)
+    expect(home.door_ease(nil)).to_be(0)
+  end)
+  it("a closed door does not turn solid under a body standing in it", function()
+    local _, p = fresh()
+    p.doors = { 0, 0 }
+    p.body = avatar.new(L, { cx, L.decks[2].floor, cz }, 0)
+    expect(#home.solids(L, p)).to_be(#L.doors - 1)
+    -- the other side of the wall's thickness plus the body radius is still solid-free only while inside
+    p.body = avatar.new(L, { cx, L.decks[2].floor, cz - 1.0 }, 0)
+    expect(#home.solids(L, p)).to_be(#L.doors)
+    -- a body on another deck never exempts it
+    p.body = avatar.new(L, { cx, L.decks[1].floor, cz }, 0)
+    expect(#home.solids(L, p)).to_be(#L.doors)
+    -- guest bodies passed in exempt it too, and a body standing in it can walk out
+    p.body = avatar.new(L, { cx, L.decks[2].floor, cz - 1.0 }, 0)
+    local guest = avatar.new(L, { cx, L.decks[2].floor, cz + 0.1 }, 0)
+    expect(#home.solids(L, p, { guest })).to_be(#L.doors - 1)
+    avatar.step(guest, { move_z = 0 }, 1 / 60, L, home.solids(L, p, { guest }))
+    expect(avatar.blocked(L, 2, cx, cz, home.solids(L, p, { guest }))).to_be(false)
+  end)
+  it("the bathroom door behaves the same way", function()
+    local st, p = fresh()
+    local b = L.doors[2]
+    local bx, bz = home.door_center(b)
+    local turns = 0
+    local last, dir = 0, 0
+    for t = 1, 240 do
+      p.body = avatar.new(L, { bx, L.decks[2].floor, bz - b.reach + 0.02 * math.sin(t) }, 0)
+      run(st, cmd(), 1)
+      local nd = p.doors[2] > last and 1 or p.doors[2] < last and -1 or 0
+      if nd ~= 0 and dir ~= 0 and nd ~= dir then turns = turns + 1 end
+      if nd ~= 0 then dir = nd end
+      last = p.doors[2]
+    end
+    expect(turns).to_be_less(2)
+    expect(p.doors[2]).to_be(1)
+  end)
+  it("a guest in the dome holds the door open for the host", function()
+    local st = new_state(2)
+    local host, guest = st.players[1], st.players[2]
+    host.mode, host.panel = "walk", false
+    host.body = avatar.new(L, { cx, L.decks[2].floor, cz - 8 }, 0)
+    guest.visiting = 1
+    guest.vbody = avatar.new(L, { cx, L.decks[2].floor, cz - 1 }, 0)
+    home.doors_step(L, host, 1 / 60, { guest.vbody })
+    expect(host.door_goal[1]).to_be(1)
   end)
 end)
