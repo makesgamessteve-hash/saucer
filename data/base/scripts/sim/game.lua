@@ -489,9 +489,10 @@ local function size_request(state, p, to)
   -- add-pocket-station-visits: the coin size steps you out into the station
   local tc = configs.get(to)
   if tc and tc.pocket then
-    -- add-dock-land-eva: the Villa no longer pops you out: land, walk out through the
-    -- hull hatch and fold it from outside. The one-seat Seat has no stairs and still steps out.
-    if configs.get(from).interior then
+    -- add-dock-land-eva: the Villa no longer pops you out into a derelict: land, walk out through the
+    -- hull hatch and fold it from outside. (A Villa docked at a station still folds from aboard until
+    -- the tractor dock slice; the one-seat Seat has no stairs and still steps out.)
+    if configs.get(from).interior and p.site ~= 0 then
       msg(state, p, "Land (L at the helm), leave through the hull hatch aft of the engine room, then fold the Villa from outside")
       fx(state, p, "denied")
       return

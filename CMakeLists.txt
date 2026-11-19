@@ -162,6 +162,12 @@ if(SAUCER_BUILD_TESTS)
            --restore-every-tick WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_station_seed7 COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-station7
            --quiet --seed 7 --ticks 40000 --script tests/game/station.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  # add-dock-land-eva slice 1: land on gear, the hull door and stairs, fold and unfold the Villa from outside
+  add_test(NAME game_hatch COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-hatch --quiet
+           --seed 42 --ticks 40000 --script tests/game/hatch.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  add_test(NAME game_hatch_restore_every_tick COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR}
+           --user-dir ${USERDIR}-hatch-ret --quiet --seed 42 --ticks 40000 --script tests/game/hatch.lua
+           --restore-every-tick WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   # milestone 7: step out in a derelict, crawl, turn a hand-lock, shut the grid, fail with the Lifeline, recover the cache
   add_test(NAME game_excursion COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-excursion --quiet
            --seed 42 --ticks 40000 --script tests/game/excursion.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
