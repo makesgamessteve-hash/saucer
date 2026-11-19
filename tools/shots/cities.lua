@@ -191,4 +191,12 @@ if BODY == "planet" then
   T.wait(40)
   shot("15_bridge_falls")
 end
+-- 9. mystery and traders (add-cities-2 slice 4)
+local clue = ruin.city.clues[1]
+require("sim.cities").restore(T.state(), site, clue.district)
+put({ clue.pos[1], clue.pos[2] + 1, clue.pos[3] - 14 }, 0, 0)
+shot("16_archive_record")
+local outpost = T.state().sector.traders[2]
+put({ outpost.pos[1] + 40, outpost.pos[2] + 12, outpost.pos[3] - 160 }, -0.2, -0.05)
+shot("17_trader_outpost")
 print("cities shots done " .. BODY)

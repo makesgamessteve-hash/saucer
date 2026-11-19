@@ -612,6 +612,7 @@ function M.generate(seed, kit, civ, origin)
       if d.kind == "palace" or d.kind == "reactor" then s.tier = math.min(5, (s.tier or 1) + 1) end
     end
   end
+  local clues = {}
   for _, lot in ipairs(bybuilding) do
     local d = districts[lot.d]
     -- a landmark's ground hall always holds something worth the trip (the archive: two things)
@@ -625,6 +626,10 @@ function M.generate(seed, kit, civ, origin)
         slots[#slots + 1] = { id = #slots + 1, room = g.id, pos = { (mn[1] + mx[1]) / 2 + (k - 1.5) * 10, mn[2] + kit.wall + 1.5, (mn[3] + mx[3]) / 2 },
                               max_size = 3, tier = d.kind == "archive" and 2 or 3, seed = saucer.seed_child(seed, "slot", #slots + 1),
                               district = d.id }
+      end
+      -- add-cities-2: the archive's ground hall also holds a record, a clue that reads in place
+      if lot.landmark == "archive" then
+        clues[#clues + 1] = { district = d.id, room = g.id, pos = { (mn[1] + mx[1]) / 2, mn[2] + kit.wall + 2.5, (mn[3] + mx[3]) / 2 + 6 } }
       end
     end
   end
@@ -671,7 +676,7 @@ function M.generate(seed, kit, civ, origin)
     city.districts[d.id] = { id = d.id, kind = d.kind, label = d.label, powered = d.powered, coupling = d.coupling,
                              pos = { cx, origin[2] + lot.y * kit.cell, cz }, drum = d.drum, crater = d.crater, box = d.box and { origin[1] + d.box[1] * kit.cell, origin[3] + d.box[2] * kit.cell, origin[1] + d.box[3] * kit.cell, origin[3] + d.box[4] * kit.cell } }
   end
-  city.rails, city.lifts, city.bridges = rails, lifts, bridge_list
+  city.rails, city.lifts, city.bridges, city.clues = rails, lifts, bridge_list, clues
   city.skyline = {}
   for _, sd in ipairs(sky) do
     if sd.n > 0 then

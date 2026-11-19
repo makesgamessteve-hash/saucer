@@ -12,4 +12,5 @@
 - [x] 3.1 Mag-rails and pylons, lift shafts, drawn trains and cabins, flooded and overgrown undercity decor
 - [x] 3.2 Storms and wind, falling sky-bridges, roaming dark-district Watchers, `hud.weather`
 ## 4. Mystery and traders (slice 4)
-- [ ] 4.1 Archive clues; trader stations near cities
+- [x] 4.1 Archive records (`city.clues`, `cities.clue_text`, beam kind `clue`)
+- [x] 4.2 City trader outposts (`sector.traders`, render and radar, dock message)

@@ -622,3 +622,117 @@ describe("patrols in the dark districts", function()
     expect(pcall(render.draw_sentries, v, A, st, p)).to_be_truthy()
   end)
 end)
+
+local function said(p)
+  local s = ""
+  for _, m in ipairs(p.msgs or {}) do s = s .. m.text .. "|" end
+  return s
+end
+local function clue_of(st, i, r, p)
+  for _, c in ipairs(cities.candidates(st, p, i, r)) do if c.kind == "clue" then return c end end
+end
+
+describe("the archive and the outposts", function()
+  it("every archive district holds one record in its ground hall, readable once its grid is up", function()
+    for _, id in ipairs({ "city_planet", "city_moon", "city_asteroid" }) do
+      local r = gen(id)
+      local n = 0
+      for _, d in ipairs(r.city.districts) do if d.kind == "archive" then n = n + 1 end end
+      expect(n).to_be_greater(0)
+      expect(#r.city.clues).to_be(n)
+      for _, c in ipairs(r.city.clues) do
+        expect(r.city.districts[c.district].kind).to_be("archive")
+        expect(r.rooms[c.room].district).to_be(c.district)
+      end
+    end
+    local st, i, r = in_city("planet")
+    local p = st.players[1]
+    expect(clue_of(st, i, r, p)).to_be(nil) -- the archive is dark
+    cities.restore(st, i, r.city.clues[1].district)
+    local c = clue_of(st, i, r, p)
+    expect(c.item.name).to_be("Archive record")
+    expect(c.district).to_be(r.city.clues[1].district)
+  end)
+  it("reading a record names the next Echo, a later record the one after, and never fills the hold", function()
+    local st, i, r = in_city("planet")
+    local p = st.players[1]
+    local d = r.city.clues[1].district
+    cities.restore(st, i, d)
+    local c = clue_of(st, i, r, p)
+    local e = st.mystery.echoes[1]
+    game.pick_up(st, p, c, i)
+    expect(said(p):find("Archive record: a ledger logs a resonance near site " .. e.site, 1, true) ~= nil).to_be_truthy()
+    expect(#p.hold).to_be(0)
+    expect(clue_of(st, i, r, p)).to_be(nil) -- read once
+    -- the text follows the chain: the next unlocked Echo
+    local m = st.mystery
+    m.echoes[1].found_by, m.echoes[1].decoded = 1, true
+    expect(cities.clue_text(st, i, r, d):find("site " .. m.echoes[2].site, 1, true) ~= nil).to_be_truthy()
+    st.sector_id = 7
+    m.echoes[2].sector = 9
+    expect(cities.clue_text(st, i, r, d):find("of sector 9", 1, true) ~= nil).to_be_truthy()
+    -- a full chain with the Heart named, then lore, then a sandbox universe
+    for _, x in ipairs(m.echoes) do x.found_by, x.decoded = 1, true end
+    m.vault_open, m.act, m.heart_sector = true, 3, 12
+    expect(cities.clue_text(st, i, r, d):find("sector 12", 1, true) ~= nil).to_be_truthy()
+    m.ending = true
+    expect(cities.clue_text(st, i, r, d):find("kept a ledger of the", 1, true) ~= nil).to_be_truthy()
+    m.mode = "off"
+    expect(cities.clue_text(st, i, r, d):find("out of date", 1, true) ~= nil).to_be_truthy()
+  end)
+  it("a record is a beam target when the hold is full and is drawn like an Echo", function()
+    local st, i, r = in_city("planet")
+    local p = st.players[1]
+    cities.restore(st, i, r.city.clues[1].district)
+    local c = clue_of(st, i, r, p)
+    for k = 1, 30 do p.hold[k] = { type = "scrap", size = 1, value = 1, name = "x", uid = k } end
+    game.pick_up(st, p, c, i)
+    expect(said(p):find("Archive record", 1, true) ~= nil).to_be_truthy()
+    local A = assets.init()
+    local v = fake_view()
+    p.site = i
+    p.ship.pos = { c.pos[1], c.pos[2], c.pos[3] - 20 }
+    expect(pcall(render.render, v, st, 0)).to_be_truthy()
+  end)
+  it("a city sector has a trader outpost off its spaceport mouth, a pure function of the seed", function()
+    local st, i, r = in_city("planet")
+    local list = st.sector.traders
+    expect(#list).to_be(2)
+    expect(list[1]).to_be(st.sector.trader)
+    expect(list[2].outpost).to_be(true)
+    local site = st.sector.sites[i]
+    expect(list[2].pos[3]).to_be(site.pos[3] - sector.OUTPOST_GAP)
+    expect(vec.dist(list[2].pos, list[1].pos)).to_be_greater(2000)
+    expect(#st.traders).to_be(2)
+    local other = sector.far(42, BODY_SECTOR.planet, galaxy.generate(42).sectors[BODY_SECTOR.planet])
+    expect(other.traders[2].pos[1]).to_be(list[2].pos[1])
+    for _, s in ipairs(st.sector.sites) do
+      if s ~= site then expect(vec.dist(list[2].pos, s.pos)).to_be_greater(500) end
+    end
+    -- a sector without a city has one trader and no list
+    local plain = sector.far(42, 2, { civs = { 1 }, danger = 1 })
+    if not sector.city_of(42, 2) then expect(plain.traders).to_be(nil) end
+  end)
+  it("docking at an outpost sells there with its own ledger, and says so", function()
+    local st, i, r = in_city("planet")
+    local p = st.players[1]
+    local tr = st.sector.traders[2]
+    p.site = 0
+    p.ship.pos = { tr.pos[1] + 20, tr.pos[2], tr.pos[3] }
+    run(st, 3)
+    expect(p.docked).to_be(2)
+    expect(p.last_trader).to_be(2)
+    expect(said(p):find("Docked at the city outpost", 1, true) ~= nil).to_be_truthy()
+    -- a save from before the outpost had no ledger for it
+    st.traders[2] = nil
+    p.ship.pos = { tr.pos[1] + 10, tr.pos[2], tr.pos[3] }
+    p.docked = false
+    run(st, 2)
+    expect(st.traders[2].demand ~= nil).to_be_truthy()
+    -- both stations are drawn and on the radar
+    expect(#render.radar_targets(st, p) >= #st.sector.sites + 2).to_be_truthy()
+    local v = fake_view()
+    p.site = 0
+    expect(pcall(render.render, v, st, 0)).to_be_truthy()
+  end)
+end)
