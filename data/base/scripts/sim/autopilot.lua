@@ -177,6 +177,19 @@ function M.walk_path(t, pl, get, pts, tol, max_ticks)
   return true
 end
 
+-- hold the stick (default: forward) until cond() or max_ticks, then let go
+function M.push(t, pl, cond, max_ticks, axes)
+  for _ = 1, max_ticks or 600 do
+    if cond() then
+      M.hold(t, pl, {})
+      return true
+    end
+    M.hold(t, pl, axes or { move_z = 1 })
+  end
+  M.hold(t, pl, {})
+  return cond()
+end
+
 -- get out of bed: pick "Get up" on the wake-up title panel
 function M.wake(t, pl, get)
   if get().mode ~= "wake" then return true end

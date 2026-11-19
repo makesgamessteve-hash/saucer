@@ -78,6 +78,9 @@ return {
       label = "USE: DISPLAY SLOT" },
     { id = "planner", kind = "planner", deck = 1, pos = { -2.4, 0.6, 3.2 }, radius = 0.9, room = "Living room",
       label = "USE: HOME PLANNER" },
+    -- add-dock-land-eva: the hull hatch in the aft wall of the lower deck
+    { id = "hatch", kind = "hatch", deck = 2, pos = { 0.0, -3.0, -7.4 }, radius = 1.7, room = "Engine room",
+      label = "USE: HULL HATCH" },
     { id = "garden", kind = "garden", deck = 1, pos = { 0.3, 0.6, -6.6 }, radius = 1.6, room = "Lab",
       label = "USE: GARDEN" },
   },
@@ -136,6 +139,7 @@ return {
       living_s = { -6.4, 0.6, 1.5 }, tv = { -6.55, 0.6, -0.2 }, books = { -7.0, 0.6, -3.45 },
       planner = { -2.4, 0.6, 3.2 }, display1 = { -4.2, 0.6, 5.3 }, display4 = { 4.2, 0.6, 5.3 },
       display3 = { -2.6, 0.6, 6.5 }, display2 = { -5.6, 0.6, 4.3 }, display5 = { 5.4, 0.6, 4.6 }, display6 = { 2.6, 0.6, 6.5 }, trade_w = { 4.0, 0.6, -6.5 }, garden = { 0.3, 0.6, -6.6 },
+      hatch_a = { -3.6, -3.0, -6.9 }, hatch = { 0.0, -3.0, -7.4 }, hatch_out = { 0.0, -3.0, -8.3 },
     },
     links = {
       { "helm", "dome" }, { "dome", "aft" }, { "dome", "living" }, { "aft", "stair_top_in" },
@@ -151,7 +155,7 @@ return {
       { "engine_e", "holodeck" }, { "holodeck", "holo_arch" }, { "holo_arch", "holo_in" },
       { "living", "living_s" }, { "living_s", "tv" }, { "lab_in", "books" },
       { "dome", "planner" }, { "planner", "display1" }, { "dome", "display4" }, { "dome", "display3" },
-      { "dome", "display6" }, { "display1", "display2" }, { "display4", "display5" }, { "trade", "trade_w" }, { "trade_w", "garden" },
+      { "dome", "display6" }, { "stair_foot", "hatch_a" }, { "hatch_a", "hatch" }, { "hatch", "hatch_out" }, { "display1", "display2" }, { "display4", "display5" }, { "trade", "trade_w" }, { "trade_w", "garden" },
     },
   },
   rooms = {

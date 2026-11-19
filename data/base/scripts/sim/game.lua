@@ -48,6 +48,9 @@ local twin = require("sim.twin")
 local cities = require("sim.cities")
 local beamqueue = require("sim.beamqueue")
 local claims = require("sim.claims")
+-- add-dock-land-eva
+local landing = require("sim.landing")
+local hulldoor = require("sim.hulldoor")
 local M = {}
 
 M.SITE_PAD = 30
@@ -236,6 +239,8 @@ function M.new_player(index, pos, yaw)
     -- sector memories, a dome visit
     fold_tier = 1, decoys = sentry.tune().decoy.start, shroud = false, shake = 0, spike = false,
     rep = {}, archive = {}, met = {}, archive_rewards = {}, away = {}, visiting = false,
+    -- add-dock-land-eva: the saucer's berth (landed or docked), the hull door and the helmet
+    berth = false, door = false, suited = false,
   }
   holo.ensure(p)
   kitchen.ensure(p)
@@ -244,7 +249,7 @@ function M.new_player(index, pos, yaw)
   return p
 end
 
-M.VERSION = 12 -- state version; saves made by a newer game are refused
+M.VERSION = 13 -- state version; saves made by a newer game are refused
 
 function M.init(state, ctx)
   M.state_ref = state
@@ -484,8 +489,20 @@ local function size_request(state, p, to)
   -- add-pocket-station-visits: the coin size steps you out into the station
   local tc = configs.get(to)
   if tc and tc.pocket then
-    -- add-on-foot-excursions: inside a derelict the Pocket means stepping out
+    -- add-dock-land-eva: the Villa no longer pops you out: land, walk out through the
+    -- hull hatch and fold it from outside. The one-seat Seat has no stairs and still steps out.
+    if configs.get(from).interior then
+      msg(state, p, "Land (L at the helm), leave through the hull hatch aft of the engine room, then fold the Villa from outside")
+      fx(state, p, "denied")
+      return
+    end
     if p.site ~= 0 then excursion.step_out(state, p, ctx_fns) else visit.pocket(state, p, to, ctx_fns) end
+    return
+  end
+  -- add-dock-land-eva: no reconfiguring on the ground with the gear down
+  if p.berth then
+    msg(state, p, "The gear is down: lift off before reshaping the hull")
+    fx(state, p, "denied")
     return
   end
   local eye, yaw
@@ -926,13 +943,13 @@ local function world_step(state, p, dt)
   -- and refills it); with the Charge gone the hull settles at a walking pace - never a trap
   local cr = site ~= 0 and rt.ruins[site] or nil
   local hangar = cities.is_city(cr) and cities.in_hangar(cr, ship.pos)
-  if cities.is_city(cr) and not hangar and not ship.morph and p.mode ~= "foot" then
+  if cities.is_city(cr) and not hangar and not ship.morph and p.mode ~= "foot" and not p.berth then
     local cost, sink = cities.pull(cr, ship.charge, dt)
     ship.charge = ship.charge - cost
     if sink then ship.pos = mover(state, p)(ship, { 0, -cities.SINK * dt, 0 }) end
   end
   -- add-cities-2: a storm over a planet city pushes the saucer about in the open (never inside a room)
-  if cities.is_city(cr) and not hangar and not ship.morph and p.mode ~= "foot" then
+  if cities.is_city(cr) and not hangar and not ship.morph and p.mode ~= "foot" and not p.berth then
     local wx, wz, wk = cities.wind(cr, state.tick)
     if wk > 0 and not cities.sheltered(cr, ship.pos) then ship.pos = mover(state, p)(ship, { wx * dt, 0, wz * dt }) end
   end
@@ -946,6 +963,7 @@ local function world_step(state, p, dt)
   local hc = p.hatch or 0
   if hw > hc then p.hatch = math.min(hw, hc + 2.5 * dt) else p.hatch = math.max(hw, hc - 1.5 * dt) end
   home.doors_step(avatar.layout(), p, dt, coop.guests(state, p))
+  hulldoor.step(state, p, dt, ctx_fns)
   -- add-wider-dark: the Shroud drains Charge while it is up
   if p.shroud then
     if p.mode == "foot" or ship.charge <= 0 then
@@ -1135,6 +1153,7 @@ function M.step_player(state, p, cmd, dt)
     if cmd:pressed("grapple") then require("sim.tools").grapple_fire(state, p, ctx_fns) end
     if cmd:pressed("shroud") then M.shroud(state, p) end
     M.spike_step(state, p, cmd, dt)
+    if p.berth then landing.step(state, p, dt, ctx_fns) end
     excursion.step(state, p, cmd, dt, ctx_fns)
     world_step(state, p, dt)
     return
@@ -1170,7 +1189,16 @@ function M.step_player(state, p, cmd, dt)
   for i, k in ipairs(SIZE_KEYS) do
     if i <= configs.count() and cmd:pressed(k) and i ~= ship.size then size_request(state, p, i) end
   end
+  -- add-dock-land-eva: the helm's Land button; thrust up lifts a landed saucer off
+  if p.mode == "helm" and cmd:pressed("land") and not ship.morph then landing.press(state, p, ctx_fns) end
+  if p.mode == "helm" and p.berth and p.berth.phase == "landed" and cmd:axis("lift") > 0.5 then
+    landing.lift_off(state, p, ctx_fns)
+  end
+  local berthed = p.berth and not ship.morph and landing.step(state, p, dt, ctx_fns)
   if ship.morph then
+    ship.vel = { 0, 0, 0 }
+  elseif berthed and p.mode == "helm" then
+    -- the gear holds the saucer; the stick does nothing until it lifts off
     ship.vel = { 0, 0, 0 }
   elseif p.mode == "helm" then
     flight.step(ship, cmd, dt, mover(state, p))
@@ -1183,11 +1211,17 @@ function M.step_player(state, p, cmd, dt)
     p.body.pitch = vec.clamp(p.body.pitch + cmd:axis("look") * L.look * dt, -L.pitch_limit, L.pitch_limit)
   else
     -- nobody at the helm: the saucer brakes to a stop and holds station
-    flight.step(ship, STILL, dt, mover(state, p))
+    if not berthed then flight.step(ship, STILL, dt, mover(state, p)) end
     local L = avatar.layout()
-    avatar.step(p.body, { move_x = cmd:axis("move_x"), move_z = cmd:axis("move_z"), turn = cmd:axis("turn"),
-                          look = cmd:axis("look"), run = cmd:held("boost"), aim = cmd.aim }, dt, L, home.solids(L, p))
-    p.body.yaw = saucer.math.wrap(p.body.yaw + comfort.snap(cmd))
+    if p.door and p.door.on then
+      -- add-dock-land-eva: on the hull stairs
+      if hulldoor.stairs_step(state, p, cmd, dt, ctx_fns) == "out" then excursion.leave_hatch(state, p, ctx_fns) end
+    else
+      avatar.step(p.body, { move_x = cmd:axis("move_x"), move_z = cmd:axis("move_z"), turn = cmd:axis("turn"),
+                            look = cmd:axis("look"), run = cmd:held("boost"), aim = cmd.aim }, dt, L, home.solids(L, p))
+      p.body.yaw = saucer.math.wrap(p.body.yaw + comfort.snap(cmd))
+      hulldoor.after_walk(state, p)
+    end
   end
   world_step(state, p, dt)
   tractor_step(state, p, cmd, dt)
