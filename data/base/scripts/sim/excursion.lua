@@ -288,6 +288,7 @@ function M.leave_hatch(state, p, ctx)
     path = { vec.copy(feet) }, work = false, warned = 0, area = "hall", deploy = false,
   }
   p.mode = "foot"
+  require("sim.eva").set_home(p)
   p.door.on = false
   p.panel = false
   p.tractor, p.beam_console = false, false
@@ -437,7 +438,7 @@ function M.deploy_villa(state, p, ctx)
 end
 
 -- the Villa has grown and stands on its gear: you stay outside, beside it
-local function stand_up(state, p, ctx)
+function M.stand_up(state, p, ctx)
   local ex = p.excursion
   local landing = require("sim.landing")
   local ship = p.ship
@@ -447,6 +448,7 @@ local function stand_up(state, p, ctx)
               feet = rep.feet or {}, at = vec.copy(ship.pos), yaw = ship.yaw, site = p.site }
   ex.coin, ex.deploy = "stand", false
   require("sim.hulldoor").ensure(p)
+  require("sim.eva").set_home(p)
   ctx.msg(state, p, "The Villa stands on its gear. Walk to the foot of the stairs to board.")
   ctx.fx(state, p, "bank")
 end
@@ -686,8 +688,9 @@ local function work_step(state, p, cmd, dt, ctx)
 end
 
 -- walk, crouch, crawl, jet-hop and fall against the derelict's boxes
-function M.move(state, p, cmd, dt)
+function M.move(state, p, cmd, dt, ctx)
   local T = M.tune()
+  if ctx and require("sim.eva").move(state, p, cmd, dt, ctx) then return 0 end
   local B = T.body
   local A = avatar().layout()
   local b = p.excursion.body
@@ -703,10 +706,11 @@ function M.move(state, p, cmd, dt)
     if saucer.physics.clearance(q, r, B.stand / 2, 0, 1) then b.crouch = false end
   end
   -- jet-hop
-  if lift > 0.5 and b.ground and p.suit > T.suit.hop and not b.crouch then
+  local kit = require("sim.eva").active(p) -- the jetpack's own fuel pays for it
+  if lift > 0.5 and b.ground and (kit or p.suit > T.suit.hop) and not b.crouch then
     b.vy = B.hop
     b.ground = false
-    p.suit = p.suit - T.suit.hop
+    if not kit then p.suit = p.suit - T.suit.hop end
   end
   -- vertical: the mag-boots' pull, a capped fall
   b.vy = math.max(-B.max_fall, (b.vy or 0) - B.gravity * dt)
@@ -776,6 +780,7 @@ function M.drain(state, p)
   local S = M.tune().suit
   -- add-dock-land-eva: with the Villa standing within reach the suit rides its field
   if p.excursion.coin == "stand" and vec.dist(p.ship.pos, M.center(p.excursion.body)) <= M.TETHER then return 0 end
+  if require("sim.eva").active(p) then return 0 end -- the EVA kit has its own gauges
   local k = 1
   if p.excursion.area == "crawl" then k = k * S.crawl end
   if require("sim.sentry").locked_on(state, p) then k = k * S.locked end
@@ -796,7 +801,7 @@ function M.step(state, p, cmd, dt, ctx)
   ex.t = ex.t + dt
   if ex.coin == "grow" then
     if not ship.morph then
-      if ex.deploy and ex.deploy.villa then stand_up(state, p, ctx) else board(state, p, ctx) return end
+      if ex.deploy and ex.deploy.villa then M.stand_up(state, p, ctx) else board(state, p, ctx) return end
     else
       return
     end
@@ -825,6 +830,7 @@ function M.step(state, p, cmd, dt, ctx)
     M.lifeline(state, p, ctx)
     return
   end
+  if require("sim.eva").step(state, p, cmd, dt, ctx) then return end
   if cmd:pressed("use") then M.use(state, p, ctx) end
   if cmd:pressed("tractor") and (ex.coin == "pocket" or ex.coin == "hand") then
     if ex.coin == "pocket" then
@@ -882,7 +888,7 @@ function M.step(state, p, cmd, dt, ctx)
                     held = function() return false end, pressed = function(_, k) return cmd:pressed(k) end, aim = cmd.aim }
     M.move(state, p, STILL, dt)
   elseif ex.coin ~= "fold" then
-    M.move(state, p, cmd, dt)
+    M.move(state, p, cmd, dt, ctx)
   else
     M.move(state, p, { axis = function(_, a) return (a == "turn" or a == "look") and cmd:axis(a) or 0 end,
                        held = function() return false end, pressed = function() return false end, aim = cmd.aim }, dt)
