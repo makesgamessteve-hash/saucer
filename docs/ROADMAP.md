@@ -532,7 +532,7 @@ and alerts. *Slice 2 — vast (done):* a skyline ring of collision-only towers (
 km), drawn as one coarse mesh per district with streamed windows and, on planets, horizon impostors (true
 lazy interior generation is deferred). *Slice 3 — transit and dynamics (done):* mag-rails and lift shafts,
 a flooded or overgrown undercity, storms with wind and lightning, sky-bridges that fall, and roaming
-Watchers in dark districts. *Slice 4 — mystery and traders (done):* an archive record in each archive district points at the next Echo, and a trader outpost hangs off every city's spaceport mouth.
+Watchers in dark districts. *Slice 4 — mystery and traders (done):* an archive record in each archive district points at the next Echo, and a trader outpost hangs off every city's spaceport mouth. *Slice 5 — polish and performance (done):* the helm hint is docked bottom-left and fades, restoring a grid is a visible moment (beacons first, a wave of light from the coupling, a `gridon` sting, a HUD banner), and the city frame cost was cut with a sentry distance cull, tuned LOD distances and generational GC; `--frame-stats` (native and `?script=&frame_stats=1` on the web) reports the real per-frame ms (see `cities2_report.md`).
 
 ## Remaining work after milestone 10
 

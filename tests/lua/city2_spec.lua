@@ -812,3 +812,30 @@ describe("the archive and the outposts", function()
     expect(pcall(render.render, v, st, 0)).to_be_truthy()
   end)
 end)
+
+describe("the frame budget in a city", function()
+  it("a city's sentries are drawn only near the eye, so a city of hundreds stays inside the frame budget", function()
+    local st, i, r = in_city("planet")
+    local A = assets.init()
+    local defs = game.sentries(i)
+    local k
+    for n, d in ipairs(defs) do if d.kind == "watcher" and not d.roam then k = n break end end
+    local def = defs[k]
+    local p = st.players[1]
+    p.site = i
+    local v1 = fake_view()
+    p.ship.pos = { def.pos[1] + 10, def.pos[2], def.pos[3] + 10 }
+    render.draw_sentries(v1, A, st, p)
+    local near = (v1.calls.mesh or 0) + (v1.calls.billboard or 0)
+    expect(near).to_be_greater(0)
+    local v2 = fake_view()
+    p.ship.pos = { def.pos[1] + render.SENTRY_DIST * 20, def.pos[2], def.pos[3] }
+    render.draw_sentries(v2, A, st, p)
+    expect((v2.calls.mesh or 0) + (v2.calls.billboard or 0)).to_be(0)
+    -- the drawn set shrinks with the eye's distance; the LOD distances keep the budget numbers sane
+    expect(render.SENTRY_DIST).to_be_less(render.LOD_DIST)
+    expect(render.CITY_NEAR).to_be_less(render.CULL_DIST)
+    expect(render.OUTER_NEAR).to_be_less(render.CITY_NEAR)
+    expect(r.city ~= nil).to_be_truthy()
+  end)
+end)

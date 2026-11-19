@@ -166,3 +166,15 @@ Restoring a district SHALL be a visible moment: its beacons and spire lights com
 #### Scenario: a restored district lights up in a wave from its coupling, the beacons first, and the HUD and sound mark it
 - **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
 - **THEN** it passes
+
+### Requirement: City frame budget
+A city SHALL be drawn inside a frame budget: a sentry farther from the eye than `SENTRY_DIST` is not drawn, the skyline, detail and chunk distances are tuned so that the per-frame game cost (simulation plus render) in a city stays under 16.6 ms at the 95th percentile on the reference box, and the engine SHALL report the frame times (average, median, 95th percentile and maximum, with the simulation and render share) at exit when run with `--frame-stats`, natively and in the web build.
+
+#### Scenario: sentries are drawn only near the eye and the LOD distances nest
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the frame summary computes average, median, 95th percentile and maximum
+- **WHEN** `tests/c/test_engine.c` runs its `frame_stats` test
+- **THEN** it passes
+
