@@ -51,6 +51,20 @@ local function state_for(mode)
   return st, p
 end
 
+-- declutter-touch-controls: every slot in context, the tray shut
+local ALL = {}
+for _, n in ipairs({ "shrink", "grow", "tractor", "scan", "use", "boost", "jam", "map", "decoy", "grapple" }) do ALL[n] = true end
+local function reset_touch()
+  saucer.input.touch_tray(false)
+  saucer.input.touch_context(ALL)
+end
+-- what hud.touch draws: the shown controls but the look area, and the floating stick
+local function drawn(lay)
+  local n = 0
+  for _, w in ipairs(lay) do if w.shown and w.kind ~= 3 then n = n + 1 end end
+  return n + (lay.stick and 1 or 0)
+end
+
 local function with_touch(fn)
   local dm, real = saucer.input.device_mode, hud.touch
   saucer.input.device_mode = function() return "touch" end
@@ -58,6 +72,7 @@ local function with_touch(fn)
   saucer.input.device_mode = dm
   hud.touch = real
   saucer.test.touch_metrics({ w = 640, h = 360 }) -- back to the headless layout
+  reset_touch()
   if not ok then error(err, 0) end
 end
 
@@ -80,7 +95,9 @@ describe("touch HUD layout", function()
           hud.draw(v, saucer.util.readonly(st), p, nil)
           local lay = saucer.input.touch_layout()
           local ctl = hud.touch_rects(v, lay)
-          expect(#ctl).to_be(#lay - 1) -- every control but the look area
+          local slots = 0
+          for _, w in ipairs(lay) do if w.kind ~= 3 and w.group ~= "tray" then slots = slots + 1 end end
+          expect(#ctl).to_be(slots) -- every slot (shown or not) but the look area and the tray
           local drew_touch, logged = false, 0
           for _, t in ipairs(v.texts) do
             if t.touch then drew_touch = true
@@ -157,8 +174,11 @@ describe("touch HUD feedback", function()
     expect(hud.touch_state("use")).to_be(nil)
     local v = rec_view(480, 270)
     v.in_touch = true
+    reset_touch()
+    saucer.input.touch_tray(true) -- (the scanner lives in the tray)
     local lay = saucer.input.touch_layout()
-    expect(hud.touch(v, st, p)).to_be(#lay - 1) -- the resting ring counts for the stick
+    expect(hud.touch(v, st, p)).to_be(drawn(lay)) -- the resting ring counts for the stick
+    reset_touch()
     local seen = {}
     for _, t in ipairs(v.texts) do seen[t[5]] = true end
     expect(seen["3S"]).to_be(true)  -- the scanner's seconds left
@@ -167,12 +187,13 @@ describe("touch HUD feedback", function()
   end)
   it("lights a pressed button and nudges its label", function()
     local use
-    for _, w in ipairs(saucer.input.touch_layout()) do if w.name == "use" then use = w end end
+    reset_touch()
+    for _, w in ipairs(saucer.input.touch_layout()) do if w.name == "use" and not use then use = w end end
     saucer.test.touch("down", 61, use.x + use.w / 2, use.y + use.h / 2)
     local v = rec_view(480, 270)
     hud.touch(v)
     local lay = saucer.input.touch_layout()
-    for _, w in ipairs(lay) do if w.name == "use" then expect(w.held).to_be(true) end end
+    for _, w in ipairs(lay) do if w.name == "use" and w.group ~= "tray" then expect(w.held).to_be(true) end end
     saucer.test.touch("up", 61)
     local function label_y(vv) -- the label proper is drawn after its shadow
       local y

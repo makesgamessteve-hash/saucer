@@ -276,7 +276,9 @@ describe("touch overlay", function()
     for _, w in ipairs(lay) do if w.held then held = held + 1 end end
     expect(held).to_be(1)
     local v = fake_view()
-    expect(hud.touch(v)).to_be(#lay)
+    local shown = 1 -- (the floating stick)
+    for _, w in ipairs(lay) do if w.shown and w.kind ~= 3 then shown = shown + 1 end end
+    expect(hud.touch(v)).to_be(shown)
     saucer.test.touch("up", 41)
     expect(saucer.input.touch_layout().stick).to_be(nil)
     expect(hud.TOUCH_LABEL.tractor).to_be("BM")

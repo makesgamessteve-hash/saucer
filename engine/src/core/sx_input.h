@@ -8,7 +8,7 @@
 #define SX_MAX_PLAYERS 4
 #define SX_MAX_ACTIONS 48
 #define SX_MAX_BUTTON_ACTIONS 32
-#define SX_NUM_AXES 6
+#define SX_NUM_AXES 8 /* touch-look-speed: + aim_yaw, aim_pitch */
 #define SX_MAX_BINDINGS 12
 #define SX_MAX_PADS 8
 #define SX_AXIS_MAX 32767

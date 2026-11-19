@@ -351,7 +351,11 @@ int sx_engine_load_bindings(sx_engine *e, int player) {
     char name[64], bind[64];
     char *e2 = strchr(p, '\n');
     if (e2) *e2 = 0;
-    if (sscanf(p, "%63s %63s", name, bind) == 2) {
+    /* touch-look-speed: a look drag used to feed the turn and look rates;
+     * it has its own angle axes now, so a saved file's old touch binding
+     * there is dropped (it would turn twice) */
+    if (sscanf(p, "%63s %63s", name, bind) == 2 &&
+        !(strncmp(bind, "touch:look_", 11) == 0 && (strcmp(name, "turn") == 0 || strcmp(name, "look") == 0))) {
       int a = sx_input_find_action(&e->input, name);
       if (a >= 0) {
         if (!cleared[a]) {
@@ -672,6 +676,7 @@ static void apply_injection(sx_engine *e, sx_cmd *cmds, int n) {
 
 static void sample_devices(sx_engine *e, sx_cmd *cmds, int *n) {
   int i;
+  e->touch.sens = e->xr.look_sens; /* touch-look-speed: the comfort setting */
   sx_touch_apply(&e->touch, &e->input.raw);
   {
     float xv[SX_XR_COUNT];

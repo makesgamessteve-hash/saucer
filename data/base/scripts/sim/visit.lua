@@ -206,7 +206,7 @@ end
 function M.walk(L, body, cmd, dt)
   local A = require("sim.avatar").layout()
   body.yaw = comfort.yaw(body.yaw, cmd, A.turn, dt)
-  body.pitch = vec.clamp(body.pitch + cmd:axis("look") * A.look * dt, -A.pitch_limit, A.pitch_limit)
+  body.pitch = comfort.pitch(body.pitch, cmd, A.look, dt, A.pitch_limit)
   local mx, mz = cmd:axis("move_x"), cmd:axis("move_z")
   if mx == 0 and mz == 0 then return 0 end
   local heading = body.yaw + require("sim.avatar").head_yaw(cmd.aim)
@@ -470,7 +470,7 @@ function M.step(state, p, cmd, dt, ctx)
     -- reshaping: you can look around, not walk
     local A = require("sim.avatar").layout()
     st.body.yaw = comfort.yaw(st.body.yaw, cmd, A.turn, dt)
-    st.body.pitch = vec.clamp(st.body.pitch + cmd:axis("look") * A.look * dt, -A.pitch_limit, A.pitch_limit)
+    st.body.pitch = comfort.pitch(st.body.pitch, cmd, A.look, dt, A.pitch_limit)
   end
   local a = M.area(state, p)
   if a and a.id ~= st.area then

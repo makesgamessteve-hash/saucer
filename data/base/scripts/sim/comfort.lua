@@ -15,6 +15,15 @@ M.STEP = math.rad(15)
 M.SNAP = math.rad(30)      -- the default angle (kept for mods and tests)
 M.ANGLES = { 15, 30, 45, 60 }
 M.VIGNETTES = { { 0, "Off" }, { 0.25, "Low" }, { 0.5, "Medium" }, { 0.75, "High" } }
+-- touch-look-speed: the touch look sensitivity steps (comfort.txt look_sens)
+M.LOOK_SENS = { 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0 }
+
+-- "1.25x [###-]..." : the setting as a little slider (one mark per step)
+function M.look_sens_text(v)
+  local bar = {}
+  for _, s in ipairs(M.LOOK_SENS) do bar[#bar + 1] = s <= v + 1e-6 and "#" or "-" end
+  return string.format("%.2fx [%s]", v, table.concat(bar))
+end
 
 -- snap angle in radians carried by this command (15, 30, 45 or 60 degrees)
 function M.angle(cmd)
@@ -33,9 +42,21 @@ function M.snap(cmd)
   return d
 end
 
--- yaw after this tick's smooth turn plus any snap turn
+-- touch-look-speed: a touch look drag arrives as angles (radians this tick),
+-- carried on the aim_yaw / aim_pitch axes over +-AIM_RANGE
+M.AIM_RANGE = math.pi / 2
+function M.aim_yaw(cmd) return cmd:axis("aim_yaw") * M.AIM_RANGE end
+function M.aim_pitch(cmd) return cmd:axis("aim_pitch") * M.AIM_RANGE end
+
+-- yaw after this tick's smooth turn, the touch drag and any snap turn
 function M.yaw(yaw, cmd, rate, dt)
-  return saucer.math.wrap(yaw - cmd:axis("turn") * rate * dt + M.snap(cmd))
+  return saucer.math.wrap(yaw - cmd:axis("turn") * rate * dt - M.aim_yaw(cmd) + M.snap(cmd))
+end
+
+-- pitch after this tick's look rate and the touch drag, kept to +-limit
+function M.pitch(pitch, cmd, rate, dt, limit)
+  local v = pitch + cmd:axis("look") * rate * dt + M.aim_pitch(cmd)
+  return v < -limit and -limit or (v > limit and limit or v)
 end
 
 -- ---- the comfort settings panel ----
@@ -73,6 +94,9 @@ function M.rows(state, p, ctx)
     { text = string.format("Vignette: %s", M.vignette_name(c.vignette)),
       hint = "Darkens the edges of the view while you move or turn smoothly",
       act = function() change({ vignette = next_of(M.VIGNETTES, c.vignette, 1)[1] }) end },
+    { text = "Touch look speed: " .. M.look_sens_text(c.look_sens or 1),
+      hint = "How far a swipe on a touch screen turns you (resets to 0.5x after 2x)",
+      act = function() change({ look_sens = next_of(M.LOOK_SENS, c.look_sens or 1) }) end },
     { text = "VR mode: " .. (c.mode == "seated" and "seated" or "standing"),
       hint = "The way the next VR session starts: seated at the cockpit eye, or standing on the floor",
       act = function() change({ mode = c.mode == "seated" and "standing" or "seated" }) end },

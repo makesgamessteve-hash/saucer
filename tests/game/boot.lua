@@ -43,6 +43,31 @@ T.assert(get().body.pos[3] > z0 + 1, "touch stick walks forward")
 T.assert(get().ship.pos[3] == s0, "walking does not fly the saucer")
 T.assert(saucer.input.device_mode(1) == "touch", "touch mode after a touch")
 
+-- touch-look-speed: a look swipe across half the short side in a quarter
+-- second turns 90..120 degrees; the comfort setting scales it
+local function swipe(id, dir)
+  local lay = saucer.input.touch_layout()
+  local sh = math.min(lay.css_w, lay.css_h)
+  local y0 = get().body.yaw
+  T.touch("down", id, 0.4, 0.25)
+  T.wait(1)
+  for i = 1, 15 do
+    T.touch("move", id, 0.4 + dir * sh * 0.5 * i / 15 / lay.css_w, 0.25)
+    T.wait(1)
+  end
+  T.touch("up", id)
+  T.wait(1)
+  return math.deg(saucer.math.wrap(y0 - get().body.yaw))
+end
+local deg = swipe(11, 1)
+T.assert(deg >= 90 and deg <= 120, "half the short side turns 90..120 degrees (" .. deg .. ")")
+T.assert(math.abs(swipe(12, -1) + deg) < 0.5, "and back the same")
+saucer.xr.set_comfort({ look_sens = 0.5 })
+local half = swipe(13, 1)
+T.assert(math.abs(half - deg / 2) < 0.5, "the look speed setting scales the turn (" .. half .. ")")
+swipe(14, -1)
+saucer.xr.set_comfort({ look_sens = 1 })
+
 -- walk to the helm and take it with the touch Use button
 T.assert(ap.walk(T, 1, get, L.helm.stand, 0.3, 600), "walked to the helm")
 tap("use", 9)

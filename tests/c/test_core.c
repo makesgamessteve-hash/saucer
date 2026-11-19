@@ -184,9 +184,9 @@ TEST(touch_polish) {
   float s[4];
   int i, use = -1;
   sx_touch_init(&t, 16.0f / 9.0f);
-  for (i = 0; i < t.nwidgets; i++)
+  for (i = t.nwidgets - 1; i >= 0; i--) /* the grid's USE, not the tray's */
     if (strcmp(t.widgets[i].name, "use") == 0) use = i;
-  CHECK(use >= 0);
+  CHECK(use >= 0 && t.widgets[use].group == SX_TOUCH_GROUP_CORE);
   CHECK(!sx_touch_stick(&t, s));
   /* just above the USE button (inside the slop) still presses it and buzzes */
   sx_touch_down(&t, 1, t.widgets[use].x + 0.01f, t.widgets[use].y - t.slop[1] * 0.5f);
@@ -225,10 +225,10 @@ TEST(touch_widgets) {
   float x, y;
   memset(&raw, 0, sizeof raw);
   sx_touch_init(&t, 0.1f); /* clamped to a very tall portrait screen */
-  CHECK(t.portrait && t.nwidgets == 15);
+  CHECK(t.portrait && t.nwidgets == 24);
   CHECK(sx_touch_ctl_from_name("boost") == SX_TOUCH_BOOST);
   CHECK(sx_touch_ctl_from_name("jam") == SX_TOUCH_JAM && widget(&t, "jam") > 0);
-  CHECK(widget(&t, "map") > 0 && sx_touch_ctl_from_name("decoy") == SX_TOUCH_DECOY && widget(&t, "decoy") > 0);
+  CHECK(widget(&t, "map") > 0 && widget(&t, "more") > 0 && sx_touch_ctl_from_name("decoy") == SX_TOUCH_DECOY && widget(&t, "decoy") > 0);
   /* add-playtest-recs: the grapple has its own button; the look area is last */
   CHECK(widget(&t, "grapple") > 0 && sx_touch_ctl_from_name("grapple") == SX_TOUCH_GRAPPLE);
   CHECK(strcmp(t.widgets[t.nwidgets - 1].name, "look") == 0);
@@ -271,7 +271,11 @@ TEST(touch_widgets) {
   sx_touch_apply(&t, &raw);
   CHECK(raw.touch[SX_TOUCH_LOOK_X] > 0 && raw.touch[SX_TOUCH_LOOK_Y] < 0);
   CHECK(fabsf(raw.touch[SX_TOUCH_LOOK_X] + raw.touch[SX_TOUCH_LOOK_Y]) < 1e-4f);
-  CHECK(fabsf(raw.touch[SX_TOUCH_LOOK_X] - 12.0f * SX_TOUCH_LOOK_GAIN) < 1e-4f);
+  {
+    float d = 12.0f / 360.0f; /* the short side of the 16:9 default is 360 CSS px */
+    float hyp = sqrtf(2.0f) * d;
+    CHECK(fabsf(raw.touch[SX_TOUCH_LOOK_X] - d * SX_TOUCH_LOOK_TURN * sx_touch_look_accel(hyp)) < 1e-4f);
+  }
   sx_touch_up(&t, 2);
   sx_touch_move(&t, 99, 0, 0);
   sx_touch_up(&t, 99);
@@ -338,7 +342,7 @@ static int rect_inside(const sx_touch_rect *a, const sx_touch_rect *b) {
 TEST(touch_layout_resolutions) {
   static const int sizes[8][2] = {{320, 568}, {568, 320}, {360, 640}, {640, 360},
                                   {390, 844}, {844, 390}, {768, 1024}, {1024, 768}};
-  int k, notch, i, j;
+  int k, notch, i, j, tray;
   for (notch = 0; notch < 2; notch++)
     for (k = 0; k < 8; k++) {
       sx_touch t;
@@ -363,13 +367,34 @@ TEST(touch_layout_resolutions) {
       sx_touch_fit_target(sizes[k][0], sizes[k][1], &m.hud_w, &m.hud_h);
       t.active = 1;
       sx_touch_layout(&t, &m);
-      CHECK(t.active == 1 && t.nwidgets == 15 && t.portrait == (H > W));
+      CHECK(t.active == 1 && t.nwidgets == 24 && t.portrait == (H > W));
+      for (tray = 0; tray < 2; tray++) {
+      /* declutter-touch-controls: everything in context with the tray shut,
+       * then the tray open (the context slots make way for it) */
+      sx_touch_set_tray(&t, tray);
+      if (tray) {
+        int c, found;
+        CHECK(rect_inside(&t.tray, &t.safe));
+        CHECK(t.tray.x >= 0 && t.tray.y >= 0 && t.tray.x + t.tray.w <= 1 && t.tray.y + t.tray.h <= 1);
+        /* every action is in the tray */
+        for (c = SX_TOUCH_SHRINK; c < SX_TOUCH_COUNT; c++) {
+          found = 0;
+          for (i = 0; i < t.nwidgets; i++)
+            if (t.widgets[i].group == SX_TOUCH_GROUP_TRAY && t.widgets[i].ctl == c && sx_touch_shown(&t, i)) {
+              sx_touch_rect r = sx_touch_visible_rect(&t, i);
+              found = 1;
+              CHECK(rect_inside(&r, &t.tray));
+            }
+          CHECK(found);
+        }
+      }
       CHECK(t.unit >= 48.0f && t.unit <= 72.0f && t.gap >= SX_TOUCH_MIN_GAP);
       CHECK(m.hud_w >= 200 && m.hud_h >= 200 && H / (float)m.hud_h >= 1.33f); /* labels at 10.7 CSS px or more */
       for (i = 0; i < t.nwidgets; i++) {
         const sx_touch_widget *w = &t.widgets[i];
         sx_touch_rect r = sx_touch_visible_rect(&t, i);
-        if (w->kind == SX_TOUCH_KIND_LOOK) continue;
+        if (w->kind == SX_TOUCH_KIND_LOOK || !sx_touch_shown(&t, i)) continue;
+        CHECK((w->group == SX_TOUCH_GROUP_TRAY) == tray || w->group == SX_TOUCH_GROUP_CORE);
         /* size: every target at least 44 CSS px both ways */
         CHECK(r.w * W >= SX_TOUCH_MIN_TARGET - 0.01f && r.h * H >= SX_TOUCH_MIN_TARGET - 0.01f);
         if (w->kind == SX_TOUCH_KIND_BUTTON || w->kind == SX_TOUCH_KIND_HOLD)
@@ -388,23 +413,27 @@ TEST(touch_layout_resolutions) {
           CHECK(rect_inside(&r, &z));
           CHECK(t.stick_r >= 48.0f);
         }
-        /* never over the HUD (top rows, status block, crosshair) or the text column */
-        for (j = 0; j < t.nhud; j++) CHECK(!sx_touch_overlap(&r, &t.hud[j]));
-        CHECK(!sx_touch_overlap(&r, &t.msg));
-        /* the centre span keeps clear of every control on the middle rows */
-        if ((r.y + r.h) * H > H * 0.5f - 64.0f * H / (float)m.hud_h && r.y * H < H * 0.5f + 72.0f * H / (float)m.hud_h)
-          CHECK(r.x + r.w <= t.cx0 + 1e-4f || r.x >= t.cx1 - 1e-4f);
+        /* never over the HUD (top rows, status block, crosshair) or the text column
+         * (the open tray is a menu over the view: it may cover them for a moment) */
+        if (w->group != SX_TOUCH_GROUP_TRAY) {
+          for (j = 0; j < t.nhud; j++) CHECK(!sx_touch_overlap(&r, &t.hud[j]));
+          CHECK(!sx_touch_overlap(&r, &t.msg));
+          /* the centre span keeps clear of every control on the middle rows */
+          if ((r.y + r.h) * H > H * 0.5f - 64.0f * H / (float)m.hud_h && r.y * H < H * 0.5f + 72.0f * H / (float)m.hud_h)
+            CHECK(r.x + r.w <= t.cx0 + 1e-4f || r.x >= t.cx1 - 1e-4f);
+        } else CHECK(rect_inside(&r, &t.tray));
         /* no two controls overlap, and they keep a gap of 8 CSS px */
         for (j = i + 1; j < t.nwidgets; j++) {
           sx_touch_rect q = sx_touch_visible_rect(&t, j), g = r;
-          if (t.widgets[j].kind == SX_TOUCH_KIND_LOOK) continue;
+          if (t.widgets[j].kind == SX_TOUCH_KIND_LOOK || !sx_touch_shown(&t, j)) continue;
           g.x -= (SX_TOUCH_MIN_GAP - 0.01f) / W;
           g.y -= (SX_TOUCH_MIN_GAP - 0.01f) / H;
           g.w += 2.0f * (SX_TOUCH_MIN_GAP - 0.01f) / W;
           g.h += 2.0f * (SX_TOUCH_MIN_GAP - 0.01f) / H;
           CHECK(!sx_touch_overlap(&g, &q));
-          /* the stick zone (touch area) does not take any other control either */
-          if (w->kind == SX_TOUCH_KIND_STICK) {
+          /* the stick zone (touch area) does not take any other control either
+           * (the open tray lies over it and wins the hit test) */
+          if (w->kind == SX_TOUCH_KIND_STICK && t.widgets[j].group != SX_TOUCH_GROUP_TRAY) {
             sx_touch_rect z;
             z.x = w->x;
             z.y = w->y;
@@ -418,8 +447,11 @@ TEST(touch_layout_resolutions) {
           sx_touch_down(&t, 7, w->x + w->w * 0.5f, w->y + w->h * 0.5f);
           CHECK(t.fingers[0].widget == i);
           sx_touch_up(&t, 7);
+          sx_touch_set_tray(&t, tray); /* (the tray button and a pick toggle it) */
         }
       }
+      }
+      sx_touch_set_tray(&t, 0);
       /* the clear column holds two lines of the log at least, 18 columns wide or the
        * whole left side, and lies in the safe area */
       CHECK(t.msg.h * (float)m.hud_h >= 20.0f && t.msg.w * (float)m.hud_w >= 120.0f);
@@ -455,7 +487,7 @@ TEST(touch_fit_and_slop) {
   /* slop: half a gap outside a button still presses it, the nearest one wins */
   sx_touch_init(&t, 16.0f / 9.0f);
   use = widget(&t, "use");
-  scan = widget(&t, "scan");
+  scan = widget(&t, "boost"); /* (the slot above USE) */
   CHECK(fabsf(t.slop[1] * t.m.h - t.gap * 0.5f) < 1e-3f);
   centre(&t, "use", &x, &y);
   sx_touch_down(&t, 1, x, t.widgets[use].y - t.gap * 0.3f / t.m.h); /* in the gap, nearer USE */
@@ -464,4 +496,179 @@ TEST(touch_fit_and_slop) {
   sx_touch_down(&t, 1, x, t.widgets[use].y - t.gap * 0.7f / t.m.h); /* nearer SCN, above */
   CHECK(t.fingers[0].widget == scan);
   sx_touch_up(&t, 1);
+}
+
+static int tray_widget(const sx_touch *t, int ctl) {
+  int i;
+  for (i = 0; i < t->nwidgets; i++)
+    if (t->widgets[i].group == SX_TOUCH_GROUP_TRAY && t->widgets[i].ctl == ctl) return i;
+  return -1;
+}
+
+/* declutter-touch-controls: context slots show and hide, never under a
+ * pressing finger; the tray opens, takes a pick and closes; fades count frames */
+/* touch-look-speed: drag a look finger (dx, dy) CSS px evenly over `ticks`
+ * ticks; returns the summed look_x and look_y (radians) */
+static void look_swipe(sx_touch *t, float x0, float y0, float dx, float dy, int ticks, float out[2]) {
+  sx_raw_input raw;
+  int i;
+  memset(&raw, 0, sizeof raw);
+  out[0] = out[1] = 0;
+  sx_touch_down(t, 77, x0, y0);
+  for (i = 1; i <= ticks; i++) {
+    sx_touch_move(t, 77, x0 + dx * (float)i / (float)ticks / t->m.w, y0 + dy * (float)i / (float)ticks / t->m.h);
+    sx_touch_apply(t, &raw);
+    out[0] += raw.touch[SX_TOUCH_LOOK_X];
+    out[1] += raw.touch[SX_TOUCH_LOOK_Y];
+  }
+  sx_touch_up(t, 77);
+  sx_touch_apply(t, &raw);
+}
+
+TEST(touch_look_speed) {
+  static const int sizes[8][2] = {{320, 568}, {568, 320}, {360, 640}, {640, 360},
+                                  {390, 844}, {844, 390}, {768, 1024}, {1024, 768}};
+  const float deg = 180.0f / 3.14159265f;
+  int k, dpr;
+  float ref = 0;
+  for (k = 0; k < 8; k++)
+    for (dpr = 1; dpr <= 3; dpr++) {
+      /* the image is in CSS px whatever the pixel ratio: only the backbuffer
+       * (and so the HUD target) grows with it */
+      sx_touch t;
+      sx_touch_metrics m;
+      float W = (float)sizes[k][0], H = (float)sizes[k][1], sh = W < H ? W : H, a[2], b[2];
+      sx_touch_init(&t, 1.0f);
+      memset(&m, 0, sizeof m);
+      m.w = W;
+      m.h = H;
+      m.hud_w = sizes[k][0] * dpr / 2;
+      m.hud_h = sizes[k][1] * dpr / 2;
+      sx_touch_layout(&t, &m);
+      /* half the short side in a quarter second (15 ticks): 90..120 degrees, either way */
+      look_swipe(&t, 0.5f, 0.12f, sh * 0.5f, 0, 15, a);
+      CHECK(a[0] * deg >= 90.0f && a[0] * deg <= 120.0f && a[1] == 0);
+      look_swipe(&t, 0.5f, 0.12f, -sh * 0.5f, 0, 15, b);
+      CHECK(fabsf(a[0] + b[0]) < 1e-4f);
+      /* a slow half-second drag stays in the band too, and the same on the vertical */
+      look_swipe(&t, 0.5f, 0.12f, sh * 0.5f, 0, 30, b);
+      CHECK(b[0] * deg >= 90.0f && b[0] < a[0]);
+      look_swipe(&t, 0.5f, 0.12f, 0, sh * 0.5f, 15, b);
+      CHECK(fabsf(b[1] - a[0]) < 1e-4f && b[0] == 0);
+      /* the same at every size and every pixel ratio */
+      if (k == 0 && dpr == 1) ref = a[0];
+      CHECK(fabsf(a[0] - ref) < 1e-4f);
+    }
+  {
+    sx_touch t;
+    float slow[2], mid[2], fast[2], sens[2];
+    sx_touch_init(&t, 16.0f / 9.0f); /* short side 360 */
+    /* acceleration: a flick turns further than a drag over the same distance */
+    look_swipe(&t, 0.5f, 0.12f, 180, 0, 120, slow);
+    look_swipe(&t, 0.5f, 0.12f, 180, 0, 15, mid);
+    look_swipe(&t, 0.5f, 0.12f, 180, 0, 5, fast);
+    CHECK(slow[0] < mid[0] && mid[0] < fast[0]);
+    CHECK(slow[0] * deg > 80.0f && fast[0] * deg < 0.5f * 210.0f * SX_TOUCH_LOOK_ACCEL_MAX + 0.01f);
+    CHECK(sx_touch_look_accel(0) == SX_TOUCH_LOOK_ACCEL_MIN && sx_touch_look_accel(1) == SX_TOUCH_LOOK_ACCEL_MAX);
+    CHECK(fabsf(sx_touch_look_accel(SX_TOUCH_LOOK_V0) - 1.0f) < 1e-6f);
+    /* the sensitivity scales the turn, kept to its range; a relayout keeps it */
+    t.sens = 2.0f;
+    sx_touch_init(&t, 16.0f / 9.0f);
+    CHECK(t.sens == 1.0f);
+    t.sens = 2.0f;
+    {
+      sx_touch_metrics m;
+      memset(&m, 0, sizeof m);
+      m.w = 640;
+      m.h = 360;
+      sx_touch_layout(&t, &m);
+    }
+    CHECK(t.sens == 2.0f);
+    look_swipe(&t, 0.5f, 0.12f, 180, 0, 15, sens);
+    CHECK(fabsf(sens[0] - 2.0f * mid[0]) < 1e-4f);
+    t.sens = 0.5f;
+    look_swipe(&t, 0.5f, 0.12f, 180, 0, 15, sens);
+    CHECK(fabsf(sens[0] - 0.5f * mid[0]) < 1e-4f);
+    t.sens = 9.0f;
+    look_swipe(&t, 0.5f, 0.12f, 180, 0, 15, sens);
+    CHECK(fabsf(sens[0] - SX_TOUCH_SENS_MAX * mid[0]) < 1e-4f);
+    CHECK(sx_touch_clamp_sens(0) == 1.0f && sx_touch_clamp_sens(0.2f) == SX_TOUCH_SENS_MIN);
+  }
+}
+
+TEST(touch_declutter) {
+  sx_touch t;
+  sx_raw_input raw;
+  int use, beam, grp, more, map, boost, i;
+  float x, y;
+  memset(&raw, 0, sizeof raw);
+  sx_touch_init(&t, 16.0f / 9.0f);
+  use = widget(&t, "use");
+  beam = widget(&t, "tractor");
+  grp = widget(&t, "grapple");
+  boost = widget(&t, "boost");
+  more = widget(&t, "more");
+  map = tray_widget(&t, SX_TOUCH_MAP);
+  CHECK(t.widgets[beam].group == SX_TOUCH_GROUP_GRID && t.widgets[use].group == SX_TOUCH_GROUP_CORE);
+  CHECK(t.widgets[more].kind == SX_TOUCH_KIND_TRAY && map > 0 && !sx_touch_shown(&t, map));
+  /* idle: only Use and Boost of the grid; the beam slot stays where it was, empty */
+  sx_touch_context(&t, 0);
+  CHECK(sx_touch_shown(&t, use) && sx_touch_shown(&t, boost) && !sx_touch_shown(&t, beam) && !sx_touch_shown(&t, grp));
+  centre(&t, "tractor", &x, &y);
+  sx_touch_down(&t, 1, x, y); /* a hidden slot is the look area */
+  CHECK(t.widgets[t.fingers[0].widget].kind == SX_TOUCH_KIND_LOOK && t.values[SX_TOUCH_TRACTOR] == 0);
+  /* loot lines up while that finger rests on the slot: the beam waits */
+  sx_touch_context(&t, 1u << SX_TOUCH_TRACTOR);
+  CHECK(!sx_touch_shown(&t, beam) && sx_touch_wanted(&t, beam));
+  sx_touch_move(&t, 1, 0.5f, 0.2f); /* the finger looks away, off the slot */
+  sx_touch_apply(&t, &raw);
+  CHECK(sx_touch_shown(&t, beam) && t.shown_frame[beam] == t.frame);
+  sx_touch_up(&t, 1);
+  /* holding the beam while its context goes: it stays until the finger lifts */
+  sx_touch_down(&t, 2, x, y);
+  CHECK(t.fingers[0].widget == beam && t.values[SX_TOUCH_TRACTOR] == 1.0f);
+  sx_touch_context(&t, 0);
+  sx_touch_apply(&t, &raw);
+  CHECK(sx_touch_shown(&t, beam));
+  sx_touch_up(&t, 2);
+  CHECK(!sx_touch_shown(&t, beam));
+  /* Use and Boost are never out of context */
+  CHECK(sx_touch_wanted(&t, use) && sx_touch_wanted(&t, boost));
+  /* the tray: its button opens it, the context slots make way */
+  sx_touch_context(&t, 1u << SX_TOUCH_GRAPPLE);
+  CHECK(sx_touch_shown(&t, grp));
+  centre(&t, "more", &x, &y);
+  sx_touch_down(&t, 3, x, y);
+  CHECK(t.tray_open && t.buzz > 0 && sx_touch_shown(&t, map) && !sx_touch_shown(&t, grp) && sx_touch_shown(&t, use));
+  sx_touch_up(&t, 3);
+  CHECK(t.tray_open);
+  /* a pick presses the action and closes the tray once the finger lifts */
+  x = t.widgets[map].x + t.widgets[map].w * 0.5f;
+  y = t.widgets[map].y + t.widgets[map].h * 0.5f;
+  sx_touch_down(&t, 4, x, y);
+  CHECK(t.fingers[0].widget == map && t.values[SX_TOUCH_MAP] == 1.0f);
+  sx_touch_up(&t, 4);
+  CHECK(!t.tray_open && !sx_touch_shown(&t, map) && sx_touch_shown(&t, grp) && t.values[SX_TOUCH_MAP] == 0);
+  /* a tap beside the open tray closes it and does not look around */
+  sx_touch_set_tray(&t, 1);
+  sx_touch_down(&t, 5, 0.5f, 0.1f);
+  CHECK(!t.tray_open && t.fingers[0].widget == -1);
+  sx_touch_move(&t, 5, 0.6f, 0.2f);
+  sx_touch_apply(&t, &raw);
+  CHECK(raw.touch[SX_TOUCH_LOOK_X] == 0);
+  sx_touch_up(&t, 5);
+  /* every action has a tray button */
+  for (i = SX_TOUCH_SHRINK; i < SX_TOUCH_COUNT; i++) CHECK(tray_widget(&t, i) > 0);
+  /* a relayout keeps the context and the tray, and lets nothing fade in again */
+  sx_touch_set_tray(&t, 1);
+  sx_touch_init(&t, 9.0f / 16.0f);
+  CHECK(!t.tray_open && sx_touch_shown(&t, beam)); /* init starts afresh */
+  sx_touch_context(&t, 0);
+  sx_touch_set_tray(&t, 1);
+  {
+    sx_touch_metrics m = t.m;
+    sx_touch_layout(&t, &m);
+  }
+  CHECK(t.tray_open && sx_touch_shown(&t, map) && !sx_touch_shown(&t, beam));
+  CHECK(t.frame - t.shown_frame[map] >= 600u);
 }

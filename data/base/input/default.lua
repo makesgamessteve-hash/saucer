@@ -13,9 +13,14 @@ return {
     move_z = { "key:W:1", "key:S:-1", "pad:lefty:-1", "touch:stick_y:-1", "xr:stick_ly:-1", "key2:I:1", "key2:K:-1" },
     lift   = { "key:Space:1", "key:LCtrl:-1", "key:R:1", "key:Z:-1", "pad:righttrigger:1", "pad:lefttrigger:-1",
                "touch:lift", "xr:stick_ry:-1", "key2:O:1", "key2:U:-1" },
-    turn   = { "mouse:dx:0.08", "key:Right:1", "key:Left:-1", "pad:rightx", "touch:look_x:2", "xr:stick_rx",
+    turn   = { "mouse:dx:0.08", "key:Right:1", "key:Left:-1", "pad:rightx", "xr:stick_rx",
                "key2:Right:1", "key2:Left:-1" },
-    look   = { "mouse:dy:-0.08", "key:Up:1", "key:Down:-1", "pad:righty:-1", "touch:look_y:-2", "key2:Up:1", "key2:Down:-1" },
+    look   = { "mouse:dy:-0.08", "key:Up:1", "key:Down:-1", "pad:righty:-1", "key2:Up:1", "key2:Down:-1" },
+    -- touch-look-speed: a touch look drag turns by an angle, not a rate. The
+    -- engine gives radians per tick; the axis carries them over +-pi/2
+    -- (comfort.AIM_RANGE), so the scale is 2/pi.
+    aim_yaw   = { "touch:look_x:0.6366198" },
+    aim_pitch = { "touch:look_y:-0.6366198" },
   },
   buttons = {
     shrink = { "key:Q", "mouse:wheel:-1", "pad:leftshoulder", "touch:shrink", "xr:lever_down", "xr:a", "key2:Comma" },
@@ -46,7 +51,7 @@ return {
     grapple = { "key:Y", "pad:dpup", "touch:grapple", "key2:0" },
   },
   -- stable order so action slots (and therefore replays) never depend on table order
-  axis_order = { "move_x", "move_z", "lift", "turn", "look" },
+  axis_order = { "move_x", "move_z", "lift", "turn", "look", "aim_yaw", "aim_pitch" },
   button_order = { "shrink", "grow", "size1", "size2", "tractor", "scan", "boost", "use",
                    "camera", "menu", "jam", "mystery_mode", "size3", "snap_left", "snap_right",
                    "map", "decoy", "shroud", "spike", "grapple", "snap_a", "snap_b" },

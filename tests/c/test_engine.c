@@ -151,6 +151,14 @@ TEST(engine_lifecycle) {
   sx_fs_write_atomic(USER "/bindings_p2.txt", "nonsense\nlift key:Q\nlift key:E\nunknown key:W", 43);
   CHECK(sx_engine_load_bindings(e, 2));
   CHECK(e->input.players[1].nbindings[sx_input_find_action(&e->input, "lift")] == 2);
+  /* touch-look-speed: an old file's touch look on the turn/look rates is dropped */
+  {
+    static const char old[] = "turn key:Right:1\nturn touch:look_x:2\nlook touch:look_y:-2\nlook key:Up:1\n";
+    sx_fs_write_atomic(USER "/bindings_p2.txt", old, sizeof old - 1);
+    CHECK(sx_engine_load_bindings(e, 2));
+    CHECK(e->input.players[1].nbindings[sx_input_find_action(&e->input, "turn")] == 1);
+    CHECK(e->input.players[1].nbindings[sx_input_find_action(&e->input, "look")] == 1);
+  }
   /* snapshot of a state holding a function fails cleanly */
   lua_rawgeti(e->L, LUA_REGISTRYINDEX, e->state_ref);
   lua_pushcfunction(e->L, luaopen_base);

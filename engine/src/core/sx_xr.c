@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: MIT */
 #include "sx_xr.h"
 #include "sx_math.h"
+#include "sx_touch.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,6 +17,7 @@ void sx_xr_init(sx_xr *x) {
   x->head_fwd[2] = -1.0f;
   x->snap_turn_deg = 30.0f;
   x->vignette = 0.5f;
+  x->look_sens = 1.0f;
   x->snap = 1;
   x->snap_units = 2;
   x->pref_mode = 2;
@@ -163,9 +165,12 @@ void sx_xr_set_vignette(sx_xr *x, float v) {
   x->vignette = v;
 }
 
+void sx_xr_set_look_sens(sx_xr *x, float v) { x->look_sens = sx_touch_clamp_sens(v); }
+
 int sx_xr_comfort_format(const sx_xr *x, char *buf, int cap) {
-  return snprintf(buf, (size_t)cap, "snap %d\nsnap_turn %d\nvignette %.2f\nmode %s\n", x->snap ? 1 : 0,
-                  x->snap_units * SX_XR_SNAP_STEP, (double)x->vignette, x->pref_mode == 1 ? "seated" : "standing");
+  return snprintf(buf, (size_t)cap, "snap %d\nsnap_turn %d\nvignette %.2f\nmode %s\nlook_sens %.2f\n", x->snap ? 1 : 0,
+                  x->snap_units * SX_XR_SNAP_STEP, (double)x->vignette, x->pref_mode == 1 ? "seated" : "standing",
+                  (double)x->look_sens);
 }
 
 int sx_xr_comfort_parse(sx_xr *x, const char *text) {
@@ -179,6 +184,7 @@ int sx_xr_comfort_parse(sx_xr *x, const char *text) {
       if (strcmp(key, "snap") == 0) { x->snap = atoi(val) != 0; n++; }
       else if (strcmp(key, "snap_turn") == 0) { sx_xr_set_snap_deg(x, (float)atof(val)); n++; }
       else if (strcmp(key, "vignette") == 0) { sx_xr_set_vignette(x, (float)atof(val)); n++; }
+      else if (strcmp(key, "look_sens") == 0) { sx_xr_set_look_sens(x, (float)atof(val)); n++; }
       else if (strcmp(key, "mode") == 0) {
         if (strcmp(val, "seated") == 0) { x->pref_mode = 1; n++; }
         else if (strcmp(val, "standing") == 0) { x->pref_mode = 2; n++; }

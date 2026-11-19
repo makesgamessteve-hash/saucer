@@ -117,11 +117,15 @@ int sx_replay_parse(sx_replay *r, const char *text, char *err, int errlen) {
     } else if (line[0] == 't' && line[1] == ' ') {
       sx_cmd c;
       long long tick;
-      int player, a[9], k;
+      int player, a[11], k, got, nax;
       unsigned b, ed;
       memset(&c, 0, sizeof c);
-      if (sscanf(line + 2, "%lld %d %x %x %d %d %d %d %d %d %d %d %d", &tick, &player, &b, &ed, &a[0], &a[1], &a[2],
-                 &a[3], &a[4], &a[5], &a[6], &a[7], &a[8]) != 13) {
+      /* touch-look-speed: 8 axes since the touch look angles; files from
+       * before carry 6 (the two new ones are 0 there) */
+      got = sscanf(line + 2, "%lld %d %x %x %d %d %d %d %d %d %d %d %d %d %d", &tick, &player, &b, &ed, &a[0], &a[1],
+                   &a[2], &a[3], &a[4], &a[5], &a[6], &a[7], &a[8], &a[9], &a[10]);
+      nax = got == 4 + SX_NUM_AXES + 3 ? SX_NUM_AXES : got == 13 ? 6 : -1;
+      if (nax < 0) {
         snprintf(err, (size_t)errlen, "bad frame on line %d", lineno);
         return 0;
       }
@@ -129,8 +133,8 @@ int sx_replay_parse(sx_replay *r, const char *text, char *err, int errlen) {
       c.player = player;
       c.buttons = b;
       c.edges = ed;
-      for (k = 0; k < SX_NUM_AXES; k++) c.axes[k] = (int16_t)a[k];
-      for (k = 0; k < 3; k++) c.aim[k] = (int16_t)a[6 + k];
+      for (k = 0; k < nax; k++) c.axes[k] = (int16_t)a[k];
+      for (k = 0; k < 3; k++) c.aim[k] = (int16_t)a[nax + k];
       sx_replay_add_frame(r, &c);
     } else if (line[0] == 'h' && line[1] == ' ') {
       long long tick;

@@ -618,10 +618,19 @@ static int l_input_touch_layout(lua_State *L) {
     lua_setfield(L, -2, "h");
     lua_pushinteger(L, w->kind);
     lua_setfield(L, -2, "kind");
-    lua_pushnumber(L, e->touch.values[w->ctl]);
+    lua_pushnumber(L, w->ctl >= 0 ? e->touch.values[w->ctl] : 0.0f);
     lua_setfield(L, -2, "value");
     lua_pushboolean(L, sx_touch_held(&e->touch, i));
     lua_setfield(L, -2, "held");
+    /* declutter-touch-controls: the set, whether it shows, how many frames since it appeared */
+    lua_pushstring(L, w->group == SX_TOUCH_GROUP_TRAY ? "tray" : (w->group == SX_TOUCH_GROUP_GRID ? "context" : "core"));
+    lua_setfield(L, -2, "group");
+    lua_pushboolean(L, sx_touch_shown(&e->touch, i));
+    lua_setfield(L, -2, "shown");
+    lua_pushboolean(L, sx_touch_wanted(&e->touch, i));
+    lua_setfield(L, -2, "wanted");
+    lua_pushinteger(L, (lua_Integer)(e->touch.frame - e->touch.shown_frame[i]));
+    lua_setfield(L, -2, "age");
     lua_rawseti(L, -2, i + 1);
   }
   lua_pushboolean(L, e->touch.active);
@@ -645,6 +654,10 @@ static int l_input_touch_layout(lua_State *L) {
   lua_setfield(L, -2, "cx1");
   lua_pushboolean(L, e->touch.portrait);
   lua_setfield(L, -2, "portrait");
+  lua_pushboolean(L, e->touch.tray_open);
+  lua_setfield(L, -2, "tray_open");
+  push_touch_rect(L, &e->touch.tray);
+  lua_setfield(L, -2, "tray");
   lua_pushnumber(L, e->touch.unit);
   lua_setfield(L, -2, "unit"); /* CSS px */
   lua_pushnumber(L, e->touch.m.w);
@@ -664,6 +677,31 @@ static int l_input_touch_layout(lua_State *L) {
     }
   }
   return 1;
+}
+
+/* declutter-touch-controls: saucer.input.touch_context({use = true, tractor = true, ...})
+ * names the actions whose grid slots make sense now; the others hide (they
+ * stay in the tray). Changes wait while a finger is on the slot. */
+static int l_input_touch_context(lua_State *L) {
+  sx_engine *e = get_engine(L);
+  unsigned mask = 0;
+  luaL_checktype(L, 1, LUA_TTABLE);
+  lua_pushnil(L);
+  while (lua_next(L, 1)) {
+    if (lua_type(L, -2) == LUA_TSTRING && lua_toboolean(L, -1)) {
+      int c = sx_touch_ctl_from_name(lua_tostring(L, -2));
+      if (c >= 0) mask |= 1u << c;
+    }
+    lua_pop(L, 1);
+  }
+  sx_touch_context(&e->touch, mask);
+  return 0;
+}
+
+/* saucer.input.touch_tray(open) opens or closes the tray (the tray button does it on touch) */
+static int l_input_touch_tray(lua_State *L) {
+  sx_touch_set_tray(&get_engine(L)->touch, lua_toboolean(L, 1));
+  return 0;
 }
 
 static int l_input_join_offers(lua_State *L) {
@@ -1457,6 +1495,8 @@ static int l_xr_comfort(lua_State *L) {
   lua_setfield(L, -2, "snap_turn");
   lua_pushnumber(L, e->xr.vignette);
   lua_setfield(L, -2, "vignette");
+  lua_pushnumber(L, e->xr.look_sens);
+  lua_setfield(L, -2, "look_sens");
   lua_pushboolean(L, 1);
   lua_setfield(L, -2, "xr_safe_retro");
   lua_pushboolean(L, e->xr.snap);
@@ -1471,7 +1511,7 @@ static int comfort_allowed(sx_engine *e, lua_Integer player) {
   return !(e->opt.play[0] || (e->net_on && player != e->net.local_slot));
 }
 /* add-presentation-packaging, add-webxr-cockpit: comfort is a client setting (never in the sim).
- * set_comfort({snap =, vignette =, snap_turn =, mode = "seated"|"standing"}, player) -> applied */
+ * set_comfort({snap =, vignette =, snap_turn =, look_sens =, mode = "seated"|"standing"}, player) -> applied */
 static int l_xr_set_comfort(lua_State *L) {
   sx_engine *e = get_engine(L);
   luaL_checktype(L, 1, LUA_TTABLE);
@@ -1484,6 +1524,7 @@ static int l_xr_set_comfort(lua_State *L) {
   lua_pop(L, 1);
   e->xr.snap_latch = 0;
   sx_xr_set_vignette(&e->xr, (float)field_num(L, 1, "vignette", e->xr.vignette));
+  sx_xr_set_look_sens(&e->xr, (float)field_num(L, 1, "look_sens", e->xr.look_sens));
   sx_xr_set_snap_deg(&e->xr, (float)field_num(L, 1, "snap_turn", sx_xr_snap_deg(&e->xr)));
   lua_getfield(L, 1, "mode");
   if (lua_isstring(L, -1)) {
@@ -1902,7 +1943,10 @@ static int l_test_set_touch(lua_State *L) {
   float x = (float)luaL_optnumber(L, 3, 0), y = (float)luaL_optnumber(L, 4, 0);
   if (strcmp(what, "down") == 0) sx_touch_down(&e->touch, id, x, y);
   else if (strcmp(what, "move") == 0) sx_touch_move(&e->touch, id, x, y);
-  else sx_touch_up(&e->touch, id);
+  else if (strcmp(what, "frame") == 0) { /* declutter-touch-controls: a frame passes (fades) */
+    e->touch.frame += (unsigned)(id > 0 ? id : 1);
+    sx_touch_settle(&e->touch);
+  } else sx_touch_up(&e->touch, id);
   return 0;
 }
 
@@ -2153,6 +2197,7 @@ static void build_saucer_api(lua_State *L, sx_engine *e) {
   static const luaL_Reg input_f[] = {{"define_action", l_input_define}, {"bind", l_input_bind},
                                      {"rebind", l_input_rebind},        {"bindings", l_input_bindings},
                                      {"device_mode", l_input_mode},     {"touch_layout", l_input_touch_layout},
+                                     {"touch_context", l_input_touch_context}, {"touch_tray", l_input_touch_tray},
                                      {"join_offers", l_input_join_offers}, {"command", l_input_command},
                                      {NULL, NULL}};
   static const luaL_Reg phys_f[] = {{"clear", l_ph_clear},         {"add_box", l_ph_add_box}, {"remove", l_ph_remove},

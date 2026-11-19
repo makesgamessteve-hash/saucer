@@ -38,9 +38,11 @@ end
 -- step(ship, cmd, dt, move) ; move(ship, delta) -> new_pos, blocked_count
 function M.step(ship, cmd, dt, move)
   local c = configs.get(ship.size)
-  local turn = cmd:axis("turn")
-  ship.yaw = comfort.yaw(ship.yaw, cmd, c.turn * require("sim.ship").mult(ship, "turn"), dt)
-  ship.pitch = vec.clamp(ship.pitch + cmd:axis("look") * M.LOOK_RATE * dt, -M.PITCH_LIMIT, M.PITCH_LIMIT)
+  local rate = c.turn * require("sim.ship").mult(ship, "turn")
+  -- (a touch drag banks like the turn rate it amounts to)
+  local turn = cmd:axis("turn") + (rate > 0 and comfort.aim_yaw(cmd) / (rate * dt) or 0)
+  ship.yaw = comfort.yaw(ship.yaw, cmd, rate, dt)
+  ship.pitch = comfort.pitch(ship.pitch, cmd, M.LOOK_RATE, dt, M.PITCH_LIMIT)
   local mx, mz, my = cmd:axis("move_x"), cmd:axis("move_z"), cmd:axis("lift")
   local speed = c.speed
   if cmd:held("boost") then speed = speed * M.BOOST end
@@ -63,11 +65,13 @@ end
 -- add-tractor-beam: fine positioning from the Tractor Room's console. Slow
 -- thrusters in the operator's frame (heading: where they face), a slow yaw
 -- trim, and the bank settles level. -> blocked count from the mover
+M.TRIM_AIM = 0.35
 function M.trim(ship, input, heading, dt, move)
   local c = configs.get(ship.size)
   local b = c.beam or {}
   local speed, turn_rate = b.trim_speed or 3.0, b.trim_turn or 0.35
-  ship.yaw = saucer.math.wrap(ship.yaw - (input.turn or 0) * turn_rate * dt)
+  -- (a touch drag trims at TRIM_AIM of its angle: fine alignment)
+  ship.yaw = saucer.math.wrap(ship.yaw - (input.turn or 0) * turn_rate * dt - (input.aim_yaw or 0) * M.TRIM_AIM)
   local f, r = vec.fwd(heading), vec.right(heading)
   local mx, mz, my = input.move_x or 0, input.move_z or 0, input.lift or 0
   local want = { (f[1] * mz + r[1] * mx) * speed, my * speed * 0.6, (f[3] * mz + r[3] * mx) * speed }
