@@ -22,9 +22,9 @@ return {
   texture = "city",
   debris = 1,
   links = false,
-  grid = { 552, 130, 552 },
+  grid = { 1672, 130, 1112 },  -- the 9 x 9 core plus a skyline ring of ten lots
   city = {
-    body = "moon", name = "Moon city", lots = { 9, 9 }, lot = 32, street = 24, margin = 24, approach = 24,
+    body = "moon", name = "Moon city", lots = { 9, 9 }, ring = 10, lot = 32, street = 24, margin = 24, approach = 24,
     ground = 40, under = { 1, 2 }, tower = { 12, 24, 16, 40 }, mix = { 15, 40, 25, 20 }, tiers = { 0 },
     terrace = 7, crater = 2, gravity = 0.16,
     env = { fog = { 0.0, 0.0, 0.0 }, clear = { 0.0, 0.0, 0.01 }, density = 0.0, light = { 0.95, 0.95, 1.0 }, ambient = 0.35, earthlight = true },

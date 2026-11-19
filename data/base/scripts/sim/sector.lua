@@ -106,7 +106,7 @@ function M.far(seed, sid, info)
   if ckit then
     local ext = M.extent(ckit)
     local a = crng:float() * saucer.math.tau
-    local d = M.CITY_DISTANCE + crng:int(0, 300)
+    local d = M.CITY_DISTANCE + math.max(ext[1], ext[3]) // 2 - 1500 + crng:int(0, 300)
     local cy = crng:int(-200, 200)
     local ci = list[crng:int(1, #list)]
     sites[#sites + 1] = { id = #sites + 1, pos = { (saucer.math.sin(a) * d - ext[1] / 2) // 1, cy - ext[2] // 2,

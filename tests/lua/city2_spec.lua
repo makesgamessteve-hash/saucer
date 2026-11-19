@@ -21,6 +21,15 @@ local render = require("view.render")
 local hud = require("view.hud")
 local mapv = require("view.map")
 
+local function core(r, off)
+  local k = ruinm.kit_of(r.kit)
+  local ro = (k.city.ring or 0) * (k.city.lot + k.city.street) * k.cell
+  return { off[1] + ro, off[2], off[3] }
+end
+local function gen(id, seed, origin)
+  civs.use(42)
+  return citygen.generate(seed or 777, ruinm.kit_of(id), civs.get(42, 1), origin or { 0, 0, 0 })
+end
 local BODY_SECTOR = { planet = 3, moon = 4, asteroid = 2 }
 
 local function cmd(t) return saucer.input.command(t or {}) end
@@ -203,12 +212,113 @@ describe("lights come on with the grid", function()
     for _, dm in pairs(set.districts) do if dm.glow then glow = glow + 1 end end
     expect(glow).to_be_greater(8)
     local A = assets.init()
-    local stat = render.draw_ruins(fake_view(), A, st, { pos = vec.add(site.pos, { 1440, 200, -300 }), yaw = 0, pitch = 0, fov = 1.5 }, false)
+    local stat = render.draw_ruins(fake_view(), A, st, { pos = vec.add(site.pos, core(r, { 1440, 200, -300 })), yaw = 0, pitch = 0, fov = 1.5 }, false)
     expect(stat.beacons or 0).to_be_greater(0)
     -- far from a dark district its glow is not drawn, and after the restore it is
-    local far = { pos = vec.add(site.pos, { 100, 300, 100 }), yaw = 0, pitch = 0, fov = 3.0 }
+    local far = { pos = vec.add(site.pos, core(r, { 100, 300, 100 })), yaw = 0, pitch = 0, fov = 3.0 }
     local v1 = fake_view()
     render.draw_ruins(v1, A, st, far, false)
     expect(v1.calls.mesh).to_be_greater(0)
+  end)
+end)
+
+describe("a city that runs to the horizon", function()
+  it("a skyline ring of towers surrounds the core: tens of districts, hundreds of boxes, no rooms", function()
+    local planet = gen("city_planet")
+    local moon = gen("city_moon")
+    local rock = gen("city_asteroid")
+    expect(#planet.city.skyline + #planet.city.districts).to_be_greater(89)
+    expect(#moon.city.skyline + #moon.city.districts).to_be_greater(49)
+    expect(#rock.city.skyline + #rock.city.districts).to_be_greater(39)
+    for _, r in ipairs({ planet, moon, rock }) do
+      expect(#r.city.districts).to_be_less(17)
+      local outer = 0
+      for _, s in ipairs(r.solids) do
+        if s.outer then
+          outer = outer + 1
+          expect(s.district).to_be_greater(citygen.SKY_BASE)
+        end
+      end
+      expect(outer).to_be(r.city.stats.skyline_solids)
+      expect(outer).to_be_greater(600)
+      for _, sd in ipairs(r.city.skyline) do
+        expect(sd.id).to_be_greater(citygen.SKY_BASE)
+        expect(sd.towers).to_be_greater(0)
+      end
+    end
+    -- the planet is several kilometres across
+    local k = ruinm.kit_of("city_planet")
+    expect(k.grid[1] * k.cell).to_be_greater(8000)
+  end)
+  it("the ring does not change the core: the same rooms, doors and slots with or without it", function()
+    local k = ruinm.kit_of("city_moon")
+    local with = gen("city_moon")
+    local ring = k.city.ring
+    k.city.ring = nil
+    local ok, without = pcall(gen, "city_moon")
+    k.city.ring = ring
+    expect(ok).to_be_truthy()
+    expect(#with.rooms).to_be(#without.rooms)
+    expect(#with.doors).to_be(#without.doors)
+    expect(#with.slots).to_be(#without.slots)
+    expect(#without.city.skyline).to_be(0)
+  end)
+  it("the ring is inside the site's bounds, so it is a place you can fly and crash into", function()
+    local st, i, r = in_city("planet")
+    local lo, hi = ruinm.bounds(r, st.sector.sites[i].pos, 0)
+    for _, s in ipairs(r.solids) do
+      if s.outer then
+        for a = 1, 3 do expect(s[1][a] >= lo[a] - 1e-6 and s[2][a] <= hi[a] + 1e-6).to_be_truthy() end
+      end
+    end
+    local b = game.site_bounds(i)
+    expect(b[2][1] - b[1][1]).to_be_greater(8000)
+  end)
+  it("skyline windows are built near the camera, a handful at a time, and the oldest are freed", function()
+    local st, i, r = in_city("planet")
+    local set = assets.ruin_chunks(r, st.sector.sites[i].pos)
+    local ids = {}
+    for d, dm in pairs(set.districts) do if dm.outer then ids[#ids + 1] = d end end
+    table.sort(ids)
+    expect(#ids).to_be_greater(60)
+    for n = 1, assets.OUTER_LIVE + 3 do
+      local near = assets.outer_detail(set, ids[n])
+      expect(near.mesh ~= nil).to_be_truthy()
+      expect(assets.outer_detail(set, ids[n])).to_be(near)
+    end
+    local live = 0
+    for _, d in ipairs(ids) do if set.districts[d].near then live = live + 1 end end
+    expect(live).to_be(assets.OUTER_LIVE)
+    expect(set.districts[ids[1]].near).to_be(nil)
+  end)
+  it("near the ring its windows are drawn, far from it one coarse mesh per district, and a planet has a horizon", function()
+    local st, i, r = in_city("planet")
+    local A = assets.init()
+    local site = st.sector.sites[i]
+    local set = assets.ruin_chunks(r, site.pos)
+    expect(set.horizon ~= nil).to_be_truthy()
+    local sd = r.city.skyline[#r.city.skyline // 2]
+    local cam = { pos = { sd.pos[1], sd.pos[2] + 80, sd.pos[3] - 60 }, yaw = 0, pitch = 0, fov = 2.4 }
+    local lit = 0
+    local stt
+    for _ = 1, 12 do stt = render.draw_ruins(fake_view(), A, st, cam, false) lit = math.max(lit, stt.lit or 0) end
+    expect(lit).to_be_greater(0)
+    local far = { pos = vec.add(site.pos, { 100, 600, -400 }), yaw = 0, pitch = 0, fov = 3.0 }
+    local stat = render.draw_ruins(fake_view(), A, st, far, false)
+    expect(stat.lod).to_be_greater(10)
+    local _, _, mr = in_city("moon")
+    expect(assets.ruin_chunks(mr, { 0, 0, 0 }).horizon).to_be(nil)
+  end)
+  it("a city site sits clear of its sector's other sites however wide the ring", function()
+    for body, sid in pairs(BODY_SECTOR) do
+      local st, i, r = in_city(body)
+      local k = ruinm.kit_of(r.kit)
+      local half = math.max(k.grid[1], k.grid[3]) * k.cell / 2
+      local s = st.sector.sites[i]
+      local c = { s.pos[1] + k.grid[1] * k.cell / 2, s.pos[2], s.pos[3] + k.grid[3] * k.cell / 2 }
+      for j, o in ipairs(st.sector.sites) do
+        if j ~= i then expect(vec.dist({ c[1], 0, c[3] }, { o.pos[1], 0, o.pos[3] })).to_be_greater(half) end
+      end
+    end
   end)
 end)
