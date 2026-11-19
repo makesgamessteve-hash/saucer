@@ -151,6 +151,13 @@ if(SAUCER_BUILD_TESTS)
   add_test(NAME game_sentries COMMAND ${HL} --seed 42 --ticks 72000 --script tests/game/sentries.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_mystery COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-mystery --quiet
            --seed 42 --ticks 60000 --script tests/game/mystery.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  # add-run-story: the first clue of the run's story, beamed up, filed, saved and loaded (own user dir: it saves)
+  add_test(NAME game_story COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-story --quiet
+           --seed 42 --script tests/game/story.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  add_test(NAME game_story_seed7 COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-story7 --quiet
+           --seed 7 --script tests/game/story.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  add_test(NAME game_story_restore_every_tick COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-story-ret
+           --quiet --seed 42 --script tests/game/story.lua --restore-every-tick WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   # milestone 4: holodeck programs, an upgrade, cooking, the bookshelf and the TV (saves at the trader)
   add_test(NAME game_holodeck COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-holo --quiet
            --seed 42 --script tests/game/holodeck.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
