@@ -906,7 +906,7 @@ end
 function M.status(state, p)
   local ex = p.excursion
   local names = { crawl = "CRAWLSPACE", chamber = "CHAMBER", strong = "STRONGROOM", hall = "HALL" }
-  local where = ex.site == 0 and "ON FOOT: STATION BAY" or string.format("ON FOOT: DERELICT %d %s", ex.site, names[ex.area] or "HALL")
+  local where = ex.site == 0 and (require("sim.dock").inside(state, ex.body.pos) and "ON FOOT: STATION BAY" or "ON FOOT: OPEN SPACE") or string.format("ON FOOT: DERELICT %d %s", ex.site, names[ex.area] or "HALL")
   if ex.coin == "fold" then return where, "THE SAUCER IS FOLDING INTO YOUR HAND" end
   if ex.coin == "grow" then return where, "STAND BACK: THE SEAT IS UNFOLDING" end
   if ex.work then
