@@ -1016,7 +1016,7 @@ function M.excursion(v, state, p)
   local oy = 0
   if kit then
     M.eva(v, state, p)
-    oy = 74
+    oy = 56
     if p.suited then M.helmet(v, state, p) end
   else
     v:rect(4, 60, 120, 40, { 0, 0, 0, 0.45 })

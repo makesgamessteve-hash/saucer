@@ -38,7 +38,7 @@ shot("50_helmet_hud_beside_the_villa")
 local function look_at_villa()
   local b = body()
   local d = vec.sub(get().ship.pos, b.pos)
-  ap.look(T, 1, get, sm.atan2(d[1], d[3]), 0, 300)
+  body().yaw, body().pitch = sm.atan2(d[1], d[3]), -0.05
 end
 
 -- fly out, then look back
