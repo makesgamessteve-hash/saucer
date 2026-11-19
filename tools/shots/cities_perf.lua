@@ -13,6 +13,7 @@ local render = require("view.render")
 -- OVERRIDES
 local BODY = "planet"
 local FRAMES = 900
+local TRACE = false -- set by sed in the profiling runs
 local function p1() return T.state().players[1] end
 T.wait(10)
 ap.wake(T, 1, p1)
@@ -48,6 +49,7 @@ if BODY ~= "none" then
     T.wait(1)
     local rs = render.stats
     if rs then lod, chunks, culled = lod + rs.lod, math.max(chunks, rs.chunks), culled + rs.culled; detail = math.max(detail, rs.detail); litmax = math.max(litmax, rs.lit or 0) end
+    if TRACE and rs then print(string.format("F %d %d %d %d %d %d %d %d", f, rs.chunks, rs.detail, rs.built, rs.outer_built, rs.lit or 0, rs.lod, rs.beacons or 0)) end
     n = n + 1
   end
   print(string.format("perf %s: %d frames, max chunks drawn %d, max detail meshes %d, mean coarse %.1f, mean culled %.0f, max lit %d",

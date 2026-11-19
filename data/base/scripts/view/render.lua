@@ -35,14 +35,17 @@ M.STATE_TINT = {
   patrol = { 0.9, 0.85, 0.3, 0.9 }, hunt = { 1, 0.15, 0.1, 1 },
 }
 
+M.SENTRY_DIST = 700 -- add-cities-2 slice 5: a sentry farther than this from the eye is not drawn (a city holds hundreds)
 function M.draw_sentries(v, A, state, p)
   local sentry = require("sim.sentry")
+  local eye = p.ship.pos
   local scanned = (p.scan_until or 0) > state.tick
   local t = sentry.tune()
   for site, list in pairs(state.sentries or {}) do
     for i, def in ipairs(game.sentries(site)) do
       local dyn = list[i]
-      if dyn then
+      local at = dyn and (dyn.pos or def.pos)
+      if dyn and vec.dist(at, eye) <= M.SENTRY_DIST then
         local tint = M.STATE_TINT[dyn.st] or M.STATE_TINT.dormant
         local show = scanned and p.site == site
         if def.kind == "watcher" and def.roam and (state.locks or {})[site .. ":power" .. tostring(def.district)] then
@@ -830,13 +833,13 @@ end
 
 M.FOG = 0.0009
 M.DETAIL_DIST = 480   -- add-detail-pass: chunks nearer than this also draw their detail mesh
-M.OUTER_NEAR = 500   -- a skyline district shows its windows inside this range (add-cities-2)
-M.DETAIL_BUILDS = 6   -- at most this many detail meshes are built per frame (no hitches)
-M.CITY_DETAIL_DIST = 200 -- a city's rooms are many: only the nearest get their detail pass
+M.OUTER_NEAR = 260   -- a skyline district shows its windows inside this range (add-cities-2)
+M.DETAIL_BUILDS = 2   -- at most this many detail meshes are built per frame (no hitches)
+M.CITY_DETAIL_DIST = 110 -- a city's rooms are many: only the nearest get their detail pass
 M.GATE_DIST = 420
-M.CITY_NEAR = 560     -- add-cities: a district nearer than this draws its chunks, else one coarse mesh
+M.CITY_NEAR = 340     -- add-cities: a district nearer than this draws its chunks, else one coarse mesh
 M.LOD_DIST = 1100     -- beyond this a site is drawn as its coarse silhouette
-M.CULL_DIST = 3200    -- beyond this (fog) nothing of a site is drawn
+M.CULL_DIST = 2400    -- beyond this (fog) nothing of a site is drawn
 M.VIEW_HALF = 1.15    -- radians: half of the widest view angle plus slack
 M.stats = { chunks = 0, culled = 0, lod = 0 }
 
@@ -889,7 +892,7 @@ end
 -- add-cities-2: mag-rail trains and lift cabins. Pure functions of the tick (nothing is simulated, nothing
 -- is stored): a train runs its line end to end and back in TRAIN_PERIOD seconds, a cabin rides its shaft
 -- up and down. Only those within TRANSIT_DIST of the camera are drawn.
-M.TRANSIT_DIST = 900
+M.TRANSIT_DIST = 700
 M.TRAIN_SPEED = 38
 M.TRAIN_CARS = 5
 function M.train_pos(line, n, tick)
