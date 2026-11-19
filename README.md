@@ -428,6 +428,10 @@ that never ends fails instead of hanging CI.
   into the station and back, folds the Villa into the pocket, refuses an unfold
   into a wall and unfolds it in the open, then lifts off and rides the beam out
   (also with `--restore-every-tick`);
+  `land_anywhere.lua` reads the landing readout and lands on a wreck's hull, a moon,
+  a planet and an asteroid city's plazas and a rooftop pad (checking what the saucer says it stands on and
+  the suit's environment), then pulls the ground away from under the gear and watches the thrusters take over
+  (also with `--restore-every-tick`);
   `excursion.lua` sets the Seat down by a derelict's crawlspace, steps out,
   crawls to the chamber, lifts a Delicate find, turns the hand-lock, shuts
   the grid, saves, lets the suit run dry for the Lifeline, recovers the

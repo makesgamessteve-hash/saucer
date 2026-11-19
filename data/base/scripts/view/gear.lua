@@ -153,6 +153,23 @@ function M.stairs(v, A, o, d)
 end
 
 -- everything for one saucer
+-- the landing markers on the ground under a saucer that is looking for a place to land (own view only):
+-- three foot squares and a centre cross, green where it would land and red where it would not
+function M.markers(v, A, state, o)
+  local lr = landing.readout(state, o)
+  if not lr or lr.void or lr.dist > 90 then return 0 end
+  local col = lr.ok and { 0.3, 1.0, 0.45, 0.55 } or { 1.0, 0.35, 0.25, 0.55 }
+  local pos = o.ship.pos
+  local n = 0
+  for i, f in ipairs(landing.feet_xz(pos, o.ship.yaw)) do
+    v:mesh(assets.unit_box(true), { pos = { f[1], lr.feet[i] + 0.08, f[2] }, yaw = o.ship.yaw, scale = { 2.6, 0.06, 2.6 }, ghost = true, tint = col })
+    n = n + 1
+  end
+  v:mesh(assets.unit_box(true), { pos = { pos[1], lr.centre + 0.08, pos[3] }, yaw = o.ship.yaw, scale = { 4.0, 0.06, 0.5 }, ghost = true, tint = col })
+  v:mesh(assets.unit_box(true), { pos = { pos[1], lr.centre + 0.08, pos[3] }, yaw = o.ship.yaw, scale = { 0.5, 0.06, 4.0 }, ghost = true, tint = col })
+  return n + 2
+end
+
 function M.draw(v, A, o, d)
   return M.legs(v, A, o, d) + M.door(v, A, o, d) + M.stairs(v, A, o, d) + require("view.dock").clamps(v, A, o)
 end

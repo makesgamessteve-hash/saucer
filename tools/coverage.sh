@@ -46,7 +46,7 @@ throttle() { while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do sleep 1; done; }
 # longest first so the slow ones overlap the rest. tests/game/widerdark.lua
 # (four views, ~47k ticks) runs in ctest only: under luacov it takes over
 # half an hour; tests/lua/widerdark_spec.lua and coop_replay cover its code.
-for s in sentries mystery station excursion hatch dock holodeck slice derelict3d home trade vertical coop interior fold tractor city xr xr_hands boot coop_replay; do
+for s in sentries mystery station excursion hatch dock land_anywhere holodeck slice derelict3d home trade vertical coop interior fold tractor city xr xr_hands boot coop_replay; do
   extra=""
   [ "$s" = coop ] && extra="--local-players 2 --viewports 2"
   [ "$s" = coop_replay ] && extra="--coop --viewports 4"

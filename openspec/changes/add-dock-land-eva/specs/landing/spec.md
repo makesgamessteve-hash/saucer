@@ -63,3 +63,17 @@ The bay SHALL hold breathable air, so leaving the Villa there needs no helmet or
 #### Scenario: Through the bay door
 - **WHEN** the player walks down the stairs, across the bay and through its back door
 - **THEN** they are on the station's concourse, the Villa is docked and clamped, and walking back through the door returns them to the bay
+
+### Requirement: Landing readout
+At the helm the HUD SHALL show the distance to the ground under the gear, the slope under the three feet and whether the Villa can land there, with the reason when it cannot, and the feet's landing spots SHALL be marked on the ground green or red.
+
+#### Scenario: Looking for a place to land
+- **WHEN** the Villa hovers within 90 m of a step that makes the ground too steep
+- **THEN** the HUD shows the ground distance, the slope and the reason, and the markers are red
+
+### Requirement: Landing anywhere
+The Villa SHALL land on any level solid surface: a derelict's hull, a plaza, a rooftop landing pad, a moon, a planet or an asteroid. The touchdown message SHALL say what it stands on and the suit SHALL use that place's air and pull. If the ground under a landed Villa that someone is flying disappears, the gear SHALL retract and the thrusters SHALL take over.
+
+#### Scenario: Landing on a moon city's rooftop pad
+- **WHEN** the player lands on a rooftop landing pad of a moon city
+- **THEN** the message names a moon city rooftop, and leaving the Villa there needs the helmet because the air is vacuum

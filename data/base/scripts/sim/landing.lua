@@ -109,6 +109,48 @@ function M.can_land(state, p)
   return true, nil, rep
 end
 
+-- short words for the HUD's verdict
+M.SHORT = {
+  size = "NO GEAR", busy = "RESHAPING", beam = "BEAM ON", fast = "TOO FAST", void = "NO GROUND",
+  wall = "NOT LEVEL", slope = "TOO STEEP", room = "NO ROOM", clamped = "CLAMPED", hatch = "HATCH OPEN", site = "SETTLING",
+}
+
+-- the landing readout at the helm -> nil (not at the helm or aloft) or
+-- { void = true } (nothing under the gear) or { ok, why, dist, slope, ref, feet, centre, spread }
+-- dist is the hull centre's height over the highest ground under the feet; slope in degrees
+function M.readout(state, p)
+  local ship = p.ship
+  if p.berth or p.mode ~= "helm" or not configs.get(ship.size).interior then return nil end
+  local ok, why, rep = M.can_land(state, p)
+  rep = rep or M.probe(state, p)
+  if rep.why == "void" then return { void = true, ok = false, why = "void" } end
+  return { ok = ok, why = why, dist = ship.pos[2] - rep.ref, slope = rep.slope, ref = rep.ref, feet = rep.feet,
+           centre = rep.centre, spread = rep.spread, target = rep.target }
+end
+
+-- what the saucer stands on, for the touchdown message -> text or nil (open space)
+function M.surface(state, p, ref)
+  if p.site == 0 then return nil end
+  local ruin = game().ruin(p.site)
+  if not ruin then return nil end
+  local cities = require("sim.cities")
+  if cities.is_city(ruin) then
+    -- the street level of the district under the hull (the lowest district's when it is between them)
+    local pos = p.ship.pos
+    local street
+    for _, d in ipairs(ruin.city.districts) do
+      local b = d.box
+      if b and pos[1] >= b[1] and pos[1] <= b[3] and pos[3] >= b[2] and pos[3] <= b[4] then street = d.pos[2] end
+      if not street or (not b and d.pos[2] < street) then street = street or d.pos[2] end
+    end
+    street = street or ruin.origin[2]
+    local body = ruin.city.body
+    if ref - street > 6 then return body .. " city rooftop" end
+    return ({ planet = "the planet's surface", moon = "the moon's surface", asteroid = "the asteroid's rock" })[body] or "the ground"
+  end
+  return "a wreck's hull"
+end
+
 -- begin landing (the helm's Land button)
 function M.start(state, p, ctx)
   -- near a station's bay the Land button asks the beam for a tow
@@ -124,7 +166,8 @@ function M.start(state, p, ctx)
   end
   local ship = p.ship
   p.berth = { phase = "descend", kind = "surface", legs = 0, t = 0, ref = rep.ref, feet = rep.feet,
-              at = { ship.pos[1], rep.target, ship.pos[3] }, yaw = ship.yaw, site = p.site }
+              at = { ship.pos[1], rep.target, ship.pos[3] }, yaw = ship.yaw, site = p.site,
+              surface = M.surface(state, p, rep.ref) }
   ship.vel = { 0, 0, 0 }
   ship.bank = 0
   ctx.msg(state, p, string.format("LANDING: gear down, settling (%.0f m to the ground). Land again to abort.", rep.dist))
@@ -165,12 +208,21 @@ function M.step(state, p, dt, ctx)
       b.phase, b.t, b.legs = "landed", 0, 1
       ship.pos = { b.at[1], b.at[2], b.at[3] }
       ctx.msg(state, p, b.kind == "bay" and "Touchdown on the dock pad: the clamps close. Walk aft to the hull hatch."
-        or "Touchdown. The Villa stands on its gear: walk aft to the hull hatch.")
+        or (b.surface and string.format("Touchdown on %s. The Villa stands on its gear: walk aft to the hull hatch.",
+              (b.surface:find("^the ") or b.surface:find("^a ")) and b.surface or "a " .. b.surface)
+            or "Touchdown. The Villa stands on its gear: walk aft to the hull hatch."))
       ctx.fx(state, p, "bank")
       saucer.events.emit({ type = "landed", player = p.index, site = p.site })
     end
     return true
   elseif b.phase == "landed" then
+    -- the ground under the gear can go (a sky-bridge tearing loose): the thrusters take over
+    if b.kind == "surface" and p.mode ~= "foot" and state.tick % M.tune().support_every == 0 and not M.supported(state, p) then
+      b.phase, b.t, b.target_y = "lift", 0, b.at[2] + T.lift_height
+      ctx.msg(state, p, "THE GROUND GIVES WAY: gear retracting, thrusters on!")
+      ctx.fx(state, p, "alert")
+      return true
+    end
     local f, yaw = M.frame_pose(state, p, b)
     ship.pos = { b.at[1] + f[1], b.at[2] + f[2], b.at[3] + f[3] }
     ship.yaw = sm.wrap(b.yaw + yaw)
@@ -193,6 +245,21 @@ function M.step(state, p, dt, ctx)
     end
     return true
   end
+end
+
+-- is there still ground under the landed hull (centre and the three feet)?
+function M.supported(state, p)
+  local b = p.berth
+  local T = M.tune()
+  local pos = p.ship.pos
+  local lim = T.leg_len + T.telescope + 1.5
+  local gc = M.ground(pos[1], pos[2], pos[3])
+  if not gc or pos[2] - gc > lim then return false end
+  for _, f in ipairs(M.feet_xz(pos, p.ship.yaw)) do
+    local g = M.ground(f[1], pos[2], f[2])
+    if not g or pos[2] - g > lim then return false end
+  end
+  return true
 end
 
 -- take off: needs the hatch shut and the pilot at the helm

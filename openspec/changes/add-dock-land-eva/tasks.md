@@ -16,9 +16,9 @@
 
 ## 3. Slice 3: land anywhere
 
-- [ ] 3.1 Landing mode HUD (ground distance, slope), landing on asteroids, moons, planets, rooftops, wrecks
-- [ ] 3.2 Moving surfaces
-- [ ] 3.3 Tests
+- [x] 3.1 Landing mode HUD (ground distance, slope), landing on asteroids, moons, planets, rooftops, wrecks
+- [x] 3.2 Moving surfaces: the anchoring frame hook, and the thrusters take over when the support vanishes (no shipped site moves)
+- [x] 3.3 Tests: `tests/game/land_anywhere.lua` (+ restore every tick), `tests/lua/landing_spec.lua`
 
 ## 4. Slice 4: EVA kit
 

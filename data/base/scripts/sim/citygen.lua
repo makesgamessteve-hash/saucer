@@ -351,6 +351,14 @@ function M.generate(seed, kit, civ, origin)
     local sp = rng:int(10, spec.tower[4] + 24)
     local top_y = top.cell[2] + top.size[2]
     sp = math.min(sp, ceiling - top_y)
+    -- add-dock-land-eva: every third roof is left clear and marked as a landing pad (the rng draws above are unchanged)
+    local padded = not big and not lot.hangar and sp >= 4 and (lot.gx + lot.gz) % 3 == 1
+    if padded then
+      local mn, mx = world_box({ top.cell[1], top_y, top.cell[3] }, { top.size[1], 0.3, top.size[3] }, kit, origin)
+      solids[#solids + 1] = { mn, mx, kind = "pad", room = top.id }
+      lot.pad = true
+      sp = 0
+    end
     if sp >= 4 and not big then
       local w = rng:int(8, 12)
       local cx = top.cell[1] + (top.size[1] - w) // 2

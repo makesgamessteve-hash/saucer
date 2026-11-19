@@ -159,6 +159,8 @@ function M.ladder(v, p, x, y)
 end
 
 -- where the player is and what Use would do right now
+M.LAND_READOUT = 90   -- m: the landing readout shows when the ground is this close
+
 function M.status(p, state)
   local L = avatar.layout()
   if p.mode == "wake" then return "BEDROOM", nil end
@@ -635,6 +637,14 @@ function M.draw(v, state, p, target)
       if tl then hx, hy, hc = tl.msg.x * W + 2, tl.msg.y * H - 12, math.max(4, (tl.msg.w * W - 4) // 8) end
       for i = #parts, 1, -1 do v:text(hx, hy - (#parts - i) * 10, parts[i]:sub(1, hc), AMBER) end
     else M.ct(v, H // 2 + 40, hint, AMBER) end
+  end
+  -- add-dock-land-eva: the landing readout while the gear has ground to look at
+  local lr = p.mode == "helm" and not compact and state and require("sim.landing").readout(state, p)
+  if lr and not lr.void and lr.dist <= M.LAND_READOUT then
+    local landing = require("sim.landing")
+    local txt = string.format("GROUND %dM  SLOPE %d DEG  %s", lr.dist // 1, lr.slope // 1,
+      lr.ok and "L: LAND" or landing.SHORT[lr.why] or "NO")
+    M.ct(v, H // 2 + 54, txt, lr.ok and GREEN or AMBER)
   end
   -- navigation
   local site, d = M.nav(state, p)

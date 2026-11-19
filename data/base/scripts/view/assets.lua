@@ -448,6 +448,21 @@ function M.solid_parts(s, k, hanging)
     parts[#parts + 1] = { kind = "sphere", c = c, r = r, h = r, seg = 10, rings = 3, color = k.solid_color or k.color }
     parts[#parts + 1] = { kind = "ring", c = c, rin = r * 0.98, r = r * 1.08, h = 0.25, seg = 12,
                           color = { 1.0, 0.62, 0.2 }, emissive = 0.9 }
+  elseif s.kind == "pad" then
+    -- add-dock-land-eva: a rooftop landing pad: a lit square border and a centre cross
+    local lx, lz = mx[1] - mn[1], mx[3] - mn[3]
+    local y0, y1 = mx[2], mx[2] + 0.05
+    local amber = { 1.0, 0.75, 0.15 }
+    local m = math.min(lx, lz) * 0.12
+    parts[1].color = { 0.30, 0.31, 0.36 }
+    local function strip(a, b) parts[#parts + 1] = { kind = "box", min = a, max = b, color = amber, emissive = 0.9, uv = 0.25 } end
+    strip({ mn[1] + m, y0, mn[3] + m }, { mx[1] - m, y1, mn[3] + m + 0.5 })
+    strip({ mn[1] + m, y0, mx[3] - m - 0.5 }, { mx[1] - m, y1, mx[3] - m })
+    strip({ mn[1] + m, y0, mn[3] + m }, { mn[1] + m + 0.5, y1, mx[3] - m })
+    strip({ mx[1] - m - 0.5, y0, mn[3] + m }, { mx[1] - m, y1, mx[3] - m })
+    local cx, cz = (mn[1] + mx[1]) / 2, (mn[3] + mx[3]) / 2
+    strip({ cx - m, y0, cz - 0.4 }, { cx + m, y1, cz + 0.4 })
+    strip({ cx - 0.4, y0, cz - m }, { cx + 0.4, y1, cz + m })
   elseif s.kind == "tower" then
     -- add-cities: a tier of a civ-styled tower: window patterns by face and floor (lit parts are
     -- `light`, switched per district), a ledge, roof greebles, a lit sign on the base, a mast on the apex

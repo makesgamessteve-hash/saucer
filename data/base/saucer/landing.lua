@@ -18,6 +18,7 @@ return {
   lift_speed = 2.0,
   speed_max = 8.0,         -- m/s: faster than this and landing is refused
   clearance_margin = 0.0,
+  support_every = 30,      -- ticks between checks that there is still ground under a landed hull
   -- the hull door (hull-local, aft)
   door = {
     deck = 2, sill = -9.0, width = 2.2, height = 2.4,

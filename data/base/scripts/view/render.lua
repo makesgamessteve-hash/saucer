@@ -788,6 +788,7 @@ local function draw_saucer(v, A, o, own_eyes, state, xr, cam)
     M.rooms(v, A, o, d, state)
     if not o.ship.morph then M.draw_hatch(v, A, o, d) end
     if not o.ship.morph then require("view.gear").draw(v, A, o, d) end
+    if v.player == o.index and o.mode == "helm" and not o.berth and not o.ship.morph then require("view.gear").markers(v, A, state, o) end
     v:mesh(A.glass, { pos = d.pos, yaw = d.yaw, roll = d.roll, scale = d.scale, ghost = true, tint = { 0.55, 0.8, 1, 0.3 } })
     if o.mode == "walk" and not own_eyes and not o.ship.morph then
       local L = avatar.layout()

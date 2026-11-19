@@ -579,3 +579,118 @@ describe("drawing the gear", function()
     expect(w.calls.mesh).to_be_greater(10)
   end)
 end)
+
+describe("the landing readout and surfaces", function()
+  it("reads the ground at the helm: distance, slope and the verdict, and draws it", function()
+    local st = new_state()
+    local at = platform({ { 20, 0, -80, 80, 2.4, -30 } })
+    local p = fly_to(st, at, 30)
+    local lr = landing.readout(st, p)
+    expect(lr.ok).to_be(true)
+    expect(lr.dist).to_be_near(30, 1e-6)
+    expect(lr.slope).to_be_near(0, 1e-6)
+    -- a drop-off, a step
+    p.ship.pos = { at[1] + 77, at[2] + 30, at[3] }
+    expect(landing.readout(st, p).void).to_be(true)
+    p.ship.pos = { at[1] + 50, at[2] + 30, at[3] - 30 }
+    lr = landing.readout(st, p)
+    expect(lr.ok).to_be(false)
+    expect(lr.why).to_be("slope")
+    expect(lr.slope > 8).to_be(true)
+    expect(landing.SHORT[lr.why]).to_be("TOO STEEP")
+    -- too fast: the verdict says so, with the numbers
+    p.ship.pos = { at[1], at[2] + 30, at[3] }
+    p.ship.vel = { T.speed_max + 5, 0, 0 }
+    expect(landing.readout(st, p).why).to_be("fast")
+    p.ship.vel = { 0, 0, 0 }
+    -- the HUD line and the markers on the ground
+    local v = fake_view()
+    require("view.hud").draw(v, st, p, nil)
+    expect(v.texts).to_contain("GROUND 30M")
+    expect(v.texts).to_contain("L: LAND")
+    p.ship.pos = { at[1] + 50, at[2] + 30, at[3] - 30 }
+    v = fake_view()
+    require("view.hud").draw(v, st, p, nil)
+    expect(v.texts).to_contain("TOO STEEP")
+    local A = assets.init()
+    expect(gear.markers(fake_view(), A, st, p)).to_be(5)
+    p.ship.pos = { at[1], at[2] + 300, at[3] }
+    expect(gear.markers(fake_view(), A, st, p)).to_be(0)
+    v = fake_view()
+    require("view.hud").draw(v, st, p, nil)
+    expect(v.texts:find("GROUND", 1, true)).to_be(nil)
+    -- not at the helm, not the Villa, already landed: nothing to read
+    p.mode = "walk"
+    expect(landing.readout(st, p)).to_be(nil)
+    p.mode = "helm"
+    p.ship.size = 2
+    expect(landing.readout(st, p)).to_be(nil)
+    p.ship.size = 1
+    p.berth = { phase = "landed" }
+    expect(landing.readout(st, p)).to_be(nil)
+  end)
+  it("names the surface: a wreck's hull, the moon's surface, a rooftop, and nothing in open space", function()
+    local st = new_state()
+    local p = st.players[1]
+    p.site = 0
+    expect(landing.surface(st, p, 0)).to_be(nil)
+    p.site = 1
+    p.ship.pos = vec.copy(st.sector.sites[1].pos)
+    expect(landing.surface(st, p, 0)).to_be("a wreck's hull")
+    p.site = 99
+    expect(landing.surface(st, p, 0)).to_be(nil)
+    game.enter_sector(st, 4)
+    local site
+    for i, s in ipairs(st.sector.sites) do if s.city then site = i end end
+    p = st.players[1]
+    p.site = site
+    local ruin = game.ruin(site)
+    local d = ruin.city.districts[1]
+    p.ship.pos = { (d.box[1] + d.box[3]) / 2, d.pos[2] + 30, (d.box[2] + d.box[4]) / 2 }
+    expect(landing.surface(st, p, d.pos[2])).to_be("the moon's surface")
+    expect(landing.surface(st, p, d.pos[2] + 40)).to_be("moon city rooftop")
+    p.ship.pos = { d.box[1] - 5000, d.pos[2], d.box[2] - 5000 }   -- between districts: the lowest street level
+    expect(landing.surface(st, p, d.pos[2] + 40)).to_be("moon city rooftop")
+    game.enter_sector(st, 3)
+    for i, s in ipairs(st.sector.sites) do if s.city then site = i end end
+    p.site = site
+    expect(landing.surface(st, p, game.ruin(site).origin[2] - 9999)).to_be("the planet's surface")
+    game.enter_sector(st, 2)
+    for i, s in ipairs(st.sector.sites) do if s.city then site = i end end
+    p.site = site
+    expect(landing.surface(st, p, game.ruin(site).origin[2] - 9999)).to_be("the asteroid's rock")
+  end)
+  it("lifts off by itself when the ground gives way, but not under a person standing outside", function()
+    local st = new_state()
+    local at = platform()
+    local p = fly_to(st, at, 12)
+    local plat = saucer.physics.add_box({ at[1] + 200, at[2] - 20, -40 }, { at[1] + 240, at[2], 40 }, 1)
+    p.ship.pos = { at[1] + 220, at[2] + 12, 0 }
+    run(st, cmd({ pressed = { "land" } }))
+    for _ = 1, 60 * 30 do run(st) if landing.landed(p) then break end end
+    expect(landing.landed(p)).to_be(true)
+    expect(landing.supported(st, p)).to_be(true)
+    run(st, cmd(), 40)
+    expect(landing.landed(p)).to_be(true)
+    saucer.physics.remove(plat)
+    expect(landing.supported(st, p)).to_be(false)
+    run(st, cmd(), 40)
+    expect(p.berth.phase).to_be("lift")
+    expect(texts(p)).to_contain("GROUND GIVES WAY")
+    for _ = 1, 60 * 20 do run(st) if not p.berth then break end end
+    expect(p.berth).to_be(false)
+    -- the same on foot: the Villa stays put
+    local plat2 = saucer.physics.add_box({ at[1] + 200, at[2] - 20, -40 }, { at[1] + 240, at[2], 40 }, 1)
+    p.ship.pos = { at[1] + 220, at[2] + 12, 0 }
+    p.ship.vel = { 0, 0, 0 }
+    run(st, cmd({ pressed = { "land" } }))
+    for _ = 1, 60 * 30 do run(st) if landing.landed(p) then break end end
+    p.mode = "foot"
+    p.excursion = { site = 0, t = 0, coin = "stand", from = 1, hand_t = 0, held = false,
+                    body = { pos = { at[1] + 215, at[2], 20 }, yaw = 0, pitch = 0, vy = 0, crouch = false, ground = true },
+                    path = {}, work = false, warned = 0, area = "hall", deploy = false }
+    saucer.physics.remove(plat2)
+    run(st, cmd(), 60)
+    expect(p.berth.phase).to_be("landed")
+  end)
+end)

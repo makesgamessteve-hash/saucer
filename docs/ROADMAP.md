@@ -549,8 +549,12 @@ the dock pad where clamps close on its feet (pull away, or Land, to cancel; Land
 the hull door opens onto the bay's own air (no helmet), the bay door leads into the walkable station and
 back, the Villa folds into the pocket and unfolds in the bay (a clear-space prompt if there is none), and
 lift-off opens the clamps and carries the saucer out. The Villa no longer pockets from aboard at a station
-either. *Slice 3 — land anywhere* and *slice 4 — EVA kit* (helmet, helmet HUD, jetpack, return assist,
-emergency teleport) follow.
+either. *Slice 3 — land anywhere (done):* at the helm a landing readout shows the ground distance and slope
+and whether it will land (green or red markers on the ground under the three feet); the Villa lands on any
+level solid — derelict hulls, a planet's, moon's or asteroid's plazas and, now, the landing pads marked on
+every third city rooftop — and says what it stands on; if the ground gives way (a sky-bridge tearing loose)
+the thrusters take over. *Slice 4 — EVA kit* (helmet, helmet HUD, jetpack, return assist, emergency
+teleport) follows.
 
 ## Remaining work after milestone 10
 
