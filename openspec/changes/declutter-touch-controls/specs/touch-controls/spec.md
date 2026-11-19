@@ -39,3 +39,21 @@ A context button SHALL NOT appear, disappear or move under a finger that is pres
 #### Scenario: Finger on the slot
 - **WHEN** a finger holds a slot and its button's condition changes
 - **THEN** the slot keeps its state until the finger lifts, then the button fades in with a pulse
+
+### Requirement: Touch look turns by an angle
+A look drag on a touch screen SHALL turn the view by an angle, not a turn rate, on its own command axes (`aim_yaw`, `aim_pitch`): per tick `d / short × 210° × sensitivity × accel(d / short)`, with `d` the thumb travel and `short` the image's shorter side, both in CSS px, and `accel(v) = clamp(1 + 6·(v − 0.025), 0.85, 1.6)`. Half the short side in a quarter second SHALL turn 90–120 degrees at the default sensitivity.
+
+#### Scenario: Half the short side
+- **WHEN** a look finger moves across half the short side over 15 ticks, at any of the eight reference sizes and at a pixel ratio of 1, 2 or 3
+- **THEN** the view turns between 90 and 120 degrees, the same at every size and ratio
+
+#### Scenario: A flick turns further
+- **WHEN** the same distance is swiped in 5 ticks instead of 15, or dragged over 120
+- **THEN** the flick turns further and the slow drag less
+
+### Requirement: Touch look speed setting
+The comfort settings SHALL have a touch look speed from 0.5x to 2x in steps of 0.25 (default 1x) that scales the look angle, is saved in `comfort.txt` as `look_sens` and is loaded at start.
+
+#### Scenario: Saved and applied
+- **WHEN** the look speed is set to 0.5x and the game restarts with the same user directory
+- **THEN** the setting is 0.5x and a swipe turns half as far as at 1x

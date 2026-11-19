@@ -20,8 +20,17 @@ two buttons used all the time (USE, boost) harder to find.
 - Lua: `saucer.input.touch_context(t)`, `saucer.input.touch_tray(open)`, and per-widget `group`,
   `shown`, `wanted`, `age` in `touch_layout()`; `ship.check` and `game.can_resize` as pure checks.
 
+- ADDED `touch-controls` (touch look speed, reported by Steve after playing): a look drag used to
+  feed the turn *rate* axis (px / 60 × 2, clamped to 1 per tick), so a swipe could turn at most
+  rate / 60 rad per tick: half the short side turned about 12° on foot and 5° at the helm, and fast
+  swipes were capped. The pixel ratio was not involved (touch points are normalized over the
+  window's CSS size). Now the drag is an angle from the short side in CSS px, with light
+  acceleration, on new `aim_yaw` / `aim_pitch` axes (`SX_NUM_AXES` 8; 6-axis replays still load),
+  and a Touch look speed comfort setting (0.5x–2x, `look_sens` in comfort.txt).
+
 ## Impact
 
 - Affected specs: `touch-controls`
-- Affected code: `engine/src/core/sx_touch.{c,h}`, `engine/src/core/sx_script.c`,
+- Affected code: `engine/src/core/sx_touch.{c,h}`, `engine/src/core/sx_script.c`, `sx_xr.{c,h}`, `sx_replay.c`,
+  `sx_input.h`, `data/base/input/default.lua`, `data/base/scripts/sim/{comfort,flight,avatar,...}.lua`,
   `data/base/scripts/view/hud.lua`, `data/base/scripts/sim/{game,ship}.lua`, tests.

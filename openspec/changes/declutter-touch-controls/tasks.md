@@ -13,6 +13,13 @@
 - [x] 2.5 Slots and the open tray in the safe area at the eight reference sizes ("fits the slots and the open tray in the safe area at WxH")
 - [x] 2.6 Beam scope placed clear of the controls and text on touch, skipped when there is no room
 
-## 3. Evidence
+## 3. Touch look speed
 
-- [x] 3.1 Screenshots before/after at 320x568 and 568x320, context buttons and tray open (`tools/shots/declutter.lua`)
+- [x] 3.1 Look drag as an angle from the short side in CSS px, acceleration, same at DPR 1/2/3 and all eight sizes (`touch_look_speed` in `tests/c/test_core.c`)
+- [x] 3.2 `aim_yaw` / `aim_pitch` axes on foot, at the helm (banks), at the beam console (trim) (`tests/lua/touch_look_spec.lua`); 6-axis replays still load (`tests/replays`)
+- [x] 3.3 Touch look speed comfort row (0.5x–2x), saved and loaded with comfort.txt (`xr_comfort_*` in `tests/c/test_xr.c`, `touch_look_spec.lua`)
+- [x] 3.4 End to end: half the short side turns 90–120°, the setting scales it (`tests/game/boot.lua`)
+
+## 4. Evidence
+
+- [x] 4.1 Screenshots before/after at 320x568 and 568x320, context buttons and tray open (`tools/shots/declutter.lua`)
