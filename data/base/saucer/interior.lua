@@ -117,7 +117,7 @@ return {
   },
   door_speed = 3.0,          -- open fraction per second
   door_solid_below = 0.75,
-  door_close_margin = 0.8,   -- m beyond `reach` before an open door starts to close
+  door_close_margin = 0.5,   -- m beyond `reach` before an open door starts to close
   door_min_open = 0.8,       -- s a door stays open once it has been triggered
   -- walking graph for scripted runs (autopilot.walk_to): hull-local points and links
   nav = {

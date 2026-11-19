@@ -79,7 +79,7 @@ function M.doors_step(L, p, dt, guests)
   p.door_goal = p.door_goal or {}
   p.door_hold = p.door_hold or {}
   local bodies = door_bodies(p, guests)
-  local margin = L.door_close_margin or 0.8
+  local margin = L.door_close_margin or 0.5
   for i, door in ipairs(L.doors or {}) do
     local goal = p.door_goal[i] or 0
     if goal == 0 then

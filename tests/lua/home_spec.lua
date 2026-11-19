@@ -396,6 +396,19 @@ describe("sliding doors are stable at the trigger edge", function()
     avatar.step(guest, { move_z = 0 }, 1 / 60, L, home.solids(L, p, { guest }))
     expect(avatar.blocked(L, 2, cx, cz, home.solids(L, p, { guest }))).to_be(false)
   end)
+  it("an open door beside a standing body makes one door sound, not one a tick", function()
+    local sound = require("view.audio")
+    sound.reset()
+    local st, p = fresh()
+    at_dist(p, 1.0)
+    local heard = 0
+    for _ = 1, 240 do
+      run(st, cmd(), 1)
+      heard = heard + #sound.events(st, p)
+    end
+    expect(heard).to_be_less(2)
+    sound.reset()
+  end)
   it("the bathroom door behaves the same way", function()
     local st, p = fresh()
     local b = L.doors[2]
