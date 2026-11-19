@@ -118,6 +118,8 @@ function M.layout(site, ruin, civ)
                         district = r.district, dark = dark_of(ruin, r) }
     end
   end
+  -- add-cities-2: dark districts keep a patrol on the wing
+  if ruin.city then require("sim.cities").patrols(out, site, ruin, band, civ) end
   -- add-wider-dark: deeper sectors add Clamps and a Lockdown node
   if (site.danger or 1) >= 2 then adv.layout(out, site, ruin, kit, t) end
   -- add-home-among-stars: the deepest derelicts keep a Warden
@@ -134,6 +136,8 @@ function M.new_state(defs, state)
       out[i] = require("sim.warden").new_state(d)
     elseif d.kind == "watcher" then
       out[i] = { st = "dormant", t = 0, lost = 0, fire = 0, target = 0, yaw = d.yaw, pitch = d.pitch }
+      -- add-cities-2: a patrolling Watcher carries its own position and heading (set from the clock each tick)
+      if d.route then out[i].pos, out[i].base = vec.copy(d.pos), d.yaw end
     else
       out[i] = { st = "dormant", t = 0, lost = 0, target = 0, pos = vec.copy(d.pos), wp = 2, carry = false }
     end
@@ -154,39 +158,58 @@ local function on_foot(p) return p.mode == "foot" and p.excursion and true or fa
 M.on_foot = on_foot
 
 -- can this Watcher see player p's hull (or p, on foot) right now?
+-- add-cities-2: where a patrolling Watcher is at this tick: round its district's streets, a function of the clock
+function M.route_at(def, tick)
+  local u = (tick / 60 * def.speed + def.phase * def.len) % def.len
+  local pts = def.route
+  for k = 1, #pts - 1 do
+    local a, b = pts[k], pts[k + 1]
+    local seg = vec.dist(a, b)
+    if u <= seg then
+      local f = u / seg
+      return { a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f, a[3] + (b[3] - a[3]) * f }, sm.atan2(b[1] - a[1], b[3] - a[3])
+    end
+    u = u - seg
+  end
+  return vec.copy(pts[1]), def.yaw
+end
+
 function M.watcher_sees(def, dyn, p, tick, t)
   local ship = p.ship
+  local wpos = dyn and dyn.pos or def.pos
   if p.site ~= def.site then return false end
   if adv.shrouded(p, t) then return false end
   if on_foot(p) then
     -- whatever its size band, a turret sees a person on foot (closer in)
     local dir = dir_of(dyn.yaw, dyn.pitch or def.pitch)
-    return saucer.physics.cone_visible(def.pos, dir, sm.cos(t.watcher.half_angle), t.watcher.foot_range or 45, ship.pos, 1)
+    return saucer.physics.cone_visible(wpos, dir, sm.cos(t.watcher.half_angle), t.watcher.foot_range or 45, ship.pos, 1)
   end
   local cls = configs.get(ship.size).class
   if cls < def.band[1] or cls > def.band[2] then return false end
   local yaw = dyn.yaw
   local dir = dir_of(yaw, dyn.pitch or def.pitch)
   local r = configs.get(ship.size).diameter / 2
-  return saucer.physics.cone_visible(def.pos, dir, sm.cos(t.watcher.half_angle), t.watcher.range + r + (ship.loud or 0) * M.LOUD_WATCHER, ship.pos, 1)
+  return saucer.physics.cone_visible(wpos, dir, sm.cos(t.watcher.half_angle), t.watcher.range + r + (ship.loud or 0) * M.LOUD_WATCHER, ship.pos, 1)
 end
 
-local function sweep_yaw(def, tick, t)
+local function sweep_yaw(def, tick, t, dyn)
   local w = t.watcher
-  return def.yaw + w.sweep * sm.sin(sm.tau * tick / (w.sweep_period * 60))
+  return ((dyn and dyn.base) or def.yaw) + w.sweep * sm.sin(sm.tau * tick / (w.sweep_period * 60))
 end
 
 local function step_watcher(state, def, dyn, dt, ctx, t)
   if dyn.st == "off" then return end
+  if def.route then dyn.pos, dyn.base = M.route_at(def, state.tick) end
+  local wpos = dyn.pos or def.pos
   if dyn.st == "disabled" then
     dyn.t = dyn.t - dt
     if dyn.t <= 0 then dyn.st, dyn.t, dyn.lost = "dormant", 0, 0 end
     return
   end
   -- add-wider-dark: a Decoy flare in sight takes all of its attention
-  local dec = t.decoy and adv.decoy_for(state, def, def.pos, t)
+  local dec = t.decoy and adv.decoy_for(state, def, wpos, t)
   if dec then
-    local d = vec.sub(dec.pos, def.pos)
+    local d = vec.sub(dec.pos, wpos)
     dyn.yaw = sm.atan2(d[1], d[3])
     dyn.pitch = sm.atan2(d[2], sm.sqrt(d[1] * d[1] + d[3] * d[3]))
     dyn.st, dyn.target, dyn.t, dyn.lost = "decoyed", 0, 0, 0
@@ -196,11 +219,11 @@ local function step_watcher(state, def, dyn, dt, ctx, t)
   local target = dyn.target > 0 and state.players[dyn.target] or nil
   if dyn.st == "locked" and target then
     -- true 3D: a locked turret tracks its target in yaw and pitch
-    local d = vec.sub(target.ship.pos, def.pos)
+    local d = vec.sub(target.ship.pos, wpos)
     dyn.yaw = sm.atan2(d[1], d[3])
     dyn.pitch = sm.atan2(d[2], sm.sqrt(d[1] * d[1] + d[3] * d[3]))
   else
-    dyn.yaw = sweep_yaw(def, state.tick, t)
+    dyn.yaw = sweep_yaw(def, state.tick, t, dyn)
     dyn.pitch = def.pitch
   end
   local seen
@@ -236,9 +259,9 @@ local function step_watcher(state, def, dyn, dt, ctx, t)
     dyn.fire = dyn.fire - dt
     if dyn.fire <= 0 then
       dyn.fire = t.watcher.fire_every
-      local d = vec.sub(seen.ship.pos, def.pos)
+      local d = vec.sub(seen.ship.pos, wpos)
       local l = vec.len(d)
-      state.bolts[#state.bolts + 1] = { site = def.site, pos = vec.copy(def.pos),
+      state.bolts[#state.bolts + 1] = { site = def.site, pos = vec.copy(wpos),
         vel = vec.scale(d, t.watcher.bolt_speed / math.max(l, 1e-6)), life = t.watcher.bolt_life }
     end
   end
@@ -459,7 +482,15 @@ function M.step(state, site_idx, defs, dt, ctx)
   end
   for i, def in ipairs(defs) do
     local dyn = dyns[i]
-    if def.dark and not (state.locks and state.locks[site_idx .. ":power" .. def.district]) then
+    local powered = state.locks and state.locks[site_idx .. ":power" .. tostring(def.district)]
+    if def.roam then
+      -- add-cities-2: a patrol roams its district's streets while the grid is down, and goes home when it comes back
+      if powered then
+        dyn.st = "dormant"
+      else
+        step_watcher(state, def, dyn, dt, ctx, t)
+      end
+    elseif def.dark and not powered then
       -- add-cities: its district is dark: it sits dormant until the grid comes back
     elseif def.kind == "watcher" then step_watcher(state, def, dyn, dt, ctx, t)
     elseif def.kind == "clamp" then adv.step_clamp(state, def, dyn, dt, ctx, t)

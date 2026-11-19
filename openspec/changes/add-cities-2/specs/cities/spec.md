@@ -74,3 +74,62 @@ The renderer SHALL draw each skyline district as one coarse mesh with a far glow
 #### Scenario: near the ring its windows are drawn, far from it one coarse mesh per district, and a planet has a horizon
 - **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
 - **THEN** it passes
+
+### Requirement: Transit
+A city SHALL have mag-rail lines on pylons across its whole width and one down its avenue, and a lift shaft at every plaza; the decks, pylons and shaft posts are solid, while the trains and lift cabins are drawn as a pure function of the tick, so nothing about them is stored.
+
+#### Scenario: mag-rails run on pylons across the whole city and a lift stands at every plaza
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: trains and lift cabins are drawn from the clock: end to end and back, up and down
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+### Requirement: Wet and wild undercity
+The deep rooms and tunnels of a planet city SHALL hold water and canal lamps; the upper undercity of a planet or moon SHALL be overgrown with moss and vines; an asteroid's SHALL be bare rock.
+
+#### Scenario: a flooded undercity holds water and canal lamps, an overgrown one moss and vines, a rock neither
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+### Requirement: Storms and wind
+A planet city SHALL be crossed by storm fronts on a fixed clock, with rain, thicker air, lightning and a wind that pushes a saucer in the open but not inside a room, and the HUD SHALL warn before a storm and during it.
+
+#### Scenario: a storm front sweeps a planet city on a fixed clock, a moon has none
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the wind pushes a saucer in the open and does not reach it inside a room
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: a storm darkens and thickens the air and lightning flashes it
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the HUD rains and warns of a storm before it and during it
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+### Requirement: Falling bridges
+Each sky-bridge of a planet city SHALL tear loose at the peak of one fixed storm, leave the physics, tell the players, and clip a hull at most once; the fall SHALL be drawn as a drop and replay the same after a rebuild.
+
+#### Scenario: each sky-bridge tears loose at the peak of its storm, leaves the physics and tells the players
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: a falling bridge clips a hull once: some hull lost, never more than once per bridge
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the falling bridge is drawn dropping and then gone, and is not in the far silhouette
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+### Requirement: Dark patrols
+Every dark district SHALL be patrolled by a roaming Watcher on a fixed route through its streets, drawn at a position that is a function of the tick; it SHALL go dormant when the district's grid is restored.
+
+#### Scenario: a Watcher patrols the streets of every dark district and goes home when its grid is back
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes

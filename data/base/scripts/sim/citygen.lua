@@ -84,6 +84,7 @@ function M.tiers(form, w, w2, h, inverted)
 end
 
 -- the cell extent (x, y, z) of a city kit's build volume
+M.TRANSIT_BASE = 2000 -- ids of the mag-rail stretches (drawn like skyline districts)
 M.SKY_BASE = 1000 -- ids of the outer skyline districts start above this (the core's are 1..n)
 
 function M.extent_cells(kit)
@@ -491,6 +492,7 @@ function M.generate(seed, kit, civ, origin)
 
   -- sky-bridges between towers or buildings side by side that rise high enough
   local bridges = 0
+  local bridge_list = {}
   if spec.body ~= "asteroid" then
     for _, lot in ipairs(plan) do
       local e = lots[lot.gz * 1000 + lot.gx + 1]
@@ -505,10 +507,63 @@ function M.generate(seed, kit, civ, origin)
         local gap = (e.tower and e.tower[1] or (e.x0 + off)) - x0
         if gap > 2 then
           local mn, mx = world_box({ x0, yb, lot.z0 + spec.lot // 2 - 3 }, { gap, 2, 6 }, kit, origin)
-          solids[#solids + 1] = { mn, mx, kind = "bridge", room = 1, district = districts[lot.d].id }
+          solids[#solids + 1] = { mn, mx, kind = "bridge", room = 1, district = districts[lot.d].id, fall = 1 + #bridge_list % 5 }
+          bridge_list[#bridge_list + 1] = #solids
           bridges = bridges + 1
         end
       end
+    end
+  end
+
+  -- 4c. transit: mag-rail lines on pylons along the east-west streets and down the central avenue (trains
+  -- are drawn, not simulated: a function of the tick), and a lift shaft at every plaza (four posts; the cabin
+  -- is drawn). The decks and pylons are real boxes: you fly under them, over them or into them.
+  local rails, lifts = {}, {}
+  if spec.rails then
+    local P = spec.lot + spec.street
+    local top = (spec.ground or 0) + (spec.tiers and spec.tiers[2] or 0) + spec.rails.height
+    local x_lo = spec.margin + 2 -- the whole width of the volume, core and ring
+    local x_hi = ext[1] - spec.margin - 2
+    for _, row in ipairs(spec.rails.rows) do
+      local zc = spec.approach + (row - 1) * P - spec.street // 2 -- the street just before the row
+      -- one deck box per pitch, a pylon at every join
+      local x = x_lo
+      local line = { axis = 1, y = top, c = zc, a = x_lo, b = x_hi }
+      while x < x_hi do
+        local x2 = math.min(x + P, x_hi)
+        local mn, mx = world_box({ x, top, zc - 0.75 }, { x2 - x, 0.3, 1.5 }, kit, origin)
+        solids[#solids + 1] = { mn, mx, kind = "rail", room = 1, district = M.TRANSIT_BASE + (x - x_lo) // (4 * P) + 20 * _, outer = true }
+        local pm, px = world_box({ x2 - 0.45, (spec.ground or 0) - 3, zc - 0.45 }, { 0.9, top - (spec.ground or 0) + 3, 0.9 }, kit, origin)
+        solids[#solids + 1] = { pm, px, kind = "pylon", room = 1, district = M.TRANSIT_BASE + (x - x_lo) // (4 * P) + 20 * _, outer = true }
+        x = x2
+      end
+      rails[#rails + 1] = line
+    end
+    -- the central avenue: north-south, down the middle of the core
+    local xc = spec.margin + (R + nx // 2) * P
+    local z_lo, z_hi = spec.approach + 4, ext[3] - spec.margin - 2
+    local z = z_lo
+    while z < z_hi do
+      local z2 = math.min(z + P, z_hi)
+      local mn, mx = world_box({ xc - 0.75, top + 6, z }, { 1.5, 0.3, z2 - z }, kit, origin)
+      solids[#solids + 1] = { mn, mx, kind = "rail", room = 1, district = M.TRANSIT_BASE + 900 + (z - z_lo) // (4 * P), outer = true }
+      local pm, px = world_box({ xc - 0.45, (spec.ground or 0) - 3, z2 - 0.45 }, { 0.9, top + 6 - (spec.ground or 0) + 3, 0.9 }, kit, origin)
+      solids[#solids + 1] = { pm, px, kind = "pylon", room = 1, district = M.TRANSIT_BASE + 900 + (z - z_lo) // (4 * P), outer = true }
+      z = z2
+    end
+    rails[#rails + 1] = { axis = 3, y = top + 6, c = xc, a = z_lo, b = z_hi }
+  end
+  for _, lot in ipairs(plan) do
+    if lot.type == "plaza" and spec.lifts then
+      local d = districts[lot.d]
+      local cx, cz = lot.x0 + spec.lot - 12, lot.z0 + spec.lot - 12
+      local y0, y1 = lot.y, ceiling - 4
+      for _, q in ipairs({ { 0, 0 }, { 2.5, 0 }, { 0, 2.5 }, { 2.5, 2.5 } }) do
+        local mn, mx = world_box({ cx + q[1], y0, cz + q[2] }, { 0.5, y1 - y0, 0.5 }, kit, origin)
+        solids[#solids + 1] = { mn, mx, kind = "liftpost", room = 1, district = d.id }
+      end
+      lifts[#lifts + 1] = { district = d.id, pos = { origin[1] + (cx + 1.5) * kit.cell, 0, origin[3] + (cz + 1.5) * kit.cell },
+                            y0 = origin[2] + y0 * kit.cell, y1 = origin[2] + y1 * kit.cell, phase = #lifts * 0.37 }
     end
   end
 
@@ -604,12 +659,19 @@ function M.generate(seed, kit, civ, origin)
   if not ok then return nil, reach end
   local city = { body = spec.body, districts = {}, couplings = couplings, gates = gates, port = port, stats = {}, style = style }
   for _, d in ipairs(districts) do
+    local x0, z0, x1, z1 = 1e9, 1e9, -1e9, -1e9
+    for _, l in ipairs(d.lots) do
+      local q = lots[l[2] * 1000 + l[1]]
+      x0, z0, x1, z1 = math.min(x0, q.x0 - spec.street // 2), math.min(z0, q.z0 - spec.street // 2), math.max(x1, q.x0 + spec.lot + spec.street // 2), math.max(z1, q.z0 + spec.lot + spec.street // 2)
+    end
+    d.box = { x0, z0, x1, z1 }
     local lot = lots[d.center[2] * 1000 + d.center[1]]
     local cx = origin[1] + (lot.x0 + spec.lot / 2) * kit.cell
     local cz = origin[3] + (lot.z0 + spec.lot / 2) * kit.cell
     city.districts[d.id] = { id = d.id, kind = d.kind, label = d.label, powered = d.powered, coupling = d.coupling,
-                             pos = { cx, origin[2] + lot.y * kit.cell, cz }, drum = d.drum, crater = d.crater }
+                             pos = { cx, origin[2] + lot.y * kit.cell, cz }, drum = d.drum, crater = d.crater, box = d.box and { origin[1] + d.box[1] * kit.cell, origin[3] + d.box[2] * kit.cell, origin[1] + d.box[3] * kit.cell, origin[3] + d.box[4] * kit.cell } }
   end
+  city.rails, city.lifts, city.bridges = rails, lifts, bridge_list
   city.skyline = {}
   for _, sd in ipairs(sky) do
     if sd.n > 0 then
@@ -618,7 +680,7 @@ function M.generate(seed, kit, civ, origin)
     end
   end
   city.stats = { rooms = #rooms, doors = #doors, walls = #walls, solids = #solids, slots = #slots, gates = #gates,
-                 districts = #districts, skyline = #city.skyline, skyline_solids = skyn, buildings = #bybuilding, bridges = bridges }
+                 rails = #rails, lifts = #lifts, districts = #districts, skyline = #city.skyline, skyline_solids = skyn, buildings = #bybuilding, bridges = bridges }
   local tint = civ and civ.tint
   return { seed = seed, kit = kit.id, rooms = rooms, doors = doors, slots = slots, walls = walls, debris = debris, solids = solids,
            origin = origin, hash = ruinm.layout_hash(rooms, doors, solids), reach = reach, city = city, tint = tint }

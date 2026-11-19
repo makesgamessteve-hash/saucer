@@ -54,7 +54,7 @@ M.SITE_PAD = 30
 M.MAX_MSGS = 8 -- add-playtest-recs: room for a tip next to a lock cycle
 M.MAX_FX = 8
 
-local rt = { ruins = {}, bounds = {}, sentries = {}, shutters = {}, seals = {}, gates = {} } -- derived, rebuilt on restore
+local rt = { ruins = {}, bounds = {}, sentries = {}, shutters = {}, seals = {}, gates = {}, fallen = {}, bridge_box = {} } -- derived, rebuilt on restore
 
 function M.ruin(i) return rt.ruins[i] end
 function M.site_bounds(i) return rt.bounds[i] end
@@ -69,6 +69,7 @@ function M.rebuild(state)
   saucer.physics.clear()
   civs.use(state.seed)
   rt.ruins, rt.bounds, rt.sentries, rt.shutters, rt.seals, rt.gates = {}, {}, {}, {}, {}, {}
+  rt.fallen, rt.bridge_box = {}, {}
   for i, site in ipairs(state.sector.sites) do
     local r = ruinm.generate(site.seed, site.kit, civ_of(site), site.pos, nil, site.first)
     rt.ruins[i] = r
@@ -77,7 +78,21 @@ function M.rebuild(state)
     rt.bounds[i] = { lo, hi }
     for _, b in ipairs(r.walls) do saucer.physics.add_box(b[1], b[2], 1) end
     for _, b in ipairs(r.debris) do saucer.physics.add_box(b[1], b[2], 1) end
-    for _, b in ipairs(r.solids or {}) do saucer.physics.add_box(b[1], b[2], 1) end
+    rt.fallen[i], rt.bridge_box[i] = {}, {}
+    local bridge_at = {}
+    for _, bi in ipairs(r.city and r.city.bridges or {}) do bridge_at[bi] = true end
+    for si, b in ipairs(r.solids or {}) do
+      local id = saucer.physics.add_box(b[1], b[2], 1)
+      if bridge_at[si] then rt.bridge_box[i][si] = id end
+    end
+    -- add-cities-2: a sky-bridge that has already torn loose (by the clock) is not rebuilt
+    for si, id in pairs(rt.bridge_box[i]) do
+      local ft = cities.fall_tick(r, r.solids[si])
+      if ft and state.tick >= ft then
+        saucer.physics.remove(id)
+        rt.fallen[i][si] = true
+      end
+    end
     -- add-on-foot-excursions: sealed shutters stay solid until their hand-lock turns
     rt.shutters[i] = {}
     for _, sh in ipairs(r.foot and r.foot.shutters or {}) do
@@ -169,6 +184,8 @@ function M.open_gates(site, district)
   return n
 end
 function M.gates(site) return rt.gates[site] or {} end
+-- add-cities-2: has this sky-bridge (solid index) torn loose?
+function M.bridge_fallen(site, si) return rt.fallen[site] ~= nil and rt.fallen[site][si] == true end
 function M.gates_closed(site, district)
   local n = 0
   for _, g in pairs(rt.gates[site] or {}) do if district == nil or g.district == district then n = n + 1 end end
@@ -907,6 +924,11 @@ local function world_step(state, p, dt)
     ship.charge = ship.charge - cost
     if sink then ship.pos = mover(state, p)(ship, { 0, -cities.SINK * dt, 0 }) end
   end
+  -- add-cities-2: a storm over a planet city pushes the saucer about in the open (never inside a room)
+  if cities.is_city(cr) and not hangar and not ship.morph and p.mode ~= "foot" then
+    local wx, wz, wk = cities.wind(cr, state.tick)
+    if wk > 0 and not cities.sheltered(cr, ship.pos) then ship.pos = mover(state, p)(ship, { wx * dt, 0, wz * dt }) end
+  end
   if shipm.update(ship, dt, (site == 0 or hangar) and home.regen_factor(state, p)) == "done" then
     msg(state, p, "Configuration: " .. configs.get(ship.size).name)
   end
@@ -1192,6 +1214,49 @@ function M.record_trail(state, p, site, mark)
   return t
 end
 
+-- add-cities-2: the sky-bridges of the city a player is in tear loose by the clock (see sim/cities.lua):
+-- the box leaves the physics, the players there are told, and a bridge in its fall costs the hull it hits
+function M.city_step(state)
+  for i = 1, #state.sector.sites do
+    local r = rt.ruins[i]
+    if cities.is_city(r) and #(r.city.bridges or {}) > 0 then
+      local here = {}
+      for _, p in ipairs(state.players) do if p.site == i then here[#here + 1] = p end end
+      if #here > 0 then
+        for _, si in ipairs(r.city.bridges) do
+          local id = rt.bridge_box[i][si]
+          local s = r.solids[si]
+          local ft = cities.fall_tick(r, s)
+          if ft and state.tick >= ft and not rt.fallen[i][si] then
+            saucer.physics.remove(id)
+            rt.fallen[i][si] = true
+            for _, p in ipairs(here) do
+              msg(state, p, cities.storm(r, state.tick) > 0 and "The storm tears a sky-bridge loose - it falls" or "A tremor shakes a sky-bridge loose - it falls")
+            end
+          end
+          local mn, mx = cities.fall_box(r, s, state.tick)
+          if mn then
+            for _, p in ipairs(here) do
+              local ship = p.ship
+              local rr = configs.get(ship.size).diameter / 2
+              local key = i .. ":hit" .. si .. ":" .. p.index
+              if p.mode ~= "foot" and not (state.locks and state.locks[key])
+                  and ship.pos[1] > mn[1] - rr and ship.pos[1] < mx[1] + rr and ship.pos[2] > mn[2] - rr and ship.pos[2] < mx[2] + rr
+                  and ship.pos[3] > mn[3] - rr and ship.pos[3] < mx[3] + rr then
+                state.locks = state.locks or {}
+                state.locks[key] = state.tick
+                hull.damage(ship, cities.BRIDGE_DAMAGE)
+                p.fx[#p.fx + 1] = { tick = state.tick, sound = "hit" }
+                msg(state, p, "A falling sky-bridge clips the hull")
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end
+
 function M.step(state, cmds, dt)
   M.state_ref = state
   state.tick = state.tick + 1
@@ -1208,6 +1273,7 @@ function M.step(state, cmds, dt)
   -- sentries act once per tick for everyone, then their stun bolts fly
   for i = 1, #state.sector.sites do sentry.step(state, i, rt.sentries[i], dt, ctx_fns) end
   sentry.step_bolts(state, dt)
+  M.city_step(state)
   -- add-wider-dark: decoys burn out; docks, the Heart and the party's fold jump
   local keep = {}
   for _, d in ipairs(state.decoys or {}) do

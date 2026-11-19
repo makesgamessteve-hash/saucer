@@ -25,7 +25,7 @@ return {
   links = false,
   grid = { 2064, 170, 1392 },  -- 8.3 x 0.68 x 5.6 km: the 12 x 12 core plus a skyline ring of twelve lots
   city = {
-    body = "planet", name = "Planet city", lots = { 12, 12 }, ring = 12, horizon = true, lot = 32, street = 24, margin = 24, approach = 24,
+    body = "planet", name = "Planet city", lots = { 12, 12 }, ring = 12, horizon = true, lifts = true, rails = { rows = { 4, 8, 11 }, height = 8 }, undercity = "flooded", storm = true, lot = 32, street = 24, margin = 24, approach = 24,
     ground = 60, under = { 2, 3 }, tower = { 14, 30, 24, 100 }, mix = { 35, 35, 15, 15 }, tiers = { 0 },
     gravity = 1.2,  -- Charge per second to hover in the open air of the city
     env = { fog = { 0.30, 0.34, 0.42 }, clear = { 0.22, 0.26, 0.34 }, density = 1.6, light = { 0.7, 0.72, 0.8 }, ambient = 0.7, night = true },

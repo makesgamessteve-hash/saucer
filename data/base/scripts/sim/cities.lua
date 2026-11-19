@@ -51,6 +51,104 @@ function M.light(state, site, ruin, d)
   return (dt - 90) / (M.RAMP - 90)
 end
 
+-- ------------------------------------------------------------------ weather and collapses
+-- Everything here is a pure function of the tick and the city's seed: nothing is stored, so saves,
+-- replays and co-op never see it. A storm front sweeps a planet city every STORM_PERIOD ticks and lasts
+-- STORM_LEN of them; the sky-bridges tear loose at the peaks, one storm each, in a fixed order.
+M.STORM_PERIOD = 7200
+M.STORM_LEN = 2100
+M.FALL_TICKS = 150     -- a torn bridge falls for this long (then it is gone)
+M.WIND = 11            -- m/s of drift at the peak of a storm
+M.BRIDGE_DAMAGE = 24   -- hull a falling bridge costs when it hits (once per bridge per saucer)
+
+-- the tick of the first storm's start (never before 30 s in)
+function M.phase(ruin) return 1800 + (ruin.seed or 0) % M.STORM_PERIOD end
+
+-- the storm: -> intensity 0..1 and the number of the storm (0 before the first). Moons and rocks have none,
+-- but the same clock times their tremors.
+function M.storm(ruin, tick)
+  local ph = M.phase(ruin)
+  if tick < ph then return 0, 0 end
+  local n = (tick - ph) // M.STORM_PERIOD
+  local t = (tick - ph) % M.STORM_PERIOD
+  if t >= M.STORM_LEN then return 0, n + 1 end
+  local k = saucer.math.sin(saucer.math.pi * t / M.STORM_LEN)
+  if not require("sim.ruin").kit_of(ruin.kit).city.storm then return 0, n + 1 end
+  return k, n + 1
+end
+
+-- ticks until the next storm starts (nil when none ever comes)
+function M.storm_in(ruin, tick)
+  if not require("sim.ruin").kit_of(ruin.kit).city.storm then return nil end
+  local ph = M.phase(ruin)
+  if tick < ph then return ph - tick end
+  local t = (tick - ph) % M.STORM_PERIOD
+  if t < M.STORM_LEN then return 0 end
+  return M.STORM_PERIOD - t
+end
+
+-- the drift of the wind at the peak of storm k: a heading that turns slowly, with gusts. -> dx, dz in m/s
+function M.wind(ruin, tick)
+  local k, n = M.storm(ruin, tick)
+  if k <= 0.02 then return 0, 0, 0 end
+  local a = n * 1.9 + 0.6 * saucer.math.sin(tick / 240)
+  local gust = 0.65 + 0.35 * saucer.math.sin(tick / 23 + n)
+  local s = M.WIND * k * gust
+  return saucer.math.sin(a) * s, saucer.math.cos(a) * s, k
+end
+
+-- is this point inside a room's walls (the wind does not reach it)? Rooms of a city are few hundred boxes.
+function M.sheltered(ruin, pos)
+  local rm = require("sim.ruin")
+  local k = rm.kit_of(ruin.kit)
+  for _, r in ipairs(ruin.rooms) do
+    local mn, mx = rm.room_box(r, k, ruin.origin)
+    if pos[1] >= mn[1] and pos[1] <= mx[1] and pos[2] >= mn[2] and pos[2] <= mx[2] and pos[3] >= mn[3] and pos[3] <= mx[3] then return true end
+  end
+  return false
+end
+
+-- the tick a sky-bridge tears loose (nil when it never does): storm number `fall` at its peak
+function M.fall_tick(ruin, s)
+  if not s.fall then return nil end
+  return M.phase(ruin) + (s.fall - 1) * M.STORM_PERIOD + M.STORM_LEN // 2
+end
+
+-- how far a bridge that tore loose at tick ft has dropped by now (m), nil if not falling right now
+function M.fall_drop(ft, tick)
+  local t = (tick - ft) / 60
+  if t < 0 or t * 60 >= M.FALL_TICKS then return nil end
+  return 0.5 * 9.8 * 1.6 * t * t
+end
+
+-- the box a falling bridge occupies right now -> mn, mx (or nil)
+function M.fall_box(ruin, s, tick)
+  local ft = M.fall_tick(ruin, s)
+  local d = ft and M.fall_drop(ft, tick)
+  if not d then return nil end
+  return { s[1][1], s[1][2] - d, s[1][3] }, { s[2][1], s[2][2] - d, s[2][3] }
+end
+
+-- add-cities-2: a Watcher on the wing over the streets of every dark district, round its block at 18 m
+-- above the roads. They are ordinary Watchers (cone, alert, stun bolts) whose position is a function of
+-- the clock; they go home when their district's grid comes back. -> appended to `out`
+M.PATROL_SPEED = 9
+function M.patrols(out, site, ruin, band, civ)
+  local city = ruin.city
+  for _, pd in ipairs(city.districts) do
+    if not pd.powered and pd.box then
+      local b = pd.box
+      local y = pd.pos[2] + 18
+      local pts = { { b[1], y, b[2] }, { b[3], y, b[2] }, { b[3], y, b[4] }, { b[1], y, b[4] }, { b[1], y, b[2] } }
+      local len = 0
+      for k = 1, #pts - 1 do len = len + vec.dist(pts[k], pts[k + 1]) end
+      out[#out + 1] = { id = #out + 1, kind = "watcher", site = site.id, room = 1, pos = vec.copy(pts[1]), yaw = 0, pitch = -0.4,
+                        band = band, glyph = civ and civ.glyph or nil, district = pd.id, dark = true, roam = true,
+                        route = pts, len = len, speed = M.PATROL_SPEED, phase = (pd.id * 0.2718) % 1 }
+    end
+  end
+end
+
 -- districts live / total
 function M.grid(state, site, ruin)
   local on, n = 0, 0

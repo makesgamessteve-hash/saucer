@@ -45,18 +45,21 @@ function M.draw_sentries(v, A, state, p)
       if dyn then
         local tint = M.STATE_TINT[dyn.st] or M.STATE_TINT.dormant
         local show = scanned and p.site == site
-        if def.kind == "watcher" then
+        if def.kind == "watcher" and def.roam and (state.locks or {})[site .. ":power" .. tostring(def.district)] then
+          -- add-cities-2: a patrol is gone once its district's grid is back
+        elseif def.kind == "watcher" then
           -- add-mesh-builder: the base hangs still, the head turns to dyn.yaw and the eye tilts to its pitch
           local pitch = dyn.pitch or def.pitch
-          kit.draw(v, assets.rig(A, "watcher", {}, def.glyph or 1), { pos = def.pos, yaw = def.yaw },
-                   { head = { yaw = dyn.yaw - def.yaw }, eye = { pitch = pitch } })
+          local wpos, byaw = dyn.pos or def.pos, dyn.base or def.yaw
+          kit.draw(v, assets.rig(A, "watcher", {}, def.glyph or 1), { pos = wpos, yaw = byaw },
+                   { head = { yaw = dyn.yaw - byaw }, eye = { pitch = pitch } })
           local f = sentry.dir_of(dyn.yaw, pitch)
-          v:billboard(A.tex.beam, vec.add(def.pos, vec.scale(f, 1.9)), 1.0, { palette = A.pal.base, tint = tint })
+          v:billboard(A.tex.beam, vec.add(wpos, vec.scale(f, 1.9)), 1.0, { palette = A.pal.base, tint = tint })
           if show then
             for _, da in ipairs({ -t.watcher.half_angle, 0, t.watcher.half_angle }) do
               local d = sentry.dir_of(dyn.yaw + da, pitch)
               for k = 1, 12 do
-                v:billboard(A.tex.beam, vec.add(def.pos, vec.scale(d, k * t.watcher.range / 12)), 0.7,
+                v:billboard(A.tex.beam, vec.add(wpos, vec.scale(d, k * t.watcher.range / 12)), 0.7,
                   { palette = A.pal.base, tint = { tint[1], tint[2], tint[3], 0.45 } })
               end
             end
@@ -851,6 +854,17 @@ end
 -- a day (CITY_DAY seconds) that fades its fog and sky; a moon sits in earthlight; an asteroid is dark
 -- rock lit by its own lamps. Render only: a pure function of the tick. -> a fog table (+ .day) or nil
 M.CITY_DAY = 360
+-- the lightning of a storm of intensity sk: a function of the tick (0 .. 1, sharp then fading)
+function M.flash(state, sk)
+  if sk < 0.25 then return 0 end
+  local slot = state.tick // 50
+  local h = ((slot * 2654435761) >> 7) % 6
+  if h ~= 0 then return 0 end
+  local t = state.tick % 50
+  if t > 10 then return 0 end
+  return (1 - t / 10) * (t % 4 < 3 and 1 or 0.5)
+end
+
 function M.city_env(state, p)
   if not p or p.site == 0 then return nil end
   local r = game.ruin(p.site)
@@ -859,10 +873,69 @@ function M.city_env(state, p)
   if not e then return nil end
   local day = 1
   if e.night then day = 0.5 + 0.5 * sm.sin(state.tick / 60 / M.CITY_DAY * sm.tau) end
-  local k = 0.18 + 0.82 * day
-  local function mix(c, f) return { c[1] * f, c[2] * f, c[3] * f } end
-  return { color = mix(e.fog, k), density = M.FOG * e.density, clear = mix(e.clear, k), light = mix(e.light, 0.45 + 0.55 * day),
-           ambient = e.ambient * (0.6 + 0.4 * day), day = e.night and day or 0 }
+  -- add-cities-2: a storm darkens and thickens the air, and lightning flashes it white
+  local sk = cities.storm(r, state.tick)
+  local dim = 1 - 0.4 * sk
+  local flash = M.flash(state, sk)
+  local k = (0.18 + 0.82 * day) * dim
+  local function mix(c, f) return { math.min(1, c[1] * f + flash * 0.7), math.min(1, c[2] * f + flash * 0.7), math.min(1, c[3] * f + flash * 0.75) } end
+  return { color = mix(e.fog, k), density = M.FOG * e.density * (1 + 1.2 * sk), clear = mix(e.clear, k),
+           light = mix(e.light, (0.45 + 0.55 * day) * dim + flash), ambient = e.ambient * (0.6 + 0.4 * day) * dim + flash * 0.5,
+           day = e.night and day or 0, storm = sk, flash = flash }
+end
+
+-- add-cities-2: mag-rail trains and lift cabins. Pure functions of the tick (nothing is simulated, nothing
+-- is stored): a train runs its line end to end and back in TRAIN_PERIOD seconds, a cabin rides its shaft
+-- up and down. Only those within TRANSIT_DIST of the camera are drawn.
+M.TRANSIT_DIST = 900
+M.TRAIN_SPEED = 38
+M.TRAIN_CARS = 5
+function M.train_pos(line, n, tick)
+  -- -> distance along the line (a..b) of train n's head, and its direction (+1/-1)
+  local len = line.b - line.a
+  local run = len * 2
+  local u = (tick / 60 * M.TRAIN_SPEED / 4 + n * len * 0.9 + line.c * 3) % run  -- (cells)
+  if u < len then return line.a + u, 1 end
+  return line.b - (u - len), -1
+end
+function M.lift_y(lift, tick)
+  local t = (tick / 60 / 36 + lift.phase) % 1
+  local tri = t < 0.5 and t * 2 or (1 - t) * 2
+  return lift.y0 + 4 + (lift.y1 - lift.y0 - 14) * tri
+end
+function M.draw_transit(v, A, state, cam, r, st)
+  local acc = r.city.style.accent
+  local dark, glow = assets.unit_box(false), assets.unit_box(true)
+  for _, line in ipairs(r.city.rails or {}) do
+    for n = 0, 1 do
+      local head, dir = M.train_pos(line, n, state.tick)
+      for c = 0, M.TRAIN_CARS - 1 do
+        local ux = head - dir * c * 11 / 4 -- cells
+        local pos = line.axis == 1 and { r.origin[1] + ux * 4, r.origin[2] + line.y * 4 + 3.3, r.origin[3] + line.c * 4 }
+                                    or { r.origin[1] + line.c * 4, r.origin[2] + line.y * 4 + 3.3, r.origin[3] + ux * 4 }
+        if vec.dist(pos, cam.pos) < M.TRANSIT_DIST then
+          local sc = line.axis == 1 and { 9.5, 3.4, 3.6 } or { 3.6, 3.4, 9.5 }
+          v:mesh(dark, { pos = pos, scale = sc, tex = A.tex.hull, palette = A.pal.base, tint = { 0.55, 0.58, 0.66, 1 } })
+          local ss = line.axis == 1 and { 9.0, 0.7, 3.8 } or { 3.8, 0.7, 9.0 }
+          v:mesh(glow, { pos = { pos[1], pos[2] + 0.4, pos[3] }, scale = ss, palette = A.pal.base, tint = { acc[1], acc[2], acc[3], 1 } })
+          if c == 0 then
+            local hs = line.axis == 1 and { 0.6, 0.9, 2.2 } or { 2.2, 0.9, 0.6 }
+            local hp = line.axis == 1 and { pos[1] + dir * 4.9, pos[2] - 0.3, pos[3] } or { pos[1], pos[2] - 0.3, pos[3] + dir * 4.9 }
+            v:mesh(glow, { pos = hp, scale = hs, palette = A.pal.base, tint = { 1, 1, 0.9, 1 } })
+          end
+          st.trains = (st.trains or 0) + 1
+        end
+      end
+    end
+  end
+  for _, lift in ipairs(r.city.lifts or {}) do
+    local pos = { lift.pos[1], M.lift_y(lift, state.tick), lift.pos[3] }
+    if vec.dist(pos, cam.pos) < M.TRANSIT_DIST then
+      v:mesh(dark, { pos = pos, scale = { 8, 6, 8 }, tex = A.tex.hull, palette = A.pal.base, tint = { 0.6, 0.62, 0.7, 1 } })
+      v:mesh(glow, { pos = { pos[1], pos[2] + 0.5, pos[3] }, scale = { 8.3, 1, 8.3 }, palette = A.pal.base, tint = { acc[1], acc[2], acc[3], 1 } })
+      st.lifts = (st.lifts or 0) + 1
+    end
+  end
 end
 
 function M.draw_ruins(v, A, state, cam, xr)
@@ -936,6 +1009,13 @@ function M.draw_ruins(v, A, state, cam, xr)
         for _, ch in ipairs(set.chunks) do
           if ch.district and set.districts and not dnear[ch.district] then
             st.culled = st.culled + 1
+          elseif ch.fall and state.tick >= ch.fall then
+            -- add-cities-2: a sky-bridge that tore loose: it drops, then it is gone
+            local dy = cities.fall_drop(ch.fall, state.tick)
+            if dy and M.visible(cam, { ch.center[1], ch.center[2] - dy, ch.center[3] }, ch.radius, xr) then
+              v:mesh(ch.mesh, { tex = tex, palette = A.pal.base, pos = { 0, -dy, 0 } })
+              st.falling = (st.falling or 0) + 1
+            end
           elseif M.visible(cam, ch.center, ch.radius, xr) then
             v:mesh(ch.mesh, { tex = tex, palette = A.pal.base })
             -- add-cities: the lights of a lit district (built the first time they are wanted)
@@ -966,6 +1046,7 @@ function M.draw_ruins(v, A, state, cam, xr)
             st.beacons = (st.beacons or 0) + 1
           end
         end
+        if r.city then M.draw_transit(v, A, state, cam, r, st) end
         -- add-cities: the gates of dark districts, a shutter in each shut door
         if r.city then
           for id, g in pairs(game.gates(i)) do

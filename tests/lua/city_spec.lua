@@ -102,7 +102,11 @@ describe("city generation", function()
       local k = ruinm.kit_of(id)
       expect(#r.rooms).to_be_less(citygen.MAX_ROOMS + 1)
       expect(#r.walls).to_be_less(8000)
-      expect(#r.solids - r.city.stats.skyline_solids).to_be_less(400)
+      local core = 0
+      for _, q in ipairs(r.solids) do
+        if not q.outer and q.kind ~= "rail" and q.kind ~= "pylon" and q.kind ~= "liftpost" then core = core + 1 end
+      end
+      expect(core).to_be_less(400)
       expect(#r.solids).to_be_less(4000)
       local ext = citygen.extent_cells(k)
       for _, b in ipairs(r.walls) do
@@ -357,15 +361,15 @@ describe("the district power grid", function()
     local dark, calm_rooms = 0, 0
     local has = {}
     for _, d in ipairs(defs) do
-      has[d.room] = true
-      if d.dark then dark = dark + 1 end
+      if not d.roam then has[d.room] = true end
+      if d.dark and not d.roam then dark = dark + 1 end
     end
     for _, room in ipairs(r.rooms) do if room.calm and has[room.id] then calm_rooms = calm_rooms + 1 end end
     expect(dark).to_be_greater(5)
     expect(calm_rooms).to_be(0)
     -- park a saucer in front of a dark Watcher: nothing happens while its district is out
     local w
-    for k, d in ipairs(defs) do if d.kind == "watcher" and d.dark then w = k break end end
+    for k, d in ipairs(defs) do if d.kind == "watcher" and d.dark and not d.roam then w = k break end end
     local def = defs[w]
     local dyn = st.sentries[i][w]
     local p = st.players[1]
@@ -382,7 +386,7 @@ describe("the district power grid", function()
   it("the clamps, the lockdown node and the warden stay out of calm halls", function()
     local st, i, r = in_city("asteroid")
     for _, d in ipairs(game.sentries(i)) do
-      expect(r.rooms[d.room].calm ~= true).to_be_truthy()
+      expect(d.roam or r.rooms[d.room].calm ~= true).to_be_truthy()
       if d.kind == "clamp" or d.kind == "lockdown" or d.kind == "warden" then expect(d.district ~= nil).to_be_truthy() end
     end
   end)
@@ -559,7 +563,7 @@ describe("drawing a city", function()
     expect(set.districts ~= nil).to_be_truthy()
     local nd = 0
     for _ in pairs(set.districts) do nd = nd + 1 end
-    expect(nd).to_be(16 + #r.city.skyline)
+    expect(nd).to_be_greater(16 + #r.city.skyline)
     expect(#set.chunks).to_be_greater(400)
     local site = st.sector.sites[i]
     local ps = {

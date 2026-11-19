@@ -25,7 +25,7 @@ return {
   links = false,
   grid = { 1312, 130, 920 },  -- the 8 x 8 core plus a skyline ring of seven lots, all inside one hollow rock
   city = {
-    body = "asteroid", name = "Asteroid city", lots = { 8, 8 }, ring = 7, lot = 32, street = 24, margin = 40, approach = 40,
+    body = "asteroid", name = "Asteroid city", lots = { 8, 8 }, ring = 7, lifts = true, rails = { rows = { 4, 7 }, height = 6 }, lot = 32, street = 24, margin = 40, approach = 40,
     ground = 40, under = { 0, 1 }, tower = { 12, 22, 12, 24 }, mix = { 10, 55, 20, 15 }, tiers = { 0, 40 },
     shell = 14, drum = { 32, 32, 32 }, gravity = 0, spin = 0.0015,
     env = { fog = { 0.10, 0.06, 0.04 }, clear = { 0.03, 0.02, 0.02 }, density = 0.5, light = { 1.0, 0.7, 0.5 }, ambient = 0.45 },

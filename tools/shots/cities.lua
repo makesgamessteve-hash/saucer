@@ -157,4 +157,38 @@ if pick then
   put(pick, 0, -0.04)
   shot("10_skyline_ring")
 end
+
+-- 8. transit, the wet undercity and weather (add-cities-2)
+local render = require("view.render")
+local line = ruin.city.rails[1]
+local u = render.train_pos(line, 0, T.state().tick + 24)
+put({ o[1] + u * 4 + 2, o[2] + line.y * 4 - 7, o[3] + line.c * 4 - 34 }, 0, 0.3)
+shot("11_mag_rail")
+local lift = ruin.city.lifts[1]
+put({ lift.pos[1] - 45, render.lift_y(lift, T.state().tick) + 6, lift.pos[3] - 45 }, 0.78, 0)
+shot("12_lift_shaft")
+local canal
+for _, r in ipairs(ruin.rooms) do if r.tunnel and not canal then canal = r end end
+if canal then
+  local mn, mx = ruinm.room_box(canal, kit, o)
+  put({ (mn[1] + mx[1]) / 2, mn[2] + 7, (mn[3] + mx[3]) / 2 }, (mx[1] - mn[1]) > (mx[3] - mn[3]) and 1.5708 or 0, 0)
+  shot("13_canal")
+end
+if BODY == "planet" then
+  local sc = require("sim.cities")
+  T.state().tick = sc.phase(ruin) + sc.STORM_LEN // 2 - 10
+  put({ inside[1], inside[2] + 90, inside[3] }, 0, 0.02)
+  shot("14_storm")
+  local bridge
+  for _, bi in ipairs(ruin.city.bridges) do
+    local b = ruin.solids[bi]
+    local m = { (b[1][1] + b[2][1]) / 2, (b[1][2] + b[2][2]) / 2, (b[1][3] + b[2][3]) / 2 }
+    if b.fall == 1 and (not bridge or vec.dist(m, inside) < bridge.d) then bridge = b bridge.d = vec.dist(m, inside) end
+  end
+  local ft = sc.fall_tick(ruin, bridge)
+  T.state().tick = ft - 4
+  put({ (bridge[1][1] + bridge[2][1]) / 2, (bridge[1][2] + bridge[2][2]) / 2 + 4, bridge[1][3] - 70 }, 0, -0.05)
+  T.wait(40)
+  shot("15_bridge_falls")
+end
 print("cities shots done " .. BODY)
