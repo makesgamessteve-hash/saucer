@@ -264,24 +264,29 @@ function M.panel(v, state, p)
   local w = 8
   for _, r in ipairs(rows) do w = math.max(w, #r.text + 4) end
   w = math.min(math.max(w, #title + 4) * 8, W - 16)
-  local x, y = W // 2 - w // 2, H // 2 - (#rows * 11 + 24) // 2
+  -- add-mobile-touch-ux: a row too long for the panel wraps onto more lines
+  -- (indented under its text) instead of being cut off
+  local lines, nl = M.panel_lines(rows, w // 8)
+  local x, y = W // 2 - w // 2, H // 2 - (nl * 11 + 24) // 2
   -- add-pocket-station-visits: face to face, the menu sits low so you can
   -- still see who you are talking to
-  if p.mode == "foot" then y = math.max(y, math.min(H // 2 + 20, H - 46 - #rows * 11 - 24)) end
+  if p.mode == "foot" then y = math.max(y, math.min(H // 2 + 20, H - 46 - nl * 11 - 24)) end
   local is_title = p.panel.kind == "title"
   local cx, title_scale = W // 2, 3
   if M.clip and p.panel.kind ~= "citymap" and p.panel.kind ~= "map" then
     -- add-mobile-touch-ux: the panel (with the title above it and the nav
     -- lines under it) moves, and narrows if it must, to sit clear of the touch
     -- controls, as near the middle as it can
-    local head, foot = is_title and 50 or 0, 24
-    local hb = #rows * 11 + (is_title and 0 or 12) + 12 + foot + head
+    local head, foot = is_title and 50 or 0, 34 -- (the nav may take two lines)
     local ww, tmin = w, 152
     while true do
+      local wl, wn = M.panel_lines(rows, ww // 8)
+      local hb = wn * 11 + (is_title and 0 or 12) + 12 + foot + head
       local bw = math.max(ww + 8, is_title and tmin or 0)
       local bx, by = M.place(v, bw, hb, cx - bw // 2, y - 4 - head)
       if bx then
         x, y, w, cx = bx + (bw - ww) // 2, by + 4 + head, ww, bx + bw // 2
+        lines, nl = wl, wn
         break
       end
       if ww <= 96 and (not is_title or tmin < 152) then break end
@@ -313,28 +318,34 @@ function M.panel(v, state, p)
     x = math.max(x, mw + 16)
     w = math.min(w, W - 8 - x)
   end
+  if p.panel.kind == "citymap" or p.panel.kind == "map" then lines, nl = M.panel_lines(rows, w // 8) end
   local top = is_title and 0 or 12
-  v:rect(x - 4, y - 4, w + 8, #rows * 11 + top + 12, { 0, 0.02, 0.06, 0.82 })
+  v:rect(x - 4, y - 4, w + 8, nl * 11 + top + 12, { 0, 0.02, 0.06, 0.82 })
   if not is_title then v:text(x, y, title, AMBER) end
   if first > 1 or first + #rows - 1 < #all then
     local more = string.format("%d-%d/%d", first, first + #rows - 1, #all)
     v:text(x + w - #more * 8, y, more, DIM)
   end
+  local ly = y + top
   for i, r in ipairs(rows) do
     local sel = i + first - 1 == p.panel.sel
     local col = r.enabled == false and DIM or (sel and GREEN or WHITE)
-    if sel then v:rect(x - 2, y + top + (i - 1) * 11 - 1, w + 4, 10, { 0.2, 0.5, 0.3, 0.5 }) end
-    v:text(x, y + top + (i - 1) * 11, ((sel and "> " or "  ") .. r.text):sub(1, w // 8), col)
+    local ls = lines[i]
+    if sel then v:rect(x - 2, ly - 1, w + 4, #ls * 11 - 1, { 0.2, 0.5, 0.3, 0.5 }) end
+    for j, l in ipairs(ls) do
+      v:text(x, ly + (j - 1) * 11, ((j > 1 and "  ") or (sel and "> " or "  ")) .. l, col)
+    end
+    ly = ly + #ls * 11
   end
   local mode = saucer.input.device_mode(v.player)
   local nav = mode == "pad" and "STICK UP/DOWN  X: PICK" or (mode == "touch" and "STICK UP/DOWN  USE: PICK" or
     (mode == "keys2" and "I/K: CHOOSE  ENTER: PICK" or "W/S: CHOOSE  G/ENTER: PICK"))
-  M.ct(v, y + top + 10 + #rows * 11, nav, DIM)
+  local navn = M.ct_parts(v, y + top + 10 + nl * 11, nav, DIM)
   -- add-home-among-stars: the selected row's hint (a mod's description)
   local cur = all[p.panel.sel]
   if cur and cur.hint then
     local h = cur.hint:sub(1, (W - 16) // 8)
-    M.ct(v, y + top + 21 + #rows * 11, h, CYAN)
+    M.ct(v, y + top + 11 + navn * 10 + nl * 11, h, CYAN)
   end
   return #rows
 end
@@ -1029,15 +1040,48 @@ end
 
 -- centred text; with the touch controls up it keeps to the span between the
 -- controls on its row (cut to fit) -> the drawn width
-function M.ct(v, y, t, col, scale)
+-- the free span [x0, x1] of the row at y (between the touch controls)
+function M.span(v, y, cw)
   local W = v.width
   local x0, x1 = 2, W - 2
-  local cw = 8 * (scale or 1)
   for _, r in ipairs(M.clip or {}) do
     if r[2] < y + cw + 1 and r[2] + r[4] > y - 1 then
       if r[1] + r[3] / 2 > W / 2 then x1 = math.min(x1, r[1] - 2) else x0 = math.max(x0, r[1] + r[3] + 2) end
     end
   end
+  return x0, x1
+end
+
+-- a panel's rows wrapped to cols (two of them for the "> " marker) -> lines per row, total
+function M.panel_lines(rows, cols)
+  local out, n = {}, 0
+  for i, r in ipairs(rows) do
+    out[i] = #r.text + 2 <= cols and { r.text } or M.wrap(r.text, cols - 2)
+    n = n + #out[i]
+  end
+  return out, n
+end
+
+-- centred text that, if its row is too narrow, goes one "  "-separated part
+-- per line (10 px apart) instead of being cut off -> lines used
+function M.ct_parts(v, y, t, col)
+  local x0, x1 = M.span(v, y, 8)
+  if #t <= (x1 - x0) // 8 then
+    M.ct(v, y, t, col)
+    return 1
+  end
+  local n = 0
+  for part in (t .. "  "):gmatch("(.-)  +") do
+    M.ct(v, y + n * 10, part, col)
+    n = n + 1
+  end
+  return n
+end
+
+function M.ct(v, y, t, col, scale)
+  local W = v.width
+  local cw = 8 * (scale or 1)
+  local x0, x1 = M.span(v, y, cw)
   local n = math.max(1, (x1 - x0) // cw)
   if #t > n then t = t:sub(1, n) end
   local x = math.max(x0, math.min(W // 2 - #t * cw // 2, x1 - #t * cw))

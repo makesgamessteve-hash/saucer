@@ -245,7 +245,51 @@ describe("touch HUD panels", function()
         expect(hud.clip).to_be(nil)
       end)
     end)
+    it(string.format("shows every title menu entry and the nav in full at %dx%d", sz[1], sz[2]), function()
+      with_touch(function()
+        local hw, hh = saucer.test.touch_metrics({ w = sz[1], h = sz[2] })
+        local v = rec_view(hw, hh)
+        local st = {}
+        game.init(st, { seed = 42, players = 1 })
+        local p = st.players[1]
+        local rs = require("sim.panel").rows(st, p)
+        expect(#rs).to_be_greater(3)
+        for i = 1, #rs + 1 do -- every entry selected in turn
+          v.texts = {}
+          p.panel.sel = math.min(i, #rs)
+          hud.draw(v, saucer.util.readonly(st), p, nil)
+          local all = {}
+          for _, t in ipairs(v.texts) do
+            -- nothing runs off the screen
+            if t[1] < -0.01 or t[1] + t[3] > hw + 0.01 then error(string.format("text %q off screen", t[5])) end
+            all[#all + 1] = t[5]
+          end
+          local joined = " " .. table.concat(all, " "):gsub(">", " "):gsub("%s+", " ") .. " "
+          for _, r in ipairs(rs) do
+            local want = " " .. r.text:gsub("%s+", " ") .. " "
+            if not joined:find(want, 1, true) then error(string.format("menu entry %q cut off", r.text)) end
+          end
+          expect(joined:find(" USE: PICK ", 1, true) ~= nil).to_be(true)
+          expect(joined:find(" STICK UP/DOWN ", 1, true) ~= nil).to_be(true)
+        end
+      end)
+    end)
   end
+  it("wraps a long menu row and splits a narrow centred line", function()
+    local ls, n = hud.panel_lines({ { text = "Load saved game" }, { text = "Get up" } }, 12)
+    expect(n).to_be(3)
+    expect(ls[1][1]).to_be("Load saved")
+    expect(ls[1][2]).to_be("game")
+    local v = rec_view(200, 100)
+    hud.clip = { { 0, 40, 30, 20, "map" }, { 170, 40, 30, 20, "up" } }
+    expect(hud.ct_parts(v, 45, "STICK UP/DOWN  USE: PICK", { 1, 1, 1, 1 })).to_be(2)
+    expect(v.texts[1][5]).to_be("STICK UP/DOWN")
+    expect(v.texts[2][5]).to_be("USE: PICK")
+    hud.clip = nil
+    v.texts = {}
+    expect(hud.ct_parts(v, 45, "STICK UP/DOWN  USE: PICK", { 1, 1, 1, 1 })).to_be(1)
+    expect(v.texts[1][5]).to_be("STICK UP/DOWN  USE: PICK")
+  end)
   it("places boxes clear of the controls, or gives up", function()
     local v = rec_view(100, 100)
     hud.clip = { { 40, 40, 20, 20, "use" } }

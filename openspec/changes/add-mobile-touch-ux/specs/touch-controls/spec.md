@@ -37,11 +37,15 @@ A finger that lands just outside a button (within half a gap) SHALL press it in 
 ## ADDED Requirements
 
 ### Requirement: HUD clear of the touch controls
-With touch controls showing, the HUD's text and panels SHALL NOT draw over a control: centred text SHALL be clipped to the span between the controls on its row, the message log and the context hint SHALL be stacked in a clear column, and the title card SHALL be placed or narrowed to stay clear.
+With touch controls showing, the HUD's text and panels SHALL NOT draw over a control: centred text SHALL be clipped to the span between the controls on its row, the message log and the context hint SHALL be stacked in a clear column, and the title card SHALL be placed or narrowed to stay clear. A menu entry too long for its narrowed panel SHALL wrap onto more lines rather than be cut off, and a centred line too wide for the span between the controls SHALL break at its parts.
 
 #### Scenario: The HUD at the reference sizes
 - **WHEN** the walk and helm HUD are drawn with touch controls at 320x568, 360x640, 390x844 and 768x1024 and their landscape versions
 - **THEN** no HUD text or panel overlaps a control and the log lines sit in the clear column
+
+#### Scenario: Title menu on a small phone
+- **WHEN** the title menu is shown with touch controls at 320x568 or any other reference size, portrait or landscape
+- **THEN** every entry ("Load saved game", "Comfort settings", ...) and the "STICK UP/DOWN" / "USE: PICK" line are shown in full and on screen
 
 #### Scenario: Hint over the log
 - **WHEN** the context hint shows on a touch screen

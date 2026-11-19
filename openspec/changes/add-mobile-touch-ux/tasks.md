@@ -14,6 +14,7 @@
 
 - [x] 3.1 Status, prompts, log, context hint and title card clear of the controls at the eight reference sizes (`tests/lua/touch_ux_spec.lua`: "keeps the walk/helm HUD off the controls", "stacks over the log in the clear column", "keeps the title card clear")
 - [x] 3.2 Pressed, active, cooldown and unavailable states (`touch_ux_spec.lua`: "shows cooldowns, an unavailable decoy, an active beam and the altitude", "lights a pressed button and nudges its label")
+- [x] 3.3 Title menu entries wrap and the nav line breaks instead of being cut off, at all eight sizes (`touch_ux_spec.lua`: "shows every title menu entry and the nav in full", "wraps a long menu row and splits a narrow centred line")
 
 ## 4. Web shell
 
