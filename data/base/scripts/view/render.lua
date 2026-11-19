@@ -259,7 +259,9 @@ function M.radar_targets(state, p)
   for _, s in ipairs(state.sector.sites) do
     out[#out + 1] = { pos = hud.site_center(state, s), color = s.id == p.site and { 1, 0.75, 0.3, 1 } or { 0.9, 0.95, 1, 1 } }
   end
-  out[#out + 1] = { pos = state.sector.trader.pos, color = { 0.35, 1, 0.45, 1 } }
+  for _, tr in ipairs(state.sector.traders or { state.sector.trader }) do
+    out[#out + 1] = { pos = tr.pos, color = { 0.35, 1, 0.45, 1 } }
+  end
   for _, t in ipairs(M.extra_radar) do
     for _, x in ipairs(t(state, p)) do out[#out + 1] = x end
   end
@@ -1099,7 +1101,9 @@ function M.render(v, state, alpha)
   if not (cenv and cenv.day > 0.55) then M.sky(v, A, cam.pos) end
   -- derelicts, in chunks: culled against the view, far sites as one silhouette
   M.draw_ruins(v, A, state, cam, v.xr)
-  v:mesh(A.station, { pos = state.sector.trader.pos, yaw = state.tick * 0.002 })
+  for _, tr in ipairs(state.sector.traders or { state.sector.trader }) do
+    v:mesh(A.station, { pos = tr.pos, yaw = state.tick * 0.002 })
+  end
   M.draw_sentries(v, A, state, p)
   -- add-on-foot-excursions: shutters, hand-locks, grid consoles, Delicate finds
   local exv = require("view.excursion")
@@ -1126,7 +1130,7 @@ function M.render(v, state, alpha)
         local pulse = 0.65 + 0.35 * sm.sin(state.tick * 0.07)
         v:mesh(A.foot.lock, { pos = { pos[1], pos[2] - 1.2, pos[3] }, yaw = spin, scale = 2.4 * k, palette = A.pal.base })
         v:billboard(A.tex.glow, pos, 7 * k, { palette = A.pal.base, tint = { 1, 0.7, 0.2, 0.9 * pulse } })
-      elseif cand.echo or cand.kind == "curio" then
+      elseif cand.echo or cand.kind == "curio" or cand.kind == "clue" then
         v:billboard(A.tex.echo, pos, (cand.kind == "curio" and 2.4 or 1.6) * k, { palette = A.pal.base })
       else
         v:billboard(A.tex.loot, pos, s * k, { palette = A.pal.base })

@@ -133,3 +133,29 @@ Every dark district SHALL be patrolled by a roaming Watcher on a fixed route thr
 #### Scenario: a Watcher patrols the streets of every dark district and goes home when its grid is back
 - **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
 - **THEN** it passes
+
+### Requirement: Archive records
+Each archive district SHALL hold one record in its ground hall, readable by the beam once the district's grid is up, taking no hold slot; it SHALL say where the next unlocked Echo waits (sector too, when elsewhere), then the Heart's sector, then lore of the cause, or a plain line when the mystery is off.
+
+#### Scenario: every archive district holds one record in its ground hall, readable once its grid is up
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: reading a record names the next Echo, a later record the one after, and never fills the hold
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: a record is a beam target when the hold is full and is drawn like an Echo
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+### Requirement: City outposts
+A sector with a city SHALL hold a second trader, an outpost off the city's spaceport mouth, with its own demand ledger; docking there SHALL say so, and both stations SHALL be drawn and on the radar.
+
+#### Scenario: a city sector has a trader outpost off its spaceport mouth, a pure function of the seed
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: docking at an outpost sells there with its own ledger, and says so
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes

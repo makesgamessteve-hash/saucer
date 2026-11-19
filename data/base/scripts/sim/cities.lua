@@ -181,7 +181,39 @@ function M.candidates(state, p, site, ruin)
         item = { name = "Power coupling (" .. pd.label .. ")", type = "coupling", size = 1, value = 0, ident = true } }
     end
   end
+  -- add-cities-2: the archive's records, one per archive district, read in place
+  for _, c in ipairs(ruin.city.clues or {}) do
+    local key = "clue:" .. site .. ":" .. c.district
+    if not (p.looted or {})[key] and M.powered(state, site, ruin, c.district) then
+      out[#out + 1] = { key = key, kind = "clue", pos = c.pos, district = c.district, room = c.room,
+        item = { name = "Archive record", type = "clue", size = 1, value = 0, ident = true } }
+    end
+  end
   return out
+end
+
+-- add-cities-2: what an archive record says. A pure function of the mystery state: the next Echo's whereabouts
+-- while the chain is open, else a line of the cause's lore.
+function M.clue_text(state, site, ruin, district)
+  local m = state.mystery
+  local mys = require("sim.mystery")
+  if m and mys.active(m) then
+    for i, e in ipairs(m.echoes) do
+      if e.found_by == 0 and mys.unlocked(m, i) then
+        local sid = e.sector or 1
+        if sid ~= state.sector_id then
+          return string.format("Archive record: a ledger logs a resonance near site %d of sector %d", e.site, sid)
+        end
+        return string.format("Archive record: a ledger logs a resonance near site %d", e.site)
+      end
+    end
+    if m.act >= 3 and not m.ending and m.heart_sector then
+      return string.format("Archive record: a sealed index names sector %d, where the Heart beats", m.heart_sector)
+    end
+    local v = m.vars or {}
+    return string.format("Archive record: the %s kept a ledger of the %s at %s", v.civ or "builders", v.object or "signal", v.place or "the dark")
+  end
+  return "Archive record: shelves of the builders' catalogues, long out of date"
 end
 
 -- where a body pulls: gravity in g (1 = the Earth-like pull the flight model is tuned for)
@@ -230,7 +262,7 @@ function M.beacon(state, site, ruin, from)
   local best, bd
   for _, c in ipairs(M.candidates(state, { index = 0 }, site, ruin)) do
     local d = vec.dist(from, c.pos)
-    if not bd or d < bd then best, bd = c, d end
+    if c.kind == "coupling" and (not bd or d < bd) then best, bd = c, d end
   end
   if best then return { pos = best.pos, label = best.item.name, short = "COUPLING", dist = bd } end
   for _, r in ipairs(ruin.rooms) do

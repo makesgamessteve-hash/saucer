@@ -71,7 +71,11 @@ function M.docked_at(state, p)
   local range = econ().dock_range
   local list = state.sector.traders or { state.sector.trader }
   for i, tr in ipairs(list) do
-    if vec.dist(tr.pos, p.ship.pos) <= range then return i end
+    if vec.dist(tr.pos, p.ship.pos) <= range then
+      -- add-cities-2: a save from before a sector had an outpost has no ledger for it yet
+      if state.traders and not state.traders[i] then state.traders[i] = { demand = {} } end
+      return i
+    end
   end
   return nil
 end

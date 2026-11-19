@@ -63,6 +63,7 @@ end
 M.CITY_CHANCE = 45
 M.CITY_NEAR = 4 -- sectors 2..4
 M.CITY_DISTANCE = 4600
+M.OUTPOST_GAP = 420 -- m off the city's approach edge to its trader outpost
 function M.city_of(seed, sid)
   if not sid or sid == 1 then return nil end
   local crng = saucer.rng.new(saucer.seed_child(seed, "city", sid))
@@ -115,7 +116,15 @@ function M.far(seed, sid, info)
                           danger = info and info.danger or 2 }
   end
   local tp = { rng:int(-200, 200), rng:int(-60, 60), rng:int(-200, 200) }
-  return { id = sid, sites = sites, trader = { pos = tp }, arrival = { tp[1] + 60, tp[2] + 20, tp[3] - 260 } }
+  local out = { id = sid, sites = sites, trader = { pos = tp }, arrival = { tp[1] + 60, tp[2] + 20, tp[3] - 260 } }
+  -- add-cities-2: a trader outpost hangs off the city's spaceport mouth, so a haul can be sold without the long
+  -- flight back to the hub
+  if ckit then
+    local cs = sites[#sites]
+    local ext = M.extent(ckit)
+    out.traders = { out.trader, { pos = { cs.pos[1] + ext[1] // 2, cs.pos[2] + 150, cs.pos[3] - M.OUTPOST_GAP }, outpost = true } }
+  end
+  return out
 end
 
 return M

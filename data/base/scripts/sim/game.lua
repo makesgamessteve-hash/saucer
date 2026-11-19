@@ -643,7 +643,7 @@ local function tractor_step(state, p, cmd, dt)
     if p.beam_queue then
       local qc, qi = beamqueue.next(state, p, ruin, heading, may)
       if qc then
-        if #p.hold >= upgrades.hold_slots(p) and qc.kind ~= "cache" and qc.kind ~= "anchor" and qc.kind ~= "coupling" then
+        if #p.hold >= upgrades.hold_slots(p) and qc.kind ~= "cache" and qc.kind ~= "anchor" and qc.kind ~= "coupling" and qc.kind ~= "clue" then
           if not p.beam_queue.warned then
             p.beam_queue.warned = true
             msg(state, p, "Hold is full: the beam queue waits")
@@ -703,7 +703,7 @@ local function tractor_step(state, p, cmd, dt)
   elseif sc.status ~= "lock" then
     msg(state, p, "Beam: " .. sc.info.hint:lower())
     fx(state, p, "denied")
-  elseif sc.cand.kind ~= "cache" and sc.cand.kind ~= "anchor" and sc.cand.kind ~= "coupling" and #p.hold >= upgrades.hold_slots(p) then
+  elseif sc.cand.kind ~= "cache" and sc.cand.kind ~= "anchor" and sc.cand.kind ~= "coupling" and sc.cand.kind ~= "clue" and #p.hold >= upgrades.hold_slots(p) then
     msg(state, p, "Hold is full")
     fx(state, p, "denied")
   else
@@ -758,6 +758,11 @@ function M.pick_up(state, p, cand, site_idx)
       end
       fx(state, p, "echo")
     end
+  elseif cand.kind == "clue" then
+    -- add-cities-2: an archive record is read in place
+    p.looted[cand.key] = true
+    msg(state, p, cities.clue_text(state, site_idx, rt.ruins[site_idx], cand.district))
+    fx(state, p, "echo")
   elseif cand.kind == "nest" then
     local n = table.remove(state.nests, cand.index)
     n.item.hot = true
@@ -952,7 +957,8 @@ local function world_step(state, p, dt)
   local docked = trade.docked_at(state, p)
   if docked and not p.docked then
     p.last_trader = docked
-    msg(state, p, "Docked at the trader. Walk to the trade terminal to sell.")
+    local tr = (state.sector.traders or {})[docked]
+    msg(state, p, string.format("Docked at the %s. Walk to the trade terminal to sell.", tr and tr.outpost and "city outpost" or "trader"))
     fx(state, p, "bank")
   end
   p.docked = docked or false
