@@ -522,6 +522,15 @@ the loot rolled; the mesh table went from 1024 to 4096. Tests: `tests/lua/city_s
 Not built (follow-ups): lazy district generation, transit rails and canals, collapsing structures and storms
 as dynamics, a flooded undercity, mystery tie-ins, on-foot hand-locks for the grid, trader stations near cities.
 
+**Phase 2 (OpenSpec change `add-cities-2`, on branch `cities-2`).** Steve's review: the scale reads well but
+the buildings were plain grey boxes and 9-16 districts is not yet vast. *Slice 1 — look and lights (done):*
+a silhouette per civilisation (ziggurats, spires, domes, arcologies; hanging, inverted towers on asteroids)
+built as stacked tier solids so the collision is the drawing, civ light colours, window patterns, lit signs,
+ledges and roof greebles, per-district lights that are dark until the grid is restored and then flicker and
+ramp up, landmark light pillars and a far glow per district, and the helm hint moved clear of the console
+and alerts. Slices still to come: a vast outer ring and horizon impostors, transit and a flooded undercity,
+storms, collapses and dark patrols, archive clues and trader stations.
+
 ## Remaining work after milestone 10
 
 Steve asked for the leftover items of the plan to be worked through in
