@@ -11,6 +11,7 @@ local ruinm = require("sim.ruin")
 local sector = require("sim.sector")
 local loot = require("sim.loot")
 local mystery = require("sim.mystery")
+local story = require("sim.story")
 local tractor = require("sim.tractor")
 local avatar = require("sim.avatar")
 local home = require("sim.home")
@@ -244,12 +245,12 @@ function M.new_player(index, pos, yaw)
   return p
 end
 
-M.VERSION = 11 -- state version; saves made by a newer game are refused
+M.VERSION = 12 -- state version; saves made by a newer game are refused
 
 function M.init(state, ctx)
   M.state_ref = state
   local seed = ctx.seed
-  state.version = M.VERSION  -- v11: seed-plus-diff saves (save format 3); v10: playtest recommendations (add-playtest-recs); v9: the wider dark (add-wider-dark); v8: on-foot excursions; v7: station visits
+  state.version = M.VERSION  -- v12: the run story (add-run-story); v11: seed-plus-diff saves (save format 3); v10: playtest recommendations (add-playtest-recs); v9: the wider dark (add-wider-dark); v8: on-foot excursions; v7: station visits
   state.seed = seed
   state.tick = 0
   civs.use(seed)
@@ -257,6 +258,8 @@ function M.init(state, ctx)
   state.sector = sector.generate(seed)
   local g = galaxy.generate(seed)
   state.mystery = mystery.generate(seed, "on", #state.sector.sites, g)
+  -- add-run-story: the story of this run, a pure function of the seed (progress is saved, the text is not)
+  state.story = story.generate(seed, state.mystery, g)
   -- the Witness's translation gate is the civ of the site it waits in
   for _, e in ipairs(state.mystery.echoes) do
     if e.gate then
