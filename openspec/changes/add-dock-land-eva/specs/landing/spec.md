@@ -79,7 +79,7 @@ The Villa SHALL land on any level solid surface: a derelict's hull, a plaza, a r
 - **THEN** the message names a moon city rooftop, and leaving the Villa there needs the helmet because the air is vacuum
 
 ### Requirement: The EVA kit
-Outside a standing or pocketed Villa the player SHALL wear a helmet that goes on by itself in vacuum or toxic air, shown as a faint rim, and a HUD with oxygen, suit integrity, jetpack fuel, the distance and direction to the Villa, gravity, temperature, radiation, carried loot and the emergency teleport's state. Oxygen SHALL drain only where the air is not breathable and refill, with fuel and integrity, beside the standing Villa. Radiation, extreme temperature and hard landings SHALL wear down the suit.
+Outside a Villa the player SHALL wear a helmet that goes on by itself in vacuum or toxic air, shown as a faint rim, and a HUD with oxygen, suit integrity, jetpack fuel, the distance and direction to the Villa, gravity, temperature, radiation, carried loot and the teleport's state. Oxygen SHALL drain only in air that is not breathable, and refill with fuel beside the standing Villa. Radiation, cold and hard landings SHALL wear down the suit.
 
 #### Scenario: Out of breath
 - **WHEN** oxygen falls to 30% and then 15% away from the Villa
