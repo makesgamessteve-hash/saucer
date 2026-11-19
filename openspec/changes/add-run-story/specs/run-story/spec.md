@@ -94,3 +94,42 @@ Clues SHALL be found one after the other; the story SHALL follow the central mys
 #### Scenario: a save from before the story (state version 10 or 11) loads with a fresh story of the same seed
 - **WHEN** `tests/lua/story_spec.lua` runs its scenario of this name
 - **THEN** it passes
+
+### Requirement: Clues in the world
+Each clue beat SHALL be a marker in its place: a wreck log or a mural in a derelict great hall, an archive record in a city's archive hall that reads only once its district's grid is restored. Only the next unfound clue SHALL be on offer, shared by the whole party; the beam SHALL read it in place (nothing rides in the hold), the finder is told, the others are told, and the clue is filed on every player's bookshelf.
+
+#### Scenario: only the next clue is on offer, at its own site, and the one before unlocks it
+- **WHEN** `tests/lua/story_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: a clue lies a quarter of a great hall in from two walls, clear of the crates, in every kit
+- **WHEN** `tests/lua/story_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: a clue falls back to a smaller room when a site has no great hall, and to the first room when it has nothing else
+- **WHEN** `tests/lua/story_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: an archive record sits in the city's archive hall and reads only once its district's grid is on
+- **WHEN** `tests/lua/story_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: a clue is found for the whole party: it is filed on every shelf and the others are told
+- **WHEN** `tests/lua/story_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the story page on the shelf is the clue's text, in pages the book reader can turn
+- **WHEN** `tests/lua/story_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the log gets the clue in chunks of whole sentences
+- **WHEN** `tests/lua/story_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: there are no clues in the sandbox, with the story switched off, or once they are all found
+- **WHEN** `tests/lua/story_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: a clue is read by the beam in a derelict, found, shelved, and survives a save and load
+- **WHEN** `tests/game/story.lua (seeds 42 and 7, and with a restore every tick)` runs
+- **THEN** it passes

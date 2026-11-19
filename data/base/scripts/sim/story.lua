@@ -356,10 +356,10 @@ function M.read(state, i, p, ctx)
   for _, o in ipairs(state.players) do
     books.add(o, "story:" .. i)
     if o == p then
+      -- the HUD lists the newest message first: sent last-line-first, the log reads top to bottom
+      local chunks = M.chunks(M.full_text(s, i), 100)
+      for k = math.min(#chunks, 4), 1, -1 do ctx.msg(state, o, chunks[k]) end
       ctx.msg(state, o, string.format("STORY %d/%d  %s (filed on your bookshelf)", n, total, name))
-      for k, chunk in ipairs(M.chunks(M.full_text(s, i), 100)) do
-        if k <= 4 then ctx.msg(state, o, chunk) end
-      end
     else
       ctx.msg(state, o, string.format("P%d read a story clue: %s (%d/%d, on your bookshelf)", p.index, name, n, total))
     end
