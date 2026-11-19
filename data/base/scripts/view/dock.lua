@@ -85,6 +85,12 @@ function M.bay(v, A, state, idx, bay, tick)
   n = n + box(v, { lo[1] - 0.2, lo[2], d.z + d.half }, { lo[1] + 0.1, lo[2] + d.height + 0.3, d.z + d.half + 0.3 }, WARN)
   n = n + box(v, { lo[1] - 0.2, lo[2] + d.height, d.z - d.half }, { lo[1] + 0.1, lo[2] + d.height + 0.3, d.z + d.half }, WARN)
   n = n + box(v, { lo[1] - 3.4, lo[2] + 0.05, d.z - d.half }, { lo[1] - 3.3, lo[2] + d.height, d.z + d.half }, { 1.0, 0.85, 0.6, 1 })
+  -- a bright frame round the mouth, amber while the beam is working
+  local fcol = towed(state, idx) and WARN or STRIP
+  n = n + box(v, { hi[1] - 0.3, lo[2] - 0.6, lo[3] - 1.2 }, { hi[1] + 0.8, lo[2] + 0.5, hi[3] + 1.2 }, fcol)
+  n = n + box(v, { hi[1] - 0.3, hi[2] - 0.5, lo[3] - 1.2 }, { hi[1] + 0.8, hi[2] + 0.6, hi[3] + 1.2 }, fcol)
+  n = n + box(v, { hi[1] - 0.3, lo[2], lo[3] - 1.2 }, { hi[1] + 0.8, hi[2], lo[3] + 0.2 }, fcol)
+  n = n + box(v, { hi[1] - 0.3, lo[2], hi[3] - 0.2 }, { hi[1] + 0.8, hi[2], hi[3] + 1.2 }, fcol)
   -- the force field across the front
   local pulse = 0.10 + 0.04 * sm.sin(tick * 0.05)
   n = n + box(v, { hi[1] - 0.05, lo[2], lo[3] }, { hi[1] + 0.05, hi[2], hi[3] }, { 0.35, 0.8, 1, pulse }, true)

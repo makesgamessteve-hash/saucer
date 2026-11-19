@@ -27,7 +27,7 @@ local st = T.state()
 -- the Pocket size is refused away from a station
 T.press(1, "size3")
 T.wait(1)
-T.assert(get().ship.size == 1 and said("only works docked"), "no pocketing in open space")
+T.assert(get().ship.size == 1 and said("Dock in a station"), "no pocketing in open space (the Villa folds from outside)")
 
 -- 1. loot the tutorial vault (something to sell on foot)
 local origin, ruin = st.sector.sites[1].pos, game.ruin(1)
@@ -50,6 +50,9 @@ T.assert(get().docked == 1, "docked")
 local dock_pos = { get().ship.pos[1], get().ship.pos[2], get().ship.pos[3] }
 
 -- 3. pocket the saucer: step out into the arrival hangar, coin in hand
+-- (add-dock-land-eva: the Villa is folded from outside through its hatch; the Seat has no stairs and still steps out)
+T.press(1, "size2")
+T.assert(ap.wait_until(T, 1, function() return get().ship.size == 2 and not get().ship.morph end, 600), "the Seat")
 local charge0 = get().ship.charge
 T.press(1, "size3")
 T.wait(1)

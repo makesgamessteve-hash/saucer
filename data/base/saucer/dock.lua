@@ -4,7 +4,7 @@
 -- is a fixed cell on a gantry above the ring and does not. Mods may override.
 return {
   -- the cell: x from the back wall (toward the station) to the open front (the force field), z side to side
-  back_x = 38, front_x = 88, half_w = 20, floor_y = 10, height = 22, wall = 1.5,
+  back_x = 38, front_x = 88, half_w = 24, floor_y = 10, height = 22, wall = 1.5,
   pad = { 67, 0 },          -- pad centre (x, z)
   yaw = 1.5707963,          -- the saucer rests nose-out: the hull door faces the back wall
   door = { half = 1.6, height = 3.4 },   -- the station door in the back wall (centred on z = 0)
