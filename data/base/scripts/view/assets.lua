@@ -366,6 +366,7 @@ function M.room_decor(ruin, r, k, origin)
       box({ cx0 - 0.5, mx[2] - 0.5, cz0 - 0.5 }, { cx0 + 0.5, mx[2] + 0.5, cz0 + 0.5 }, { 1, 1, 0.9 }, true)
     end
   end
+  if ruin.city then M.undercity_decor(ruin, r, k, mn, mx, parts) end
   if not covered(ruin, r) then
     local g = kit.recipe("derelict_greeble", { w = mx[1] - mn[1], d = mx[3] - mn[3], top = mx[2] - mn[2] },
                          saucer.seed_child(ruin.seed, "greeble", r.id))
@@ -379,6 +380,60 @@ function M.hash3(a, b, c)
   local x = (math.floor(a) * 73856093) ~ (math.floor(b) * 19349663) ~ (math.floor(c) * 83492791)
   x = x ~ (x >> 13)
   return x & 0x7fffffff
+end
+
+-- add-cities-2: the undercity is wet or wild. A flooded kit (planet): the second and third levels and every
+-- tunnel (the canals, lamps along their walls) hold water; the first level is overgrown. An overgrown kit
+-- (moon): moss and vines from the first level down. All a function of the room, so identical every visit.
+function M.undercity_decor(ruin, r, k, mn, mx, parts)
+  local mode = ruinm.kit_of(ruin.kit).city.undercity
+  if not mode or (not r.level and not r.tunnel) or ((r.level or 0) > -1 and not r.tunnel) then return end
+  local w = k.wall
+  local floor = mn[2] + w
+  local seed = M.hash3(mn[1], mn[2], mn[3])
+  local function rnd(i) return ((seed >> (i * 3)) ~ (seed * (i + 1))) % 1000 / 1000 end
+  if mode == "flooded" and ((r.level or 0) <= -2 or r.tunnel) then
+    local depth = r.tunnel and 1.6 or 2.6
+    parts[#parts + 1] = { kind = "box", min = { mn[1] + w, floor, mn[3] + w }, max = { mx[1] - w, floor + depth, mx[3] - w },
+                          color = { 0.07, 0.26, 0.42 }, emissive = 0.45 }
+    local z = mn[3] + w + 3 + rnd(1) * 4
+    while z < mx[3] - w - 2 do
+      parts[#parts + 1] = { kind = "box", min = { mn[1] + w + 1, floor + depth, z }, max = { mx[1] - w - 1, floor + depth + 0.08, z + 0.35 },
+                            color = { 0.35, 0.75, 0.95 }, emissive = 1 }
+      z = z + 6 + rnd(2) * 6
+    end
+    if r.tunnel then
+      -- canal lamps on the walls, lit with the district's grid
+      local long = (mx[1] - mn[1]) > (mx[3] - mn[3]) and 1 or 3
+      local o = long == 1 and 3 or 1
+      local u = mn[long] + 6
+      while u < mx[long] - 4 do
+        for _, side in ipairs({ mn[o] + w, mx[o] - w - 0.3 }) do
+          local lo, hi = { 0, floor + depth + 1.2, 0 }, { 0, floor + depth + 2.2, 0 }
+          lo[long], hi[long] = u, u + 0.9
+          lo[o], hi[o] = side, side + 0.3
+          parts[#parts + 1] = { kind = "box", min = lo, max = hi, color = k.accent or { 1, 0.8, 0.4 }, emissive = 1, light = true }
+        end
+        u = u + 14
+      end
+    end
+  end
+  if (mode == "overgrown" or r.level == -1) and not r.tunnel then
+    local n = 7 + math.floor(rnd(3) * 8)
+    for i = 1, n do
+      local x = mn[1] + w + 2 + rnd(i * 2) * math.max(1, mx[1] - mn[1] - 2 * w - 6)
+      local z = mn[3] + w + 2 + rnd(i * 2 + 1) * math.max(1, mx[3] - mn[3] - 2 * w - 6)
+      local s = 1.2 + rnd(i + 20) * 2.4
+      local g = 0.35 + rnd(i + 40) * 0.35
+      parts[#parts + 1] = { kind = "box", min = { x, floor, z }, max = { x + s * 1.4, floor + s, z + s * 1.4 }, color = { 0.12, g, 0.16 } }
+      if i % 3 == 0 then
+        local hang = 3 + rnd(i + 60) * 7
+        parts[#parts + 1] = { kind = "box", min = { x, mx[2] - w - hang, z }, max = { x + 0.35, mx[2] - w, z + 0.35 }, color = { 0.1, g * 0.9, 0.14 } }
+        parts[#parts + 1] = { kind = "box", min = { x - 0.2, mx[2] - w - hang - 0.4, z - 0.2 }, max = { x + 0.55, mx[2] - w - hang + 0.2, z + 0.55 },
+                              color = { 1, 0.5, 0.9 }, emissive = 1 }
+      end
+    end
+  end
 end
 
 -- exterior solid: plain block plus lit window bands (towers) or tip beacons.
@@ -469,6 +524,30 @@ function M.solid_parts(s, k, hanging)
                             max = { c[1] + 0.8, math.max(c[2] + 9 * d, c[2] + 10.6 * d), c[3] + 0.8 }, color = { 1, 0.3, 0.25 },
                             emissive = 1, light = true }
     end
+  elseif s.kind == "rail" or s.kind == "pylon" or s.kind == "liftpost" then
+    -- add-cities-2: transit. The rail deck has lit edges, a pylon a lit collar, a lift post a lit stripe every 24 m.
+    local acc = k.accent or { 1, 0.8, 0.4 }
+    parts[1].color = { 0.28, 0.3, 0.36 }
+    if s.kind == "rail" then
+      local long = (mx[1] - mn[1]) > (mx[3] - mn[3]) and 1 or 3
+      local o = long == 1 and 3 or 1
+      for _, side in ipairs({ 0, 1 }) do
+        local lo, hi = { mn[1], mn[2] - 0.2, mn[3] }, { mx[1], mn[2] + 0.2, mx[3] }
+        lo[o] = side == 0 and mn[o] - 0.05 or mx[o] - 0.35
+        hi[o] = side == 0 and mn[o] + 0.35 or mx[o] + 0.05
+        parts[#parts + 1] = { kind = "box", min = lo, max = hi, color = acc, emissive = 1, light = true }
+      end
+    elseif s.kind == "pylon" then
+      parts[#parts + 1] = { kind = "box", min = { mn[1] - 0.2, mx[2] - 4, mn[3] - 0.2 }, max = { mx[1] + 0.2, mx[2] - 2.5, mx[3] + 0.2 }, color = acc,
+                            emissive = 1, light = true }
+    else
+      local y = mn[2] + 12
+      while y < mx[2] - 4 do
+        parts[#parts + 1] = { kind = "box", min = { mn[1] - 0.1, y, mn[3] - 0.1 }, max = { mx[1] + 0.1, y + 1.2, mx[3] + 0.1 }, color = acc,
+                              emissive = 1, light = true }
+        y = y + 24
+      end
+    end
   elseif s.kind == "platform" or s.kind == "bridge" then
     -- lit edge strips: a plaza or a sky-bridge reads from afar at night
     local acc = k.accent or { 1, 0.8, 0.4 }
@@ -502,6 +581,17 @@ local function sphere_of(parts)
 end
 
 -- -> { chunks = { { mesh, center, radius, room } ... }, lod = { mesh, center, radius } }
+-- a centred unit cube, drawn scaled and tinted (trains, lift cabins): dark, or emissive for lit strips
+function M.unit_box(emissive)
+  cache.unitbox = cache.unitbox or {}
+  local key = emissive and "e" or "d"
+  if not cache.unitbox[key] then
+    cache.unitbox[key] = saucer.mesh.build({ parts = { { kind = "box", min = { -0.5, -0.5, -0.5 }, max = { 0.5, 0.5, 0.5 },
+      color = { 1, 1, 1 }, emissive = emissive and 1 or nil, uv = 0.5 } } })
+  end
+  return cache.unitbox[key]
+end
+
 -- add-cities: a city's kit wearing its civ's light colours (the kit table itself is shared and untouched)
 function M.styled_kit(ruin)
   local k = ruinm.kit_of(ruin.kit)
@@ -628,7 +718,8 @@ function M.ruin_chunks(ruin, origin)
     local lights
     if ruin.city then parts, lights = split_lights(parts) end
     local c, rad = sphere_of(parts)
-    out.chunks[#out.chunks + 1] = { light_parts = lights, district = sd, mesh = saucer.mesh.build({ parts = parts }), center = c, radius = rad, solid = i }
+    out.chunks[#out.chunks + 1] = { light_parts = lights, district = sd, mesh = saucer.mesh.build({ parts = parts }), center = c, radius = rad, solid = i,
+                                    fall = ruin.city and require("sim.cities").fall_tick(ruin, s) or nil }
     -- the far glow of a lit district: one band and a beacon per tower
     if ruin.city and s.kind == "tower" and s.apex then
       local gp = dglow[sd or 0] or {}
@@ -642,8 +733,10 @@ function M.ruin_chunks(ruin, origin)
       local yy = s[1][2] + (s[2][2] - s[1][2]) * 0.55
       gp[#gp + 1] = { kind = "box", min = { s[1][1] - 0.4, yy, s[1][3] - 0.4 }, max = { s[2][1] + 0.4, yy + 6, s[2][3] + 0.4 }, color = k.window_color, emissive = 1 }
     end
-    coarse[#coarse + 1] = { kind = "box", min = s[1], max = s[2], color = k.solid_color or k.color, uv = 0.25 }
-    dpart(sd, coarse[#coarse])
+    if not s.fall then -- (a sky-bridge that may fall is not in the far silhouette)
+      coarse[#coarse + 1] = { kind = "box", min = s[1], max = s[2], color = k.solid_color or k.color, uv = 0.25 }
+      dpart(sd, coarse[#coarse])
+    end
     ::continue::
   end
   for d, g in pairs(dparts) do

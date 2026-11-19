@@ -1,9 +1,7 @@
 -- SPDX-License-Identifier: MIT
--- Milestone 11 (add-cities): body cities on asteroids, moons and planets. Generation (determinism,
--- budget, reachability, landmarks, the three forms), the sites in the sectors, the district power
--- grid (couplings, gates, sleeping sentries), the body's pull on the saucer, the city map, the HUD
--- beacon, the render streaming and the environment. Every `it` name is a scenario of
--- openspec/changes/add-cities.
+-- Milestone 11, phase 2 (OpenSpec add-cities-2): the look and lights of a city, the skyline ring that runs it
+-- to the horizon, transit (mag-rails, lifts), the wet or wild undercity, storms and wind, falling sky-bridges
+-- and the patrols of the dark districts. Every `it` name is a scenario of openspec/changes/add-cities-2.
 local game = require("sim.game")
 local galaxy = require("sim.galaxy")
 local sector = require("sim.sector")
@@ -234,7 +232,7 @@ describe("a city that runs to the horizon", function()
       expect(#r.city.districts).to_be_less(17)
       local outer = 0
       for _, s in ipairs(r.solids) do
-        if s.outer then
+        if s.outer and s.district < citygen.TRANSIT_BASE then
           outer = outer + 1
           expect(s.district).to_be_greater(citygen.SKY_BASE)
         end
@@ -320,5 +318,307 @@ describe("a city that runs to the horizon", function()
         if j ~= i then expect(vec.dist({ c[1], 0, c[3] }, { o.pos[1], 0, o.pos[3] })).to_be_greater(half) end
       end
     end
+  end)
+end)
+
+local function peak(r) return cities.phase(r) + cities.STORM_LEN // 2 end
+
+describe("transit and the undercity", function()
+  it("mag-rails run on pylons across the whole city and a lift stands at every plaza", function()
+    for _, id in ipairs({ "city_planet", "city_moon", "city_asteroid" }) do
+      local r = gen(id)
+      local k = ruinm.kit_of(id)
+      expect(#r.city.rails).to_be(#k.city.rails.rows + 1)
+      expect(#r.city.lifts).to_be_greater(5)
+      local rails, pylons, posts = 0, 0, 0
+      for _, s in ipairs(r.solids) do
+        if s.kind == "rail" then rails = rails + 1 expect(s.district >= citygen.TRANSIT_BASE and s.outer).to_be_truthy() end
+        if s.kind == "pylon" then pylons = pylons + 1 end
+        if s.kind == "liftpost" then posts = posts + 1 end
+      end
+      expect(rails).to_be_greater(30)
+      expect(pylons).to_be(rails)
+      expect(posts).to_be(#r.city.lifts * 4)
+    end
+    local r = gen("city_planet")
+    local longest = 0
+    for _, ln in ipairs(r.city.rails) do longest = math.max(longest, (ln.b - ln.a) * 4) end
+    expect(longest).to_be_greater(6000)
+  end)
+  it("trains and lift cabins are drawn from the clock: end to end and back, up and down", function()
+    local r = gen("city_planet")
+    local line = r.city.rails[1]
+    local lo, hi = 1e9, -1e9
+    for tick = 0, 60 * 400, 97 do
+      local u, dir = render.train_pos(line, 0, tick)
+      lo, hi = math.min(lo, u), math.max(hi, u)
+      expect(u >= line.a - 1e-6 and u <= line.b + 1e-6).to_be_truthy()
+      expect(dir == 1 or dir == -1).to_be_truthy()
+    end
+    expect(hi - lo).to_be_greater((line.b - line.a) * 0.8)
+    expect(render.train_pos(line, 0, 1234)).to_be(render.train_pos(line, 0, 1234))
+    local lift = r.city.lifts[1]
+    for tick = 0, 60 * 80, 31 do
+      local y = render.lift_y(lift, tick)
+      expect(y >= lift.y0 and y <= lift.y1).to_be_truthy()
+    end
+    local st, i, rr = in_city("planet")
+    local A = assets.init()
+    local ln = rr.city.rails[1]
+    local u = render.train_pos(ln, 0, 500)
+    local cam = { pos = { rr.origin[1] + u * 4, rr.origin[2] + ln.y * 4 + 40, rr.origin[3] + ln.c * 4 - 60 }, yaw = 0, pitch = 0, fov = 2 }
+    st.tick = 500
+    local stat = render.draw_ruins(fake_view(), A, st, cam, false)
+    expect(stat.trains).to_be_greater(0)
+    local lf = rr.city.lifts[1]
+    local cam2 = { pos = { lf.pos[1], render.lift_y(lf, 500), lf.pos[3] - 50 }, yaw = 0, pitch = 0, fov = 2 }
+    expect(render.draw_ruins(fake_view(), A, st, cam2, false).lifts).to_be_greater(0)
+  end)
+  it("a flooded undercity holds water and canal lamps, an overgrown one moss and vines, a rock neither", function()
+    local function find(r, f) for _, room in ipairs(r.rooms) do if f(room) then return room end end end
+    local function parts_of(id, f)
+      civs.use(42)
+      local r = gen(id)
+      local room = find(r, f)
+      expect(room ~= nil).to_be_truthy()
+      return assets.room_decor(r, room, assets.styled_kit(r), r.origin), room
+    end
+    local function count(parts, pred) local n = 0 for _, p in ipairs(parts) do if pred(p) then n = n + 1 end end return n end
+    local water = function(p) return p.color and p.color[3] > 0.4 and p.color[1] < 0.1 and p.emissive and p.emissive < 1 end
+    local green = function(p) return p.color and p.color[2] > p.color[1] * 1.8 and p.color[2] > p.color[3] * 1.8 and not p.emissive end
+    local deep = parts_of("city_planet", function(r) return r.level and r.level <= -2 end)
+    expect(count(deep, water)).to_be(1)
+    local canal, room = parts_of("city_planet", function(r) return r.tunnel end)
+    expect(count(canal, water)).to_be(1)
+    expect(count(canal, function(p) return p.light end)).to_be_greater(2)
+    local moss = parts_of("city_planet", function(r) return r.level == -1 end)
+    expect(count(moss, green)).to_be_greater(2)
+    local moon = parts_of("city_moon", function(r) return r.level and r.level <= -1 end)
+    expect(count(moon, green)).to_be_greater(2)
+    expect(count(moon, water)).to_be(0)
+    local plain = parts_of("city_asteroid", function(r) return r.level and r.level <= -1 end)
+    expect(count(plain, green)).to_be(0)
+    expect(count(plain, water)).to_be(0)
+  end)
+end)
+
+describe("storms, wind and falling bridges", function()
+  it("a storm front sweeps a planet city on a fixed clock, a moon has none", function()
+    local st, i, r = in_city("planet")
+    expect(cities.storm(r, 0)).to_be(0)
+    local k, n = cities.storm(r, peak(r))
+    expect(k).to_be_greater(0.95)
+    expect(n).to_be(1)
+    expect(cities.storm(r, cities.phase(r) + cities.STORM_LEN + 5)).to_be(0)
+    local _, n2 = cities.storm(r, peak(r) + cities.STORM_PERIOD)
+    expect(n2).to_be(2)
+    expect(cities.storm_in(r, 0)).to_be(cities.phase(r))
+    expect(cities.storm_in(r, peak(r))).to_be(0)
+    expect(cities.storm_in(r, cities.phase(r) + cities.STORM_LEN)).to_be(cities.STORM_PERIOD - cities.STORM_LEN)
+    local _, mi, mr = in_city("moon")
+    expect(cities.storm(mr, peak(mr))).to_be(0)
+    expect(cities.storm_in(mr, 0)).to_be(nil)
+    local wx, wz, wk = cities.wind(r, peak(r))
+    expect(wk).to_be_greater(0.9)
+    expect(math.abs(wx) + math.abs(wz)).to_be_greater(2)
+    local ax, az, ak = cities.wind(r, 0)
+    expect(ak).to_be(0)
+    expect(ax).to_be(0)
+    local bx = cities.wind(r, peak(r))
+    expect(bx).to_be(wx)
+  end)
+  it("the wind pushes a saucer in the open and does not reach it inside a room", function()
+    local st, i, r = in_city("planet")
+    local p = st.players[1]
+    p.mode, p.panel, p.ship.morph = "helm", false, false
+    local open = vec.add(st.sector.sites[i].pos, core(r, { 1440, 650, 700 }))
+    expect(cities.sheltered(r, open)).to_be(false)
+    st.tick = peak(r)
+    p.ship.pos, p.ship.vel, p.ship.charge = vec.copy(open), { 0, 0, 0 }, 100
+    p.ship.charge = 100
+    run(st, 30)
+    local moved = vec.dist(p.ship.pos, open)
+    expect(moved).to_be_greater(2)
+    -- the same time of day with the wind off (before the first storm) leaves it where it was
+    local st2, i2, r2 = in_city("planet")
+    local q = st2.players[1]
+    q.mode, q.panel, q.ship.morph = "helm", false, false
+    q.ship.pos, q.ship.vel, q.ship.charge = vec.copy(open), { 0, 0, 0 }, 100
+    st2.tick = 10
+    run(st2, 30)
+    expect(vec.dist(q.ship.pos, open)).to_be_less(moved - 1)
+    -- inside the hangar there is shelter
+    local mn, mx = ruinm.room_box(r2.rooms[1], ruinm.kit_of(r2.kit), r2.origin)
+    expect(cities.sheltered(r2, { (mn[1] + mx[1]) / 2, (mn[2] + mx[2]) / 2, (mn[3] + mx[3]) / 2 })).to_be(true)
+  end)
+  it("a storm darkens and thickens the air and lightning flashes it", function()
+    local st, i, r = in_city("planet")
+    local p = st.players[1]
+    p.site = i
+    st.tick = 0
+    local calm = render.city_env(st, p)
+    st.tick = peak(r)
+    local env = render.city_env(st, p)
+    expect(env.storm).to_be_greater(0.9)
+    expect(env.density).to_be_greater(calm.density * 1.5)
+    local flashes, mx = 0, 0
+    for t = peak(r), peak(r) + 600 do
+      st.tick = t
+      local f = render.flash(st, 1)
+      if f > 0 then flashes = flashes + 1 mx = math.max(mx, f) end
+      expect(f >= 0 and f <= 1).to_be_truthy()
+    end
+    expect(flashes).to_be_greater(5)
+    expect(mx).to_be_greater(0.5)
+    expect(render.flash(st, 0.1)).to_be(0)
+  end)
+  it("the HUD rains and warns of a storm before it and during it", function()
+    local st, i, r = in_city("planet")
+    local p = st.players[1]
+    p.mode, p.panel, p.ship.morph = "helm", false, false
+    p.site = i
+    local function texts_at(tick)
+      st.tick = tick
+      local v = fake_view({ width = 480, height = 270 })
+      hud.weather(v, st, p)
+      return v
+    end
+    local v0 = texts_at(cities.phase(r) - 300)
+    expect(v0.texts:find("STORM IN", 1, true) ~= nil).to_be_truthy()
+    local v1 = texts_at(peak(r))
+    expect(v1.texts:find("STORM!", 1, true) ~= nil).to_be_truthy()
+    expect(v1.calls.rect).to_be_greater(30)
+    local v2 = texts_at(10)
+    expect(v2.texts).to_be("")
+    local sp = st.players[1]
+    sp.site = 0
+    st.tick = peak(r)
+    local v3 = fake_view()
+    hud.weather(v3, st, sp)
+    expect(v3.texts).to_be("")
+  end)
+  it("each sky-bridge tears loose at the peak of its storm, leaves the physics and tells the players", function()
+    local st, i, r = in_city("planet")
+    local p = st.players[1]
+    p.mode, p.panel, p.ship.morph = "helm", false, false
+    p.site = i
+    local si = r.city.bridges[1]
+    local s = r.solids[si]
+    expect(s.fall >= 1 and s.fall <= 5).to_be_truthy()
+    local ft = cities.fall_tick(r, s)
+    expect(ft).to_be(cities.phase(r) + (s.fall - 1) * cities.STORM_PERIOD + cities.STORM_LEN // 2)
+    expect(cities.fall_tick(r, { 1 })).to_be(nil)
+    expect(game.bridge_fallen(i, si)).to_be(false)
+    expect(cities.fall_box(r, s, ft - 5)).to_be(nil)
+    local mn0 = cities.fall_box(r, s, ft + 30)
+    expect(mn0[2]).to_be_less(s[1][2])
+    expect(cities.fall_box(r, s, ft + cities.FALL_TICKS + 5)).to_be(nil)
+    -- park the saucer far away and let the clock reach it
+    p.ship.pos = vec.add(st.sector.sites[i].pos, core(r, { 1440, 650, 700 }))
+    st.tick = ft - 2
+    run(st, 4)
+    expect(game.bridge_fallen(i, si)).to_be(true)
+    local told = false
+    for _, m in ipairs(p.msgs or {}) do if m.text:find("sky-bridge", 1, true) then told = true end end
+    expect(told).to_be_truthy()
+    -- a rebuilt world (a restore) after the fall does not bring the bridge back
+    game.rebuild(st)
+    expect(game.bridge_fallen(i, si)).to_be(true)
+    st.tick = 0
+    game.rebuild(st)
+    expect(game.bridge_fallen(i, si)).to_be(false)
+  end)
+  it("a falling bridge clips a hull once: some hull lost, never more than once per bridge", function()
+    local st, i, r = in_city("planet")
+    local p = st.players[1]
+    p.mode, p.panel, p.ship.morph = "helm", false, false
+    p.site = i
+    local si = r.city.bridges[1]
+    local s = r.solids[si]
+    local ft = cities.fall_tick(r, s)
+    local hull0 = p.ship.hull or 100
+    local drop = cities.fall_box(r, s, ft + 20)
+    p.ship.pos = { (s[1][1] + s[2][1]) / 2, drop[2] + 1, (s[1][3] + s[2][3]) / 2 }
+    p.ship.vel = { 0, 0, 0 }
+    st.tick = ft + 19
+    game.city_step(st)
+    st.tick = ft + 20
+    p.ship.pos = { (s[1][1] + s[2][1]) / 2, select(1, cities.fall_box(r, s, st.tick))[2] + 1, (s[1][3] + s[2][3]) / 2 }
+    game.city_step(st)
+    local after = p.ship.shield + p.ship.hull
+    expect(after).to_be_less(200)
+    expect(st.locks[i .. ":hit" .. si .. ":" .. p.index] ~= nil).to_be_truthy()
+    local shield1, hull1 = p.ship.shield, p.ship.hull
+    st.tick = ft + 21
+    p.ship.pos = { (s[1][1] + s[2][1]) / 2, select(1, cities.fall_box(r, s, st.tick))[2] + 1, (s[1][3] + s[2][3]) / 2 }
+    game.city_step(st)
+    expect(p.ship.shield).to_be(shield1)
+    expect(p.ship.hull).to_be(hull1)
+    expect(hull1 <= hull0).to_be_truthy()
+  end)
+  it("the falling bridge is drawn dropping and then gone, and is not in the far silhouette", function()
+    local st, i, r = in_city("planet")
+    local A = assets.init()
+    local si = r.city.bridges[1]
+    local s = r.solids[si]
+    local ft = cities.fall_tick(r, s)
+    local c = { (s[1][1] + s[2][1]) / 2, (s[1][2] + s[2][2]) / 2 - 20, (s[1][3] + s[2][3]) / 2 }
+    local cam = { pos = { c[1], c[2], c[3] - 90 }, yaw = 0, pitch = 0, fov = 2.4 }
+    st.tick = ft + 10
+    expect(render.draw_ruins(fake_view(), A, st, cam, false).falling or 0).to_be_greater(0)
+    st.tick = ft + cities.FALL_TICKS + 20
+    expect(render.draw_ruins(fake_view(), A, st, cam, false).falling or 0).to_be(0)
+  end)
+end)
+
+describe("patrols in the dark districts", function()
+  it("a Watcher patrols the streets of every dark district and goes home when its grid is back", function()
+    local st, i, r = in_city("planet")
+    local defs = game.sentries(i)
+    local roam = {}
+    for k, d in ipairs(defs) do if d.roam then roam[#roam + 1] = k end end
+    expect(#roam).to_be(#r.city.districts - 1)
+    local def = defs[roam[1]]
+    expect(def.kind).to_be("watcher")
+    expect(def.dark and def.route ~= nil).to_be_truthy()
+    local a, ya = sentry.route_at(def, 0)
+    local b = sentry.route_at(def, 60 * 20)
+    expect(vec.dist(a, b)).to_be_greater(100)
+    expect(vec.dist(sentry.route_at(def, 77), sentry.route_at(def, 77))).to_be(0)
+    -- it comes round again after a full lap
+    local lap = math.floor(def.len / def.speed * 60 + 0.5)
+    expect(vec.dist(sentry.route_at(def, 5), sentry.route_at(def, 5 + lap))).to_be_less(def.speed)
+    -- it keeps to its district's streets, 18 m up
+    for t = 0, 60 * 60, 421 do
+      local q = sentry.route_at(def, t)
+      expect(math.abs(q[2] - (r.city.districts[def.district].pos[2] + 18)) < 1e-6).to_be_truthy()
+    end
+    -- park a saucer under its beam: it stirs; restore the grid and it is dormant again, whatever is in view
+    local k = roam[1]
+    local dyn = st.sentries[i][k]
+    local p = st.players[1]
+    p.mode, p.panel, p.ship.morph = "helm", false, false
+    p.ship.size = 1
+    local ctx = { msg = function() end, fx = function() end, seal = function() end }
+    local woke = false
+    for t = 0, 60 * 40, 3 do
+      st.tick = t
+      local pos, yaw = sentry.route_at(def, t)
+      local dir = sentry.dir_of(yaw, def.pitch)
+      p.ship.pos = { pos[1] + dir[1] * 20, pos[2] + dir[2] * 20, pos[3] + dir[3] * 20 }
+      p.site = i
+      sentry.step(st, i, defs, 1 / 60, ctx)
+      if dyn.st ~= "dormant" then woke = true break end
+    end
+    expect(woke).to_be_truthy()
+    expect(dyn.pos ~= nil and dyn.base ~= nil).to_be_truthy()
+    cities.restore(st, i, def.district)
+    sentry.step(st, i, defs, 1 / 60, ctx)
+    expect(dyn.st).to_be("dormant")
+    -- and it is not drawn any more
+    local v = fake_view()
+    local A = assets.init()
+    st.tick = st.tick + 1
+    expect(pcall(render.draw_sentries, v, A, st, p)).to_be_truthy()
   end)
 end)

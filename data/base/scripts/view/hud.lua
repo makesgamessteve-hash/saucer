@@ -452,6 +452,31 @@ function M.beam(v, state, p, scan)
   return n + 1
 end
 
+-- add-cities-2: rain streaks and the storm banner over a planet city (a function of the tick: nothing stored)
+function M.weather(v, state, p)
+  if p.site == 0 then return end
+  local r = require("sim.game").ruin(p.site)
+  if not (r and r.city) then return end
+  local cities = require("sim.cities")
+  local W, H = v.width, v.height
+  local k = cities.storm(r, state.tick)
+  if k > 0.08 then
+    local n = math.floor((12 + 60 * k) * (W * H) / (480 * 270))
+    for i = 1, n do
+      local x = (i * 97 + state.tick * 3) % W
+      local y = (i * 53 + state.tick * 11) % H
+      v:rect(x, y, 1, 5, { 0.7, 0.8, 1, 0.35 })
+    end
+    v:text(W // 2 - 24, 30, "STORM!", (state.tick // 20) % 2 == 0 and AMBER or RED)
+  else
+    local s = cities.storm_in(r, state.tick)
+    if s and s > 0 and s < 900 then
+      local t = string.format("STORM IN %dS", (s + 59) // 60)
+      v:text(W // 2 - #t * 4, 30, t, AMBER)
+    end
+  end
+end
+
 function M.draw(v, state, p, target)
   local W, H = v.width, v.height
   -- add-wider-dark: a split-screen view keeps only the essentials (a quarter
@@ -467,6 +492,7 @@ function M.draw(v, state, p, target)
     if saucer.input.device_mode(v.player) == "touch" then M.touch(v) end
     return
   end
+  M.weather(v, state, p)
   -- size + charge
   v:rect(4, 4, 120, 28, { 0, 0, 0, 0.45 })
   v:text(8, 7, c.name:upper(), WHITE)
