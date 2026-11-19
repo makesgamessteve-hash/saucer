@@ -36,7 +36,12 @@ function M.get_up(state, p, ctx)
   say(ctx, state, p, "Good morning. The helm is upstairs at the front of the dome.")
 end
 
--- doors: open fraction per layout door, sliding toward open while a body is near
+-- doors: open fraction per layout door, sliding toward open while a body is near.
+-- fix-bedroom-door: a door decides with hysteresis (it opens inside `reach` but
+-- only starts to close once every body is past `reach + door_close_margin`),
+-- stays open for at least `door_min_open` seconds, and never turns solid under a
+-- body that is standing in it, so a body swaying on the trigger edge (a thumb on
+-- a touch stick, a walk that stops there) cannot make it flap.
 function M.new_doors(L)
   local d = {}
   for i = 1, #(L.doors or {}) do d[i] = 0 end
@@ -48,33 +53,78 @@ function M.door_center(door)
   return (b[1] + b[3]) / 2, (b[2] + b[4]) / 2
 end
 
--- add-wider-dark: guests walking your dome (bodies) open doors too
-function M.doors_step(L, p, dt, guests)
-  p.doors = p.doors or M.new_doors(L)
+-- the bodies that open the dome's doors: the player walking it, plus guests
+local function door_bodies(p, guests)
   local bodies = {}
   if p.mode == "walk" and not p.visiting then bodies[1] = p.body end
   for _, b in ipairs(guests or {}) do bodies[#bodies + 1] = b end
-  for i, door in ipairs(L.doors or {}) do
-    local want = 0
-    for _, b in ipairs(bodies) do
-      if avatar.deck_of(L, b) == door.deck then
-        local cx, cz = M.door_center(door)
-        local dx, dz = b.pos[1] - cx, b.pos[3] - cz
-        if dx * dx + dz * dz <= door.reach * door.reach then want = 1 end
-      end
+  return bodies
+end
+
+-- is any of the bodies on the door's deck within r of its centre?
+local function within(L, door, bodies, r)
+  local cx, cz = M.door_center(door)
+  for _, b in ipairs(bodies) do
+    if avatar.deck_of(L, b) == door.deck then
+      local dx, dz = b.pos[1] - cx, b.pos[3] - cz
+      if dx * dx + dz * dz <= r * r then return true end
     end
+  end
+  return false
+end
+
+-- add-wider-dark: guests walking your dome (bodies) open doors too
+function M.doors_step(L, p, dt, guests)
+  p.doors = p.doors or M.new_doors(L)
+  p.door_goal = p.door_goal or {}
+  p.door_hold = p.door_hold or {}
+  local bodies = door_bodies(p, guests)
+  local margin = L.door_close_margin or 0.5
+  for i, door in ipairs(L.doors or {}) do
+    local goal = p.door_goal[i] or 0
+    if goal == 0 then
+      if within(L, door, bodies, door.reach) then
+        goal = 1
+        p.door_hold[i] = L.door_min_open or 0.8
+      end
+    else
+      local hold = math.max(0, (p.door_hold[i] or 0) - dt)
+      p.door_hold[i] = hold
+      -- somebody still close (inside the wider close radius) keeps it open
+      if hold <= 0 and not within(L, door, bodies, door.reach + margin) then goal = 0 end
+    end
+    p.door_goal[i] = goal
     local cur = p.doors[i] or 0
     local step = L.door_speed * dt
-    if want > cur then cur = math.min(1, cur + step) else cur = math.max(0, cur - step) end
+    -- move toward the goal and stop on it (the old `else` also ran when cur == goal == 1,
+    -- so a fully open door slid shut a notch and back open every tick)
+    if cur < goal then cur = math.min(goal, cur + step) elseif cur > goal then cur = math.max(goal, cur - step) end
     p.doors[i] = cur
   end
 end
 
--- closed doors as extra solids for avatar.step
-function M.solids(L, p)
+-- smooth ease for drawing a door at open fraction f (0..1); the sim stays linear
+function M.door_ease(f)
+  f = math.max(0, math.min(1, f or 0))
+  return f * f * (3 - 2 * f)
+end
+
+-- closed doors as extra solids for avatar.step. A door never turns solid on a
+-- body that overlaps it (`bodies`, default the player's own): it stays passable
+-- until that body is out, so its collision cannot trap or shove anyone.
+function M.solids(L, p, bodies)
   local out = {}
+  bodies = bodies or door_bodies(p)
   for i, door in ipairs(L.doors or {}) do
-    if (p.doors and p.doors[i] or 0) < L.door_solid_below then out[#out + 1] = { deck = door.deck, box = door.box } end
+    if (p.doors and p.doors[i] or 0) < L.door_solid_below then
+      local b, hit = door.box, false
+      local pad = (L.body_radius or 0.3) + 0.05
+      for _, body in ipairs(bodies) do
+        if avatar.deck_of(L, body) == door.deck and body.pos[1] > b[1] - pad and body.pos[1] < b[3] + pad
+            and body.pos[3] > b[2] - pad and body.pos[3] < b[4] + pad then hit = true end
+      end
+      if not hit then out[#out + 1] = { deck = door.deck, box = door.box } end
+    end
   end
   -- add-home-among-stars: placed furniture is solid (for guests too)
   for _, b in ipairs(require("sim.decor").solids(p)) do out[#out + 1] = b end

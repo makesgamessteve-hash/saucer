@@ -700,7 +700,7 @@ function M.rooms(v, A, o, d, state)
   end
   if not ship.morph then
     for i, door in ipairs(L.doors or {}) do
-      local open = o.doors and o.doors[i] or 0
+      local open = require("sim.home").door_ease(o.doors and o.doors[i] or 0)
       local b = door.box
       local w = b[3] - b[1]
       local side = (b[1] + b[3]) > 0 and 1 or -1

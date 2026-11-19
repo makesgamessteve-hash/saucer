@@ -33,10 +33,55 @@ T.assert(get().doors[1] == 1, "the door slid open")
 T.assert(#home.solids(L, get()) == #L.doors - 1, "an open door can be walked through")
 T.assert(ap.walk_to(T, 1, get, "engine"), "walked through it to the engine room")
 T.assert(avatar.room(L, get().body) == "Engine room", "in the engine room")
-T.wait(30)
+T.wait(150)
 T.assert(get().doors[1] == 0, "the door closed behind")
 
+-- fix-bedroom-door: stand and dither on the door's trigger edge (as a thumb on a touch
+-- stick does): the leaf must open once and stay put, never jitter or flap
+do
+  local reach = L.doors[1].reach
+  local cx, cz = home.door_center(L.doors[1])
+  T.assert(ap.walk(T, 1, get, { cx, L.decks[2].floor, cz - reach - 0.4 }, 0.1, 600), "walked to the door's trigger edge")
+  -- face the door (yaw 0 looks along +z) and creep up until it just triggers
+  for _ = 1, 200 do
+    local b = get().body
+    if math.abs(saucer.math.wrap(b.yaw)) < 0.01 then break end
+    ap.hold(T, 1, { turn = (saucer.math.wrap(b.yaw) > 0) and 0.3 or -0.3 })
+  end
+  T.assert(get().door_goal == nil or get().door_goal[1] == 0, "the door waits while the body is outside its reach")
+  for _ = 1, 600 do
+    if get().door_goal and get().door_goal[1] == 1 then break end
+    ap.hold(T, 1, { move_z = 0.1 })
+  end
+  T.assert(get().door_goal and get().door_goal[1] == 1, "creeping up triggers the door at its reach")
+  local turns, dir, last, solid_flips, solid = 0, 0, get().doors[1], 0, nil
+  local function sample()
+    local d = get().doors[1]
+    local nd = d > last and 1 or d < last and -1 or 0
+    if nd ~= 0 and dir ~= 0 and nd ~= dir then turns = turns + 1 end
+    if nd ~= 0 then dir = nd end
+    last = d
+    local s = d < L.door_solid_below
+    if solid ~= nil and s ~= solid then solid_flips = solid_flips + 1 end
+    solid = s
+  end
+  for i = 1, 600 do
+    -- creep in and out across the open radius: about 5 mm per tick, 3 ticks each way
+    local fwd = ((i // 3) % 2 == 0) and 0.1 or -0.1
+    if i > 300 then fwd = 0 end
+    ap.hold(T, 1, { move_z = fwd })
+    sample()
+  end
+  T.assert(get().doors[1] == 1, "the door is open for the body on its edge")
+  print("door at the edge: direction reversals", turns, "solid flips", solid_flips, "open", get().doors[1])
+  T.assert(turns <= 2, "the door did not flap at the trigger edge")
+  T.assert(solid_flips <= 2, "the door's collision did not flap either")
+  T.assert(get().doors[1] == 1 or get().doors[1] == 0, "the leaf rests fully open or shut")
+  for _ = 1, 60 do T.wait(1); T.assert(get().doors[1] == last, "a body standing still leaves the door where it is") end
+end
+
 -- engine console
+T.assert(ap.walk_to(T, 1, get, "engine"), "back to the engine console")
 use()
 T.assert(said("Fold engine: Charge"), "engine console reads out Charge")
 
