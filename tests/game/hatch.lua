@@ -6,6 +6,7 @@
 -- it again, climb back in and lift off.
 local T = saucer.test
 local ap = require("sim.autopilot")
+local game = require("sim.game")
 local landing = require("sim.landing")
 local hulldoor = require("sim.hulldoor")
 local excursion = require("sim.excursion")
@@ -17,15 +18,18 @@ end
 
 T.assert(ap.wake(T, 1, get), "got up")
 T.assert(ap.take_helm(T, 1, get), "took the helm")
-local p = get()
 -- a big flat platform far from every site, and a pillar for the slope case
 local PY = -520
-saucer.physics.add_box({ -80, PY - 20, -80 }, { 80, PY, 80 }, 1)
-saucer.physics.add_box({ 200, PY - 20, -80 }, { 360, PY, 80 }, 1)
-saucer.physics.add_box({ 200, PY, -80 }, { 360, PY + 2.4, -30 }, 1) -- a step under part of the hull
+local function solid(mn, mx)
+  game.extra_solids[#game.extra_solids + 1] = { mn, mx }
+  saucer.physics.add_box(mn, mx, 1)
+end
+solid({ -80, PY - 20, -80 }, { 80, PY, 80 })
+solid({ 200, PY - 20, -80 }, { 360, PY, 80 })
+solid({ 200, PY, -80 }, { 360, PY + 2.4, -30 }) -- a step under part of the hull
 
 -- the hatch will not open while flying
-p.ship.pos = { 0, PY + 60, 0 }
+get().ship.pos = { 0, PY + 60, 0 }
 T.press(1, "use")
 T.wait(1)
 T.assert(get().mode == "walk", "stood up from the helm")
@@ -37,21 +41,21 @@ T.assert(said("Land first"), "and says why")
 T.assert(ap.take_helm(T, 1, get), "back at the helm")
 
 -- no ground under the gear: over the platform's edge
-p.ship.pos = { 77, PY + 40, 0 }
+get().ship.pos = { 77, PY + 40, 0 }
 T.press(1, "land")
 T.wait(2)
 T.assert(get().berth == false and said("No ground"), "no landing with a foot over the drop")
 -- too steep: a step under part of the hull
-p.ship.pos = { 280, PY + 40, -30 }
-p.msgs = {}
+get().ship.pos = { 280, PY + 40, -30 }
+get().msgs = {}
 T.press(1, "land")
 T.wait(2)
 T.assert(get().berth == false and said("too steep") or said("Too steep"), "no landing on a slope")
 
 -- land on the platform
-p.ship.pos = { 0, PY + 40, 0 }
-p.ship.yaw = 0.7
-p.msgs = {}
+get().ship.pos = { 0, PY + 40, 0 }
+get().ship.yaw = 0.7
+get().msgs = {}
 T.press(1, "land")
 T.wait(5)
 T.assert(get().berth and get().berth.phase == "descend", "settling on the gear")
@@ -83,7 +87,7 @@ local total = hulldoor.total(get())
 T.assert(ap.walk_path(T, 1, get, { { 0, -3, -8.0 } }, 0.3, 1500), "walked to the hatch")
 ap.look(T, 1, get, saucer.math.pi, 0, 300)
 T.assert(ap.push(T, 1, function() return get().mode == "foot" end, 60 * 14), "walked down the stairs onto the platform")
-p = get()
+local p = get()
 T.assert(p.excursion and p.excursion.coin == "stand", "the Villa stands behind you")
 T.assert(p.excursion.body.pos[2] > PY - 0.5 and p.excursion.body.pos[2] < PY + 0.5, "feet on the ground")
 T.assert(p.suited, "helmet on outside")

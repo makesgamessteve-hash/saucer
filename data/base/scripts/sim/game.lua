@@ -67,9 +67,13 @@ function M.sentries(i) return rt.sentries[i] or {} end
 local function civ_of(site) return civs.get(civs.current() or 0, site.civ) end
 M.civ_of = civ_of
 
+-- extra static boxes { min, max } that survive a rebuild (tests build landing platforms here)
+M.extra_solids = {}
+
 function M.rebuild(state)
   M.state_ref = state
   saucer.physics.clear()
+  for _, b in ipairs(M.extra_solids) do saucer.physics.add_box(b[1], b[2], 1) end
   civs.use(state.seed)
   rt.ruins, rt.bounds, rt.sentries, rt.shutters, rt.seals, rt.gates = {}, {}, {}, {}, {}, {}
   rt.fallen, rt.bridge_box = {}, {}
