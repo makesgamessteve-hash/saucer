@@ -1133,6 +1133,12 @@ function M.render(v, state, alpha)
         local pulse = 0.65 + 0.35 * sm.sin(state.tick * 0.07)
         v:mesh(A.foot.lock, { pos = { pos[1], pos[2] - 1.2, pos[3] }, yaw = spin, scale = 2.4 * k, palette = A.pal.base })
         v:billboard(A.tex.glow, pos, 7 * k, { palette = A.pal.base, tint = { 1, 0.7, 0.2, 0.9 * pulse } })
+      elseif cand.kind == "story" then
+        -- add-run-story: a clue of the run's story, tinted by what it is (log amber, mural violet, record teal)
+        local pulse = 0.7 + 0.3 * sm.sin(state.tick * 0.05)
+        local tint = cand.carrier == "mural" and { 0.85, 0.5, 1.0 } or (cand.carrier == "archive" and { 0.4, 1.0, 0.9 } or { 1.0, 0.8, 0.35 })
+        v:billboard(A.tex.glow, pos, 6 * k, { palette = A.pal.base, tint = { tint[1], tint[2], tint[3], 0.55 * pulse } })
+        v:billboard(A.tex.echo, pos, 2.0 * k, { palette = A.pal.base, tint = { tint[1], tint[2], tint[3], 1 } })
       elseif cand.echo or cand.kind == "curio" or cand.kind == "clue" then
         v:billboard(A.tex.echo, pos, (cand.kind == "curio" and 2.4 or 1.6) * k, { palette = A.pal.base })
       else
