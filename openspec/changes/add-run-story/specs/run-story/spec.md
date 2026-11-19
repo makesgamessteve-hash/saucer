@@ -94,3 +94,99 @@ Clues SHALL be found one after the other; the story SHALL follow the central mys
 #### Scenario: a save from before the story (state version 10 or 11) loads with a fresh story of the same seed
 - **WHEN** `tests/lua/story_spec.lua` runs its scenario of this name
 - **THEN** it passes
+
+### Requirement: Clues in the world
+Each clue beat SHALL be a marker in its place: a wreck log or a mural in a derelict great hall, an archive record in a city's archive hall that reads only once its district's grid is restored. Only the next unfound clue SHALL be on offer, shared by the whole party; the beam SHALL read it in place (nothing rides in the hold), the finder is told, the others are told, and the clue is filed on every player's bookshelf.
+
+#### Scenario: only the next clue is on offer, at its own site, and the one before unlocks it
+- **WHEN** `tests/lua/story_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: a clue lies a quarter of a great hall in from two walls, clear of the crates, in every kit
+- **WHEN** `tests/lua/story_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: a clue falls back to a smaller room when a site has no great hall, and to the first room when it has nothing else
+- **WHEN** `tests/lua/story_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: an archive record sits in the city's archive hall and reads only once its district's grid is on
+- **WHEN** `tests/lua/story_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: a clue is found for the whole party: it is filed on every shelf and the others are told
+- **WHEN** `tests/lua/story_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the story page on the shelf is the clue's text, in pages the book reader can turn
+- **WHEN** `tests/lua/story_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the log gets the clue in chunks of whole sentences
+- **WHEN** `tests/lua/story_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: there are no clues in the sandbox, with the story switched off, or once they are all found
+- **WHEN** `tests/lua/story_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: a clue is read by the beam in a derelict, found, shelved, and survives a save and load
+- **WHEN** `tests/game/story.lua (seeds 42 and 7, and with a restore every tick)` runs
+- **THEN** it passes
+
+### Requirement: The story page at the holotable
+The living room's coffee table SHALL be a holotable station that opens the Story page: the story's title, the clues found with their text a pick away, the next clue's place, what the Echo really is once every clue is found, the decoded Echoes, the ending and the twist once the Heart is resolved, and a switch that turns the story off and on.
+
+#### Scenario: stands in the living room as a station with its own mesh, reachable on foot
+- **WHEN** `tests/lua/story_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: using it opens the Story page: the title, the clues still to find and where the next one is
+- **WHEN** `tests/lua/story_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: stitches the found clues, the Echo, the ending and the twist; a found clue can be read again from its row
+- **WHEN** `tests/lua/story_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the switch turns the story off and on, and the page says why when there is no story
+- **WHEN** `tests/lua/story_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the hologram turns over the holotable when the home is drawn
+- **WHEN** `tests/lua/story_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the holotable opens the Story page and a found clue is read again from it
+- **WHEN** `tests/game/story.lua` runs
+- **THEN** it passes
+
+### Requirement: Hints
+The HUD SHALL show how many clues are found beside the mystery's counter, and in hints mode where the next clue waits; a clue within range of the saucer SHALL be announced once, and none of it SHALL show in the sandbox.
+
+#### Scenario: the HUD counts the clues beside the mystery, and in hints mode says where the next one is
+- **WHEN** `tests/lua/story_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: a clue close by is announced once, with the beam in mind, and never in the sandbox
+- **WHEN** `tests/lua/story_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+### Requirement: The ending
+Resolving the Heart SHALL end the story: every player is told the ending (with the twist's line), a finale book is filed on every shelf, the ending book gains the finale text, and the saved progress records it once.
+
+#### Scenario: is told when the Heart is resolved: the ending and the twist, to every player, and filed on every shelf
+- **WHEN** `tests/lua/story_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: is not told in the sandbox, or for a story that is switched off
+- **WHEN** `tests/lua/story_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the finale of every skeleton and ending reads well: it names the lost civilisation or the Heart
+- **WHEN** `tests/lua/story_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the whole co-op game's Heart ending tells the story
+- **WHEN** `tests/game/widerdark.lua` runs
+- **THEN** it passes

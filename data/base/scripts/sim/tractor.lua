@@ -164,6 +164,8 @@ function M.candidates(state, p, site_idx, ruin)
     -- add-holodeck-home-life: data cores, modules, books and ingredients in vaults
     for _, c in ipairs(require("sim.finds").candidates(state, p, site_idx, ruin)) do out[#out + 1] = c end
     for _, c in ipairs(require("sim.cities").candidates(state, p, site_idx, ruin)) do out[#out + 1] = c end
+    -- add-run-story: the next clue of the run's story, a wreck log, a mural or an archive record
+    for _, c in ipairs(require("sim.story").candidates(state, p, site_idx, ruin)) do out[#out + 1] = c end
     local echo = mystery.echo_at(state.mystery, site_idx, state.sector_id)
     if echo then
       for _, r in ipairs(ruin.rooms) do
