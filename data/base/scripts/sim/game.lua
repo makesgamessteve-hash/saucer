@@ -11,6 +11,7 @@ local ruinm = require("sim.ruin")
 local sector = require("sim.sector")
 local loot = require("sim.loot")
 local mystery = require("sim.mystery")
+local story = require("sim.story")
 local tractor = require("sim.tractor")
 local avatar = require("sim.avatar")
 local home = require("sim.home")
@@ -260,7 +261,7 @@ M.VERSION = 14 -- state version; saves made by a newer game are refused
 function M.init(state, ctx)
   M.state_ref = state
   local seed = ctx.seed
-  state.version = M.VERSION  -- v14: landing gear, the hull hatch and the suit (add-dock-land-eva); v12: sliding doors keep a goal and a hold timer (fix-bedroom-door); v11: seed-plus-diff saves (save format 3); v10: playtest recommendations (add-playtest-recs); v9: the wider dark (add-wider-dark); v8: on-foot excursions; v7: station visits
+  state.version = M.VERSION  -- v14: landing gear, the hull hatch and the suit (add-dock-land-eva); v13: the run story (add-run-story); v12: sliding doors keep a goal and a hold timer (fix-bedroom-door); v11: seed-plus-diff saves (save format 3); v10: playtest recommendations (add-playtest-recs); v9: the wider dark (add-wider-dark); v8: on-foot excursions; v7: station visits
   state.seed = seed
   state.tick = 0
   civs.use(seed)
@@ -268,6 +269,8 @@ function M.init(state, ctx)
   state.sector = sector.generate(seed)
   local g = galaxy.generate(seed)
   state.mystery = mystery.generate(seed, "on", #state.sector.sites, g)
+  -- add-run-story: the story of this run, a pure function of the seed (progress is saved, the text is not)
+  state.story = story.generate(seed, state.mystery, g)
   -- the Witness's translation gate is the civ of the site it waits in
   for _, e in ipairs(state.mystery.echoes) do
     if e.gate then
@@ -668,7 +671,7 @@ local function tractor_step(state, p, cmd, dt)
     if p.beam_queue then
       local qc, qi = beamqueue.next(state, p, ruin, heading, may)
       if qc then
-        if #p.hold >= upgrades.hold_slots(p) and qc.kind ~= "cache" and qc.kind ~= "anchor" and qc.kind ~= "coupling" and qc.kind ~= "clue" then
+        if #p.hold >= upgrades.hold_slots(p) and qc.kind ~= "cache" and qc.kind ~= "anchor" and qc.kind ~= "coupling" and qc.kind ~= "clue" and qc.kind ~= "story" then
           if not p.beam_queue.warned then
             p.beam_queue.warned = true
             msg(state, p, "Hold is full: the beam queue waits")
@@ -728,7 +731,7 @@ local function tractor_step(state, p, cmd, dt)
   elseif sc.status ~= "lock" then
     msg(state, p, "Beam: " .. sc.info.hint:lower())
     fx(state, p, "denied")
-  elseif sc.cand.kind ~= "cache" and sc.cand.kind ~= "anchor" and sc.cand.kind ~= "coupling" and sc.cand.kind ~= "clue" and #p.hold >= upgrades.hold_slots(p) then
+  elseif sc.cand.kind ~= "cache" and sc.cand.kind ~= "anchor" and sc.cand.kind ~= "coupling" and sc.cand.kind ~= "clue" and sc.cand.kind ~= "story" and #p.hold >= upgrades.hold_slots(p) then
     msg(state, p, "Hold is full")
     fx(state, p, "denied")
   else
@@ -790,6 +793,9 @@ function M.pick_up(state, p, cand, site_idx)
     p.looted[cand.key] = true
     msg(state, p, cities.clue_text(state, site_idx, rt.ruins[site_idx], cand.district))
     fx(state, p, "echo")
+  elseif cand.kind == "story" then
+    -- add-run-story: a wreck log, a mural or an archive record is read in place
+    story.read(state, cand.story, p, ctx_fns)
   elseif cand.kind == "nest" then
     local n = table.remove(state.nests, cand.index)
     n.item.hot = true
@@ -1024,6 +1030,7 @@ local function world_step(state, p, dt)
       end
     end
   end
+  story.notice(state, p, ctx_fns)
 end
 
 -- add-wider-dark: launch a Decoy flare ahead of you (inside a site)
@@ -1350,6 +1357,7 @@ panel.register("map", { title = "SECTOR MAP", rows = function(state, p) return g
 panel.register("fold_warn", { title = "FOLD WARNING", rows = function(state, p) return galaxy.warn_rows(state, p, ctx_fns) end })
 panel.register("party", { title = "PARTY", rows = function(state, p) return coop.rows(state, p, ctx_fns) end })
 panel.register("archive", { title = "XENOARCHIVE", rows = function(state, p) return archive.rows(state, p) end })
+panel.register("story", { title = "HOLOTABLE: THE STORY", rows = function(state, p) return story.rows(state, p, ctx_fns) end })
 panel.register("heart", { title = "THE HEART", rows = function(state, p) return heart.rows(state, p) end })
 panel.register("gift_table", { title = "GIFT TABLE", rows = function(state, p) return coop.gift_rows(state, p, ctx_fns) end })
 

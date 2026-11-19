@@ -686,7 +686,20 @@ function M.draw(v, state, p, target)
   else
     local t = string.format("%s %d/%d", m.title:upper(), m.found, #m.echoes)
     -- add-wider-dark: a split-screen view is too narrow for the top row
+    local story = require("sim.story")
+    -- add-run-story: the story's own counter beside the mystery's, and in hints mode where the next clue is
     v:text(W - 4 - #t * 8, W < 400 and 86 or 6, t, m.solved and GREEN or AMBER)
+    local y0 = W < 400 and 108 or 28
+    local sc = story.counter(state)
+    if sc then
+      v:text(W - 4 - #sc * 8, y0, sc, m.solved and GREEN or AMBER)
+      y0 = y0 + 10
+    end
+    local sh = story.hint(state)
+    if sh then
+      sh = sh:sub(1, (W - 8) // 8 // 2 + 6)
+      v:text(W - 4 - #sh * 8, y0, sh, CYAN)
+    end
   end
   -- messages
   -- add-playtest-recs: wrapped, repeats folded, the most urgent first
