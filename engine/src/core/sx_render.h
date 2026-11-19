@@ -82,6 +82,7 @@ typedef struct sx_render_settings {
   int width, height; /* low-res target */
   int vertex_snap, dither, affine;
   int split_horizontal; /* add-wider-dark: 2 players stacked (default side by side) */
+  int fill;             /* add-mobile-touch-ux: the platform sizes the target to the window (no letterbox) */
 } sx_render_settings;
 
 /* add-retro-renderer-basic: the retro effects in force for one view. Vertex snapping and affine

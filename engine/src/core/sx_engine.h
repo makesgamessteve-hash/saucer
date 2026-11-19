@@ -46,6 +46,7 @@ typedef struct sx_options {
   int coop;
   int split_keyboard; /* add-wider-dark: P2 on the right half of the keyboard */
   int split_horizontal; /* two players: stacked instead of side by side */
+  int fill;             /* add-mobile-touch-ux --fill: the target follows the window's aspect */
   int quiet;
   int test_mode; /* debug checks: render mutation guard, saucer.test */
   /* add-home-among-stars: networked co-op (lockstep) */

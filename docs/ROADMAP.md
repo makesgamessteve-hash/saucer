@@ -721,6 +721,11 @@ Open, none scheduled (OpenSpec changes `later-followups` and
 - Co-op: the push timer counts consecutive ticks only; claims over a laggy link.
 - Tooling: see `add-tooling-followups`.
 
+In progress: `add-mobile-touch-ux` (2026-11-19 mobile review): the web build fills the
+window; touch controls sized from the short side (48-72 CSS px, 8 px+ gaps) inside the safe
+area, re-laid out on rotation; a deadzoned floating stick; HUD text kept off the controls;
+cooldown and unavailable button states; no browser gestures over the game.
+
 ## Later / maybe
 
 Rivals, a fabricator, and a macOS port. (Cities are milestone 11 above.)
