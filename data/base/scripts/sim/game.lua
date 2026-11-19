@@ -506,6 +506,23 @@ local function size_request(state, p, to)
   end
 end
 
+-- declutter-touch-controls: would size_request(state, p, to) go through now?
+-- (no side effects: the touch size buttons show only when it would)
+function M.can_resize(state, p, to)
+  local ship = p.ship
+  if p.clamped_by or not ship then return false end
+  local tc = configs.get(to)
+  if not tc then return false end
+  if tc.pocket then
+    if p.site ~= 0 then return (excursion.can_step_out(state, p)) end
+    return (visit.can_pocket(state, p, to))
+  end
+  local eye, yaw
+  if p.mode == "walk" then eye, yaw = M.viewpoint(p) end
+  local blocked = function(pos, r, hh, margin) return M.blocked(state, p, pos, r, hh, margin) end
+  return (shipm.check(ship, to, blocked, eye, yaw))
+end
+
 -- add-tractor-beam: sit down at the beam console in the Tractor Room / get up
 M.HATCH_ARMED = 0.7 -- how far the iris opens while the operator sits at the console
 local function console_enter(state, p)

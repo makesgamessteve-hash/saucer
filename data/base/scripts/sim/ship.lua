@@ -82,14 +82,15 @@ end
 -- current config). blocked(pos, r, hh, margin) must return true when a hull
 -- of that size would not fit at pos (walls or other players' saucers); it is
 -- only asked when growing.
-function M.request(ship, to, blocked, eye, yaw)
+-- would a reconfiguration to `to` go through now? -> ok, why, center (no side
+-- effects; declutter-touch-controls shows the size buttons only when it would)
+function M.check(ship, to, blocked, eye, yaw)
   local all = configs.all()
   -- the Pocket coin is not a flight size: sim/visit.lua pockets and unpockets it
   if to < 1 or to > #all or all[to].pocket or all[ship.size].pocket then return false, "range" end
   if to == ship.size then return false, "same" end
   if ship.morph then return false, "busy" end
-  local cost = M.cost(ship.size, to)
-  if ship.charge < cost then return false, "charge" end
+  if ship.charge < M.cost(ship.size, to) then return false, "charge" end
   yaw = yaw or ship.yaw
   eye = eye or M.eye_world(ship.pos, ship.yaw, ship.size)
   local center = M.center_for_eye(eye, yaw, to)
@@ -97,6 +98,16 @@ function M.request(ship, to, blocked, eye, yaw)
     local r, hh = M.dims_of(to)
     if blocked(center, r, hh, all.grow_margin) then return false, "clearance", center end
   end
+  return true, nil, center
+end
+
+function M.request(ship, to, blocked, eye, yaw)
+  local ok, why, center = M.check(ship, to, blocked, eye, yaw)
+  if not ok then return false, why, center end
+  yaw = yaw or ship.yaw
+  eye = eye or M.eye_world(ship.pos, ship.yaw, ship.size)
+  local all = configs.all()
+  local cost = M.cost(ship.size, to)
   ship.charge = ship.charge - cost
   ship.morph = { from = ship.size, pos = { ship.pos[1], ship.pos[2], ship.pos[3] }, yaw = ship.yaw,
                  total = to > ship.size and all.shrink_time or all.grow_time, eye = { eye[1], eye[2], eye[3] } }

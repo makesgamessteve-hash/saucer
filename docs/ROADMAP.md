@@ -726,6 +726,10 @@ window; touch controls sized from the short side (48-72 CSS px, 8 px+ gaps) insi
 area, re-laid out on rotation; a deadzoned floating stick; HUD text kept off the controls;
 cooldown and unavailable button states; no browser gestures over the game.
 
+In progress: `declutter-touch-controls`: only the stick, lift, USE, boost and a MORE tray button
+stay on screen; beam, grapple, jam/decoy and size buttons show in fixed slots only when they
+would act (never under a pressing finger, ~150 ms fade and pulse); every action is in the tray.
+
 ## Later / maybe
 
 Rivals, a fabricator, and a macOS port. (Cities are milestone 11 above.)

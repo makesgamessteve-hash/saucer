@@ -33,7 +33,15 @@ enum {
   SX_TOUCH_KIND_STICK = 1,  /* the floating stick's zone (invisible; the ring is drawn) */
   SX_TOUCH_KIND_SLIDER = 2,
   SX_TOUCH_KIND_LOOK = 3,   /* everything no control claims */
-  SX_TOUCH_KIND_HOLD = 4    /* hold-to-climb/dive button */
+  SX_TOUCH_KIND_HOLD = 4,   /* hold-to-climb/dive button */
+  SX_TOUCH_KIND_TRAY = 5    /* declutter-touch-controls: opens and closes the tray */
+};
+
+/* declutter-touch-controls: which set a widget belongs to */
+enum {
+  SX_TOUCH_GROUP_CORE = 0, /* always shown: stick, lift, look, the tray button */
+  SX_TOUCH_GROUP_GRID = 1, /* a fixed slot under the right thumb, shown in context (and not while the tray is open) */
+  SX_TOUCH_GROUP_TRAY = 2  /* in the tray: shown while it is open */
 };
 
 typedef struct sx_touch_widget {
@@ -42,6 +50,7 @@ typedef struct sx_touch_widget {
   float x, y, w, h; /* normalized rect */
   int kind;         /* SX_TOUCH_KIND_* */
   float sign;       /* kind 4: +1 up, -1 down */
+  int group;        /* SX_TOUCH_GROUP_* */
 } sx_touch_widget;
 
 typedef struct sx_touch_rect {
@@ -65,11 +74,12 @@ typedef struct sx_touch_metrics {
 #define SX_TOUCH_LOOK_GAIN (1.0f / 60.0f)
 
 #define SX_TOUCH_MAX_FINGERS 10
+#define SX_TOUCH_MAX_WIDGETS 32
 #define SX_TOUCH_MAX_HUD 3
 typedef struct sx_touch {
   int active; /* becomes 1 on first touch event */
   int nwidgets;
-  sx_touch_widget widgets[16];
+  sx_touch_widget widgets[SX_TOUCH_MAX_WIDGETS];
   struct {
     long long id;
     int widget; /* -1 none */
@@ -93,6 +103,13 @@ typedef struct sx_touch {
   float cx0, cx1;          /* the clear span for centred HUD text, mid-screen (normalized x) */
   sx_touch_rect hud[SX_TOUCH_MAX_HUD]; /* HUD keep-outs no control may cover */
   int nhud;
+  /* declutter-touch-controls */
+  int tray_open;
+  sx_touch_rect tray;    /* the open tray's panel (normalized) */
+  unsigned ctx_hide;     /* bit per sx_touch_ctl: its grid slot is out of context */
+  unsigned shown;        /* bit per widget: drawn and hit-tested now */
+  unsigned frame;        /* frames applied so far (for fades) */
+  unsigned shown_frame[SX_TOUCH_MAX_WIDGETS]; /* the frame each widget last appeared */
 } sx_touch;
 
 /* Fingers that just miss a button still press it within the slop (half a
@@ -121,6 +138,19 @@ void sx_touch_up(sx_touch *t, long long id);
 int sx_touch_held(const sx_touch *t, int i);
 /* The stick finger's base and current point -> 1 when the stick is held */
 int sx_touch_stick(const sx_touch *t, float out[4]);
-/* Write current values into raw->touch and reset look deltas. */
+/* Write current values into raw->touch and reset look deltas; counts a frame
+ * and settles the shown set. */
 void sx_touch_apply(sx_touch *t, sx_raw_input *raw);
+/* declutter-touch-controls: the actions (bit per sx_touch_ctl) whose grid
+ * slots make sense now; the rest hide. Every action stays in the tray. */
+void sx_touch_context(sx_touch *t, unsigned ctl_mask);
+void sx_touch_set_tray(sx_touch *t, int open);
+/* Is widget i shown (drawn, hit-tested)? */
+int sx_touch_shown(const sx_touch *t, int i);
+/* Should widget i be shown (context, tray)? */
+int sx_touch_wanted(const sx_touch *t, int i);
+/* Bring the shown set to the wanted one, except for a widget a finger holds
+ * or rests on: it changes once that finger lifts or moves off (nothing
+ * appears, vanishes or moves under a pressing finger). */
+void sx_touch_settle(sx_touch *t);
 #endif

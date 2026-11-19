@@ -466,8 +466,21 @@ function M.beam(v, state, p, scan)
   end
   M.ct(v, y0 + 10, hint, col)
   n = n + 1
-  -- the scope, bottom right
+  -- the scope, bottom right (on touch: the nearest spot clear of the controls, or none)
   local cx, cy, R = W - 40, H - 70, 22
+  if M.clip then
+    -- (and clear of the text: the top rows, the status, the rows round the crosshair, the log column)
+    local lay = saucer.input.touch_layout()
+    local clip, m = M.clip, lay.msg
+    M.clip = { table.unpack(clip) }
+    for _, r in ipairs(lay.hud or {}) do M.clip[#M.clip + 1] = { r.x * W, r.y * H, r.w * W, r.h * H } end
+    M.clip[#M.clip + 1] = { 0, H // 2 - 34, W, 90 }
+    M.clip[#M.clip + 1] = { m.x * W, m.y * H, m.w * W, m.h * H }
+    local bx, by = M.place(v, 2 * R + 12, 2 * R + 34, cx - R - 6, cy - R - 14)
+    M.clip = clip
+    if not bx then return n end
+    cx, cy = bx + R + 6, by + R + 14
+  end
   v:rect(cx - R - 6, cy - R - 14, 2 * R + 12, 2 * R + 34, { 0, 0.02, 0.06, 0.6 })
   v:text(cx - 16, cy - R - 12, "BEAM", DIM)
   for k = 0, 23 do
@@ -554,6 +567,8 @@ function M.draw(v, state, p, target)
   -- add-mobile-touch-ux: with the touch controls up, centred text keeps to
   -- the span between them and the log and hints go in the clear column
   local mode = saucer.input.device_mode(v.player)
+  -- declutter-touch-controls: the context slots that make sense now
+  if mode == "touch" then saucer.input.touch_context(M.touch_context(state, p, target)) end
   local tl = mode == "touch" and saucer.input.touch_layout() or nil
   M.clip = tl and M.touch_rects(v, tl) or nil
   if p.mode == "wake" then
@@ -966,7 +981,10 @@ end
 -- jammer) and an unavailable state (no decoys left).
 M.TOUCH_LABEL = { stick = "MOVE", lift = "LFT", up = "UP", dn = "DN", shrink = "-SZ", grow = "+SZ",
                   tractor = "BM", scan = "SCN", use = "USE", boost = "BST", jam = "JAM", grapple = "GRP",
-                  decoy = "DEC", map = "MAP" }
+                  decoy = "DEC", map = "MAP", more = "MORE" }
+-- declutter-touch-controls: a context button fades in over ~150 ms with a
+-- highlight pulse of ~400 ms (frames at 60 fps)
+M.FADE_FRAMES, M.PULSE_FRAMES = 9, 24
 local TOUCH_BACK, TOUCH_FILL, TOUCH_EDGE = { 0, 0.02, 0.06, 0.45 }, { 0.4, 0.8, 1, 0.2 }, { 0.7, 0.95, 1, 0.85 }
 local TOUCH_HELD, TOUCH_KNOB, TOUCH_ON = { 0.6, 1, 1, 0.55 }, { 0.8, 1, 1, 0.75 }, { 1, 0.8, 0.3, 0.45 }
 local TOUCH_COOL, TOUCH_SHADOW = { 0, 0, 0, 0.6 }, { 0, 0, 0, 0.85 }
@@ -1002,7 +1020,9 @@ M.ring = ring
 function M.touch_rects(v, lay)
   local W, H, out = v.width, v.height, {}
   for _, w in ipairs(lay) do
-    local r = w.kind == 1 and lay.home or (w.kind ~= 3 and w or nil)
+    -- (every slot, shown or not, so the HUD does not shift when a context
+    -- button comes and goes; not the tray, a menu over the view while open)
+    local r = w.kind == 1 and lay.home or (w.kind ~= 3 and w.group ~= "tray" and w or nil)
     if r then out[#out + 1] = { r.x * W, r.y * H, r.w * W, r.h * H, w.name } end
   end
   return out
@@ -1105,17 +1125,91 @@ function M.touch_state(name, state, p)
   return nil
 end
 
-local function label_at(v, x, y, t, col)
+local function fa(c, a)
+  if a >= 1 then return c end
+  return { c[1], c[2], c[3], (c[4] or 1) * a }
+end
+
+local function label_at(v, x, y, t, col, a)
   -- (on whole HUD pixels: a glyph at a fraction loses rows when the image is scaled up)
   x, y = math.floor(x + 0.5), math.floor(y + 0.5)
-  v:text(x + 1, y + 1, t, TOUCH_SHADOW)
-  v:text(x, y, t, col)
+  v:text(x + 1, y + 1, t, fa(TOUCH_SHADOW, a or 1))
+  v:text(x, y, t, fa(col, a or 1))
+end
+
+-- declutter-touch-controls: which context slots make sense now -> { action = true }.
+-- Use and Boost (and the stick and lift) always show; the scanner and the map
+-- live in the tray; everything is in the tray too.
+local resize_cache = {}
+function M.touch_context(state, p, target)
+  local want = {}
+  if not (state and p) or p.panel or p.mode == "wake" then return want end
+  local mode = p.mode
+  -- the beam: loot lined up in the scope at the helm, the beam console, a pull under way
+  if p.tractor or p.beam_console or (mode == "helm" and target and target.status == "lock") then want.tractor = true end
+  -- grip and climb: the grapple, only on foot in a derelict
+  if mode == "foot" and p.excursion then want.grapple = true end
+  -- sentry trouble: the jammer, and a decoy while you have one
+  if M.alarm(state, p) or p.clamped_by then
+    want.jam = true
+    if (p.decoys or 0) > 0 and p.site ~= 0 then want.decoy = true end
+  end
+  -- a size change where it would go through (room, Charge, not clamped or busy);
+  -- the clearance check runs a few times a second, not every frame
+  if (mode == "helm" or mode == "walk") and p.ship and not (p.visiting or p.tv or p.reading or p.cooking or p.holo_run
+      or p.clamped_by or p.ship.morph) then
+    local key, c = p.index or 1, resize_cache[p.index or 1]
+    local tick = state.tick or 0
+    if not c or tick < c.tick or tick - c.tick >= 10 or c.size ~= p.ship.size or c.mode ~= mode then
+      local game = require("sim.game")
+      c = { tick = tick, size = p.ship.size, mode = mode,
+            shrink = game.can_resize(state, p, p.ship.size + 1), grow = game.can_resize(state, p, p.ship.size - 1) }
+      resize_cache[key] = c
+    end
+    want.shrink, want.grow = c.shrink or nil, c.grow or nil
+  end
+  return want
 end
 
 function M.touch(v, state, p)
   local W, H = v.width, v.height
   local lay = saucer.input.touch_layout()
   local n = 0
+  local function button(w)
+    local x, y, ww, hh = w.x * W, w.y * H, w.w * W, w.h * H
+    local st = M.touch_state(w.name, state, p) or {}
+    if w.kind == 5 and lay.tray_open then st = { on = true } end -- the tray button lit while open
+    -- declutter-touch-controls: a context button fades in with a short pulse
+    local age = w.age or 1e9
+    local a = math.min(1, (age + 1) / M.FADE_FRAMES)
+    v:rect(x, y, ww, hh, fa(TOUCH_BACK, a))
+    v:rect(x, y, ww, hh, fa(w.held and TOUCH_HELD or (st.on and TOUCH_ON or TOUCH_FILL), a))
+    if st.cool then v:rect(x, y, ww, hh * st.cool, fa(TOUCH_COOL, a)) end -- drains from the top
+    outline(v, x, y, ww, hh, fa(st.off and DIM or TOUCH_EDGE, a))
+    if w.held then outline(v, x + 1, y + 1, ww - 2, hh - 2, WHITE) end
+    if age < M.PULSE_FRAMES and w.group ~= "core" then
+      local k = 1 - age / M.PULSE_FRAMES
+      outline(v, x - 2, y - 2, ww + 4, hh + 4, { 1, 1, 1, 0.9 * k })
+      v:rect(x, y, ww, hh, { 1, 1, 1, 0.25 * k })
+    end
+    if w.kind == 2 then
+      -- the lift level: a bar from the middle toward the thumb
+      local mid, lv = y + hh / 2, (w.value or 0) * hh / 2
+      v:rect(x + 2, math.min(mid, mid - lv), ww - 4, math.max(1, math.abs(lv)), TOUCH_KNOB)
+      v:rect(x + 2, mid, ww - 4, 1, WHITE)
+    end
+    local label = M.TOUCH_LABEL[w.name] or w.name:upper()
+    if st.secs then label = tostring(st.secs) .. "S" end
+    if w.kind == 5 and lay.tray_open then label = "X" end
+    if w.kind == 2 and p and p.mode == "helm" and p.ship and p.ship.pos then
+      label = tostring(math.floor(p.ship.pos[2])) -- the altitude, in metres
+    end
+    label = label:sub(1, math.max(1, math.floor((ww - 2) / 8)))
+    local tw = #label * 8
+    local ly = y + (w.kind == 2 and 3 or (hh - 8) / 2) + (w.held and 1 or 0)
+    label_at(v, x + math.max(1, (ww - tw) / 2), ly, label, st.off and DIM or (st.cool and AMBER or WHITE), a)
+    n = n + 1
+  end
   for _, w in ipairs(lay) do
     if w.kind == 1 then
       -- the stick's resting ring in the corner (hidden while the thumb is down)
@@ -1127,30 +1221,18 @@ function M.touch(v, state, p)
         label_at(v, cx - 16, cy - r * 0.35 - 11, "MOVE", DIM)
       end
       n = n + 1
-    elseif w.kind ~= 3 then
-      local x, y, ww, hh = w.x * W, w.y * H, w.w * W, w.h * H
-      local st = M.touch_state(w.name, state, p) or {}
-      v:rect(x, y, ww, hh, TOUCH_BACK)
-      v:rect(x, y, ww, hh, w.held and TOUCH_HELD or (st.on and TOUCH_ON or TOUCH_FILL))
-      if st.cool then v:rect(x, y, ww, hh * st.cool, TOUCH_COOL) end -- drains from the top
-      outline(v, x, y, ww, hh, st.off and DIM or TOUCH_EDGE)
-      if w.held then outline(v, x + 1, y + 1, ww - 2, hh - 2, WHITE) end
-      if w.kind == 2 then
-        -- the lift level: a bar from the middle toward the thumb
-        local mid, lv = y + hh / 2, (w.value or 0) * hh / 2
-        v:rect(x + 2, math.min(mid, mid - lv), ww - 4, math.max(1, math.abs(lv)), TOUCH_KNOB)
-        v:rect(x + 2, mid, ww - 4, 1, WHITE)
-      end
-      local label = M.TOUCH_LABEL[w.name] or w.name:upper()
-      if st.secs then label = tostring(st.secs) .. "S" end
-      if w.kind == 2 and p and p.mode == "helm" and p.ship and p.ship.pos then
-        label = tostring(math.floor(p.ship.pos[2])) -- the altitude, in metres
-      end
-      label = label:sub(1, math.max(1, math.floor((ww - 2) / 8)))
-      local tw = #label * 8
-      local ly = y + (w.kind == 2 and 3 or (hh - 8) / 2) + (w.held and 1 or 0)
-      label_at(v, x + math.max(1, (ww - tw) / 2), ly, label, st.off and DIM or (st.cool and AMBER or WHITE))
-      n = n + 1
+    end
+  end
+  for _, w in ipairs(lay) do
+    if w.shown ~= false and w.group ~= "tray" and w.kind ~= 1 and w.kind ~= 3 then button(w) end
+  end
+  if lay.tray_open then
+    -- the tray: a dark panel under its buttons, over the view
+    local t = lay.tray
+    v:rect(t.x * W - 2, t.y * H - 2, t.w * W + 4, t.h * H + 4, { 0, 0.02, 0.06, 0.8 })
+    outline(v, t.x * W - 2, t.y * H - 2, t.w * W + 4, t.h * H + 4, TOUCH_EDGE)
+    for _, w in ipairs(lay) do
+      if w.group == "tray" and w.shown ~= false then button(w) end
     end
   end
   if lay.stick then
