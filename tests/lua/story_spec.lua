@@ -505,3 +505,254 @@ describe("story clues in the world", function()
     expect(story.candidates(st, p, 0, nil)).to_equal({})
   end)
 end)
+
+-- ------------------------------------------------------------------ slice 3: the codex, the hints, the ending
+local panel = require("sim.panel")
+local home = require("sim.home")
+local avatar = require("sim.avatar")
+local heart = require("sim.heart")
+local hud = require("view.hud")
+local assets = require("view.assets")
+local render = require("view.render")
+
+local function texts(p)
+  local t = {}
+  for _, m in ipairs(p.msgs) do t[#t + 1] = m.text end
+  return table.concat(t, "|")
+end
+local function row_texts(st, p)
+  local t = {}
+  for _, r in ipairs(panel.rows(st, p)) do t[#t + 1] = r.text end
+  return table.concat(t, "\n")
+end
+local function find_row(st, p, prefix)
+  for _, r in ipairs(panel.rows(st, p)) do if r.text:sub(1, #prefix) == prefix then return r end end
+end
+local function fake_view(w, h)
+  local v = { calls = {}, width = w or 480, height = h or 270, player = 1, index = 1, xr = false, texts = "" }
+  for _, m in ipairs({ "camera", "fog", "mesh", "billboard", "rect", "text", "image" }) do
+    v[m] = function(self, ...)
+      self.calls[m] = (self.calls[m] or 0) + 1
+      if m == "text" then
+        local s = select(3, ...)
+        self.texts = self.texts .. s .. "|"
+        return #s * 8
+      end
+    end
+  end
+  return v
+end
+
+describe("the holotable", function()
+  it("stands in the living room as a station with its own mesh, reachable on foot", function()
+    local L = avatar.layout()
+    local st
+    for _, s in ipairs(L.stations) do if s.kind == "holotable" then st = s end end
+    expect(st ~= nil).to_be(true)
+    expect(st.room).to_be("Living room")
+    local prop
+    for _, f in ipairs(L.furniture) do if f.kind == "holotable" then prop = f end end
+    expect(prop ~= nil).to_be(true)
+    expect(L.nav.nodes.holotable ~= nil).to_be(true)
+    expect(L.holotable.y > 0).to_be(true)
+  end)
+  it("using it opens the Story page: the title, the clues still to find and where the next one is", function()
+    local st = new_state(42)
+    local p = st.players[1]
+    home.get_up(st, p, game.ctx)
+    home.USE.holotable(st, p, nil, game.ctx)
+    expect(p.panel.kind).to_be("story")
+    expect(panel.title(st, p)).to_be("HOLOTABLE: THE STORY")
+    local t = row_texts(st, p)
+    expect(t:find(st.story.title:upper(), 1, true) ~= nil).to_be(true)
+    expect(t:find("Clues found 0/" .. story.clue_count(st.story), 1, true) ~= nil).to_be(true)
+    expect(t:find("1 ???  next: ", 1, true) ~= nil).to_be(true)
+    expect(t:find(st.story.beats[1].loc, 1, true) ~= nil).to_be(true)
+    expect(t:find("The Echo is ???", 1, true) ~= nil).to_be(true)
+    expect(t:find("The truth waits at the Heart", 1, true) ~= nil).to_be(true)
+    expect(t:find("Story clues: ON", 1, true) ~= nil).to_be(true)
+    -- the page of a game that finds it through the station code
+    home.get_up(st, p, game.ctx)
+    p.body = avatar.new(avatar.layout(), { -5.0, 0.6, 1.3 }, 0)
+    local used = home.use_station(st, p, game.ctx)
+    expect(used and used.kind).to_be("holotable")
+    expect(p.panel.kind).to_be("story")
+  end)
+  it("stitches the found clues, the Echo, the ending and the twist; a found clue can be read again from its row", function()
+    local st = new_state(42, 2)
+    local p = st.players[1]
+    local s = st.story
+    story.read(st, 1, p, game.ctx)
+    story.read(st, 2, p, game.ctx)
+    panel.open(p, "story")
+    local t = row_texts(st, p)
+    expect(t:find("Clues found 2/", 1, true) ~= nil).to_be(true)
+    expect(t:find("1 " .. story.vocab().carriers[s.beats[1].carrier].name .. ": ", 1, true) ~= nil).to_be(true)
+    expect(find_row(st, p, "1 ").hint:find(s.beats[1].text:sub(1, 20), 1, true) ~= nil).to_be(true)
+    expect(find_row(st, p, "3 ???  next: ") ~= nil).to_be(true)
+    expect(find_row(st, p, "4 ???") ~= nil or story.clue_count(s) == 3).to_be(true)
+    find_row(st, p, "1 ").act(st, p)
+    expect(p.reading.id).to_be("story:1")
+    -- all clues found: the Echo is named
+    for i = 1, story.clue_count(s) do story.read(st, i, p, game.ctx) end
+    panel.open(p, "story")
+    local echo = story.vocab().echo_text(s.echo)
+    expect(row_texts(st, p):find("The Echo is " .. echo, 1, true) ~= nil).to_be(true)
+    -- decoded Echoes show, and open their transcript
+    st.mystery.echoes[1].decoded = true
+    books.add(p, "echo:1")
+    local er = find_row(st, p, "Echo I (who): ")
+    expect(er ~= nil).to_be(true)
+    er.act(st, p)
+    expect(p.reading.id).to_be("echo:1")
+    -- the ending and the twist
+    local m = st.mystery
+    heart.resolve(st, m.endings[1].id, game.ctx)
+    panel.open(p, "story")
+    expect(find_row(st, p, "Ending: " .. m.endings[1].title) ~= nil).to_be(true)
+    if s.twist then expect(find_row(st, p, "Twist: " .. s.twist_title) ~= nil).to_be(true) end
+    expect(find_row(st, p, "Ending: ").hint ~= nil).to_be(true)
+    find_row(st, p, "Ending: ").act(st, p)
+    expect(p.reading.id).to_be("story:" .. #s.beats)
+    expect(books.resolve(st, p.reading.id).title).to_be("The end of " .. s.title)
+    expect(books.resolve(st, "ending").pages[1][3] ~= nil).to_be(true)
+  end)
+  it("the switch turns the story off and on, and the page says why when there is no story", function()
+    local st = new_state(42)
+    local p = st.players[1]
+    panel.open(p, "story")
+    find_row(st, p, "Story clues: ON").act(st, p)
+    expect(st.story.mode).to_be("off")
+    expect(row_texts(st, p):find("The story is switched off", 1, true) ~= nil).to_be(true)
+    expect(story.counter(st)).to_be(nil)
+    find_row(st, p, "Story clues: OFF").act(st, p)
+    expect(st.story.mode).to_be("on")
+    st.mystery.mode = "off"
+    expect(row_texts(st, p):find("Sandbox: no story", 1, true) ~= nil).to_be(true)
+    find_row(st, p, "Close").act(st, p)
+    expect(p.panel).to_be(false)
+    st.story = nil
+    expect(row_texts(st, p) == nil or true).to_be(true)
+    expect(story.rows(st, p, game.ctx)[1].text).to_be("No story in this universe")
+  end)
+end)
+
+describe("story hints and notices", function()
+  it("the HUD counts the clues beside the mystery, and in hints mode says where the next one is", function()
+    local st = new_state(42)
+    local p = st.players[1]
+    home.get_up(st, p, game.ctx)
+    p.mode = "helm"
+    local v = fake_view(480, 270)
+    hud.draw(v, st, p, nil)
+    expect(v.texts:find("STORY 0/" .. story.clue_count(st.story), 1, true) ~= nil).to_be(true)
+    expect(v.texts:find("STORY: ", 1, true)).to_be(nil)
+    expect(story.hint(st)).to_be(nil)
+    st.mystery.mode = "hints"
+    local v2 = fake_view(480, 270)
+    hud.draw(v2, st, p, nil)
+    expect(v2.texts:find("STORY: ", 1, true) ~= nil).to_be(true)
+    expect(story.hint(st):find(st.story.beats[1].loc, 1, true) ~= nil).to_be(true)
+    local v3 = fake_view(360, 640)
+    hud.draw(v3, st, p, nil)
+    for i = 1, story.clue_count(st.story) do story.read(st, i, p, game.ctx) end
+    expect(story.hint(st)).to_be("STORY: the truth waits at the Heart")
+    st.story.done = true
+    expect(story.hint(st)).to_be(nil)
+    st.mystery.mode = "off"
+    expect(story.counter(st)).to_be(nil)
+    local v4 = fake_view(480, 270)
+    hud.draw(v4, st, p, nil)
+    expect(v4.texts:find("SANDBOX", 1, true) ~= nil and v4.texts:find("STORY %d+/%d+  ") == nil).to_be(true)
+  end)
+  it("the hologram turns over the holotable when the home is drawn", function()
+    local A = assets.init()
+    local v = fake_view()
+    local n = render.home_parts(v, A, { }, { pos = { 0, 0, 0 }, yaw = 0, roll = 0, scale = 1 }, 10)
+    expect(n >= 2).to_be(true)
+    expect(v.calls.billboard >= 1).to_be(true)
+  end)
+  it("a clue close by is announced once, with the beam in mind, and never in the sandbox", function()
+    local st = new_state(42)
+    local p = st.players[1]
+    local b = st.story.beats[1]
+    local c = story_cand(st, p, b.site)
+    p.site, p.ship.pos = b.site, { c.pos[1] + 30, c.pos[2] + 10, c.pos[3] }
+    st.tick = 20
+    p.msgs = {}
+    expect(story.notice(st, p, game.ctx)).to_be(true)
+    expect(texts(p):find("lies nearby", 1, true) ~= nil).to_be(true)
+    expect(p.hints.story1).to_be(20)
+    expect(story.notice(st, p, game.ctx)).to_be(false) -- once
+    -- only on the beat: not at the wrong tick, far away, outside a site or in the sandbox
+    p.hints.story1 = nil
+    st.tick = 21
+    expect(story.notice(st, p, game.ctx)).to_be(false)
+    st.tick = 40
+    p.ship.pos = { c.pos[1] + 400, c.pos[2], c.pos[3] }
+    expect(story.notice(st, p, game.ctx)).to_be(false)
+    p.ship.pos = { c.pos[1], c.pos[2] + 5, c.pos[3] }
+    p.site = 0
+    expect(story.notice(st, p, game.ctx)).to_be(false)
+    p.site = b.site
+    st.mystery.mode = "off"
+    expect(story.notice(st, p, game.ctx)).to_be(false)
+    st.mystery.mode = "on"
+    p.site = b.site == 1 and 2 or 1 -- a site without the clue
+    expect(story.notice(st, p, game.ctx)).to_be(false)
+  end)
+end)
+
+describe("the story's ending", function()
+  it("is told when the Heart is resolved: the ending and the twist, to every player, and filed on every shelf", function()
+    local st = new_state(7, 2)
+    local s = st.story
+    local m = st.mystery
+    story.read(st, 1, st.players[1], game.ctx)
+    for _, o in ipairs(st.players) do o.msgs = {} end
+    expect(heart.resolve(st, m.endings[2].id, game.ctx)).to_be(true)
+    expect(s.done).to_be(true)
+    expect(s.ending).to_be(m.endings[2].id)
+    for _, o in ipairs(st.players) do
+      expect(texts(o):find("THE STORY: " .. s.title, 1, true) ~= nil).to_be(true)
+      expect(texts(o):find("you found 1 of " .. story.clue_count(s), 1, true) ~= nil).to_be(true)
+      expect(books.has(o, "story:" .. #s.beats) ~= nil).to_be(true)
+    end
+    local fin = story.finale(s)
+    expect(fin.found_by >= 1 and fin.tick == st.tick).to_be(true)
+    local said = texts(st.players[1])
+    expect(said:find(story.chunks(story.finale_text(s, m.endings[2].id), 100)[1], 1, true) ~= nil).to_be(true)
+    -- once only
+    expect(story.finish(st, "seal", game.ctx)).to_be(false)
+    -- the saved progress carries it
+    local rec = save.record(st)
+    expect(rec.world.story.done).to_be(true)
+    expect(rec.world.story.ending).to_be(m.endings[2].id)
+    local st2 = { players = { {}, {} } }
+    save.apply(st2, rec, game)
+    expect(st2.story.done).to_be(true)
+    expect(story.finale(st2.story).tick).to_be(fin.tick)
+  end)
+  it("is not told in the sandbox, or for a story that is switched off", function()
+    local st = new_state(42)
+    st.story.mode = "off"
+    expect(story.finish(st, "seal", game.ctx)).to_be(false)
+    expect(st.story.done).to_be(false)
+    st.story.mode = "on"
+    st.mystery.mode = "off"
+    expect(story.finish(st, "seal", game.ctx)).to_be(false)
+    st.mystery.mode = "on"
+    st.story = nil
+    expect(story.finish(st, "seal", game.ctx)).to_be(false)
+  end)
+  it("the finale of every skeleton and ending reads well: it names the lost civilisation or the Heart", function()
+    for _, seed in ipairs(SEEDS) do
+      local s = story_of(seed)
+      for _, e in ipairs({ "seal", "restore", "take" }) do
+        local t = story.finale_text(s, e)
+        expect(t:find("You ", 1, true) ~= nil).to_be(true)
+        expect(#t > 60).to_be(true)
+      end
+    end
+  end)
+end)

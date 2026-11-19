@@ -117,15 +117,16 @@ function M.resolve(state, id)
     local s = state.story
     local b = s and s.beats[tonumber(sn)]
     if not b then return { title = "Story page", kind = "clue", pages = { { "(lost)" } } } end
-    local lines = M.wrap(st.full_text(s, tonumber(sn)))
+    local finale = b.finale ~= nil
+    local lines = M.wrap(finale and st.finale_text(s, s.ending or "seal") or st.full_text(s, tonumber(sn)))
     local pages = {}
     for k = 1, #lines, 8 do
       local page = {}
       for j = k, math.min(k + 7, #lines) do page[#page + 1] = lines[j] end
       pages[#pages + 1] = page
     end
-    return { title = string.format("%s %d/%d", st.vocab().carriers[b.carrier].name, tonumber(sn), st.clue_count(s)),
-             kind = "clue", pages = pages }
+    return { title = finale and ("The end of " .. s.title) or string.format("%s %d/%d", st.vocab().carriers[b.carrier].name,
+             tonumber(sn), st.clue_count(s)), kind = "clue", pages = pages }
   end
   -- add-wider-dark: a Xenoarchive lore page (25% of a civ's catalog)
   local lore = id:match("^lore:(.+)$")
@@ -141,7 +142,9 @@ function M.resolve(state, id)
   if id == "ending" then
     local m = state.mystery
     local e = m.ending and require("sim.mystery").ending_of(m, m.ending)
-    local lines = M.wrap(e and (e.title .. ". " .. e.text) or "(the Heart is still beating)")
+    local text = e and (e.title .. ". " .. e.text) or "(the Heart is still beating)"
+    if e and state.story and state.story.done then text = text .. " " .. require("sim.story").finale_text(state.story, m.ending) end
+    local lines = M.wrap(text)
     table.insert(lines, 1, "")
     table.insert(lines, 1, "What we chose at the Heart:")
     return { title = "The Heart", kind = "clue", pages = { lines } }

@@ -1004,6 +1004,7 @@ local function world_step(state, p, dt)
       end
     end
   end
+  story.notice(state, p, ctx_fns)
 end
 
 -- add-wider-dark: launch a Decoy flare ahead of you (inside a site)
@@ -1311,6 +1312,7 @@ panel.register("map", { title = "SECTOR MAP", rows = function(state, p) return g
 panel.register("fold_warn", { title = "FOLD WARNING", rows = function(state, p) return galaxy.warn_rows(state, p, ctx_fns) end })
 panel.register("party", { title = "PARTY", rows = function(state, p) return coop.rows(state, p, ctx_fns) end })
 panel.register("archive", { title = "XENOARCHIVE", rows = function(state, p) return archive.rows(state, p) end })
+panel.register("story", { title = "HOLOTABLE: THE STORY", rows = function(state, p) return story.rows(state, p, ctx_fns) end })
 panel.register("heart", { title = "THE HEART", rows = function(state, p) return heart.rows(state, p) end })
 panel.register("gift_table", { title = "GIFT TABLE", rows = function(state, p) return coop.gift_rows(state, p, ctx_fns) end })
 

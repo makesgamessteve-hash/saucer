@@ -100,6 +100,18 @@ function BUILD.table(out, f, y)
   out[#out + 1] = box((b[1] + b[3]) / 2 - 0.1, y, (b[2] + b[4]) / 2 - 0.1, (b[1] + b[3]) / 2 + 0.1, y + f.h - 0.06,
                       (b[2] + b[4]) / 2 + 0.1, darker(f.color, 0.7))
 end
+-- add-run-story: the holotable, a drum with a lit rim and a lens; the hologram above it is drawn by view/render.lua
+function BUILD.holotable(out, f, y)
+  local b = f.box
+  local cx, cz = (b[1] + b[3]) / 2, (b[2] + b[4]) / 2
+  local w, d = (b[3] - b[1]) / 2, (b[4] - b[2]) / 2
+  out[#out + 1] = box(b[1], y, b[2], b[3], y + 0.14, b[4], darker(f.color, 0.6))
+  out[#out + 1] = box(b[1] + 0.12, y + 0.14, b[2] + 0.12, b[3] - 0.12, y + f.h - 0.08, b[4] - 0.12, f.color)
+  out[#out + 1] = box(b[1] - 0.03, y + f.h - 0.08, b[2] - 0.03, b[3] + 0.03, y + f.h, b[4] + 0.03, { 0.45, 0.9, 1.0 },
+                      { emissive = 0.7 })
+  local r = math.min(w, d) * 0.5
+  out[#out + 1] = box(cx - r, y + f.h, cz - r, cx + r, y + f.h + 0.03, cz + r, { 0.55, 0.95, 1.0 }, { emissive = 0.9 })
+end
 function BUILD.plant(out, f, y)
   local b = f.box
   local cx, cz, r = (b[1] + b[3]) / 2, (b[2] + b[4]) / 2, (b[3] - b[1]) / 2

@@ -64,3 +64,13 @@ T.wait(5)
 T.assert(T.state().story.beats[1].found_by == 1 and T.state().story.beats[1].tick == b1.tick, "the load put the progress back")
 T.assert(story.next_clue(T.state().story) == 2, "and the next clue is still the second")
 T.assert(books.has(T.state().players[1], "story:1") ~= nil, "with its page on the shelf")
+
+-- the holotable: walk to it, use it, the Story page lists the clue and where the next one is
+T.assert(ap.walk_to_station(T, 1, get, "holotable"), "walked to the holotable")
+T.press(1, "use")
+T.wait(1)
+T.assert(get().panel and get().panel.kind == "story", "the Story page opened")
+T.screenshot("story_codex.png")
+T.assert(ap.pick(T, 1, get, "1 "), "opened the first clue from the page")
+T.assert(get().reading and get().reading.id == "story:1", "and it reads again")
+T.screenshot("story_codex_read.png")
