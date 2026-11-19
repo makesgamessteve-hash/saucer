@@ -17,7 +17,7 @@ return {
     },
     log = {
       "A wreck log at {next_loc} carries on.",
-      "The log's last line gives a bearing: {next_loc}.",
+      "The last line of a wreck log gives a bearing: {next_loc}.",
     },
     mural = {
       "A mural at {next_loc} shows what came next.",
