@@ -243,6 +243,138 @@ function M.finale_text(s, ending_id)
   return t
 end
 
+-- ---------------------------------------------------------------- in the world
+
+local QUARTERS = { { -1, 1 }, { 1, -1 }, { -1, -1 }, { 1, 1 } } -- (the Echo keeps the vault's +x +z)
+local placed = setmetatable({}, { __mode = "k" })
+
+local function overlaps_debris(ruin, p)
+  for _, d in ipairs(ruin.debris or {}) do
+    local mn, mx = d[1], d[2]
+    if mn and mx and p[1] > mn[1] - 1.5 and p[1] < mx[1] + 1.5 and p[3] > mn[3] - 1.5 and p[3] < mx[3] + 1.5 then return true end
+  end
+  return false
+end
+
+-- where beat b lies in the site's ruin -> pos, room id, district (for an archive record). A pure function
+-- of the layout and the beat's salt: an archive record sits in a city's archive hall, a log or a mural a
+-- quarter of a great hall in from two walls (so the whole Villa can hover over it), clear of the crates.
+function M.place(ruin, b)
+  local memo = placed[ruin]
+  if not memo then
+    memo = {}
+    placed[ruin] = memo
+  end
+  local hit = memo[b.n]
+  if hit == nil then
+    hit = false
+    local rm = require("sim.ruin")
+    local kit = rm.kit_of(ruin.kit)
+    local function box(r) return rm.room_box(r, kit, ruin.origin) end
+    local clues = ruin.city and ruin.city.clues or nil
+    if b.carrier == "archive" and clues and #clues > 0 then
+      local c = clues[(b.slot - 1) % #clues + 1]
+      local mn, mx = box(ruin.rooms[c.room])
+      hit = { { (mn[1] + mx[1]) / 2, c.pos[2], (mn[3] + mx[3]) / 2 - 6 }, c.room, c.district }
+    else
+      local halls, any = {}, {}
+      for _, r in ipairs(ruin.rooms) do
+        if r.kind == "hall" and r.class >= (kit.big or 4) then halls[#halls + 1] = r
+        elseif r.kind ~= "shaft" and r.kind ~= "duct" and r.kind ~= "vault" and r.class >= 2 then any[#any + 1] = r end
+      end
+      local pool = #halls > 0 and halls or any
+      if #pool == 0 then pool = { ruin.rooms[1] } end
+      local r = pool[b.salt % #pool + 1]
+      local mn, mx = box(r)
+      for k = 0, #QUARTERS - 1 do
+        local q = QUARTERS[(b.salt + k) % #QUARTERS + 1]
+        local pos = { (mn[1] + mx[1]) / 2 + q[1] * (mx[1] - mn[1]) / 4, mn[2] + kit.wall + 0.8,
+                      (mn[3] + mx[3]) / 2 + q[2] * (mx[3] - mn[3]) / 4 }
+        if k == #QUARTERS - 1 or not overlaps_debris(ruin, pos) then
+          hit = { pos, r.id }
+          break
+        end
+      end
+    end
+    memo[b.n] = hit
+  end
+  if not hit then return nil end
+  return hit[1], hit[2], hit[3]
+end
+
+-- the beam target of beat i
+function M.item(s, i)
+  local b = s.beats[i]
+  local c = M.vocab().carriers[b.carrier]
+  return { name = c and c.name or "Clue", type = "story", size = 1, value = 0, ident = true, story = i }
+end
+
+-- the one clue to be found at this site right now: the next unfound beat, if it is bound here (and, for
+-- an archive record, its district's grid is on) -> tractor candidates
+function M.candidates(state, p, site_idx, ruin)
+  local out = {}
+  if not ruin or not M.active(state) then return out end
+  local s = state.story
+  local i = M.next_clue(s)
+  if not i then return out end
+  local b = s.beats[i]
+  if b.sector ~= (state.sector_id or 1) or b.site ~= site_idx then return out end
+  local pos, room, district = M.place(ruin, b)
+  if not pos then return out end
+  if district and not require("sim.cities").powered(state, site_idx, ruin, district) then return out end
+  out[1] = { key = "story:" .. i, kind = "story", pos = pos, room = room, district = district, story = i, carrier = b.carrier,
+             item = M.item(s, i) }
+  return out
+end
+
+-- the text of beat i in short chunks for the message log (two screen lines each)
+function M.chunks(text, width)
+  local out, cur = {}, ""
+  for sentence in (text .. " "):gmatch("(.-[%.%?!'\"]+)%s+") do
+    if #cur > 0 and #cur + 1 + #sentence > width then
+      out[#out + 1] = cur
+      cur = sentence
+    else
+      cur = #cur > 0 and (cur .. " " .. sentence) or sentence
+    end
+  end
+  if #cur > 0 then out[#out + 1] = cur end
+  if #out == 0 then out[1] = text end
+  return out
+end
+
+-- a player reads clue i in place: it is found for the whole party (one story per universe), filed on every
+-- bookshelf, and says where the next one is. ctx = { msg, fx }. -> true when it was new
+function M.read(state, i, p, ctx)
+  local s = state.story
+  local b = s and s.beats[i]
+  if not b or i > M.clue_count(s) or b.found_by ~= 0 then return false end
+  b.found_by, b.tick = p.index, state.tick
+  local books = require("sim.books")
+  local n, total = M.found_count(s), M.clue_count(s)
+  local name = M.vocab().carriers[b.carrier].name
+  for _, o in ipairs(state.players) do
+    books.add(o, "story:" .. i)
+    if o == p then
+      ctx.msg(state, o, string.format("STORY %d/%d  %s (filed on your bookshelf)", n, total, name))
+      for k, chunk in ipairs(M.chunks(M.full_text(s, i), 100)) do
+        if k <= 4 then ctx.msg(state, o, chunk) end
+      end
+    else
+      ctx.msg(state, o, string.format("P%d read a story clue: %s (%d/%d, on your bookshelf)", p.index, name, n, total))
+    end
+  end
+  -- a lead on the radar when the next place is in this sector
+  local nxt = s.beats[i + 1]
+  if nxt and nxt.sector == (state.sector_id or 1) and i + 1 <= total then
+    p.leads = p.leads or {}
+    p.leads[tostring(nxt.site)] = true
+  end
+  ctx.fx(state, p, "echo")
+  saucer.events.emit({ type = "story_clue", player = p.index, beat = i })
+  return true
+end
+
 -- ---------------------------------------------------------------- saving
 
 -- what a save keeps: the mode, who found each beat and when (the text regenerates)

@@ -110,6 +110,23 @@ function M.resolve(state, id)
     table.insert(lines, 1, "Decoded at the lab bench:")
     return { title = "Echo " .. num .. " transcript", kind = "clue", pages = { lines } }
   end
+  -- add-run-story: a clue of the run's story, filed when it was found
+  local sn = id:match("^story:(%d+)$")
+  if sn then
+    local st = require("sim.story")
+    local s = state.story
+    local b = s and s.beats[tonumber(sn)]
+    if not b then return { title = "Story page", kind = "clue", pages = { { "(lost)" } } } end
+    local lines = M.wrap(st.full_text(s, tonumber(sn)))
+    local pages = {}
+    for k = 1, #lines, 8 do
+      local page = {}
+      for j = k, math.min(k + 7, #lines) do page[#page + 1] = lines[j] end
+      pages[#pages + 1] = page
+    end
+    return { title = string.format("%s %d/%d", st.vocab().carriers[b.carrier].name, tonumber(sn), st.clue_count(s)),
+             kind = "clue", pages = pages }
+  end
   -- add-wider-dark: a Xenoarchive lore page (25% of a civ's catalog)
   local lore = id:match("^lore:(.+)$")
   if lore then
