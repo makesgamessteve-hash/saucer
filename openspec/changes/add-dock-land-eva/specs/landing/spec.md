@@ -42,3 +42,24 @@ Outside a landed Villa the player SHALL be able to fold it into their hand and p
 #### Scenario: Pocket and unpocket
 - **WHEN** the player folds the standing Villa and later unfolds it
 - **THEN** it goes into the pocket, and unfolds ahead of the player standing on its gear with the stairs ready
+
+### Requirement: Station tractor dock
+Every trader station SHALL carry a hangar bay with a dock pad, walls, a force field across its front and a door in its back wall that leads into the station. A Villa that approaches the bay slowly, in front of it, SHALL be taken over by the station's tractor beam and towed in along a smooth curve onto the pad, where the pad's clamps close on its feet.
+
+#### Scenario: Approaching the bay
+- **WHEN** the Villa slows down within the capture radius in front of a station's bay
+- **THEN** the tractor beam takes over, tows it onto the dock pad, and the clamps close
+
+### Requirement: Cancelling and leaving the dock
+The player SHALL be able to cancel the tow by pulling away or with the Land button, and the beam SHALL NOT grab the saucer again until it has left the beam's reach. The Land button near the bay SHALL ask for a tow. At lift-off the clamps SHALL open before the saucer rises, and the beam SHALL carry it out of the bay before the helm is the player's again.
+
+#### Scenario: Pulling away
+- **WHEN** the player thrusts away from the bay for a moment during the tow
+- **THEN** the beam lets go and does not grab again until the saucer is clear of its reach
+
+### Requirement: Walking the dock
+The bay SHALL hold breathable air, so leaving the Villa there needs no helmet or airlock cycle. The bay door SHALL lead into the walkable station and back, with the Villa staying docked. The player SHALL be able to fold the Villa into the pocket in the bay and unfold it again where there is clear space; with none the Villa SHALL NOT unfold and the player SHALL be told so. The Villa SHALL NOT pocket from aboard at a station.
+
+#### Scenario: Through the bay door
+- **WHEN** the player walks down the stairs, across the bay and through its back door
+- **THEN** they are on the station's concourse, the Villa is docked and clamped, and walking back through the door returns them to the bay

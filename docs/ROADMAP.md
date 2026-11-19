@@ -542,9 +542,15 @@ the ground under the feet, refuses a drop-off or a slope, settles at a walking p
 hatch aft of the engine room slides open (never while flying, and only once the suit has sealed in
 vacuum or toxic air) and unfolds stairs to the ground; you walk out and back in first person, fold the
 standing Villa into your hand from outside, pocket it and unfold it again on its gear. The Villa no
-longer pockets from aboard in a derelict. State version 14. *Slice 2 — station tractor dock*,
-*slice 3 — land anywhere* and *slice 4 — EVA kit* (helmet, helmet HUD, jetpack, return assist, emergency
-teleport) follow.
+longer pockets from aboard in a derelict. State version 14. *Slice 2 — station tractor dock (done):* every
+trader station carries a fixed hangar cell above its ring (floor, walls, force field, a door in the back
+wall); slow in front of it and the tractor beam takes over, tows the Villa in along a curve and sets it on
+the dock pad where clamps close on its feet (pull away, or Land, to cancel; Land also asks for a tow);
+the hull door opens onto the bay's own air (no helmet), the bay door leads into the walkable station and
+back, the Villa folds into the pocket and unfolds in the bay (a clear-space prompt if there is none), and
+lift-off opens the clamps and carries the saucer out. The Villa no longer pockets from aboard at a station
+either. *Slice 3 — land anywhere* and *slice 4 — EVA kit* (helmet, helmet HUD, jetpack, return assist,
+emergency teleport) follow.
 
 ## Remaining work after milestone 10
 

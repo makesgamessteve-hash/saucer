@@ -37,6 +37,9 @@ end
 -- the environment for player p right now: a station hangar has air
 function M.at(state, p)
   if p.station or (p.berth and p.berth.kind == "bay") then return copy(M.AIR) end
+  -- a person (or a pocketed saucer) inside a station's hangar bay breathes its air
+  local at = (p.mode == "foot" and p.excursion and p.excursion.body.pos) or p.ship.pos
+  if p.site == 0 and require("sim.dock").inside(state, at) then return copy(M.AIR) end
   return M.of_site(p.site)
 end
 

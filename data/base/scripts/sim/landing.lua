@@ -111,6 +111,10 @@ end
 
 -- begin landing (the helm's Land button)
 function M.start(state, p, ctx)
+  -- near a station's bay the Land button asks the beam for a tow
+  local dock = require("sim.dock")
+  local idx = dock.can_capture(state, p)
+  if idx then return dock.start(state, p, idx, ctx, "You ask the station for a tow: the tractor beam takes you in. Pull away to cancel.") end
   local ok, why, rep = M.can_land(state, p)
   if not ok then
     if why == "site" then return false end
@@ -143,6 +147,10 @@ function M.step(state, p, dt, ctx)
   local T = M.tune()
   local ship = p.ship
   ship.vel = { 0, 0, 0 }
+  -- the station's tractor beam owns the guide and the release (sim/dock.lua)
+  local dock = require("sim.dock")
+  if b.phase == "guide" or b.phase == "release" then return dock.step(state, p, dt, ctx) end
+  if b.kind == "bay" then dock.clamps(b, dt) end
   b.t = b.t + dt
   if b.phase == "descend" then
     local d = ship.pos[2] - b.at[2]
@@ -156,7 +164,8 @@ function M.step(state, p, dt, ctx)
     if y <= b.at[2] + 1e-9 then
       b.phase, b.t, b.legs = "landed", 0, 1
       ship.pos = { b.at[1], b.at[2], b.at[3] }
-      ctx.msg(state, p, "Touchdown. The Villa stands on its gear: walk aft to the hull hatch.")
+      ctx.msg(state, p, b.kind == "bay" and "Touchdown on the dock pad: the clamps close. Walk aft to the hull hatch."
+        or "Touchdown. The Villa stands on its gear: walk aft to the hull hatch.")
       ctx.fx(state, p, "bank")
       saucer.events.emit({ type = "landed", player = p.index, site = p.site })
     end
@@ -169,10 +178,16 @@ function M.step(state, p, dt, ctx)
     return true
   else -- lift
     b.target_y = b.target_y or (b.at[2] + T.lift_height)
+    if b.kind == "bay" and (b.clamp or 0) > 0 then return true end   -- the clamps open first
     local y = math.min(b.target_y, ship.pos[2] + T.lift_speed * dt)
     ship.pos = { ship.pos[1], y, ship.pos[3] }
     b.legs = math.max(0, b.legs - dt / T.gear_time)
     if y >= b.target_y - 1e-9 and b.legs <= 0 then
+      if b.kind == "bay" then
+        b.phase, b.t = "release", 0
+        ctx.msg(state, p, "Clamps open, gear up: the beam carries you out of the bay.")
+        return true
+      end
       p.berth = false
       ctx.msg(state, p, "Gear up. The helm is yours.")
     end
@@ -202,6 +217,8 @@ function M.press(state, p, ctx)
   local b = p.berth
   if not b then return M.start(state, p, ctx) end
   if b.phase == "landed" then return M.lift_off(state, p, ctx) end
+  if b.phase == "guide" then return require("sim.dock").cancel(state, p, ctx) end
+  if b.phase == "release" then return false end
   if b.phase == "descend" then
     b.phase, b.t, b.target_y = "lift", 0, p.ship.pos[2] + 2
     ctx.msg(state, p, "Landing aborted: gear up.")

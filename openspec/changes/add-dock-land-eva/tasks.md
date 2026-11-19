@@ -4,15 +4,15 @@
 - [x] 1.2 `sim/hulldoor.lua`: hull hatch state, airlock cycle in vacuum or toxic air, hysteresis and minimum open time, stairs geometry for the ground, walking the stairs
 - [x] 1.3 `sim/env.lua`: where you are (vacuum, toxic, air) for the suit
 - [x] 1.4 `sim/excursion.lua`: the standing Villa (`stand` coin), fold from outside, unfold with room checks, board by the stairs
-- [x] 1.5 Input: `land`, `home`, `assist` buttons; state version 13
+- [x] 1.5 Input: `land`, `home`, `assist` buttons; state version 14
 - [x] 1.6 View: legs, door leaves, belly plates, stairs (`view/gear.lua`); the hull gets a doorway (`gap` on lathe shells), the lower deck wall a frame
 - [x] 1.7 Tests: `tests/game/hatch.lua` (+ restore every tick), `tests/lua/landing_spec.lua`, replays re-recorded
 
 ## 2. Slice 2: station tractor dock
 
-- [ ] 2.1 Tractor guide into the hangar bay, cancel by pulling away, dock pad with clamps
-- [ ] 2.2 Door and stairs onto the hangar floor; pocket and unpocket in the hangar with a clear-space prompt
-- [ ] 2.3 Tests
+- [x] 2.1 Tractor guide into the hangar bay, cancel by pulling away, dock pad with clamps
+- [x] 2.2 Door and stairs onto the hangar floor; pocket and unpocket in the hangar with a clear-space prompt
+- [x] 2.3 Tests: `tests/game/dock.lua` (+ restore every tick), `tests/lua/dock_spec.lua`
 
 ## 3. Slice 3: land anywhere
 

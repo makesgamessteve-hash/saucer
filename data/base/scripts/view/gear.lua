@@ -154,7 +154,7 @@ end
 
 -- everything for one saucer
 function M.draw(v, A, o, d)
-  return M.legs(v, A, o, d) + M.door(v, A, o, d) + M.stairs(v, A, o, d)
+  return M.legs(v, A, o, d) + M.door(v, A, o, d) + M.stairs(v, A, o, d) + require("view.dock").clamps(v, A, o)
 end
 
 return M

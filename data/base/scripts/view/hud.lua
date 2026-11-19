@@ -182,7 +182,12 @@ function M.status(p, state)
     if st then return room, st.label end
     return room, nil
   end
-  if configs.get(p.ship.size).interior then return "AT THE HELM", "USE: STAND UP" end
+  if configs.get(p.ship.size).interior then
+    local w, h
+    if state then w, h = require("sim.dock").hint(state, p) end
+    if w then return w, h end
+    return "AT THE HELM", "USE: STAND UP"
+  end
   return "SEAT", "F: MINI BEAM  E: UNFOLD THE VILLA"
 end
 

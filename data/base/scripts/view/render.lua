@@ -1109,6 +1109,7 @@ function M.render(v, state, alpha)
   for _, tr in ipairs(state.sector.traders or { state.sector.trader }) do
     v:mesh(A.station, { pos = tr.pos, yaw = state.tick * 0.002 })
   end
+  require("view.dock").draw(v, A, state, cam)
   M.draw_sentries(v, A, state, p)
   -- add-on-foot-excursions: shutters, hand-locks, grid consoles, Delicate finds
   local exv = require("view.excursion")

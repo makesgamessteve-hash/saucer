@@ -74,6 +74,8 @@ function M.rebuild(state)
   M.state_ref = state
   saucer.physics.clear()
   for _, b in ipairs(M.extra_solids) do saucer.physics.add_box(b[1], b[2], 1) end
+  -- add-dock-land-eva: every station's hangar bay
+  for _, b in ipairs(require("sim.dock").solids(state)) do saucer.physics.add_box(b[1], b[2], 1) end
   civs.use(state.seed)
   rt.ruins, rt.bounds, rt.sentries, rt.shutters, rt.seals, rt.gates = {}, {}, {}, {}, {}, {}
   rt.fallen, rt.bridge_box = {}, {}
@@ -244,7 +246,7 @@ function M.new_player(index, pos, yaw)
     fold_tier = 1, decoys = sentry.tune().decoy.start, shroud = false, shake = 0, spike = false,
     rep = {}, archive = {}, met = {}, archive_rewards = {}, away = {}, visiting = false,
     -- add-dock-land-eva: the saucer's berth (landed or docked), the hull door and the helmet
-    berth = false, door = false, suited = false,
+    berth = false, door = false, suited = false, dock_off = false,
   }
   holo.ensure(p)
   kitchen.ensure(p)
@@ -494,10 +496,11 @@ local function size_request(state, p, to)
   local tc = configs.get(to)
   if tc and tc.pocket then
     -- add-dock-land-eva: the Villa no longer pops you out into a derelict: land, walk out through the
-    -- hull hatch and fold it from outside. (A Villa docked at a station still folds from aboard until
-    -- the tractor dock slice; the one-seat Seat has no stairs and still steps out.)
-    if configs.get(from).interior and p.site ~= 0 then
-      msg(state, p, "Land (L at the helm), leave through the hull hatch aft of the engine room, then fold the Villa from outside")
+    -- hull hatch and fold it from outside; at a station the tractor beam tows it into the bay first. (The
+    -- one-seat Seat has no stairs and still steps out.)
+    if configs.get(from).interior then
+      msg(state, p, p.site ~= 0 and "Land (L at the helm), leave through the hull hatch aft of the engine room, then fold the Villa from outside"
+        or "Dock in a station's bay (its tractor beam tows you in), leave through the hull hatch, then fold the Villa from outside")
       fx(state, p, "denied")
       return
     end
@@ -1160,6 +1163,7 @@ function M.step_player(state, p, cmd, dt)
     M.spike_step(state, p, cmd, dt)
     if p.berth then landing.step(state, p, dt, ctx_fns) end
     excursion.step(state, p, cmd, dt, ctx_fns)
+    if p.excursion and p.site == 0 then require("sim.dock").door_step(state, p, ctx_fns) end
     world_step(state, p, dt)
     return
   end
@@ -1199,6 +1203,8 @@ function M.step_player(state, p, cmd, dt)
   if p.mode == "helm" and p.berth and p.berth.phase == "landed" and cmd:axis("lift") > 0.5 then
     landing.lift_off(state, p, ctx_fns)
   end
+  if p.mode == "helm" and not p.berth and not ship.morph then require("sim.dock").auto(state, p, dt, ctx_fns) end
+  require("sim.dock").watch(state, p, cmd, dt, ctx_fns)
   local berthed = p.berth and not ship.morph and landing.step(state, p, dt, ctx_fns)
   if ship.morph then
     ship.vel = { 0, 0, 0 }

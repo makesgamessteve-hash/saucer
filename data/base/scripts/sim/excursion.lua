@@ -442,7 +442,8 @@ local function stand_up(state, p, ctx)
   local landing = require("sim.landing")
   local ship = p.ship
   local rep = landing.probe(state, p, ship.pos, ship.yaw)
-  p.berth = { phase = "landed", kind = "surface", legs = 1, t = 0, ref = rep.ref or ship.pos[2] - landing.tune().leg_len,
+  local bay = require("sim.dock").inside(state, ship.pos)
+  p.berth = { phase = "landed", kind = bay and "bay" or "surface", bay = bay, clamp = 0, legs = 1, t = 0, ref = rep.ref or ship.pos[2] - landing.tune().leg_len,
               feet = rep.feet or {}, at = vec.copy(ship.pos), yaw = ship.yaw, site = p.site }
   ex.coin, ex.deploy = "stand", false
   require("sim.hulldoor").ensure(p)
@@ -899,7 +900,7 @@ end
 function M.status(state, p)
   local ex = p.excursion
   local names = { crawl = "CRAWLSPACE", chamber = "CHAMBER", strong = "STRONGROOM", hall = "HALL" }
-  local where = string.format("ON FOOT: DERELICT %d %s", ex.site, names[ex.area] or "HALL")
+  local where = ex.site == 0 and "ON FOOT: STATION BAY" or string.format("ON FOOT: DERELICT %d %s", ex.site, names[ex.area] or "HALL")
   if ex.coin == "fold" then return where, "THE SAUCER IS FOLDING INTO YOUR HAND" end
   if ex.coin == "grow" then return where, "STAND BACK: THE SEAT IS UNFOLDING" end
   if ex.work then
@@ -913,6 +914,7 @@ function M.status(state, p)
     return where, "USE: TAKE " .. (t.cand.kind == "cache" and "YOUR CACHE" or items.label(t.cand.item):upper())
   end
   if ex.coin == "stand" then return where, M.stand_text(state, p) end
+  if ex.site == 0 then return where, "THE DOOR IN THE BACK WALL LEADS INTO THE STATION" end
   return where, nil
 end
 

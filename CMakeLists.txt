@@ -168,6 +168,12 @@ if(SAUCER_BUILD_TESTS)
   add_test(NAME game_hatch_restore_every_tick COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR}
            --user-dir ${USERDIR}-hatch-ret --quiet --seed 42 --ticks 40000 --script tests/game/hatch.lua
            --restore-every-tick WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  # add-dock-land-eva slice 2: the station's tractor dock, the bay, the station door, pocket and unpocket in the bay
+  add_test(NAME game_dock COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-dock --quiet
+           --seed 42 --ticks 60000 --script tests/game/dock.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  add_test(NAME game_dock_restore_every_tick COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR}
+           --user-dir ${USERDIR}-dock-ret --quiet --seed 42 --ticks 60000 --script tests/game/dock.lua
+           --restore-every-tick WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   # milestone 7: step out in a derelict, crawl, turn a hand-lock, shut the grid, fail with the Lifeline, recover the cache
   add_test(NAME game_excursion COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-excursion --quiet
            --seed 42 --ticks 40000 --script tests/game/excursion.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})

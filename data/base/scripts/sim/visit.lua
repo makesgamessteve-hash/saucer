@@ -460,6 +460,10 @@ function M.step(state, p, cmd, dt, ctx)
   for i, k in ipairs({ "size1", "size2" }) do
     if cmd:pressed(k) and i < ps then want = i end
   end
+  if st.coin == "docked" then
+    if want then ctx.msg(state, p, "The Villa is docked in the bay: go back through the bay door to it") end
+    want = nil
+  end
   if want and want >= 1 then
     M.unpocket(state, p, want, ctx)
     if p.mode ~= "foot" or st.coin == "grow" then return end
@@ -478,6 +482,8 @@ function M.step(state, p, cmd, dt, ctx)
     ctx.msg(state, p, a.name)
   end
   M.thief_step(state, p, dt, ctx)
+  -- add-dock-land-eva: the bay door is the doorway to the arrival hangar
+  if st.dock then require("sim.dock").station_door_step(state, p, ctx) end
 end
 
 -- a menu is open on foot (haggling at a stall, the bar): you stand still,
@@ -512,6 +518,7 @@ function M.coin_text(p)
   local c = p.station.coin
   if c == "pocket" then return "SAUCER: IN YOUR POCKET", "ok" end
   if c == "hand" then return "SAUCER: IN YOUR HAND", "ok" end
+  if c == "docked" then return "SAUCER: DOCKED IN THE BAY", "ok" end
   if c == "thief" then return "SAUCER: STOLEN - CATCH THE THIEF!", "alarm" end
   if c == "fence" then return "SAUCER: WITH THE FENCE AT THE BAR", "alarm" end
   return "SAUCER: RESHAPING", "busy"
