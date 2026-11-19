@@ -35,9 +35,63 @@ typedef struct app {
   char net_title[160];
   SDL_JoystickID pads[SX_MAX_PADS];
   SDL_Gamepad *pad_handles[SX_MAX_PADS];
+  float safe[4]; /* add-mobile-touch-ux: safe-area insets in CSS px (left, top, right, bottom), from the page */
+  float img[4];  /* where the game image sits in the window (logical px): x, y, w, h */
 } app;
 
 static app A;
+
+/* add-mobile-touch-ux: size the low-res target to the window (--fill) and
+ * fit the touch controls to the image, its safe area and the HUD. Fingers
+ * held through a resize or a rotation are let go. */
+static void touch_relayout(void) {
+  sx_engine *e = A.e;
+  sx_touch_metrics m;
+  int lw, lh, tw, th;
+  float s;
+  if (!e) return;
+  SDL_GetWindowSize(A.win, &lw, &lh);
+  if (lw < 1) lw = 1;
+  if (lh < 1) lh = 1;
+  if (e->render.settings.fill) {
+    sx_touch_fit_target(lw, lh, &tw, &th);
+    e->render.settings.width = tw;
+    e->render.settings.height = th;
+    A.img[0] = A.img[1] = 0;
+    A.img[2] = (float)lw;
+    A.img[3] = (float)lh;
+  } else {
+    tw = e->render.settings.width;
+    th = e->render.settings.height;
+    s = (float)lw / (float)tw < (float)lh / (float)th ? (float)lw / (float)tw : (float)lh / (float)th;
+    A.img[2] = (float)tw * s;
+    A.img[3] = (float)th * s;
+    A.img[0] = ((float)lw - A.img[2]) * 0.5f;
+    A.img[1] = ((float)lh - A.img[3]) * 0.5f;
+  }
+  memset(&m, 0, sizeof m);
+  m.w = A.img[2];
+  m.h = A.img[3];
+  m.hud_w = e->render.settings.width;
+  m.hud_h = e->render.settings.height;
+  m.safe[0] = A.safe[0] - A.img[0];
+  m.safe[1] = A.safe[1] - A.img[1];
+  m.safe[2] = A.safe[2] - ((float)lw - A.img[0] - A.img[2]);
+  m.safe[3] = A.safe[3] - ((float)lh - A.img[1] - A.img[3]);
+  sx_touch_layout(&e->touch, &m);
+}
+
+/* a finger's window-normalized point -> normalized over the game image */
+static float touch_x(float x) {
+  int lw, lh;
+  SDL_GetWindowSize(A.win, &lw, &lh);
+  return A.img[2] > 0 ? (x * (float)lw - A.img[0]) / A.img[2] : x;
+}
+static float touch_y(float y) {
+  int lw, lh;
+  SDL_GetWindowSize(A.win, &lw, &lh);
+  return A.img[3] > 0 ? (y * (float)lh - A.img[1]) / A.img[3] : y;
+}
 
 static void png_sink(void *ctx, void *data, int size) { sx_buf_put((sx_buf *)ctx, data, (size_t)size); }
 
@@ -121,7 +175,7 @@ static void handle_event(const SDL_Event *ev) {
     if (s >= 0 && ev->gaxis.axis < 8) raw->pad_axis[s][ev->gaxis.axis] = (float)ev->gaxis.value / 32767.0f;
     break;
   case SDL_EVENT_FINGER_DOWN:
-    sx_touch_down(&e->touch, (long long)ev->tfinger.fingerID, ev->tfinger.x, ev->tfinger.y);
+    sx_touch_down(&e->touch, (long long)ev->tfinger.fingerID, touch_x(ev->tfinger.x), touch_y(ev->tfinger.y));
 #ifdef __EMSCRIPTEN__
     if (e->touch.buzz) {
       /* add-presentation-packaging: a short tick under the thumb on button presses */
@@ -130,16 +184,13 @@ static void handle_event(const SDL_Event *ev) {
     }
 #endif
     break;
-  case SDL_EVENT_FINGER_MOTION: sx_touch_move(&e->touch, (long long)ev->tfinger.fingerID, ev->tfinger.x, ev->tfinger.y); break;
+  case SDL_EVENT_FINGER_MOTION:
+    sx_touch_move(&e->touch, (long long)ev->tfinger.fingerID, touch_x(ev->tfinger.x), touch_y(ev->tfinger.y));
+    break;
   case SDL_EVENT_FINGER_UP:
   case SDL_EVENT_FINGER_CANCELED: sx_touch_up(&e->touch, (long long)ev->tfinger.fingerID); break;
-  case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
-    if (e->touch.nfingers == 0) {
-      int active = e->touch.active;
-      sx_touch_init(&e->touch, (float)ev->window.data1 / (float)(ev->window.data2 > 0 ? ev->window.data2 : 1));
-      e->touch.active = active;
-    }
-    break;
+  case SDL_EVENT_WINDOW_RESIZED:
+  case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED: touch_relayout(); break; /* rotation and resize */
   case SDL_EVENT_WINDOW_FOCUS_LOST:
     memset(raw->keys, 0, sizeof raw->keys);
     memset(raw->mouse_btn, 0, sizeof raw->mouse_btn);
@@ -285,6 +336,15 @@ EM_JS(int, saucer_web_net_send, (const unsigned char *buf, int len), {
 static int web_net_send(const unsigned char *buf, int len) { return saucer_web_net_send(buf, len); }
 /* the page pushes every datagram from the data channel in here */
 EMSCRIPTEN_KEEPALIVE int saucer_net_push(const unsigned char *buf, int len) { return sx_net_web_push(buf, len); }
+/* add-mobile-touch-ux: the page reports env(safe-area-inset-*) in CSS px on
+ * start, resize and rotation */
+EMSCRIPTEN_KEEPALIVE void saucer_set_safe_area(float l, float t, float r, float b) {
+  A.safe[0] = l;
+  A.safe[1] = t;
+  A.safe[2] = r;
+  A.safe[3] = b;
+  touch_relayout();
+}
 /* what the page shows while the session runs */
 EMSCRIPTEN_KEEPALIVE const char *saucer_net_status(void) {
   return A.e && A.e->net_on ? A.e->net.status : "";
@@ -481,11 +541,7 @@ int main(int argc, char **argv) {
     shutdown_app();
     return 2;
   }
-  {
-    int w, h;
-    SDL_GetWindowSizeInPixels(A.win, &w, &h);
-    sx_touch_init(&A.e->touch, (float)w / (float)(h > 0 ? h : 1));
-  }
+  touch_relayout();
   A.running = 1;
   A.last = SDL_GetPerformanceCounter();
 #ifdef __EMSCRIPTEN__

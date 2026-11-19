@@ -6,29 +6,47 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Saucer</title>
 <style>
-  html, body { margin: 0; height: 100%; background: #000; color: #9cf; font: 14px monospace; overflow: hidden; }
-  canvas { display: block; width: 100vw; height: 100vh; touch-action: none; image-rendering: pixelated; }
+  /* add-mobile-touch-ux: the page never scrolls, bounces, zooms or selects
+     under the thumbs; the canvas fills the dynamic viewport (no URL-bar gap)
+     and the engine keeps its controls inside env(safe-area-inset-*) */
+  html, body { margin: 0; height: 100%; background: #000; color: #9cf; font: 14px monospace; overflow: hidden;
+               overscroll-behavior: none; -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
+  body { position: fixed; inset: 0; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  canvas { display: block; position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; height: 100dvh;
+           touch-action: none; image-rendering: pixelated; outline: none; }
+  #safe-probe { position: fixed; left: 0; top: 0; width: 0; height: 0; visibility: hidden; pointer-events: none;
+                padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
   #status { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); text-align: center; }
-  .vr { position: fixed; bottom: 12px; display: none; padding: 10px 16px; background: #123;
+  .vr { position: fixed; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); display: none; min-height: 44px; padding: 10px 16px; background: #123;
         color: #9cf; border: 1px solid #9cf; font: 14px monospace; cursor: pointer; }
-  #vr { right: 12px; }
-  #vr-seated { right: 160px; }
+  #vr { right: calc(12px + env(safe-area-inset-right, 0px)); }
+  #vr-seated { right: calc(160px + env(safe-area-inset-right, 0px)); }
   /* add-home-among-stars: online co-op (copy-paste WebRTC signaling) */
-  #online { position: fixed; left: 12px; bottom: 12px; display: none; padding: 8px 12px; background: #123;
+  #online { position: fixed; left: calc(12px + env(safe-area-inset-left, 0px)); bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+            display: none; min-height: 44px; padding: 8px 12px; background: #123;
             color: #9cf; border: 1px solid #9cf; font: 13px monospace; cursor: pointer; }
+  /* the first touch on the game hands the lower left to the move stick */
+  body.touched #online { display: none !important; }
+  /* ...and the VR buttons (rare on a phone) move up, clear of the button grid */
+  body.touched .vr { bottom: auto; top: calc(48px + env(safe-area-inset-top, 0px)); }
+  body.touched #vr { right: auto; left: calc(50% + 4px); }
+  body.touched #vr-seated { right: calc(50% + 4px); }
   #net { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); display: none; width: min(560px, 92vw);
-         background: #0a1420; border: 1px solid #9cf; padding: 16px; }
+         max-height: 92dvh; overflow: auto; touch-action: pan-y; -webkit-user-select: text; user-select: text;
+         background: #0a1420; border: 1px solid #9cf; padding: 16px; box-sizing: border-box; }
   #net h2 { margin: 0 0 8px; font-size: 16px; color: #fc6; }
-  #net textarea { width: 100%; height: 72px; background: #000; color: #9f9; border: 1px solid #456; font: 11px monospace; }
-  #net button { margin: 6px 6px 6px 0; padding: 6px 12px; background: #123; color: #9cf; border: 1px solid #9cf;
+  #net textarea { width: 100%; height: 72px; background: #000; color: #9f9; border: 1px solid #456; font: 11px monospace; box-sizing: border-box; }
+  #net button { margin: 6px 6px 6px 0; min-height: 44px; padding: 6px 12px; background: #123; color: #9cf; border: 1px solid #9cf;
                 font: 13px monospace; cursor: pointer; }
   #net .hint { color: #789; font-size: 12px; margin: 4px 0; }
   #net-state { color: #fc6; min-height: 1.2em; }
-  #net-bar { position: fixed; left: 12px; top: 8px; color: #fc6; font: 12px monospace; pointer-events: none; }
+  #net-bar { position: fixed; left: calc(12px + env(safe-area-inset-left, 0px)); top: calc(8px + env(safe-area-inset-top, 0px));
+             color: #fc6; font: 12px monospace; pointer-events: none; }
 </style>
 </head>
 <body>
 <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+<div id="safe-probe"></div>
 <div id="status">loading data…</div>
 <button id="vr" class="vr" title="standing / room scale (local-floor)">VR standing</button>
 <button id="vr-seated" class="vr" title="seated (local, eye level at the cockpit)">VR seated</button>
@@ -106,8 +124,38 @@
     if (q.get('script')) args.push('--script', q.get('script'), '--windowed'); // windowed: really renders (perf runs)
     if (q.get('frame_stats')) args.push('--frame-stats');
     if (!extra.length) document.getElementById('online').style.display = 'block';
+    args.push('--fill'); // the low-res target takes the screen's aspect: no letterbox, touch maps 1:1
     Module.callMain(args.concat(extra));
+    started = true;
+    reportSafeArea();
   }
+  // add-mobile-touch-ux: tell the engine the safe-area insets (notches, the
+  // home indicator) on start, resize and rotation; it re-fits the controls
+  var started = false, safeProbe = document.getElementById('safe-probe');
+  function reportSafeArea() {
+    if (!started) return;
+    var cs = getComputedStyle(safeProbe);
+    Module.ccall('saucer_set_safe_area', null, ['number', 'number', 'number', 'number'],
+      [parseFloat(cs.paddingLeft) || 0, parseFloat(cs.paddingTop) || 0, parseFloat(cs.paddingRight) || 0, parseFloat(cs.paddingBottom) || 0]);
+  }
+  function soon() { requestAnimationFrame(function () { requestAnimationFrame(reportSafeArea); }); }
+  window.addEventListener('resize', soon);
+  window.addEventListener('orientationchange', function () { soon(); setTimeout(reportSafeArea, 300); });
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', soon);
+  // no pull-to-refresh, pinch or double-tap zoom, long-press menus or text
+  // selection over the game; the co-op panel still scrolls and selects
+  (function () {
+    var cv = document.getElementById('canvas');
+    function onGame(e) { return e.target === cv || e.target === document.body || e.target === document.documentElement; }
+    document.addEventListener('touchmove', function (e) { if (onGame(e)) e.preventDefault(); }, { passive: false });
+    document.addEventListener('touchstart', function (e) {
+      if (e.target === cv) document.body.classList.add('touched');
+      if (e.touches.length > 1 && onGame(e)) e.preventDefault();
+    }, { passive: false });
+    ['gesturestart', 'gesturechange', 'gestureend', 'dblclick', 'contextmenu', 'selectstart'].forEach(function (n) {
+      document.addEventListener(n, function (e) { if (onGame(e)) e.preventDefault(); }, { passive: false });
+    });
+  })();
   // add-home-among-stars: host or join over a WebRTC data channel
   function online(q) {
     var N = Module.saucerNet, $ = function (id) { return document.getElementById(id); };

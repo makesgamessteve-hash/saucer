@@ -1,5 +1,9 @@
-/* Virtual touch controls for mobile web (left stick, right-half look drag,
- * vertical lift slider with UP/DN hold buttons, buttons). Positions are normalized 0..1 screen space.
+/* Virtual touch controls for mobile web (floating left stick, look drag
+ * anywhere else, vertical lift slider with UP/DN hold buttons, a 3x3 button
+ * grid under the right thumb). Positions are normalized 0..1 of the game
+ * image; add-mobile-touch-ux sizes everything in CSS px from the image size,
+ * the safe-area insets and the HUD target, so the layout holds from a
+ * 320x568 phone to a tablet, in portrait and landscape.
  * SPDX-License-Identifier: MIT */
 #ifndef SX_TOUCH_H
 #define SX_TOUCH_H
@@ -24,15 +28,44 @@ typedef enum {
   SX_TOUCH_COUNT
 } sx_touch_ctl;
 
+enum {
+  SX_TOUCH_KIND_BUTTON = 0,
+  SX_TOUCH_KIND_STICK = 1,  /* the floating stick's zone (invisible; the ring is drawn) */
+  SX_TOUCH_KIND_SLIDER = 2,
+  SX_TOUCH_KIND_LOOK = 3,   /* everything no control claims */
+  SX_TOUCH_KIND_HOLD = 4    /* hold-to-climb/dive button */
+};
+
 typedef struct sx_touch_widget {
   const char *name;
   int ctl;          /* sx_touch_ctl it drives */
   float x, y, w, h; /* normalized rect */
-  int kind;         /* 0 button, 1 stick, 2 slider, 3 look area, 4 hold-to-climb/dive button */
+  int kind;         /* SX_TOUCH_KIND_* */
   float sign;       /* kind 4: +1 up, -1 down */
 } sx_touch_widget;
 
+typedef struct sx_touch_rect {
+  float x, y, w, h; /* normalized */
+} sx_touch_rect;
+
+/* add-mobile-touch-ux: what a layout is fitted to */
+typedef struct sx_touch_metrics {
+  float w, h;       /* the game image in CSS px */
+  float safe[4];    /* safe-area insets over the image in CSS px: left, top, right, bottom */
+  int hud_w, hud_h; /* the low-res target (HUD pixels) the image shows */
+} sx_touch_metrics;
+
+/* Design rules (CSS px): targets at least 48 (44 is the hard floor the tests
+ * hold), gaps at least 8, everything scaled from min(w, h). */
+#define SX_TOUCH_MIN_TARGET 44.0f
+#define SX_TOUCH_MIN_GAP 8.0f
+/* radial deadzone of the stick (fraction of its radius) */
+#define SX_TOUCH_DEADZONE 0.12f
+/* look drag gain: stick-units per CSS px of thumb travel (same on both axes) */
+#define SX_TOUCH_LOOK_GAIN (1.0f / 60.0f)
+
 #define SX_TOUCH_MAX_FINGERS 10
+#define SX_TOUCH_MAX_HUD 3
 typedef struct sx_touch {
   int active; /* becomes 1 on first touch event */
   int nwidgets;
@@ -48,21 +81,45 @@ typedef struct sx_touch {
   /* add-presentation-packaging: a press landing on a button/hold widget
    * bumps buzz (the web build turns it into a short vibration) */
   int buzz;
+  /* add-mobile-touch-ux */
+  sx_touch_metrics m;
+  float unit, gap, margin; /* CSS px: button size, gap between targets, margin inside the safe area */
+  float stick_r;           /* CSS px: the stick's throw */
+  float slop[2];           /* normalized near-miss slop (half a gap) on x and y */
+  int portrait;            /* 1: the lift column stands on the button grid */
+  sx_touch_rect safe;      /* the safe area (normalized) */
+  sx_touch_rect home;      /* the stick's resting ring (bounding box) */
+  sx_touch_rect msg;       /* a column clear of controls for the message log and hints */
+  float cx0, cx1;          /* the clear span for centred HUD text, mid-screen (normalized x) */
+  sx_touch_rect hud[SX_TOUCH_MAX_HUD]; /* HUD keep-outs no control may cover */
+  int nhud;
 } sx_touch;
 
-/* Fingers that just miss a button still press it within this slop
- * (normalized, either axis); the look area never takes slop hits. */
-#define SX_TOUCH_SLOP 0.025f
+/* Fingers that just miss a button still press it within the slop (half a
+ * gap); kept for older callers, the layout sets t->slop. */
+#define SX_TOUCH_SLOP 0.0125f
 
 int sx_touch_ctl_from_name(const char *name);
 const char *sx_touch_ctl_name(int ctl);
+/* A layout for an image of this aspect whose short side is 360 CSS px
+ * (headless runs and tests); the platform calls sx_touch_layout. */
 void sx_touch_init(sx_touch *t, float aspect);
+/* Fit the controls to m. Keeps `active`, lets go of every finger. */
+void sx_touch_layout(sx_touch *t, const sx_touch_metrics *m);
+/* The low-res target that fills a w x h CSS px window: the short side is
+ * 200..270 HUD px (at least 1.33 CSS px each), the long side follows the
+ * aspect up to 640; a big screen's long side is at least 480 (the full HUD). */
+void sx_touch_fit_target(int w, int h, int *tw, int *th);
+/* Do two normalized rects overlap (touching edges do not)? */
+int sx_touch_overlap(const sx_touch_rect *a, const sx_touch_rect *b);
+/* Widget i's rect (or the stick's resting ring) as a sx_touch_rect */
+sx_touch_rect sx_touch_visible_rect(const sx_touch *t, int i);
 void sx_touch_down(sx_touch *t, long long id, float x, float y);
 void sx_touch_move(sx_touch *t, long long id, float x, float y);
 void sx_touch_up(sx_touch *t, long long id);
 /* Is any finger holding widget i? (for pressed highlights) */
 int sx_touch_held(const sx_touch *t, int i);
-/* The stick finger's start and current point -> 1 when the stick is held */
+/* The stick finger's base and current point -> 1 when the stick is held */
 int sx_touch_stick(const sx_touch *t, float out[4]);
 /* Write current values into raw->touch and reset look deltas. */
 void sx_touch_apply(sx_touch *t, sx_raw_input *raw);

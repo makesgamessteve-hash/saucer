@@ -587,6 +587,18 @@ static int l_input_mode(lua_State *L) {
   return 1;
 }
 
+static void push_touch_rect(lua_State *L, const sx_touch_rect *r) {
+  lua_createtable(L, 0, 4);
+  lua_pushnumber(L, r->x);
+  lua_setfield(L, -2, "x");
+  lua_pushnumber(L, r->y);
+  lua_setfield(L, -2, "y");
+  lua_pushnumber(L, r->w);
+  lua_setfield(L, -2, "w");
+  lua_pushnumber(L, r->h);
+  lua_setfield(L, -2, "h");
+}
+
 static int l_input_touch_layout(lua_State *L) {
   sx_engine *e = get_engine(L);
   int i;
@@ -614,6 +626,31 @@ static int l_input_touch_layout(lua_State *L) {
   }
   lua_pushboolean(L, e->touch.active);
   lua_setfield(L, -2, "active");
+  /* add-mobile-touch-ux: where the HUD may put text, and the design numbers */
+  push_touch_rect(L, &e->touch.msg);
+  lua_setfield(L, -2, "msg");
+  push_touch_rect(L, &e->touch.home);
+  lua_setfield(L, -2, "home");
+  push_touch_rect(L, &e->touch.safe);
+  lua_setfield(L, -2, "safe");
+  lua_createtable(L, e->touch.nhud, 0);
+  for (i = 0; i < e->touch.nhud; i++) {
+    push_touch_rect(L, &e->touch.hud[i]);
+    lua_rawseti(L, -2, i + 1);
+  }
+  lua_setfield(L, -2, "hud");
+  lua_pushnumber(L, e->touch.cx0);
+  lua_setfield(L, -2, "cx0");
+  lua_pushnumber(L, e->touch.cx1);
+  lua_setfield(L, -2, "cx1");
+  lua_pushboolean(L, e->touch.portrait);
+  lua_setfield(L, -2, "portrait");
+  lua_pushnumber(L, e->touch.unit);
+  lua_setfield(L, -2, "unit"); /* CSS px */
+  lua_pushnumber(L, e->touch.m.w);
+  lua_setfield(L, -2, "css_w");
+  lua_pushnumber(L, e->touch.m.h);
+  lua_setfield(L, -2, "css_h");
   {
     float s[4];
     if (sx_touch_stick(&e->touch, s)) {
@@ -1869,6 +1906,33 @@ static int l_test_set_touch(lua_State *L) {
   return 0;
 }
 
+/* add-mobile-touch-ux: lay the touch controls out for another screen
+ * ({w, h, safe = {l, t, r, b}}; the HUD target follows the window unless
+ * hud_w/hud_h are given). Does not touch the render settings. */
+static int l_test_touch_metrics(lua_State *L) {
+  sx_engine *e = get_engine(L);
+  sx_touch_metrics m;
+  int i;
+  luaL_checktype(L, 1, LUA_TTABLE);
+  memset(&m, 0, sizeof m);
+  m.w = field_num(L, 1, "w", 640);
+  m.h = field_num(L, 1, "h", 360);
+  sx_touch_fit_target((int)m.w, (int)m.h, &m.hud_w, &m.hud_h);
+  m.hud_w = (int)field_num(L, 1, "hud_w", (float)m.hud_w);
+  m.hud_h = (int)field_num(L, 1, "hud_h", (float)m.hud_h);
+  if (lua_getfield(L, 1, "safe") == LUA_TTABLE)
+    for (i = 0; i < 4; i++) {
+      lua_rawgeti(L, -1, i + 1);
+      m.safe[i] = (float)lua_tonumber(L, -1);
+      lua_pop(L, 1);
+    }
+  lua_pop(L, 1);
+  sx_touch_layout(&e->touch, &m);
+  lua_pushinteger(L, m.hud_w);
+  lua_pushinteger(L, m.hud_h);
+  return 2;
+}
+
 static int l_test_set_xr(lua_State *L) {
   sx_engine *e = get_engine(L);
   luaL_checktype(L, 1, LUA_TTABLE);
@@ -2120,7 +2184,7 @@ static void build_saucer_api(lua_State *L, sx_engine *e) {
                                     {"axis", l_test_axis},             {"assert", l_test_assert},
                                     {"screenshot", l_test_screenshot}, {"audio_count", l_test_audio_count},
                                     {"audio_loops", l_test_audio_loops}, {"audio_flush", l_test_audio_flush},
-                                    {"touch", l_test_set_touch},       {"xr", l_test_set_xr},
+                                    {"touch", l_test_set_touch}, {"touch_metrics", l_test_touch_metrics},       {"xr", l_test_set_xr},
                                     {"xr_haptics", l_test_xr_haptics},
                                     {"viewports", l_test_viewports},   {NULL, NULL}};
   struct {

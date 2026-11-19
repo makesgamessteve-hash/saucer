@@ -264,20 +264,46 @@ function M.panel(v, state, p)
   local w = 8
   for _, r in ipairs(rows) do w = math.max(w, #r.text + 4) end
   w = math.min(math.max(w, #title + 4) * 8, W - 16)
-  local x, y = W // 2 - w // 2, H // 2 - (#rows * 11 + 24) // 2
+  -- add-mobile-touch-ux: a row too long for the panel wraps onto more lines
+  -- (indented under its text) instead of being cut off
+  local lines, nl = M.panel_lines(rows, w // 8)
+  local x, y = W // 2 - w // 2, H // 2 - (nl * 11 + 24) // 2
   -- add-pocket-station-visits: face to face, the menu sits low so you can
   -- still see who you are talking to
-  if p.mode == "foot" then y = math.max(y, math.min(H // 2 + 20, H - 46 - #rows * 11 - 24)) end
+  if p.mode == "foot" then y = math.max(y, math.min(H // 2 + 20, H - 46 - nl * 11 - 24)) end
   local is_title = p.panel.kind == "title"
+  local cx, title_scale = W // 2, 3
+  if M.clip and p.panel.kind ~= "citymap" and p.panel.kind ~= "map" then
+    -- add-mobile-touch-ux: the panel (with the title above it and the nav
+    -- lines under it) moves, and narrows if it must, to sit clear of the touch
+    -- controls, as near the middle as it can
+    local head, foot = is_title and 50 or 0, 34 -- (the nav may take two lines)
+    local ww, tmin = w, 152
+    while true do
+      local wl, wn = M.panel_lines(rows, ww // 8)
+      local hb = wn * 11 + (is_title and 0 or 12) + 12 + foot + head
+      local bw = math.max(ww + 8, is_title and tmin or 0)
+      local bx, by = M.place(v, bw, hb, cx - bw // 2, y - 4 - head)
+      if bx then
+        x, y, w, cx = bx + (bw - ww) // 2, by + 4 + head, ww, bx + bw // 2
+        lines, nl = wl, wn
+        break
+      end
+      if ww <= 96 and (not is_title or tmin < 152) then break end
+      if ww <= 96 then ww, tmin, title_scale = w, 104, 2 else ww = math.max(96, ww - 16) end
+    end
+  end
   if is_title then
     -- add-presentation-packaging: the Grok Imagine title emblem above the name
     local A = require("view.assets").init()
     local es = math.min(96, y - 52)
+    -- (on touch it shrinks until it is clear of the controls)
+    while es >= 24 and M.hits(cx - es // 2, y - 50 - es, es, es) do es = es // 2 end
     if A.tex.title_emblem and es >= 24 then
-      v:image(A.tex.title_emblem, W // 2 - es // 2, y - 50 - es, es, es, A.pal.sprites)
+      v:image(A.tex.title_emblem, cx - es // 2, y - 50 - es, es, es, A.pal.sprites)
     end
-    v:text(W // 2 - 6 * 8 * 3 // 2, y - 46, "SAUCER", AMBER, 3)
-    v:text(W // 2 - 13 * 8 // 2, y - 18, "a cozy salvage", DIM)
+    v:text(cx - 6 * 8 * title_scale // 2, y - 22 - 8 * title_scale, "SAUCER", AMBER, title_scale)
+    v:text(cx - 13 * 8 // 2, y - 18, "a cozy salvage", DIM)
   end
   -- add-wider-dark: the sector map sits left of its rows when there is room
   if p.panel.kind == "citymap" and W >= 360 then
@@ -292,28 +318,34 @@ function M.panel(v, state, p)
     x = math.max(x, mw + 16)
     w = math.min(w, W - 8 - x)
   end
+  if p.panel.kind == "citymap" or p.panel.kind == "map" then lines, nl = M.panel_lines(rows, w // 8) end
   local top = is_title and 0 or 12
-  v:rect(x - 4, y - 4, w + 8, #rows * 11 + top + 12, { 0, 0.02, 0.06, 0.82 })
+  v:rect(x - 4, y - 4, w + 8, nl * 11 + top + 12, { 0, 0.02, 0.06, 0.82 })
   if not is_title then v:text(x, y, title, AMBER) end
   if first > 1 or first + #rows - 1 < #all then
     local more = string.format("%d-%d/%d", first, first + #rows - 1, #all)
     v:text(x + w - #more * 8, y, more, DIM)
   end
+  local ly = y + top
   for i, r in ipairs(rows) do
     local sel = i + first - 1 == p.panel.sel
     local col = r.enabled == false and DIM or (sel and GREEN or WHITE)
-    if sel then v:rect(x - 2, y + top + (i - 1) * 11 - 1, w + 4, 10, { 0.2, 0.5, 0.3, 0.5 }) end
-    v:text(x, y + top + (i - 1) * 11, ((sel and "> " or "  ") .. r.text):sub(1, w // 8), col)
+    local ls = lines[i]
+    if sel then v:rect(x - 2, ly - 1, w + 4, #ls * 11 - 1, { 0.2, 0.5, 0.3, 0.5 }) end
+    for j, l in ipairs(ls) do
+      v:text(x, ly + (j - 1) * 11, ((j > 1 and "  ") or (sel and "> " or "  ")) .. l, col)
+    end
+    ly = ly + #ls * 11
   end
   local mode = saucer.input.device_mode(v.player)
   local nav = mode == "pad" and "STICK UP/DOWN  X: PICK" or (mode == "touch" and "STICK UP/DOWN  USE: PICK" or
     (mode == "keys2" and "I/K: CHOOSE  ENTER: PICK" or "W/S: CHOOSE  G/ENTER: PICK"))
-  v:text(W // 2 - #nav * 4, y + top + 10 + #rows * 11, nav, DIM)
+  local navn = M.ct_parts(v, y + top + 10 + nl * 11, nav, DIM)
   -- add-home-among-stars: the selected row's hint (a mod's description)
   local cur = all[p.panel.sel]
   if cur and cur.hint then
     local h = cur.hint:sub(1, (W - 16) // 8)
-    v:text(W // 2 - #h * 4, y + top + 21 + #rows * 11, h, CYAN)
+    M.ct(v, y + top + 11 + navn * 10 + nl * 11, h, CYAN)
   end
   return #rows
 end
@@ -415,7 +447,7 @@ function M.beam(v, state, p, scan)
   if p.tractor then
     local f = vec.clamp(p.tractor.t / p.tractor.total, 0, 1)
     local t = f < 0.75 and "BEAM PULLING - SHRINKING TO FIT" or "INTO THE HOLD"
-    v:text(W // 2 - #t * 4, y0 + 12, t, CYAN)
+    M.ct(v, y0 + 12, t, CYAN)
     v:rect(W // 2 - 40, y0 + 22, 80, 3, { 0.15, 0.15, 0.2, 1 })
     v:rect(W // 2 - 40, y0 + 22, 80 * f, 3, AMBER)
     return 2
@@ -425,14 +457,14 @@ function M.beam(v, state, p, scan)
   local info, st = scan.info, scan.status
   local col = st == "lock" and GREEN or ((st == "big" or st == "blocked") and RED or AMBER)
   local label = string.format("%s [%s]", items.label(scan.cand.item), loot.size_name(scan.cand.item.size))
-  v:text(W // 2 - #label * 4, y0, label, col)
+  M.ct(v, y0, label, col)
   n = n + 1
   local hint = info.hint
   if st == "lock" and b.console and not p.beam_console then
     -- add-playtest-recs: the helm beam relay pulls small finds from here
     hint = require("sim.upgrades").relay(p, scan.cand.item) and "LOCK - F PULLS (HELM RELAY)" or "LOCK - GO DOWN TO THE TRACTOR ROOM"
   end
-  v:text(W // 2 - #hint * 4, y0 + 10, hint, col)
+  M.ct(v, y0 + 10, hint, col)
   n = n + 1
   -- the scope, bottom right
   local cx, cy, R = W - 40, H - 70, 22
@@ -475,7 +507,7 @@ function M.weather(v, state, p)
     local s = cities.storm_in(r, state.tick)
     if s and s > 0 and s < 900 then
       local t = string.format("STORM IN %dS", (s + 59) // 60)
-      v:text(W // 2 - #t * 4, 30, t, AMBER)
+      M.ct(v, 30, t, AMBER)
     end
   end
 end
@@ -519,10 +551,16 @@ function M.draw(v, state, p, target)
   local function fit(t) return t:sub(1, (W - 8) // 8) end
   local ship = p.ship
   local c = configs.get(ship.size)
+  -- add-mobile-touch-ux: with the touch controls up, centred text keeps to
+  -- the span between them and the log and hints go in the clear column
+  local mode = saucer.input.device_mode(v.player)
+  local tl = mode == "touch" and saucer.input.touch_layout() or nil
+  M.clip = tl and M.touch_rects(v, tl) or nil
   if p.mode == "wake" then
     -- waking up: just the title card over the bedroom (and the touch buttons)
     M.panel(v, state, p)
-    if saucer.input.device_mode(v.player) == "touch" then M.touch(v) end
+    if tl then M.touch(v, state, p) end
+    M.clip = nil
     return
   end
   M.weather(v, state, p)
@@ -562,7 +600,7 @@ function M.draw(v, state, p, target)
   local alerts = M.alerts(state, p, W)
   local ay = H // 2 - (compact and 20 or 44) - (#alerts - 1) * 11
   for _, a in ipairs(alerts) do
-    v:text(math.max(2, W // 2 - #a[1] * 4), ay, a[1]:sub(1, (W - 4) // 8), a[2])
+    M.ct(v, ay, a[1], a[2])
     if a[3] then
       v:rect(W // 2 - 40, ay + 9, 80 * a[3], 2, a[2])
     end
@@ -575,7 +613,8 @@ function M.draw(v, state, p, target)
   if (p.decoys or 0) > 0 and not compact and p.mode ~= "foot" then v:text(8, 66, string.format("DECOYS %d", p.decoys), DIM) end
   if p.visiting then v:text(W // 2 - 64, 36, string.format("VISITING P%d'S DOME", p.visiting), GREEN) end
   M.jump(v, state, p, compact)
-  if p.mode == "helm" and not compact then M.altitude(v, p) end
+  -- (on touch the lift slider reads the altitude instead of the tape)
+  if p.mode == "helm" and not compact and not tl then M.altitude(v, p) end
   -- crosshair, where you are and what Use does
   v:text(W // 2 - 4, H // 2 - 4, "+", p.tractor and AMBER or WHITE)
   local where, hint = M.status(p, state)
@@ -587,8 +626,10 @@ function M.draw(v, state, p, target)
       -- one line per part ("F: MINI BEAM  E: UNFOLD" -> two lines), left of the scope
       local parts = {}
       for part in (hint .. "  "):gmatch("(.-)  +") do parts[#parts + 1] = part end
-      for i = #parts, 1, -1 do v:text(6, H - 34 - (#parts - i) * 10, parts[i]:sub(1, (W - 64) // 8), AMBER) end
-    else v:text(W // 2 - #hint * 4, H // 2 + 40, hint, AMBER) end
+      local hx, hy, hc = 6, H - 34, (W - 64) // 8
+      if tl then hx, hy, hc = tl.msg.x * W + 2, tl.msg.y * H - 12, math.max(4, (tl.msg.w * W - 4) // 8) end
+      for i = #parts, 1, -1 do v:text(hx, hy - (#parts - i) * 10, parts[i]:sub(1, hc), AMBER) end
+    else M.ct(v, H // 2 + 40, hint, AMBER) end
   end
   -- navigation
   local site, d = M.nav(state, p)
@@ -645,17 +686,39 @@ function M.draw(v, state, p, target)
   -- messages
   -- add-playtest-recs: wrapped, repeats folded, the most urgent first
   -- (two lines under an open panel, so the two never overlap)
-  local lines = M.message_lines(state, p, (W - 12) // 8, (compact or p.panel) and 2 or 5)
-  local y = H - 12 - (#lines - 1) * 10
+  -- add-playtest-recs: the hint for the current context only, wrapped, for
+  -- a while after the context changes (and at the start)
+  local ctxk = (v.player or 0) .. ":" .. M.hint_context(p) .. ":" .. mode
+  local hs = hint_seen[v.player or 0]
+  if not hs or hs.key ~= ctxk or state.tick < hs.tick then
+    hs = { key = ctxk, tick = state.tick }
+    hint_seen[v.player or 0] = hs
+  end
+  local hl, hcols, hfade = {}, 0, 0
+  if (not compact or tl) and not p.panel and state.tick - hs.tick < M.HINT_TICKS then
+    hcols = math.max(12, (W * 30 // 100) // 8)
+    if tl then hcols = math.max(8, math.min(40, (tl.msg.w * W - 4) // 8)) end
+    hl = M.wrap(M.hint_for(p, mode), hcols, tl and 3 or 5)
+    hfade = math.min(1, (M.HINT_TICKS - (state.tick - hs.tick)) / 60)
+  end
+  local mx, mw, mbot, mmax = 6, W - 12, H - 2, ((compact and not tl) or p.panel) and 2 or 5
+  if tl then -- add-mobile-touch-ux: the log (and the hint over it) share the clear column
+    local room = math.max(0, (tl.msg.h * H - 2) // 10)
+    if #hl > room - 1 then hl = {} end
+    mx, mw, mbot = tl.msg.x * W + 4, tl.msg.w * W - 8, (tl.msg.y + tl.msg.h) * H
+    mmax = math.min(mmax, room - #hl)
+  end
+  local lines = mmax > 0 and M.message_lines(state, p, math.max(4, mw // 8), mmax) or {}
+  local y = mbot - 10 - (#lines - 1) * 10
   -- a soft backing so the log reads over the console and the room behind it
-  if #lines > 0 then v:rect(2, y - 2, W - 4, #lines * 10 + 3, { 0, 0.02, 0.06, 0.55 }) end
+  if #lines > 0 then v:rect(mx - 4, y - 2, mw + 8, #lines * 10 + 3, { 0, 0.02, 0.06, 0.55 }) end
   for _, l in ipairs(lines) do
-    v:text(6, y, l[1], l[2] == 3 and RED or (l[2] == 2 and AMBER or WHITE))
+    v:text(mx, y, l[1], l[2] == 3 and RED or (l[2] == 2 and AMBER or WHITE))
     y = y + 10
   end
   M.home(v, state, p)
   local fs = p.mode ~= "foot" and M.fold_status(p) or nil
-  if fs then v:text(W // 2 - #fs * 4, H // 2 - 30, fs, CYAN) end
+  if fs then M.ct(v, H // 2 - 30, fs, CYAN) end
   M.lifeline(v, state, p)
   if p.slept_tick and state.tick - p.slept_tick < 120 then
     v:rect(0, 0, W, H, { 0, 0, 0.02, 1 - (state.tick - p.slept_tick) / 120 })
@@ -667,28 +730,17 @@ function M.draw(v, state, p, target)
     v:rect(2, hy, 340, 12 * #HELP + 8, { 0, 0, 0.05, 0.8 })
     for i, line in ipairs(HELP) do v:text(8, hy - 4 + i * 12, line, i == 1 and AMBER or WHITE) end
   end
-  local mode = saucer.input.device_mode(v.player)
-  if mode == "touch" then M.touch(v) end
-  -- add-playtest-recs: the hint for the current context only, wrapped, for
-  -- a while after the context changes (and at the start)
-  local ctxk = (v.player or 0) .. ":" .. M.hint_context(p) .. ":" .. mode
-  local hs = hint_seen[v.player or 0]
-  if not hs or hs.key ~= ctxk or state.tick < hs.tick then
-    hs = { key = ctxk, tick = state.tick }
-    hint_seen[v.player or 0] = hs
-  end
-  if not compact and not p.panel and state.tick - hs.tick < M.HINT_TICKS then
+  if tl then M.touch(v, state, p) end
+  if #hl > 0 then
     -- the hint is docked bottom-left above the console, out of the sightline (never over the status stacks,
-    -- the alerts or the message log), for a few seconds after the context changes
-    local cols = math.max(12, (W * 30 // 100) // 8)
-    local hl = M.wrap(M.hint_for(p, mode), cols, 5)
-    local fade = math.min(1, (M.HINT_TICKS - (state.tick - hs.tick)) / 60)
+    -- the alerts or the message log), for a few seconds after the context changes;
+    -- on touch: right over the log in the clear column, not under the move stick
     local x0, y0 = 4, M.dock_y(H, #hl)
-    if #hl > 0 then
-      v:rect(x0 - 2, y0 - 3, cols * 8 + 4, 10 * #hl + 4, { 0, 0.02, 0.06, 0.5 * fade })
-    end
-    for i, l in ipairs(hl) do v:text(x0, y0 + 10 * (i - 1), l, { DIM[1], DIM[2], DIM[3], fade }) end
+    if tl then x0, y0 = mx, mbot - 10 * #lines - 10 * #hl - 2 end
+    v:rect(x0 - 2, y0 - 3, hcols * 8 + 4, 10 * #hl + 4, { 0, 0.02, 0.06, 0.5 * hfade })
+    for i, l in ipairs(hl) do v:text(x0, y0 + 10 * (i - 1), l, { DIM[1], DIM[2], DIM[3], hfade }) end
   end
+  M.clip = nil
 end
 
 -- add-playtest-recs: the co-op fold readiness line. During a jump vote:
@@ -726,7 +778,7 @@ function M.jump(v, state, p, compact)
   local m = state.mystery
   if require("sim.heart").can_vote(state, p) and not m.votes[tostring(p.index)] and state.tick % 60 < 45 then
     local t = narrow and "HEART OPEN - TAB TO VOTE" or "THE HEART IS OPEN - TAB TO VOTE"
-    v:text(W // 2 - #t * 4, compact and 58 or narrow and H // 2 - 80 or 56, t, { 1, 0.45, 0.65, 1 })
+    M.ct(v, compact and 58 or narrow and H // 2 - 80 or 56, t, { 1, 0.45, 0.65, 1 })
   end
   local j = state.jump
   -- add-playtest-recs: who is ready to fold (co-op), for whoever waits
@@ -782,7 +834,7 @@ function M.home(v, state, p)
     local pg = string.format("PAGE %d/%d%s", p.reading.page, #r.pages, r.kind == "clue" and "  CLUE" or "")
     v:text(x + bw - 12 - #pg * 8, y + bh - 12, pg, { 0.45, 0.35, 0.25, 1 })
     local h = "USE: NEXT PAGE  MOVE: CLOSE THE BOOK"
-    v:text(W // 2 - #h * 4, y + bh + 8, h, AMBER)
+    M.ct(v, y + bh + 8, h, AMBER)
     n = n + 1
   end
   if p.tv then
@@ -803,7 +855,7 @@ function M.home(v, state, p)
     local r = require("sim.kitchen").recipe(p.cooking.recipe)
     local f = vec.clamp(1 - p.cooking.left / p.cooking.total, 0, 1)
     local t = "COOKING " .. (r and r.name:upper() or "")
-    v:text(W // 2 - #t * 4, H // 2 + 30, t, AMBER)
+    M.ct(v, H // 2 + 30, t, AMBER)
     v:rect(W // 2 - 50, H // 2 + 42, 100, 4, { 0.15, 0.15, 0.2, 1 })
     v:rect(W // 2 - 50, H // 2 + 42, 100 * f, 4, AMBER)
     n = n + 1
@@ -816,7 +868,7 @@ function M.home(v, state, p)
     local t = string.format("RING %d/%d  %.1f S%s", math.min(run.gate, #sc.gates), #sc.gates, run.t,
       best and string.format("  BEST %.1f", best) or "")
     if run.done then t = string.format("COURSE CLEAR %.1f S  USE: END", run.t) end
-    v:text(W // 2 - #t * 4, 30, t, run.done and GREEN or AMBER)
+    M.ct(v, 30, t, run.done and GREEN or AMBER)
     n = n + 1
   end
   return n
@@ -835,13 +887,13 @@ function M.station(v, state, p)
     local a = saucer.math.wrap(saucer.math.atan2(pos[1] - b.pos[1], pos[2] - b.pos[3]) - b.yaw)
     local dir = math.abs(a) < 0.4 and "AHEAD" or (math.abs(a) > 2.6 and "BEHIND" or (a > 0 and "LEFT" or "RIGHT"))
     local t = string.format("THIEF %s %dm  SPRINT: SHIFT", dir, d // 1)
-    v:text(W // 2 - #t * 4, 80, t, RED)
+    M.ct(v, 80, t, RED)
     local left = math.max(0, visit.tune().escape - (p.station.thief.t or 0))
     v:rect(W // 2 - 50, 90, 100, 3, { 0.15, 0.15, 0.2, 1 })
     v:rect(W // 2 - 50, 90, 100 * left / visit.tune().escape, 3, RED)
   elseif mode == "stalk" and d < 5 then
     local t = "SOMEONE IS CROWDING YOU"
-    v:text(W // 2 - #t * 4, 80, t, AMBER)
+    M.ct(v, 80, t, AMBER)
   end
   return 1
 end
@@ -872,7 +924,7 @@ function M.excursion(v, state, p)
   v:text(8, 104, text, kind == "busy" and AMBER or GREEN)
   if s <= 0.3 then
     local t = s <= 0.1 and "! SUIT CHARGE CRITICAL - DEPLOY (E) !" or "SUIT CHARGE LOW"
-    v:text(W // 2 - #t * 4, H // 2 - 56, t, s <= 0.1 and RED or AMBER)
+    M.ct(v, H // 2 - 56, t, s <= 0.1 and RED or AMBER)
   end
   if e.work then
     local f = vec.clamp(e.work.t / e.work.total, 0, 1)
@@ -905,13 +957,19 @@ function M.lifeline(v, state, p)
 end
 
 -- add-presentation-packaging: touch overlay. Held widgets light up, labels
--- sit centred, the stick shows where the thumb landed and where it is now,
--- and the lift slider shows its level.
--- (three letters fit the smallest buttons at the 512 x 288 target)
+-- are short, the stick floats where the thumb lands.
+-- add-mobile-touch-ux: the layout is fitted in CSS px by the engine (targets
+-- 48-72 px, 8+ px gaps, inside the safe area, clear of the HUD); here every
+-- control gets a dark backing and a bright edge so it reads over any scene,
+-- a pressed state (brighter fill, double edge, label nudged down), an active
+-- state (the beam on), a cooldown that drains with the seconds left (scanner,
+-- jammer) and an unavailable state (no decoys left).
 M.TOUCH_LABEL = { stick = "MOVE", lift = "LFT", up = "UP", dn = "DN", shrink = "-SZ", grow = "+SZ",
-                  tractor = "BM", scan = "SCN", use = "USE", boost = "BST", jam = "JAM", grapple = "GRP" }
-local TOUCH_FILL, TOUCH_EDGE = { 0.4, 0.8, 1, 0.22 }, { 0.6, 0.9, 1, 0.55 }
-local TOUCH_HELD, TOUCH_KNOB = { 0.6, 1, 1, 0.5 }, { 0.8, 1, 1, 0.75 }
+                  tractor = "BM", scan = "SCN", use = "USE", boost = "BST", jam = "JAM", grapple = "GRP",
+                  decoy = "DEC", map = "MAP" }
+local TOUCH_BACK, TOUCH_FILL, TOUCH_EDGE = { 0, 0.02, 0.06, 0.45 }, { 0.4, 0.8, 1, 0.2 }, { 0.7, 0.95, 1, 0.85 }
+local TOUCH_HELD, TOUCH_KNOB, TOUCH_ON = { 0.6, 1, 1, 0.55 }, { 0.8, 1, 1, 0.75 }, { 1, 0.8, 0.3, 0.45 }
+local TOUCH_COOL, TOUCH_SHADOW = { 0, 0, 0, 0.6 }, { 0, 0, 0, 0.85 }
 
 local function outline(v, x, y, w, h, c)
   v:rect(x, y, w, 1, c)
@@ -920,37 +978,192 @@ local function outline(v, x, y, w, h, c)
   v:rect(x + w - 1, y, 1, h, c)
 end
 
-function M.touch(v)
+-- a 1.5 px ring (or a disc) of radius r, one row at a time -> rects drawn
+local function ring(v, cx, cy, r, c, filled)
+  local n = 0
+  for dy = -math.floor(r), math.floor(r) do
+    local hw = math.sqrt(math.max(0, r * r - dy * dy))
+    if filled then
+      v:rect(cx - hw, cy + dy, hw * 2, 1, c)
+      n = n + 1
+    else
+      local iw = math.sqrt(math.max(0, (r - 1.5) ^ 2 - dy * dy))
+      local w = math.max(1, hw - iw)
+      v:rect(cx - hw, cy + dy, w, 1, c)
+      v:rect(cx + hw - w, cy + dy, w, 1, c)
+      n = n + 2
+    end
+  end
+  return n
+end
+M.ring = ring
+
+-- the visible controls of a touch layout in view pixels: {x, y, w, h, name}
+function M.touch_rects(v, lay)
+  local W, H, out = v.width, v.height, {}
+  for _, w in ipairs(lay) do
+    local r = w.kind == 1 and lay.home or (w.kind ~= 3 and w or nil)
+    if r then out[#out + 1] = { r.x * W, r.y * H, r.w * W, r.h * H, w.name } end
+  end
+  return out
+end
+
+-- does a box hit any touch control? (false when the touch controls are not up)
+function M.hits(x, y, w, h)
+  for _, r in ipairs(M.clip or {}) do
+    if x < r[1] + r[3] and r[1] < x + w and y < r[2] + r[4] and r[2] < y + h then return true end
+  end
+  return false
+end
+
+-- a top-left corner for a w x h box clear of the touch controls, nearest to
+-- (px, py), from the edges of the controls and the view -> x, y (or nil)
+function M.place(v, w, h, px, py)
+  local W, H = v.width, v.height
+  local xs, ys = { px, 2, W - 2 - w }, { py, 2, H - 2 - h }
+  for _, r in ipairs(M.clip or {}) do
+    xs[#xs + 1], xs[#xs + 2] = r[1] - 2 - w, r[1] + r[3] + 2
+    ys[#ys + 1], ys[#ys + 2] = r[2] - 2 - h, r[2] + r[4] + 2
+  end
+  local bx, by, bd
+  for _, x in ipairs(xs) do
+    for _, y in ipairs(ys) do
+      x, y = math.floor(x), math.floor(y)
+      if x >= 2 and y >= 0 and x + w <= W - 2 and y + h <= H and not M.hits(x, y, w, h) then
+        local d = math.abs(x - px) + math.abs(y - py)
+        if not bd or d < bd then bx, by, bd = x, y, d end
+      end
+    end
+  end
+  return bx, by
+end
+
+-- centred text; with the touch controls up it keeps to the span between the
+-- controls on its row (cut to fit) -> the drawn width
+-- the free span [x0, x1] of the row at y (between the touch controls)
+function M.span(v, y, cw)
+  local W = v.width
+  local x0, x1 = 2, W - 2
+  for _, r in ipairs(M.clip or {}) do
+    if r[2] < y + cw + 1 and r[2] + r[4] > y - 1 then
+      if r[1] + r[3] / 2 > W / 2 then x1 = math.min(x1, r[1] - 2) else x0 = math.max(x0, r[1] + r[3] + 2) end
+    end
+  end
+  return x0, x1
+end
+
+-- a panel's rows wrapped to cols (two of them for the "> " marker) -> lines per row, total
+function M.panel_lines(rows, cols)
+  local out, n = {}, 0
+  for i, r in ipairs(rows) do
+    out[i] = #r.text + 2 <= cols and { r.text } or M.wrap(r.text, cols - 2)
+    n = n + #out[i]
+  end
+  return out, n
+end
+
+-- centred text that, if its row is too narrow, goes one "  "-separated part
+-- per line (10 px apart) instead of being cut off -> lines used
+function M.ct_parts(v, y, t, col)
+  local x0, x1 = M.span(v, y, 8)
+  if #t <= (x1 - x0) // 8 then
+    M.ct(v, y, t, col)
+    return 1
+  end
+  local n = 0
+  for part in (t .. "  "):gmatch("(.-)  +") do
+    M.ct(v, y + n * 10, part, col)
+    n = n + 1
+  end
+  return n
+end
+
+function M.ct(v, y, t, col, scale)
+  local W = v.width
+  local cw = 8 * (scale or 1)
+  local x0, x1 = M.span(v, y, cw)
+  local n = math.max(1, (x1 - x0) // cw)
+  if #t > n then t = t:sub(1, n) end
+  local x = math.max(x0, math.min(W // 2 - #t * cw // 2, x1 - #t * cw))
+  return v:text(x, y, t, col, scale)
+end
+
+-- what a touch button shows besides pressed: {on = true} (active), {off =
+-- true} (unavailable) or {cool = 0..1, secs = n} (recharging), or nil
+function M.touch_state(name, state, p)
+  if not (state and p) then return nil end
+  local tick = state.tick or 0
+  local function cool(ready, total)
+    local left = (ready or 0) - tick
+    if left <= 0 then return nil end
+    return { cool = math.min(1, left / math.max(1, total * 60)), secs = math.ceil(left / 60) }
+  end
+  if name == "scan" then return cool(p.scan_ready, require("sim.sentry").tune().scanner.cooldown) end
+  if name == "jam" then return cool(p.jam_ready, require("sim.sentry").tune().jammer.cooldown) end
+  if name == "decoy" and p.mode ~= "foot" and (p.decoys or 0) <= 0 then return { off = true } end
+  if name == "tractor" and p.tractor then return { on = true } end
+  return nil
+end
+
+local function label_at(v, x, y, t, col)
+  -- (on whole HUD pixels: a glyph at a fraction loses rows when the image is scaled up)
+  x, y = math.floor(x + 0.5), math.floor(y + 0.5)
+  v:text(x + 1, y + 1, t, TOUCH_SHADOW)
+  v:text(x, y, t, col)
+end
+
+function M.touch(v, state, p)
   local W, H = v.width, v.height
   local lay = saucer.input.touch_layout()
   local n = 0
   for _, w in ipairs(lay) do
-    if w.name ~= "look" then
+    if w.kind == 1 then
+      -- the stick's resting ring in the corner (hidden while the thumb is down)
+      if not lay.stick then
+        local h = lay.home
+        local cx, cy, r = (h.x + h.w / 2) * W, (h.y + h.h / 2) * H, h.w * W / 2
+        ring(v, cx, cy, r, TOUCH_EDGE)
+        ring(v, cx, cy, r * 0.35, TOUCH_FILL, true)
+        label_at(v, cx - 16, cy - r * 0.35 - 11, "MOVE", DIM)
+      end
+      n = n + 1
+    elseif w.kind ~= 3 then
       local x, y, ww, hh = w.x * W, w.y * H, w.w * W, w.h * H
-      if w.kind ~= 1 then v:rect(x, y, ww, hh, w.held and TOUCH_HELD or TOUCH_FILL) end
-      if not (w.kind == 1 and w.held) then outline(v, x, y, ww, hh, TOUCH_EDGE) end
+      local st = M.touch_state(w.name, state, p) or {}
+      v:rect(x, y, ww, hh, TOUCH_BACK)
+      v:rect(x, y, ww, hh, w.held and TOUCH_HELD or (st.on and TOUCH_ON or TOUCH_FILL))
+      if st.cool then v:rect(x, y, ww, hh * st.cool, TOUCH_COOL) end -- drains from the top
+      outline(v, x, y, ww, hh, st.off and DIM or TOUCH_EDGE)
+      if w.held then outline(v, x + 1, y + 1, ww - 2, hh - 2, WHITE) end
       if w.kind == 2 then
         -- the lift level: a bar from the middle toward the thumb
         local mid, lv = y + hh / 2, (w.value or 0) * hh / 2
         v:rect(x + 2, math.min(mid, mid - lv), ww - 4, math.max(1, math.abs(lv)), TOUCH_KNOB)
+        v:rect(x + 2, mid, ww - 4, 1, WHITE)
       end
       local label = M.TOUCH_LABEL[w.name] or w.name:upper()
-      label = label:sub(1, math.max(1, math.floor(ww / 8)))
+      if st.secs then label = tostring(st.secs) .. "S" end
+      if w.kind == 2 and p and p.mode == "helm" and p.ship and p.ship.pos then
+        label = tostring(math.floor(p.ship.pos[2])) -- the altitude, in metres
+      end
+      label = label:sub(1, math.max(1, math.floor((ww - 2) / 8)))
       local tw = #label * 8
-      v:text(x + math.max(1, (ww - tw) / 2), y + (w.kind == 1 and 2 or (hh - 8) / 2), label, WHITE)
+      local ly = y + (w.kind == 2 and 3 or (hh - 8) / 2) + (w.held and 1 or 0)
+      label_at(v, x + math.max(1, (ww - tw) / 2), ly, label, st.off and DIM or (st.cool and AMBER or WHITE))
       n = n + 1
     end
   end
   if lay.stick then
-    -- floating stick: a ring where the thumb landed, a knob where it is
+    -- floating stick: a ring where the thumb landed (it follows past the rim),
+    -- a knob where the thumb is
     local s = lay.stick
     local bx, by, kx, ky = s[1] * W, s[2] * H, s[3] * W, s[4] * H
-    local r = 0.53 * 0.35 * H
-    outline(v, bx - r, by - r, r * 2, r * 2, TOUCH_EDGE)
+    local r = lay.home.w * W / 2
+    ring(v, bx, by, r, TOUCH_HELD)
     local dx, dy = kx - bx, ky - by
     local d = math.sqrt(dx * dx + dy * dy)
     if d > r then kx, ky = bx + dx / d * r, by + dy / d * r end
-    v:rect(kx - 6, ky - 6, 12, 12, TOUCH_KNOB)
+    ring(v, kx, ky, math.max(6, r * 0.35), TOUCH_KNOB, true)
     n = n + 1
   end
   return n

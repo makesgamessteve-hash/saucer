@@ -670,6 +670,10 @@ void sx_gl_draw(sx_render *r, int win_w, int win_h) {
   s = sx < sy ? sx : sy;
   dw = (float)w * s;
   dh = (float)h * s;
+  if (r->settings.fill) { /* add-mobile-touch-ux: the target already has the window's aspect */
+    dw = (float)win_w;
+    dh = (float)win_h;
+  }
   glUseProgram(G.ui.id);
   glUniform2f(G.ui.size, (float)win_w, (float)win_h);
   glUniform1i(G.ui.tex, 3);

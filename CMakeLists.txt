@@ -77,7 +77,7 @@ if(SAUCER_BUILD_GAME)
     target_compile_options(saucer PRIVATE -sUSE_SDL=3)
     target_link_options(saucer PRIVATE -sUSE_SDL=3 -sMAX_WEBGL_VERSION=2 -sMIN_WEBGL_VERSION=2
       -sALLOW_MEMORY_GROWTH=1 -sFORCE_FILESYSTEM=1 -sINVOKE_RUN=0 -sSTACK_SIZE=1048576 -sEXPORTED_RUNTIME_METHODS=FS,callMain,ccall
-      -sEXPORTED_FUNCTIONS=_main,_saucer_xr_set_available,_saucer_xr_begin,_saucer_xr_end,_saucer_xr_frame,_saucer_xr_set_view,_saucer_xr_set_head,_saucer_xr_set_control,_saucer_xr_set_hand,_saucer_xr_set_joints,_saucer_xr_haptic_take,_saucer_xr_haptic_ms,_saucer_xr_pref_mode,_saucer_net_push,_saucer_net_status,_malloc,_free
+      -sEXPORTED_FUNCTIONS=_main,_saucer_xr_set_available,_saucer_xr_begin,_saucer_xr_end,_saucer_xr_frame,_saucer_xr_set_view,_saucer_xr_set_head,_saucer_xr_set_control,_saucer_xr_set_hand,_saucer_xr_set_joints,_saucer_xr_haptic_take,_saucer_xr_haptic_ms,_saucer_xr_pref_mode,_saucer_net_push,_saucer_net_status,_saucer_set_safe_area,_malloc,_free
       --js-library ${CMAKE_SOURCE_DIR}/web/saucer_xr.js --pre-js ${CMAKE_SOURCE_DIR}/web/saucer_net.js
       --shell-file ${CMAKE_SOURCE_DIR}/web/shell.html)
     set_target_properties(saucer PROPERTIES SUFFIX ".html")

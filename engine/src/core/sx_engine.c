@@ -57,6 +57,7 @@ const char *sx_usage(void) {
          "  --screenshot FILE     save a PNG of the frame at --screenshot-tick (windowed)\n"
          "  --screenshot-tick N   tick for --screenshot (default 120)\n"
          "  --windowed            run a --script in the game window (screenshot tours)\n"
+         "  --fill                the low-res target follows the window's aspect (no letterbox; the web build)\n"
          "  --ticks-per-frame N   windowed scripts: N ticks per drawn frame (1-600, default 1)\n"
          "  --realtime            windowed scripts: pace to wall clock, 60 ticks a second (env SAUCER_REALTIME=1)\n"
          "  --frame-stats         windowed: print frame time avg/p50/p95/max at exit (env SAUCER_FRAME_STATS=1)\n"
@@ -109,6 +110,7 @@ int sx_options_parse(sx_options *o, int argc, char **argv, char *err, int errlen
     else if (strcmp(a, "--height") == 0) { NEEDV(); o->height = atoi(v); }
     else if (strcmp(a, "--coop") == 0) o->coop = 1;
     else if (strcmp(a, "--split-keyboard") == 0) o->split_keyboard = 1;
+    else if (strcmp(a, "--fill") == 0) o->fill = 1;
     else if (strcmp(a, "--split") == 0) { NEEDV(); o->split_horizontal = strcmp(v, "horizontal") == 0; }
     else if (strcmp(a, "--host") == 0) {
       o->net_role = SX_NET_HOST;
@@ -625,6 +627,7 @@ sx_engine *sx_engine_create(const sx_options *o) {
   sx_engine_load_comfort(e);
   if (o->split_keyboard) sx_input_split_keyboard(&e->input, 2);
   e->render.settings.split_horizontal = o->split_horizontal;
+  e->render.settings.fill = o->fill;
   if (o->script[0] && start_test_script(e)) resume_test(e);
   return e;
 }
