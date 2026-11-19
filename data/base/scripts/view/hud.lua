@@ -14,7 +14,7 @@ local WHITE, DIM, GREEN, RED, AMBER, CYAN = { 1, 1, 1, 1 }, { 0.6, 0.65, 0.75, 1
 M.MSG_TICKS = 300
 
 local HINTS = {
-  kbm = "WASD fly MOUSE aim SPACE/CTRL up/down G use Q/E fold F beam (Tractor Room) V scan T jam TAB map H help",
+  kbm = "WASD fly  MOUSE aim  SPACE/CTRL climb  G use  Q/E fold  F beam  V scan  T jam  TAB map  H help",
   pad = "LS move RS aim RT/LT up/down X use LB/RB fold A beam Y scan RS-click jam DPAD map/decoy/shroud",
   keys2 = "IJKL move ARROWS aim O/U up/down ENTER use ,/. fold RSHIFT beam ; scan \\ map",
   touch = "Stick move  drag aim  UP/DN climb/dive  USE helm/console  buttons fold/tractor/scan/jam",
@@ -587,6 +587,8 @@ function M.draw(v, state, p, target)
   -- (two lines under an open panel, so the two never overlap)
   local lines = M.message_lines(state, p, (W - 12) // 8, (compact or p.panel) and 2 or 5)
   local y = H - 12 - (#lines - 1) * 10
+  -- a soft backing so the log reads over the console and the room behind it
+  if #lines > 0 then v:rect(2, y - 2, W - 4, #lines * 10 + 3, { 0, 0.02, 0.06, 0.55 }) end
   for _, l in ipairs(lines) do
     v:text(6, y, l[1], l[2] == 3 and RED or (l[2] == 2 and AMBER or WHITE))
     y = y + 10
@@ -614,8 +616,15 @@ function M.draw(v, state, p, target)
     hint_seen[v.player or 0] = hs
   end
   if not compact and not p.panel and state.tick - hs.tick < M.HINT_TICKS then
-    local hl = M.wrap(M.hint_for(p, mode), (W - 12) // 8, 2)
-    for i, l in ipairs(hl) do v:text(6, H - 14 - 10 * #lines - 10 * (#hl - i + 1), l, DIM) end
+    -- the hint sits top-centre, between the status stacks (never over the console or the alerts)
+    local x0 = W * 41 // 100
+    local cols = math.max(12, (W * 40 // 100) // 8)
+    local hl = M.wrap(M.hint_for(p, mode), cols, 4)
+    local fade = math.min(1, (M.HINT_TICKS - (state.tick - hs.tick)) / 60)
+    if #hl > 0 then
+      v:rect(x0 - 2, 50, cols * 8 + 4, 10 * #hl + 4, { 0, 0.02, 0.06, 0.5 * fade })
+    end
+    for i, l in ipairs(hl) do v:text(x0, 53 + 10 * (i - 1), l, { DIM[1], DIM[2], DIM[3], fade }) end
   end
 end
 

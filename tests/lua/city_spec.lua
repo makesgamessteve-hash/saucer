@@ -116,8 +116,8 @@ describe("city generation", function()
     local towers, tall = 0, 0
     for _, s in ipairs(r.solids) do
       if s.kind == "tower" then
-        towers = towers + 1
-        if s[2][2] - s[1][2] > 150 then tall = tall + 1 end
+        if s.tier == 1 then towers = towers + 1 end
+        if s[2][2] - r.city.districts[1].pos[2] > 150 then tall = tall + 1 end
       end
     end
     expect(towers).to_be_greater(10)
@@ -180,11 +180,16 @@ describe("city generation", function()
     -- the planet's skyline out-tops the moon's, which out-tops the rock's
     local function top(r)
       local m = 0
-      for _, s in ipairs(r.solids) do if s.kind == "tower" then m = math.max(m, s[2][2] - s[1][2]) end end
+      for _, s in ipairs(r.solids) do if s.kind == "tower" then m = math.max(m, s[2][2] - r.origin[2]) end end
       return m
     end
-    expect(top(planet)).to_be_greater(top(moon))
-    expect(top(moon)).to_be_greater(top(rock))
+    expect(top(planet)).to_be_greater(top(moon) + 100)
+    -- the asteroid hangs some towers from the rock above: their top is the ceiling, their widest tier on it
+    local hung = 0
+    for _, s in ipairs(rock.solids) do
+      if s.kind == "tower" and s[2][2] - rock.origin[2] >= 440 then hung = hung + 1 end
+    end
+    expect(hung).to_be_greater(2)
   end)
   it("sky-bridges join towers on a planet and a moon but not inside an asteroid", function()
     local function bridges(r)

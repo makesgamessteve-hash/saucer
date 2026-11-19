@@ -34,6 +34,55 @@ local function lot_origin(spec, gx, gz)
          spec.approach + (gz - 1) * (spec.lot + spec.street)
 end
 
+-- per-civ look: architecture by the civ's shape, light colours by its glyph
+M.PALETTES = { { 1.0, 0.82, 0.45 }, { 0.45, 0.95, 1.0 }, { 1.0, 0.5, 0.85 }, { 0.55, 1.0, 0.6 }, { 0.9, 0.95, 1.0 }, { 1.0, 0.55, 0.35 } }
+M.SHAPES = { angular = "ziggurat", crystalline = "spire", organic = "dome", modular = "arcology" }
+function M.style_of(civ)
+  local glyph = civ and civ.glyph or 1
+  local shape = civ and civ.shape or "angular"
+  local n = #M.PALETTES
+  return { shape = shape, form = M.SHAPES[shape] or "ziggurat", window = M.PALETTES[glyph % n + 1],
+           accent = M.PALETTES[(glyph * 5 + 2) % n + 1], civ = civ and civ.id or nil }
+end
+
+-- a tower's silhouette: stacked boxes { dx, dz, w, w2, dy, h } (cells, from the tower's footprint corner and base),
+-- every box inside the footprint, so what you see is exactly what you hit
+function M.tiers(form, w, w2, h, inverted)
+  local out = {}
+  local function add(frac_w, frac_w2, y0, hh, ox, oz)
+    local ww, ww2 = math.max(4, math.floor(w * frac_w)), math.max(4, math.floor(w2 * frac_w2))
+    out[#out + 1] = { dx = ((w - ww) // 2) + (ox or 0), dz = ((w2 - ww2) // 2) + (oz or 0), w = ww, w2 = ww2, dy = y0, h = math.max(2, hh) }
+  end
+  if form == "spire" then
+    add(1, 1, 0, h * 0.42)
+    add(0.62, 0.62, h * 0.42, h * 0.3)
+    add(0.26, 0.26, h * 0.72, h * 0.28)
+  elseif form == "dome" then
+    local fr = { { 1, 0.35 }, { 0.88, 0.25 }, { 0.7, 0.2 }, { 0.48, 0.12 }, { 0.26, 0.08 } }
+    local y = 0
+    for _, f in ipairs(fr) do add(f[1], f[1], y, h * f[2]) y = y + h * f[2] end
+  elseif form == "arcology" then
+    add(0.5, 0.5, 0, h)
+    add(1, 0.62, 0, h * 0.3)
+    add(0.64, 1, h * 0.42, h * 0.2, w // 8, 0)
+    add(0.8, 0.5, h * 0.72, h * 0.14, 0, w2 // 6)
+  else -- ziggurat: four steps, each narrower
+    local y = 0
+    for i = 0, 3 do
+      local f = 1 - i * 0.2
+      add(f, f, y, h / 4)
+      y = y + h / 4
+    end
+  end
+  if inverted then -- hung from the ceiling: widest at the top
+    local top = 0
+    for _, t in ipairs(out) do top = math.max(top, t.dy + t.h) end
+    for _, t in ipairs(out) do t.dy = top - t.dy - t.h end
+  end
+  for _, t in ipairs(out) do t.dy, t.h = math.floor(t.dy), math.floor(t.h) end
+  return out
+end
+
 -- the cell extent (x, y, z) of a city kit's build volume
 function M.extent_cells(kit)
   local s = kit.city
@@ -197,6 +246,7 @@ function M.generate(seed, kit, civ, origin)
   local rooms, doors, solids, debris = {}, {}, {}, {}
   local lots, bybuilding = {}, {}
   local gates, couplings = {}, {}
+  local style = M.style_of(civ)
   local ceiling = kit.grid[2] - (spec.shell or 2) - 2
   local nx, nz = spec.lots[1], spec.lots[2]
   local ux, uz = M.HALL[1], M.HALL[3]
@@ -360,9 +410,16 @@ function M.generate(seed, kit, civ, origin)
       h = math.min(h, ceiling - lot.y)
       local cx = lot.x0 + (spec.lot - w) // 2
       local cz = lot.z0 + (spec.lot - w2) // 2
-      local mn, mx = world_box({ cx, lot.y - 3, cz }, { w, h + 3, w2 }, kit, origin)
-      solids[#solids + 1] = { mn, mx, kind = "tower", room = 1, district = d.id }
-      lot.tower = { cx, cz, w, w2, h }
+      -- asteroid towers alternate: standing on the floor or hung from the rock above
+      local inverted = spec.body == "asteroid" and (lot.gx + lot.gz) % 2 == 0
+      local y0 = inverted and (ceiling - h) or (lot.y - 3)
+      local tl = M.tiers(style.form, w, w2, h + 3, inverted)
+      for k, t in ipairs(tl) do
+        local mn, mx = world_box({ cx + t.dx, y0 + t.dy, cz + t.dz }, { t.w, t.h, t.w2 }, kit, origin)
+        solids[#solids + 1] = { mn, mx, kind = "tower", room = 1, district = d.id, tier = k, form = style.form,
+                                apex = k == #tl or nil }
+      end
+      lot.tower = { cx, cz, w, w2, math.floor(h * (style.form == "spire" and 0.42 or style.form == "dome" and 0.35 or 0.3)), inv = inverted }
     elseif lot.type == "plaza" then
       local w = spec.lot - 4
       local mn, mx = world_box({ lot.x0 + 2, lot.y - 2, lot.z0 + 2 }, { w, 2, w }, kit, origin)
@@ -383,16 +440,19 @@ function M.generate(seed, kit, civ, origin)
     for _, lot in ipairs(plan) do
       local e = lots[lot.gz * 1000 + lot.gx + 1]
       local function top_of(l)
-        if l.tower then return l.y + l.tower[5] end
+        if l.tower then return not l.tower.inv and (l.y + l.tower[5]) or nil end
         if l.stack then return l.stack[l.hmax].cell[2] + M.STEP end
       end
       if e and top_of(lot) and top_of(e) and rng:int(1, 100) <= 45 and bridges < 40 then
         local yb = math.min(top_of(lot), top_of(e)) - 3
-        local x0 = lot.x0 + spec.lot - 2
-        local gap = e.x0 + 2 - x0
-        local mn, mx = world_box({ x0, yb, lot.z0 + spec.lot // 2 - 3 }, { gap, 2, 6 }, kit, origin)
-        solids[#solids + 1] = { mn, mx, kind = "bridge", room = 1, district = districts[lot.d].id }
-        bridges = bridges + 1
+        -- from this building's wall to the next one's (the tower base or the hall footprint)
+        local x0 = lot.tower and (lot.tower[1] + lot.tower[3]) or (lot.x0 + off + ux)
+        local gap = (e.tower and e.tower[1] or (e.x0 + off)) - x0
+        if gap > 2 then
+          local mn, mx = world_box({ x0, yb, lot.z0 + spec.lot // 2 - 3 }, { gap, 2, 6 }, kit, origin)
+          solids[#solids + 1] = { mn, mx, kind = "bridge", room = 1, district = districts[lot.d].id }
+          bridges = bridges + 1
+        end
       end
     end
   end
@@ -487,7 +547,7 @@ function M.generate(seed, kit, civ, origin)
   debris = ruinm.debris(rng2, rooms, doors, kit, origin)
   local ok, reach = ruinm.validate(rooms, doors, slots)
   if not ok then return nil, reach end
-  local city = { body = spec.body, districts = {}, couplings = couplings, gates = gates, port = port, stats = {} }
+  local city = { body = spec.body, districts = {}, couplings = couplings, gates = gates, port = port, stats = {}, style = style }
   for _, d in ipairs(districts) do
     local lot = lots[d.center[2] * 1000 + d.center[1]]
     local cx = origin[1] + (lot.x0 + spec.lot / 2) * kit.cell

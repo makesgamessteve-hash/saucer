@@ -53,13 +53,13 @@ local towers = {}
 for _, s in ipairs(ruin.solids) do if s.kind == "tower" then towers[#towers + 1] = s end end
 table.sort(towers, function(a, b) return (a[2][2] - a[1][2]) > (b[2][2] - b[1][2]) end)
 local best
-for i = 1, math.min(#towers, 12) do
-  for j = i + 1, math.min(#towers, 12) do
+for i = 1, math.min(#towers, 24) do
+  for j = i + 1, math.min(#towers, 24) do
     local a, b = towers[i], towers[j]
     local ca = { (a[1][1] + a[2][1]) / 2, 0, (a[1][3] + a[2][3]) / 2 }
     local cb = { (b[1][1] + b[2][1]) / 2, 0, (b[1][3] + b[2][3]) / 2 }
     local d = vec.dist(ca, cb)
-    if d < 400 and (not best or d < best.d) then best = { a = a, b = b, d = d, ca = ca, cb = cb } end
+    if d > 40 and d < 400 and (not best or d < best.d) then best = { a = a, b = b, d = d, ca = ca, cb = cb } end
   end
 end
 if best then
@@ -107,4 +107,30 @@ put(inside, 0, -0.08)
 T.press(1, "map")
 T.wait(5)
 shot("05_city_map")
+
+-- 6. the payoff: a dark district, then the same view once its grid is restored (add-cities-2)
+local cities = require("sim.cities")
+T.press(1, "map") -- close the map
+T.wait(5)
+local tgt
+for _, d in ipairs(ruin.city.districts) do
+  if not d.powered and d.id ~= ruin.city.port and d.kind ~= "spaceport" then
+    local dd = vec.dist(d.pos, port.pos)
+    if not tgt or dd < tgt.dd then tgt = { d = d, dd = dd } end
+  end
+end
+if tgt then
+  local d = tgt.d
+  local back = { port.pos[1] - d.pos[1], 0, port.pos[3] - d.pos[3] }
+  local bl = math.sqrt(back[1] ^ 2 + back[3] ^ 2) + 1e-6
+  local from = { d.pos[1] + back[1] / bl * (BODY == "planet" and 230 or 170), d.pos[2] + 60, d.pos[3] + back[3] / bl * (BODY == "planet" and 230 or 170) }
+  local yaw = saucer.math.atan2(back[3], -back[1])
+  put(from, yaw, -0.05)
+  shot("06_grid_dark")
+  cities.restore(T.state(), site, d.id)
+  T.wait(200)
+  shot("07_grid_restored")
+  put(from, yaw, -0.05)
+  shot("08_grid_restored_b")
+end
 print("cities shots done " .. BODY)

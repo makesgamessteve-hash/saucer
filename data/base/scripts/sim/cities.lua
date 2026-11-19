@@ -37,6 +37,20 @@ function M.restore(state, site, d)
   state.locks[lockkey(site, d)] = state.tick
 end
 
+-- how brightly a district's lights burn (0 dark .. 1 full) at this tick: dark until its coupling is
+-- restored, then a flicker for a second and a half and a ramp up. Render only: a function of the tick.
+M.RAMP = 150
+function M.light(state, site, ruin, d)
+  local pd = d and ruin.city.districts[d]
+  if not pd or pd.powered then return 1 end
+  local t0 = state.locks and state.locks[lockkey(site, d)]
+  if not t0 then return 0 end
+  local dt = state.tick - t0
+  if dt >= M.RAMP then return 1 end
+  if dt < 90 then return ((dt // 7 + d) % 3 == 0) and 0.8 or 0 end
+  return (dt - 90) / (M.RAMP - 90)
+end
+
 -- districts live / total
 function M.grid(state, site, ruin)
   local on, n = 0, 0
