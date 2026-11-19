@@ -2272,6 +2272,9 @@ int sx_script_open(sx_engine *e) {
   if (!L) return 0;
   e->L = L;
   luaL_openlibs(L);
+  /* slice 5 (add-cities-2): a city holds a big, mostly static heap; a generational collector only walks the
+   * young objects, so there is no multi-ten-millisecond full-cycle hitch every second or so */
+  lua_gc(L, LUA_GCGEN, 0, 0);
   lua_pushlightuserdata(L, e);
   lua_setfield(L, LUA_REGISTRYINDEX, ENGINE_KEY);
   lua_newtable(L);

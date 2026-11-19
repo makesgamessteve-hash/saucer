@@ -39,9 +39,9 @@ The lights of a city SHALL be separate from its walls and burn only in a distric
 - **THEN** it passes
 
 ### Requirement: Helm hint
-The control hint at the helm SHALL sit in the free band at the top centre, backed and faded, clear of the console, the status stacks and the alerts; the message log SHALL have a backing.
+The control hint at the helm SHALL be docked bottom-left above the console, out of the sightline, backed, shown for a few seconds after the context changes and then faded; H SHALL show the full help in the same corner; the message log SHALL have a backing.
 
-#### Scenario: the hint line sits at the top and a city's message log has a backing
+#### Scenario: the hint line is docked bottom-left above the console, clear of the sightline, and fades
 - **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
 - **THEN** it passes
 
@@ -159,3 +159,22 @@ A sector with a city SHALL hold a second trader, an outpost off the city's space
 #### Scenario: docking at an outpost sells there with its own ledger, and says so
 - **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
 - **THEN** it passes
+
+### Requirement: Grid-restore payoff
+Restoring a district SHALL be a visible moment: its beacons and spire lights come on first, then a wave of light runs out from the coupling at a fixed speed so that windows and signs inside the front are lit and those beyond are dark, a sting plays for every player in the city, and the HUD shows a banner with the district and the grid count for a few seconds. All of it SHALL be a function of the tick.
+
+#### Scenario: a restored district lights up in a wave from its coupling, the beacons first, and the HUD and sound mark it
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+### Requirement: City frame budget
+A city SHALL be drawn inside a frame budget: a sentry farther from the eye than `SENTRY_DIST` is not drawn, the skyline, detail and chunk distances are tuned so that the per-frame game cost (simulation plus render) in a city stays under 16.6 ms at the 95th percentile on the reference box, and the engine SHALL report the frame times (average, median, 95th percentile and maximum, with the simulation and render share) at exit when run with `--frame-stats`, natively and in the web build.
+
+#### Scenario: sentries are drawn only near the eye and the LOD distances nest
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the frame summary computes average, median, 95th percentile and maximum
+- **WHEN** `tests/c/test_engine.c` runs its `frame_stats` test
+- **THEN** it passes
+

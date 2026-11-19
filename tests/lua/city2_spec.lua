@@ -146,15 +146,30 @@ describe("a city's look", function()
     for _, s in ipairs(r.solids) do if s.kind == "tower" and s.apex then n = n + 1 end end
     expect(n).to_be_greater(10)
   end)
-  it("the hint line sits at the top and a city's message log has a backing", function()
+  it("the hint line is docked bottom-left above the console, clear of the sightline, and fades", function()
     local st = new_state()
     local p = st.players[1]
     p.mode, p.panel, p.ship.morph = "helm", false, false
     run(st, 2)
     local v = fake_view({ width = 1024, height = 576 })
+    local at = {}
+    local text = v.text
+    v.text = function(self, x, y, s, c) if s:find("WASD fly", 1, true) then at[#at + 1] = { x, y, c } end return text(self, x, y, s, c) end
     hud.draw(v, st, p, nil)
-    expect(v.calls.rect).to_be_greater(1)
     expect(v.texts:find("WASD fly", 1, true) ~= nil).to_be_truthy()
+    expect(#at).to_be(1)
+    expect(at[1][1]).to_be_less(1024 * 0.35)
+    expect(at[1][2] > 576 * 0.3 and at[1][2] < 576 * 0.65).to_be_truthy()
+    -- gone after HINT_TICKS; H shows the full help in the same corner
+    st.tick = st.tick + hud.HINT_TICKS + 5
+    local v2 = fake_view({ width = 1024, height = 576 })
+    hud.draw(v2, st, p, nil)
+    expect(v2.texts:find("WASD fly", 1, true)).to_be(nil)
+    p.help = true
+    local v3 = fake_view({ width = 1024, height = 576 })
+    hud.draw(v3, st, p, nil)
+    expect(v3.texts:find("SAUCER - controls", 1, true) ~= nil).to_be_truthy()
+    p.help = false
   end)
 end)
 
@@ -170,17 +185,78 @@ describe("lights come on with the grid", function()
     st.tick = 1000
     cities.restore(st, i, d)
     local seen_on, seen_off = false, false
-    for dt = 0, 89 do
+    for dt = 0, 39 do
       st.tick = 1000 + dt
       local l = cities.light(st, i, r, d)
       if l > 0 then seen_on = true else seen_off = true end
     end
     expect(seen_on and seen_off).to_be_truthy()
-    st.tick = 1000 + 120
+    st.tick = 1000 + 70
     local mid = cities.light(st, i, r, d)
     expect(mid > 0 and mid < 1).to_be_truthy()
     st.tick = 1000 + cities.RAMP
     expect(cities.light(st, i, r, d)).to_be(1)
+  end)
+  it("a restored district lights up in a wave from its coupling, the beacons first, and the HUD and sound mark it", function()
+    local st, i, r = in_city("planet")
+    local p = st.players[1]
+    p.mode, p.panel, p.ship.morph = "helm", false, false
+    p.site = i
+    local c = cities.candidates(st, p, i, r)[1]
+    expect(c.kind).to_be("coupling")
+    local d = c.district
+    st.tick = 3000
+    game.pick_up(st, p, c, i)
+    local sting = false
+    for _, f in ipairs(p.fx or {}) do if f.sound == "gridon" then sting = true end end
+    expect(sting).to_be_truthy()
+    local near, far = { c.pos[1] + 5, c.pos[2], c.pos[3] }, { c.pos[1] + 400, c.pos[2], c.pos[3] }
+    -- dark during the flicker; then the front leaves the coupling and reaches the far side later
+    st.tick = 3000 + 10
+    expect(cities.light_at(st, i, r, d, near)).to_be(0)
+    st.tick = 3000 + cities.WAVE_START + 40
+    expect(cities.light_at(st, i, r, d, near)).to_be(1)
+    expect(cities.light_at(st, i, r, d, far)).to_be(0)
+    local mid
+    for t = 3000 + cities.WAVE_START, 3000 + cities.WAVE_TICKS do
+      st.tick = t
+      local k = cities.light_at(st, i, r, d, far)
+      if k > 0 and k < 1 then mid = true end
+    end
+    expect(mid).to_be_truthy()
+    st.tick = 3000 + cities.WAVE_TICKS
+    expect(cities.light_at(st, i, r, d, far)).to_be(1)
+    expect(cities.light_at(st, i, r, nil, far)).to_be(1)
+    expect(cities.light_at(st, i, r, r.city.port, far)).to_be(1)
+    local other
+    for _, pd in ipairs(r.city.districts) do if not pd.powered and pd.id ~= d then other = pd.id break end end
+    expect(cities.light_at(st, i, r, other, far)).to_be(0)
+    -- the beacon is already up at the start of the wave
+    st.tick = 3000 + cities.WAVE_START + 20
+    expect(cities.light(st, i, r, d) > 0).to_be_truthy()
+    -- the fresh list and the banner
+    expect(#cities.fresh(st, i, r, hud.BANNER_TICKS)).to_be(1)
+    expect(cities.fresh(st, i, r, hud.BANNER_TICKS)[1].id).to_be(d)
+    expect(#cities.fresh(st, i, {}, 10)).to_be(0)
+    local function banner(tick)
+      st.tick = tick
+      local v = fake_view({ width = 480, height = 270 })
+      hud.grid_banner(v, st, p)
+      return v
+    end
+    expect(banner(3000 + 5).calls.rect).to_be_greater(2)
+    local b = banner(3000 + 60)
+    expect(b.texts:find("POWER RESTORED", 1, true) ~= nil).to_be_truthy()
+    expect(b.texts:find("GRID 2/16", 1, true) ~= nil).to_be_truthy()
+    expect(banner(3000 + 3).texts).to_be("")
+    expect(banner(3000 + hud.BANNER_TICKS + 5).texts).to_be("")
+    p.site = 0
+    expect(banner(3000 + 60).texts).to_be("")
+    p.site = i
+    expect(banner(3000 + 60).calls.rect).to_be_greater(0)
+    local small = fake_view({ width = 240, height = 135 })
+    hud.grid_banner(small, st, p)
+    expect(small.texts).to_be("")
   end)
   it("the drawn lights follow the grid: none in a dark district, many once it is restored", function()
     local st, i, r = in_city("planet")
@@ -193,7 +269,7 @@ describe("lights come on with the grid", function()
     st.tick = 5000
     local before = render.draw_ruins(fake_view(), A, st, cam, false).lit or 0
     for _, pd in ipairs(r.city.districts) do if not pd.powered then cities.restore(st, i, pd.id) end end
-    st.tick = 5000 + cities.RAMP + 1
+    st.tick = 5000 + cities.WAVE_TICKS + 1
     local after = 0
     for _ = 1, 8 do after = render.draw_ruins(fake_view(), A, st, cam, false).lit or 0 end
     expect(after).to_be_greater(before)
@@ -734,5 +810,32 @@ describe("the archive and the outposts", function()
     local v = fake_view()
     p.site = 0
     expect(pcall(render.render, v, st, 0)).to_be_truthy()
+  end)
+end)
+
+describe("the frame budget in a city", function()
+  it("a city's sentries are drawn only near the eye, so a city of hundreds stays inside the frame budget", function()
+    local st, i, r = in_city("planet")
+    local A = assets.init()
+    local defs = game.sentries(i)
+    local k
+    for n, d in ipairs(defs) do if d.kind == "watcher" and not d.roam then k = n break end end
+    local def = defs[k]
+    local p = st.players[1]
+    p.site = i
+    local v1 = fake_view()
+    p.ship.pos = { def.pos[1] + 10, def.pos[2], def.pos[3] + 10 }
+    render.draw_sentries(v1, A, st, p)
+    local near = (v1.calls.mesh or 0) + (v1.calls.billboard or 0)
+    expect(near).to_be_greater(0)
+    local v2 = fake_view()
+    p.ship.pos = { def.pos[1] + render.SENTRY_DIST * 20, def.pos[2], def.pos[3] }
+    render.draw_sentries(v2, A, st, p)
+    expect((v2.calls.mesh or 0) + (v2.calls.billboard or 0)).to_be(0)
+    -- the drawn set shrinks with the eye's distance; the LOD distances keep the budget numbers sane
+    expect(render.SENTRY_DIST).to_be_less(render.LOD_DIST)
+    expect(render.CITY_NEAR).to_be_less(render.CULL_DIST)
+    expect(render.OUTER_NEAR).to_be_less(render.CITY_NEAR)
+    expect(r.city ~= nil).to_be_truthy()
   end)
 end)

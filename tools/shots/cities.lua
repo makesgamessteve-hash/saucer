@@ -199,4 +199,32 @@ shot("16_archive_record")
 local outpost = T.state().sector.traders[2]
 put({ outpost.pos[1] + 40, outpost.pos[2] + 12, outpost.pos[3] - 160 }, -0.2, -0.05)
 shot("17_trader_outpost")
+-- 10. the grid-restore payoff (add-cities-2 slice 5): dark, beacon up, the wave, done
+do
+  local cs = require("sim.cities")
+  local dd
+  for _, pd in ipairs(ruin.city.districts) do
+    if not pd.powered and not cs.powered(T.state(), site, ruin, pd.id) and (not dd or vec.dist(pd.pos, inside) < vec.dist(dd.pos, inside)) then dd = pd end
+  end
+  local cp
+  for _, c in ipairs(ruin.city.couplings) do if c.district == dd.id then cp = c.pos end end
+  T.state().tick = 300 -- clear weather
+  local back = { port.pos[1] - dd.pos[1], 0, port.pos[3] - dd.pos[3] }
+  local bl = math.sqrt(back[1] ^ 2 + back[3] ^ 2) + 1e-6
+  local k = BODY == "planet" and 260 or 200
+  local view = { dd.pos[1] + back[1] / bl * k, dd.pos[2] + 130, dd.pos[3] + back[3] / bl * k }
+  local vyaw = saucer.math.atan2(back[3], -back[1])
+  put(view, vyaw, -0.14)
+  shot("18_restore_0_dark")
+  cs.restore(T.state(), site, dd.id)
+  T.state().tick = T.state().tick + 0
+  put(view, vyaw, -0.14)  -- 20 ticks in: the flicker and the first beacon light
+  shot("18_restore_1_flicker")
+  T.wait(70)
+  shot("18_restore_2_wave")
+  T.wait(50)
+  shot("18_restore_3_wave_wide")
+  T.wait(200)
+  shot("18_restore_4_done")
+end
 print("cities shots done " .. BODY)

@@ -497,6 +497,13 @@ def pass_sounds(rate=22050):
     def coin(t):  # the saucer pocketed / taken out: two bright chimes
         return 0.3 * (sin(tau * 1318.5 * t) + (sin(tau * 1975.5 * t) if t > 0.08 else 0)) * math.exp(-t * 6)
 
+    def gridon(t):  # a district's power coming back: a rising arpeggio over a swelling hum
+        notes = (220, 330, 440, 660, 880)
+        k = min(len(notes) - 1, int(t / 0.14))
+        arp = 0.28 * sin(tau * notes[k] * t) * math.exp(-((t % 0.14)) * 9)
+        hum = 0.22 * sin(tau * (55 + 110 * t) * t) * min(1, t / 0.5) * math.exp(-max(0, t - 0.7) * 5)
+        return arp + hum
+
     return {
         "engine_hum.wav": (2.0, engine_hum, True),
         "beam_loop.wav": (1.0, beam_loop, True),
@@ -511,6 +518,7 @@ def pass_sounds(rate=22050):
         "hit.wav": (0.4, hit, False),
         "click.wav": (0.06, click, False),
         "coin.wav": (0.5, coin, False),
+        "gridon.wav": (1.1, gridon, False),
     }
 
 

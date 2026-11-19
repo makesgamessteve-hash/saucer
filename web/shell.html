@@ -102,6 +102,9 @@
     var args = ['--root', '/', '--width', String(window.innerWidth), '--height', String(window.innerHeight)];
     if (q.get('seed') && extra.indexOf('--seed') < 0) args.push('--seed', q.get('seed'));
     if (q.get('players') && !extra.length) args.push('--local-players', q.get('players'), '--viewports', q.get('players'), '--coop');
+    // ?script=/path.lua runs a script from the data tree (the perf runs); ?frame_stats=1 prints frame times at exit
+    if (q.get('script')) args.push('--script', q.get('script'), '--windowed'); // windowed: really renders (perf runs)
+    if (q.get('frame_stats')) args.push('--frame-stats');
     if (!extra.length) document.getElementById('online').style.display = 'block';
     Module.callMain(args.concat(extra));
   }

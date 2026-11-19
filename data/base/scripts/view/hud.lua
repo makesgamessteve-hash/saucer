@@ -63,7 +63,10 @@ end
 
 -- per view, which context its hint was last shown for (view state, not sim)
 local hint_seen = {}
-M.HINT_TICKS = 600
+M.HINT_TICKS = 420
+
+-- top of a box of n 10-px lines docked bottom-left, clear of the message log and the side console
+function M.dock_y(H, n) return H * 62 // 100 - 10 * n end
 
 -- wrap text to `cols` columns (long words are cut), at most `max` lines
 function M.wrap(text, cols, max)
@@ -477,6 +480,36 @@ function M.weather(v, state, p)
   end
 end
 
+-- add-cities-2 slice 5: the grid-restore moment: a flash, then a banner while the wave of light runs out
+M.BANNER_TICKS = 240
+function M.grid_banner(v, state, p)
+  if p.site == 0 or v.height < 200 then return end
+  local game = require("sim.game")
+  local r = game.ruin(p.site)
+  if not (r and r.city) then return end
+  local cities = require("sim.cities")
+  local list = cities.fresh(state, p.site, r, M.BANNER_TICKS)
+  local f
+  for _, x in ipairs(list) do if not f or x.age < f.age then f = x end end
+  if not f then return end
+  local W, H = v.width, v.height
+  local fade = math.min(1, (M.BANNER_TICKS - f.age) / 40)
+  if f.age < 24 then v:rect(0, 0, W, H, { 0.4, 0.9, 1, 0.22 * (1 - f.age / 24) }) end
+  local on, n = cities.grid(state, p.site, r)
+  local t1 = "POWER RESTORED"
+  local t2 = string.format("%s LIVE  GRID %d/%d", f.label:upper(), on, n)
+  local y = H // 6
+  local cx = W * 58 // 100 -- right of the status stacks
+  local w = math.max(#t1, #t2) * 8 + 16
+  local grow = math.min(1, f.age / 20)
+  v:rect(cx - w * grow / 2, y - 4, w * grow, 36, { 0, 0.03, 0.08, 0.6 * fade })
+  v:rect(cx - w * grow / 2, y + 33, w * grow, 1, { 1, 0.75, 0.25, fade })
+  if grow >= 1 then
+    v:text(cx - #t1 * 4, y, t1, { AMBER[1], AMBER[2], AMBER[3], fade })
+    v:text(cx - #t2 * 4, y + 16, t2, { CYAN[1], CYAN[2], CYAN[3], fade })
+  end
+end
+
 function M.draw(v, state, p, target)
   local W, H = v.width, v.height
   -- add-wider-dark: a split-screen view keeps only the essentials (a quarter
@@ -493,6 +526,7 @@ function M.draw(v, state, p, target)
     return
   end
   M.weather(v, state, p)
+  M.grid_banner(v, state, p)
   -- size + charge
   v:rect(4, 4, 120, 28, { 0, 0, 0, 0.45 })
   v:text(8, 7, c.name:upper(), WHITE)
@@ -628,8 +662,10 @@ function M.draw(v, state, p, target)
   end
   M.panel(v, state, p)
   if p.help then
-    v:rect(W // 2 - 170, 50, 340, 12 * #HELP + 8, { 0, 0, 0.05, 0.8 })
-    for i, line in ipairs(HELP) do v:text(W // 2 - 164, 46 + i * 12, line, i == 1 and AMBER or WHITE) end
+    -- docked bottom-left (only while H is on), not over the middle of the view
+    local hy = H * 62 // 100 - 12 * #HELP - 8
+    v:rect(2, hy, 340, 12 * #HELP + 8, { 0, 0, 0.05, 0.8 })
+    for i, line in ipairs(HELP) do v:text(8, hy - 4 + i * 12, line, i == 1 and AMBER or WHITE) end
   end
   local mode = saucer.input.device_mode(v.player)
   if mode == "touch" then M.touch(v) end
@@ -642,15 +678,16 @@ function M.draw(v, state, p, target)
     hint_seen[v.player or 0] = hs
   end
   if not compact and not p.panel and state.tick - hs.tick < M.HINT_TICKS then
-    -- the hint sits top-centre, between the status stacks (never over the console or the alerts)
-    local x0 = W * 41 // 100
-    local cols = math.max(12, (W * 40 // 100) // 8)
-    local hl = M.wrap(M.hint_for(p, mode), cols, 4)
+    -- the hint is docked bottom-left above the console, out of the sightline (never over the status stacks,
+    -- the alerts or the message log), for a few seconds after the context changes
+    local cols = math.max(12, (W * 30 // 100) // 8)
+    local hl = M.wrap(M.hint_for(p, mode), cols, 5)
     local fade = math.min(1, (M.HINT_TICKS - (state.tick - hs.tick)) / 60)
+    local x0, y0 = 4, M.dock_y(H, #hl)
     if #hl > 0 then
-      v:rect(x0 - 2, 50, cols * 8 + 4, 10 * #hl + 4, { 0, 0.02, 0.06, 0.5 * fade })
+      v:rect(x0 - 2, y0 - 3, cols * 8 + 4, 10 * #hl + 4, { 0, 0.02, 0.06, 0.5 * fade })
     end
-    for i, l in ipairs(hl) do v:text(x0, 53 + 10 * (i - 1), l, { DIM[1], DIM[2], DIM[3], fade }) end
+    for i, l in ipairs(hl) do v:text(x0, y0 + 10 * (i - 1), l, { DIM[1], DIM[2], DIM[3], fade }) end
   end
 end
 

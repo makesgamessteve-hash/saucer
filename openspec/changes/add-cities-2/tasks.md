@@ -14,3 +14,7 @@
 ## 4. Mystery and traders (slice 4)
 - [x] 4.1 Archive records (`city.clues`, `cities.clue_text`, beam kind `clue`)
 - [x] 4.2 City trader outposts (`sector.traders`, render and radar, dock message)
+## 5. Polish and performance (slice 5)
+- [x] 5.1 Helm hint docked bottom-left, fading; H help docked likewise
+- [x] 5.2 Grid-restore payoff: light wave, early beacons, `gridon` sting, HUD banner
+- [x] 5.3 Per-frame cost measured native and wasm; culling, LOD and batching to a budget

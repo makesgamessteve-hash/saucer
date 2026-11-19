@@ -27,6 +27,7 @@ typedef struct sx_options {
   uint64_t seed;
   int headless;
   int windowed; /* --windowed: run a --script in the window (screenshot tours) */
+  int frame_stats;     /* --frame-stats / SAUCER_FRAME_STATS=1: windowed runs print per-frame wall time (avg, p50, p95, max) at exit */
   int realtime;        /* --realtime / SAUCER_REALTIME=1: windowed scripts run at 60 ticks a second of wall clock */
   int ticks_per_frame; /* --ticks-per-frame: windowed scripts simulate this many ticks a frame (default 1) */
   char script[512];   /* game test script (VFS-independent path) */
@@ -160,6 +161,9 @@ uint64_t sx_engine_state_hash(sx_engine *e);
 #define SX_PACE_MAX_LAG 0.25
 typedef struct sx_pace { double due; int started; } sx_pace;
 double sx_pace_wait(sx_pace *p, double now, int ticks);
+/* Frame-time summary for --frame-stats (milliseconds per frame). Sorts ms in place. n <= 0 gives zeros. */
+typedef struct sx_frame_summary { int n; double avg, p50, p95, max; } sx_frame_summary;
+void sx_frame_summarize(double *ms, int n, sx_frame_summary *out);
 /* SAUCER_REALTIME style switch: set and not "" or "0". */
 int sx_env_flag(const char *value);
 /* Fixed-step scheduler: accumulate elapsed seconds and return ticks to run. */

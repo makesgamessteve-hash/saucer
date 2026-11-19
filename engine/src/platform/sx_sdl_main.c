@@ -24,6 +24,10 @@ typedef struct app {
   sx_engine *e;
   Uint64 last;
   double acc;
+  double ssum, rsum, psum;       /* --frame-stats: summed ms in sx_engine_render (script + GL calls) and in present */
+  double *fms, *wms;       /* total wall ms per frame, and the part that is the game's own work (sim + render) */
+              /* --frame-stats: wall ms of each frame after the warm-up */
+  int nfms, nframes;
   sx_pace pace;            /* --realtime: wall clock schedule of a fixed-step run */
   int running, status;
   int fixed_step;          /* one tick per frame (screenshots, slow CI GPUs) */
@@ -173,6 +177,9 @@ static void present(void) {
 
 /* --realtime: a fixed-step scripted run sleeps off the rest of each frame's
  * n/60 s, so a recording plays at the speed of the game, not of the GPU. */
+#define FRAME_WARMUP 30 /* --frame-stats skips start-up and the first generation */
+#define FRAME_STATS_MAX 200000
+
 static void pace_frame(int ticks) {
   double wait;
   if (!A.fixed_step || !A.e->opt.realtime) return;
@@ -183,7 +190,7 @@ static void pace_frame(int ticks) {
 static void frame(void) {
   sx_engine *e = A.e;
   SDL_Event ev;
-  Uint64 now;
+  Uint64 now, tr0, tr1;
   int n, i, ran = 0;
   while (SDL_PollEvent(&ev)) handle_event(&ev);
   if (e->xr.session && !e->xr.mocked) return; /* the XR frame loop drives the game while immersive */
@@ -197,9 +204,23 @@ static void frame(void) {
     sx_engine_tick(e);
     ran++;
   }
+  tr0 = SDL_GetPerformanceCounter();
   sx_engine_render(e, A.fixed_step ? 1.0 : A.acc * SX_TICK_HZ);
+  tr1 = SDL_GetPerformanceCounter();
   sx_audio_flush(e);
   present();
+  if (e->opt.frame_stats) {
+    Uint64 t1 = SDL_GetPerformanceCounter();
+    if (++A.nframes > FRAME_WARMUP && A.nfms < FRAME_STATS_MAX) {
+      if (!A.fms) A.fms = (double *)malloc(sizeof(double) * FRAME_STATS_MAX);
+      A.ssum += (double)(tr0 - now) * 1000.0 / (double)SDL_GetPerformanceFrequency();
+      A.rsum += (double)(tr1 - tr0) * 1000.0 / (double)SDL_GetPerformanceFrequency();
+      A.psum += (double)(t1 - tr1) * 1000.0 / (double)SDL_GetPerformanceFrequency();
+      if (!A.wms) A.wms = (double *)malloc(sizeof(double) * FRAME_STATS_MAX);
+      if (A.fms && A.wms) A.wms[A.nfms] = (double)(tr1 - now) * 1000.0 / (double)SDL_GetPerformanceFrequency();
+      if (A.fms && A.wms) A.fms[A.nfms++] = (double)(t1 - now) * 1000.0 / (double)SDL_GetPerformanceFrequency();
+    }
+  }
   pace_frame(ran);
   if (e->opt.max_ticks > 0 && e->tick >= e->opt.max_ticks) A.running = 0;
   if (e->playing && e->tick >= e->play.end_tick && !e->opt.screenshot[0]) A.running = 0;
@@ -212,6 +233,26 @@ static void frame(void) {
 
 static void shutdown_app(void) {
   int i;
+  if (A.fms) {
+    sx_frame_summary fs, ws;
+    const char *csv = getenv("SAUCER_FRAME_CSV"); /* every frame's ms in order, for tracing a hitch */
+    if (csv && csv[0]) {
+      FILE *f = fopen(csv, "w");
+      if (f) {
+        for (i = 0; i < A.nfms; i++) fprintf(f, "%d,%.3f\n", i, A.fms[i]);
+        fclose(f);
+      }
+    }
+    sx_frame_summarize(A.fms, A.nfms, &fs);
+    sx_frame_summarize(A.wms, A.wms ? A.nfms : 0, &ws);
+    printf("frame-stats: frames=%d avg=%.2f p50=%.2f p95=%.2f max=%.2f ms (sim %.2f, render %.2f, present %.2f) work(sim+render): avg=%.2f p95=%.2f max=%.2f\n", fs.n, fs.avg, fs.p50, fs.p95, fs.max,
+           fs.n ? A.ssum / fs.n : 0.0, fs.n ? A.rsum / fs.n : 0.0, fs.n ? A.psum / fs.n : 0.0, ws.avg, ws.p95, ws.max);
+    free(A.wms);
+    A.wms = NULL;
+    fflush(stdout);
+    free(A.fms);
+    A.fms = NULL;
+  }
   if (A.e) {
     if (sx_engine_finish(A.e)) A.status = 1;
     sx_engine_destroy(A.e);
