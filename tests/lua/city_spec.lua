@@ -61,6 +61,12 @@ local function fake_view(opts)
   end
   return v
 end
+-- the core of a city starts after its skyline ring: shift an offset measured from the core's corner
+local function core(r, off)
+  local k = ruinm.kit_of(r.kit)
+  local ro = (k.city.ring or 0) * (k.city.lot + k.city.street) * k.cell
+  return { off[1] + ro, off[2], off[3] }
+end
 local function gen(id, seed, origin)
   civs.use(42)
   return citygen.generate(seed or 777, ruinm.kit_of(id), civs.get(42, 1), origin or { 0, 0, 0 })
@@ -96,7 +102,8 @@ describe("city generation", function()
       local k = ruinm.kit_of(id)
       expect(#r.rooms).to_be_less(citygen.MAX_ROOMS + 1)
       expect(#r.walls).to_be_less(8000)
-      expect(#r.solids).to_be_less(400)
+      expect(#r.solids - r.city.stats.skyline_solids).to_be_less(400)
+      expect(#r.solids).to_be_less(4000)
       local ext = citygen.extent_cells(k)
       for _, b in ipairs(r.walls) do
         for a = 1, 3 do
@@ -180,7 +187,7 @@ describe("city generation", function()
     -- the planet's skyline out-tops the moon's, which out-tops the rock's
     local function top(r)
       local m = 0
-      for _, s in ipairs(r.solids) do if s.kind == "tower" then m = math.max(m, s[2][2] - r.origin[2]) end end
+      for _, s in ipairs(r.solids) do if s.kind == "tower" and not s.outer then m = math.max(m, s[2][2] - r.origin[2]) end end
       return m
     end
     expect(top(planet)).to_be_greater(top(moon) + 100)
@@ -231,9 +238,10 @@ describe("cities in the sectors", function()
       expect(s.kit).to_be("city_" .. body)
       expect(s.city).to_be(true)
       expect(r.city.body).to_be(body)
-      local c = vec.add(s.pos, { 1440, 0, 1440 })
+      local ext = citygen.extent_cells(ruinm.kit_of(s.kit))
+      local c = vec.add(s.pos, { ext[1] * 2, 0, ext[3] * 2 })
       for j, o in ipairs(st.sector.sites) do
-        if j ~= i then expect(vec.dist(c, o.pos)).to_be_greater(1200) end
+        if j ~= i then expect(vec.dist(c, o.pos)).to_be_greater(math.max(ext[1], ext[3]) * 2) end
       end
       expect(st.sector.sites[1].heart or st.sector.sites[1].kit ~= nil).to_be_truthy()
     end
@@ -250,7 +258,7 @@ describe("cities in the sectors", function()
   it("entering a city says what it is and what the body does to the hull", function()
     local st, i = in_city("planet")
     local p = st.players[1]
-    p.ship.pos = vec.add(st.sector.sites[i].pos, { 1440, 200, 300 })
+    p.ship.pos = vec.add(st.sector.sites[i].pos, core(game.ruin(i), { 1440, 200, 300 }))
     run(st, 2)
     local said = ""
     for _, m in ipairs(p.msgs or {}) do said = said .. m.text .. "|" end
@@ -385,7 +393,7 @@ describe("the body's pull", function()
     local st, i, r = in_city("planet")
     local p = st.players[1]
     local s = st.sector.sites[i]
-    p.ship.pos = vec.add(s.pos, { 1440, 300, 700 })
+    p.ship.pos = vec.add(s.pos, core(game.ruin(i), { 1440, 300, 700 }))
     p.ship.charge = 50
     run(st, 60)
     expect(p.ship.charge).to_be_less(50)
@@ -402,7 +410,7 @@ describe("the body's pull", function()
   it("with the Charge gone the hull settles at a walking pace and horizontal flight stays free", function()
     local st, i = in_city("planet")
     local p = st.players[1]
-    p.ship.pos = vec.add(st.sector.sites[i].pos, { 1440, 650, 700 })
+    p.ship.pos = vec.add(st.sector.sites[i].pos, core(game.ruin(i), { 1440, 650, 700 }))
     p.ship.charge = 0
     local y = p.ship.pos[2]
     run(st, 60)
@@ -432,7 +440,7 @@ describe("finding your way", function()
     local st, i, r = in_city("planet")
     local p = st.players[1]
     p.site = i
-    p.ship.pos = vec.add(st.sector.sites[i].pos, { 1440, 200, 300 })
+    p.ship.pos = vec.add(st.sector.sites[i].pos, core(game.ruin(i), { 1440, 200, 300 }))
     local rows = cities.panel_rows(st, p, i, r, panel)
     expect(#rows).to_be(#r.city.districts + 2)
     expect(rows[1].text:find("PLANET CITY", 1, true) ~= nil).to_be_truthy()
@@ -456,7 +464,7 @@ describe("finding your way", function()
     expect(panel.title(st, p)).to_be("CITY MAP")
     game.step(st, { cmd({ pressed = { "map" } }) }, 1 / 60)
     expect(p.panel).to_be(false)
-    p.ship.pos = vec.add(st.sector.sites[i].pos, { 1440, 200, -2000 })
+    p.ship.pos = vec.add(st.sector.sites[i].pos, core(game.ruin(i), { 1440, 200, -2000 }))
     run(st, 2)
     game.step(st, { cmd({ pressed = { "map" } }) }, 1 / 60)
     expect(p.panel and p.panel.kind).to_be("map")
@@ -489,7 +497,7 @@ describe("finding your way", function()
     local st, i, r = in_city("planet")
     local p = st.players[1]
     p.site = i
-    p.ship.pos = vec.add(st.sector.sites[i].pos, { 1440, 200, 300 })
+    p.ship.pos = vec.add(st.sector.sites[i].pos, core(game.ruin(i), { 1440, 200, 300 }))
     p.mode = "helm"
     local v = fake_view({ width = 480 })
     hud.draw(v, st, p, nil)
@@ -523,7 +531,7 @@ describe("loot and tractor targets in a city", function()
   it("only the loot within beam sense is rolled, the couplings are beam targets", function()
     local st, i, r = in_city("planet")
     local p = st.players[1]
-    p.ship.pos = vec.add(st.sector.sites[i].pos, { 1440, 200, 300 })
+    p.ship.pos = vec.add(st.sector.sites[i].pos, core(game.ruin(i), { 1440, 200, 300 }))
     local near = 0
     for _, s in ipairs(r.slots) do
       if vec.dist(s.pos, p.ship.pos) < 160 then near = near + 1 end
@@ -551,11 +559,11 @@ describe("drawing a city", function()
     expect(set.districts ~= nil).to_be_truthy()
     local nd = 0
     for _ in pairs(set.districts) do nd = nd + 1 end
-    expect(nd).to_be(16)
+    expect(nd).to_be(16 + #r.city.skyline)
     expect(#set.chunks).to_be_greater(400)
     local site = st.sector.sites[i]
     local ps = {
-      { pos = vec.add(site.pos, { 1440, 120, -120 }), label = "near" },
+      { pos = vec.add(site.pos, core(game.ruin(i), { 1440, 120, -120 })), label = "near" },
       { pos = vec.add(site.pos, { 100, 300, 100 }), label = "corner" },
     }
     local counts = {}
@@ -603,7 +611,7 @@ describe("drawing a city", function()
     expect(render.city_env(st, nil)).to_be(nil)
     -- the whole frame in a planet city: fog from the body, no stars at midday, then a night with stars
     p.site = i
-    p.ship.pos = vec.add(st.sector.sites[i].pos, { 1440, 200, 300 })
+    p.ship.pos = vec.add(st.sector.sites[i].pos, core(game.ruin(i), { 1440, 200, 300 }))
     st.tick = math.floor(60 * render.CITY_DAY * 0.25)
     local v = fake_view()
     render.render(v, st, 1)

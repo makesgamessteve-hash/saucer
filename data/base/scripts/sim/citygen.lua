@@ -30,7 +30,7 @@ M.MAX_ROOMS = 420          -- generation budget (rooms) per city
 local function kit_of(id) return ruinm.kit_of(id) end
 
 local function lot_origin(spec, gx, gz)
-  return spec.margin + (gx - 1) * (spec.lot + spec.street) + spec.street // 2,
+  return spec.margin + ((spec.ring or 0) + gx - 1) * (spec.lot + spec.street) + spec.street // 2,
          spec.approach + (gz - 1) * (spec.lot + spec.street)
 end
 
@@ -84,10 +84,13 @@ function M.tiers(form, w, w2, h, inverted)
 end
 
 -- the cell extent (x, y, z) of a city kit's build volume
+M.SKY_BASE = 1000 -- ids of the outer skyline districts start above this (the core's are 1..n)
+
 function M.extent_cells(kit)
   local s = kit.city
   local p = s.lot + s.street
-  return { 2 * s.margin + s.lots[1] * p, kit.grid[2], s.approach + s.lots[2] * p + s.margin }
+  local R = s.ring or 0
+  return { 2 * s.margin + (s.lots[1] + 2 * R) * p, kit.grid[2], s.approach + (s.lots[2] + R) * p + s.margin }
 end
 
 -- ------------------------------------------------------------------ the plan
@@ -434,6 +437,58 @@ function M.generate(seed, kit, civ, origin)
       solids[#solids + 1] = { bm, bx, kind = "monument", room = 1, district = d.id }
     end
   end
+  -- 4b. the skyline: an outer ring of lots round and behind the core, towers and blocks only (no rooms, no
+  -- doors, no slots): a few hundred cheap collision boxes that make the city run on for kilometres. Its own
+  -- rng, so the core of a seed is the same with or without it.
+  local sky, skyby = {}, {}
+  local skyn = 0
+  local R = spec.ring or 0
+  if R > 0 then
+    local rr = saucer.rng.new(saucer.seed_child(seed, "ring", 0))
+    for gz = 1, nz + R do
+      for gx = 1 - R, nx + R do
+        if not (gx >= 1 and gx <= nx and gz <= nz) then
+          local bx, bz = (gx - 1 + 3 * R) // M.DISTRICT, (gz - 1) // M.DISTRICT
+          local key = bz * 1000 + bx
+          local sd = skyby[key]
+          if not sd then
+            sd = { id = M.SKY_BASE + #sky + 1, n = 0, sx = 0, sz = 0, sy = 0 }
+            sky[#sky + 1] = sd
+            skyby[key] = sd
+          end
+          local x0, z0 = lot_origin(spec, gx, gz)
+          local y = lot_level(spec, rr, gx, gz)
+          local roll = rr:int(1, 100)
+          local edge = math.max(1, 1 - gx, gx - nx, gz - nz)
+          local fall = 1 - 0.5 * (edge - 1) / R
+          local w, w2, h
+          if roll <= 55 then
+            w, w2 = rr:int(spec.tower[1], spec.tower[2]), rr:int(spec.tower[1], spec.tower[2])
+            h = rr:int(spec.tower[3], spec.tower[4])
+          elseif roll <= 78 then
+            w, w2 = rr:int(14, 22), rr:int(14, 22)
+            h = rr:int(10, 36)
+          end
+          if w then
+            h = math.max(10, math.min(math.floor(h * fall), ceiling - y))
+            local cx, cz = x0 + (spec.lot - w) // 2, z0 + (spec.lot - w2) // 2
+            local inverted = spec.body == "asteroid" and (gx + gz) % 2 == 0
+            local y0 = inverted and (ceiling - h) or (y - 3)
+            local tl = M.tiers(style.form, w, w2, h + 3, inverted)
+            for k, t in ipairs(tl) do
+              local mn, mx = world_box({ cx + t.dx, y0 + t.dy, cz + t.dz }, { t.w, t.h, t.w2 }, kit, origin)
+              solids[#solids + 1] = { mn, mx, kind = "tower", room = 1, district = sd.id, tier = k, form = style.form,
+                                      apex = k == #tl or nil, outer = true }
+            end
+            sd.n = sd.n + 1
+            skyn = skyn + #tl
+            sd.sx, sd.sz, sd.sy = sd.sx + x0 + spec.lot / 2, sd.sz + z0 + spec.lot / 2, sd.sy + y
+          end
+        end
+      end
+    end
+  end
+
   -- sky-bridges between towers or buildings side by side that rise high enough
   local bridges = 0
   if spec.body ~= "asteroid" then
@@ -555,8 +610,15 @@ function M.generate(seed, kit, civ, origin)
     city.districts[d.id] = { id = d.id, kind = d.kind, label = d.label, powered = d.powered, coupling = d.coupling,
                              pos = { cx, origin[2] + lot.y * kit.cell, cz }, drum = d.drum, crater = d.crater }
   end
+  city.skyline = {}
+  for _, sd in ipairs(sky) do
+    if sd.n > 0 then
+      city.skyline[#city.skyline + 1] = { id = sd.id, towers = sd.n,
+        pos = { origin[1] + sd.sx / sd.n * kit.cell, origin[2] + sd.sy / sd.n * kit.cell, origin[3] + sd.sz / sd.n * kit.cell } }
+    end
+  end
   city.stats = { rooms = #rooms, doors = #doors, walls = #walls, solids = #solids, slots = #slots, gates = #gates,
-                 districts = #districts, buildings = #bybuilding, bridges = bridges }
+                 districts = #districts, skyline = #city.skyline, skyline_solids = skyn, buildings = #bybuilding, bridges = bridges }
   local tint = civ and civ.tint
   return { seed = seed, kit = kit.id, rooms = rooms, doors = doors, slots = slots, walls = walls, debris = debris, solids = solids,
            origin = origin, hash = ruinm.layout_hash(rooms, doors, solids), reach = reach, city = city, tint = tint }

@@ -133,4 +133,28 @@ if tgt then
   put(from, yaw, -0.05)
   shot("08_grid_restored_b")
 end
+
+-- 7. how far it runs: from high above the core, then low in the skyline ring (add-cities-2)
+local top = o[2] + ext[2] - 40
+put({ o[1] + ext[1] / 2, top, o[3] + 60 }, 0, -0.18)
+shot("09_vast_high")
+-- low in the ring: 110 m off the -z face of a tall outer tower, at a height clear of every solid
+local function clear(pos)
+  for _, q in ipairs(ruin.solids) do
+    if pos[1] > q[1][1] - 12 and pos[1] < q[2][1] + 12 and pos[2] > q[1][2] - 12 and pos[2] < q[2][2] + 12
+       and pos[3] > q[1][3] - 12 and pos[3] < q[2][3] + 12 then return false end
+  end
+  return true
+end
+local pick
+for _, q in ipairs(ruin.solids) do
+  if q.outer and q.apex and q[2][2] - o[2] > 300 and not pick then
+    local pos = { (q[1][1] + q[2][1]) / 2, o[2] + (q[2][2] - o[2]) * 0.6, q[1][3] - 110 }
+    if q[1][3] - o[3] > ext[3] * 0.5 and clear(pos) then pick = pos end
+  end
+end
+if pick then
+  put(pick, 0, -0.04)
+  shot("10_skyline_ring")
+end
 print("cities shots done " .. BODY)

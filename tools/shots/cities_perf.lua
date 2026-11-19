@@ -17,7 +17,7 @@ T.wait(10)
 ap.wake(T, 1, p1)
 ap.take_helm(T, 1, p1)
 local st = T.state()
-local lod, chunks, culled, detail = 0, 0, 0, 0
+local lod, chunks, culled, detail, litmax = 0, 0, 0, 0, 0
 if BODY ~= "none" then
   for id = 2, #galaxy.generate(st.seed).sectors do
     if sector.city_of(st.seed, id) == "city_" .. BODY then game.enter_sector(st, id) break end
@@ -46,11 +46,11 @@ if BODY ~= "none" then
     s.yaw = saucer.math.atan2(b[1] - a[1], b[3] - a[3])
     T.wait(1)
     local rs = render.stats
-    if rs then lod, chunks, culled = lod + rs.lod, math.max(chunks, rs.chunks), culled + rs.culled; detail = math.max(detail, rs.detail) end
+    if rs then lod, chunks, culled = lod + rs.lod, math.max(chunks, rs.chunks), culled + rs.culled; detail = math.max(detail, rs.detail); litmax = math.max(litmax, rs.lit or 0) end
     n = n + 1
   end
-  print(string.format("perf %s: %d frames, max chunks drawn %d, max detail meshes %d, mean coarse %.1f, mean culled %.0f",
-    BODY, n, chunks, detail, lod / n, culled / n))
+  print(string.format("perf %s: %d frames, max chunks drawn %d, max detail meshes %d, mean coarse %.1f, mean culled %.0f, max lit %d",
+    BODY, n, chunks, detail, lod / n, culled / n, litmax))
 else
   T.wait(FRAMES)
   print("perf none: " .. FRAMES .. " frames")

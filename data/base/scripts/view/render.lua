@@ -825,6 +825,7 @@ end
 
 M.FOG = 0.0009
 M.DETAIL_DIST = 480   -- add-detail-pass: chunks nearer than this also draw their detail mesh
+M.OUTER_NEAR = 500   -- a skyline district shows its windows inside this range (add-cities-2)
 M.DETAIL_BUILDS = 6   -- at most this many detail meshes are built per frame (no hitches)
 M.CITY_DETAIL_DIST = 200 -- a city's rooms are many: only the nearest get their detail pass
 M.GATE_DIST = 420
@@ -865,7 +866,7 @@ function M.city_env(state, p)
 end
 
 function M.draw_ruins(v, A, state, cam, xr)
-  local st = { chunks = 0, culled = 0, lod = 0, detail = 0, built = 0 }
+  local st = { chunks = 0, culled = 0, lod = 0, detail = 0, built = 0, outer_built = 0 }
   local function draw_detail(set, ch)
     if vec.dist(ch.center, cam.pos) - ch.radius > (set.ruin.city and M.CITY_DETAIL_DIST or M.DETAIL_DIST) then return end
     for _, g in ipairs(ch.glyphs or {}) do
@@ -889,6 +890,7 @@ function M.draw_ruins(v, A, state, cam, xr)
       local tex = assets.kit_texture(A, set.kit)
       local ftex = assets.floor_texture(A, set.kit)
       local lod = set.lod
+      if set.horizon then v:mesh(set.horizon.mesh, { tex = tex, palette = A.pal.base }) end
       local far = vec.dist(lod.center, cam.pos) - lod.radius > M.LOD_DIST
       if far then
         if M.visible(cam, lod.center, lod.radius, xr) then
@@ -905,7 +907,23 @@ function M.draw_ruins(v, A, state, cam, xr)
             local dx = math.max(dm.mn[1] - cam.pos[1], 0, cam.pos[1] - dm.mx[1])
             local dy = math.max(dm.mn[2] - cam.pos[2], 0, cam.pos[2] - dm.mx[2])
             local dz = math.max(dm.mn[3] - cam.pos[3], 0, cam.pos[3] - dm.mx[3])
-            if dx * dx + dy * dy + dz * dz < M.CITY_NEAR * M.CITY_NEAR then
+            local d2 = dx * dx + dy * dy + dz * dz
+            if dm.outer and d2 < M.OUTER_NEAR * M.OUTER_NEAR and M.visible(cam, dm.center, dm.radius, xr) then
+              -- a skyline district close by: its windows and lights (one build per frame)
+              local nr = dm.near
+              if not nr and st.outer_built < 1 then
+                nr = assets.outer_detail(set, d)
+                st.outer_built = st.outer_built + 1
+              end
+              if nr then
+                v:mesh(nr.mesh, { tex = tex, palette = A.pal.base })
+                if nr.lights then v:mesh(nr.lights, { palette = A.pal.base }) st.lit = (st.lit or 0) + 1 end
+                st.lod = st.lod + 1
+              else
+                v:mesh(dm.mesh, { tex = tex, palette = A.pal.base })
+                st.lod = st.lod + 1
+              end
+            elseif not dm.outer and d2 < M.CITY_NEAR * M.CITY_NEAR then
               dnear[d] = true
             elseif M.visible(cam, dm.center, dm.radius, xr) then
               v:mesh(dm.mesh, { tex = tex, palette = A.pal.base })

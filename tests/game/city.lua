@@ -8,6 +8,7 @@ local game = require("sim.game")
 local ap = require("sim.autopilot")
 local cities = require("sim.cities")
 local vec = require("lib.vec")
+local ruinm = require("sim.ruin")
 local get = function() return T.state().players[1] end
 local function said(s)
   for _, m in ipairs(get().msgs) do if m.text:find(s, 1, true) then return true end end
@@ -59,7 +60,7 @@ game.enter_sector(st, 3)
 site = city_site(st)
 ruin = game.ruin(site)
 T.assert(ruin.city.body == "planet", "a planet city")
-stage(vec.add(st.sector.sites[site].pos, { 1440, 650, 700 }))
+stage(vec.add(st.sector.sites[site].pos, { 1440 + (ruinm.kit_of(game.ruin(site).kit).city.ring or 0) * 56 * 4, 650, 700 }))
 get().ship.charge = 60
 T.wait(120)
 T.assert(get().ship.charge < 60 - 1, "hovering in the planet's pull spent Charge (" .. get().ship.charge .. ")")

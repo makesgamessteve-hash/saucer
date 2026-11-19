@@ -406,20 +406,21 @@ function M.solid_parts(s, k, hanging)
     local y, n = mn[2] + 3, 0
     while y < mx[2] - 2 and n < 26 do
       n = n + 1
-      local hv = M.hash3(mn[1], y, mn[3])
       if n % 4 ~= 0 then
         for f = 0, 3 do
-          for seg = 0, 2 do
-            if (hv >> (f * 3 + seg)) & 1 == 1 then
+          local len = f < 2 and lx or lz
+          local nw = math.max(1, math.floor(len / 9))
+          for w = 0, nw - 1 do
+            -- each window is lit or dark by a hash of its place (about four in ten are lit)
+            if M.hash3(mn[1] + f * 7 + w * 131, y, mn[3] + w) % 100 < 42 then
+              local u0 = (w + 0.5) / nw * len - 2.2
               local lo, hi
               if f < 2 then
-                local x0 = mn[1] + seg * lx / 3
                 local z0 = f == 0 and mn[3] - 0.15 or mx[3] - 0.15
-                lo, hi = { x0 + 0.8, y, z0 }, { x0 + lx / 3 - 0.8, y + 1.2, z0 + 0.3 }
+                lo, hi = { mn[1] + u0, y, z0 }, { mn[1] + u0 + 4.4, y + 2.0, z0 + 0.3 }
               else
-                local z0 = mn[3] + seg * lz / 3
                 local x0 = f == 2 and mn[1] - 0.15 or mx[1] - 0.15
-                lo, hi = { x0, y, z0 + 0.8 }, { x0 + 0.3, y + 1.2, z0 + lz / 3 - 0.8 }
+                lo, hi = { x0, y, mn[3] + u0 }, { x0 + 0.3, y + 2.0, mn[3] + u0 + 4.4 }
               end
               parts[#parts + 1] = { kind = "box", min = lo, max = hi, color = win, emissive = 1, light = true }
             end
@@ -527,6 +528,31 @@ function M.chunk_lights(ch)
   return ch.lights or nil
 end
 
+-- add-cities-2: the windows and lights of a skyline district, built when the camera comes near it; a handful
+-- stay built (the oldest is freed first), so flying along the ring never piles up meshes
+M.OUTER_LIVE = 8
+local outer_live = {}
+function M.outer_detail(set, d)
+  local dm = set.districts[d]
+  if dm.near then return dm.near end
+  local main, lights = {}, {}
+  for _, i in ipairs(dm.solids) do
+    local s = set.ruin.solids[i]
+    local m, l = split_lights(M.solid_parts(s, set.kit, detail.hanging(set.ruin, s, set.kit, set.origin)))
+    for _, p in ipairs(m) do main[#main + 1] = p end
+    for _, p in ipairs(l) do lights[#lights + 1] = p end
+  end
+  dm.near = { mesh = saucer.mesh.build({ parts = main }), lights = #lights > 0 and saucer.mesh.build({ parts = lights }) or nil }
+  outer_live[#outer_live + 1] = dm
+  while #outer_live > M.OUTER_LIVE do
+    local old = table.remove(outer_live, 1)
+    saucer.mesh.free(old.near.mesh)
+    if old.near.lights then saucer.mesh.free(old.near.lights) end
+    old.near = nil
+  end
+  return dm.near
+end
+
 function M.ruin_chunks(ruin, origin)
   local hit = cache.chunks and cache.chunks[ruin.hash]
   if hit then return hit end
@@ -575,35 +601,58 @@ function M.ruin_chunks(ruin, origin)
     coarse[#coarse + 1] = { kind = "box", min = mn, max = mx, color = k.color, uv = 0.25 }
     dpart(r.district, coarse[#coarse])
   end
+  local skyi = {}
   for i, s in ipairs(ruin.solids or {}) do
+    local sd = not s.global and (s.district or (s.room and ruin.rooms[s.room] and ruin.rooms[s.room].district)) or nil
+    if s.outer then
+      -- the skyline ring: coarse boxes and a far glow only; windows and lights are built when the camera is near
+      skyi[sd] = skyi[sd] or {}
+      skyi[sd][#skyi[sd] + 1] = i
+      coarse[#coarse + 1] = { kind = "box", min = s[1], max = s[2], color = k.solid_color or k.color, uv = 0.25 }
+      dpart(sd, coarse[#coarse])
+      if s.apex then
+        local gp = dglow[sd] or {}
+        dglow[sd] = gp
+        local cxm, czm = (s[1][1] + s[2][1]) / 2, (s[1][3] + s[2][3]) / 2
+        gp[#gp + 1] = { kind = "box", min = { cxm - 2.5, s[2][2] - 14, czm - 2.5 }, max = { cxm + 2.5, s[2][2] + 6, czm + 2.5 }, color = k.window_color, emissive = 1 }
+      end
+      if s.tier == 1 then
+        local gp = dglow[sd] or {}
+        dglow[sd] = gp
+        local yy = s[1][2] + (s[2][2] - s[1][2]) * 0.55
+        gp[#gp + 1] = { kind = "box", min = { s[1][1] - 0.4, yy, s[1][3] - 0.4 }, max = { s[2][1] + 0.4, yy + 6, s[2][3] + 0.4 }, color = k.window_color, emissive = 1 }
+      end
+      goto continue
+    end
     local parts = M.solid_parts(s, k, detail.hanging(ruin, s, k, origin))
     local lights
     if ruin.city then parts, lights = split_lights(parts) end
     local c, rad = sphere_of(parts)
-    local sd = not s.global and (s.district or (s.room and ruin.rooms[s.room] and ruin.rooms[s.room].district)) or nil
     out.chunks[#out.chunks + 1] = { light_parts = lights, district = sd, mesh = saucer.mesh.build({ parts = parts }), center = c, radius = rad, solid = i }
     -- the far glow of a lit district: one band and a beacon per tower
     if ruin.city and s.kind == "tower" and s.apex then
       local gp = dglow[sd or 0] or {}
       dglow[sd or 0] = gp
       local cxm, czm = (s[1][1] + s[2][1]) / 2, (s[1][3] + s[2][3]) / 2
-      gp[#gp + 1] = { kind = "box", min = { cxm - 1.2, s[2][2] - 8, czm - 1.2 }, max = { cxm + 1.2, s[2][2] + 4, czm + 1.2 }, color = k.window_color, emissive = 1 }
+      gp[#gp + 1] = { kind = "box", min = { cxm - 2.5, s[2][2] - 14, czm - 2.5 }, max = { cxm + 2.5, s[2][2] + 6, czm + 2.5 }, color = k.window_color, emissive = 1 }
     end
     if ruin.city and s.kind == "tower" and s.tier == 1 then
       local gp = dglow[sd or 0] or {}
       dglow[sd or 0] = gp
       local yy = s[1][2] + (s[2][2] - s[1][2]) * 0.55
-      gp[#gp + 1] = { kind = "box", min = { s[1][1] - 0.3, yy, s[1][3] - 0.3 }, max = { s[2][1] + 0.3, yy + 2, s[2][3] + 0.3 }, color = k.window_color, emissive = 1 }
+      gp[#gp + 1] = { kind = "box", min = { s[1][1] - 0.4, yy, s[1][3] - 0.4 }, max = { s[2][1] + 0.4, yy + 6, s[2][3] + 0.4 }, color = k.window_color, emissive = 1 }
     end
     coarse[#coarse + 1] = { kind = "box", min = s[1], max = s[2], color = k.solid_color or k.color, uv = 0.25 }
     dpart(sd, coarse[#coarse])
+    ::continue::
   end
   for d, g in pairs(dparts) do
     if d ~= 0 then
       local c, rad = sphere_of(g.parts)
       out.districts = out.districts or {}
       out.districts[d] = { mesh = saucer.mesh.build({ parts = g.parts }), center = c, radius = rad, mn = g.mn, mx = g.mx,
-                           glow = dglow[d] and #dglow[d] > 0 and saucer.mesh.build({ parts = dglow[d] }) or nil }
+                           glow = dglow[d] and #dglow[d] > 0 and saucer.mesh.build({ parts = dglow[d] }) or nil,
+                           outer = skyi[d] ~= nil or nil, solids = skyi[d] }
     end
   end
   -- add-cities: a light pillar over every landmark district, to find them from afar
@@ -619,6 +668,28 @@ function M.ruin_chunks(ruin, origin)
             max = { pd.pos[1] + 1.5, top, pd.pos[3] + 1.5 }, color = col, emissive = 1 } } }) }
       end
     end
+  end
+  -- add-cities-2: a ring of far skyline beyond the last district (planet: seen through the haze), one mesh
+  local spec = ruin.city and k.city
+  if spec and spec.horizon then
+    local hrng = saucer.rng.new(saucer.seed_child(ruin.seed, "horizon", 0))
+    local ext = { k.grid[1] * k.cell, k.grid[3] * k.cell }
+    local cx, cz = origin[1] + ext[1] / 2, origin[3] + ext[2] / 2
+    local hp = {}
+    local base = math.max(ext[1], ext[2]) / 2 + 500
+    for n = 1, 150 do
+      local a = (n + hrng:float()) / 150 * saucer.math.tau
+      local rr = base + hrng:int(0, 2200)
+      local w, h = hrng:int(30, 120), hrng:int(60, 420)
+      local x, z = cx + saucer.math.sin(a) * rr, cz + saucer.math.cos(a) * rr
+      local y0 = origin[2]
+      hp[#hp + 1] = { kind = "box", min = { x - w / 2, y0, z - w / 2 }, max = { x + w / 2, y0 + h, z + w / 2 }, color = k.solid_color, uv = 0.25 }
+      if hrng:int(1, 100) <= 60 then
+        hp[#hp + 1] = { kind = "box", min = { x - w / 2 - 0.5, y0 + h * 0.6, z - w / 2 - 0.5 }, max = { x + w / 2 + 0.5, y0 + h * 0.6 + 3, z + w / 2 + 0.5 },
+                        color = k.window_color, emissive = 1 }
+      end
+    end
+    out.horizon = { mesh = saucer.mesh.build({ parts = hp }) }
   end
   local c, rad = sphere_of(coarse)
   out.lod = { mesh = saucer.mesh.build({ parts = coarse }), center = c, radius = rad }

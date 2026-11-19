@@ -44,3 +44,33 @@ The control hint at the helm SHALL sit in the free band at the top centre, backe
 #### Scenario: the hint line sits at the top and a city's message log has a backing
 - **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
 - **THEN** it passes
+
+### Requirement: Skyline ring
+A city SHALL be surrounded by a ring of skyline districts, generated from their own seed child so the core is unchanged: only towers and blocks (collision boxes, no rooms, doors or slots), tens of districts and hundreds of boxes, all inside the site's bounds, so a planet city runs on for several kilometres and the sector keeps its other sites clear of it.
+
+#### Scenario: a skyline ring of towers surrounds the core: tens of districts, hundreds of boxes, no rooms
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the ring does not change the core: the same rooms, doors and slots with or without it
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the ring is inside the site's bounds, so it is a place you can fly and crash into
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: a city site sits clear of its sector's other sites however wide the ring
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+### Requirement: Streamed skyline
+The renderer SHALL draw each skyline district as one coarse mesh with a far glow, build the windows and lights of the districts near the camera one per frame, keep at most a handful built and free the oldest, and give a planet a ring of horizon impostors.
+
+#### Scenario: skyline windows are built near the camera, a handful at a time, and the oldest are freed
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: near the ring its windows are drawn, far from it one coarse mesh per district, and a planet has a horizon
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
