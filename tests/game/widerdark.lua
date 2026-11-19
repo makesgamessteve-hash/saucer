@@ -234,6 +234,9 @@ vote(2, endings[2])
 T.assert(m().ending == endings[2].id, "a tie goes to whoever set the last Key: " .. tostring(m().ending))
 T.assert(m().act == 4, "the mystery is over")
 for i = 1, 4 do T.assert(said(i, "ENDING: " .. endings[2].title), "P" .. i .. " saw the ending") end
+T.assert(T.state().story.done and T.state().story.ending == endings[2].id, "the story is told when the Heart is resolved")
+for i = 1, 4 do T.assert(said(i, "THE STORY: " .. T.state().story.title), "P" .. i .. " was told the story's end") end
+T.assert(require("sim.books").has(T.state().players[1], "story:" .. #T.state().story.beats) ~= nil, "the finale is on the shelf")
 local carried = 0
 for _, pi in ipairs({ 1, 2 }) do
   for _, it in ipairs(P(pi)().hold) do if it.name == mystery.centerpiece(m()).name then carried = carried + 1 end end

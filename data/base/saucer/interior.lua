@@ -76,6 +76,9 @@ return {
       label = "USE: DISPLAY SLOT" },
     { id = "display6", kind = "display", slot = 6, deck = 1, pos = { 2.6, 0.6, 6.5 }, radius = 0.8, room = "Helm",
       label = "USE: DISPLAY SLOT" },
+    -- add-run-story: the holotable (the coffee table, now a projector) stitches the run's story together
+    { id = "holotable", kind = "holotable", deck = 1, pos = { -5.0, 0.6, -0.2 }, radius = 1.6, room = "Living room",
+      label = "USE: HOLOTABLE (THE STORY)" },
     { id = "planner", kind = "planner", deck = 1, pos = { -2.4, 0.6, 3.2 }, radius = 0.9, room = "Living room",
       label = "USE: HOME PLANNER" },
     -- add-dock-land-eva: the hull hatch in the aft wall of the lower deck
@@ -110,6 +113,8 @@ return {
   holodeck = { x = 4.0, z0 = -2.7, z1 = -1.3, inside = { 5.0, -3.0, -2.0 }, inside_yaw = -1.5708,
                room = { 4.1, -6.9, 8.6, 0.7 } },
   tv = { screen = { -3.025, 1.87, -0.2 }, w = 2.0, h = 1.1 },
+  -- add-run-story: where the holotable's hologram hangs (world x, z; y above the dome deck)
+  holotable = { x = -5.0, z = -0.2, y = 1.2 },
   -- sliding doors on the lower-deck partitions: open on their own when a body
   -- comes within `reach` (fix-bedroom-door: and stay open until every body is
   -- past reach + door_close_margin and door_min_open seconds have gone by),
@@ -138,7 +143,7 @@ return {
       lab = { -4.7, 0.6, -5.85 }, trade = { 5.4, 0.6, -5.85 }, kitchen = { 6.2, 0.6, 0.0 },
       bed = { 2.4, -3.0, 4.0 }, shower = { -3.9, -3.0, 3.4 }, engine = { 0.0, -3.0, -0.3 }, living = { -3.2, 0.6, 1.5 },
       holodeck = { 3.2, -3.0, -3.15 }, holo_arch = { 3.3, -3.0, -2.0 }, holo_in = { 5.2, -3.0, -2.0 },
-      living_s = { -6.4, 0.6, 1.5 }, tv = { -6.55, 0.6, -0.2 }, books = { -7.0, 0.6, -3.45 },
+      living_s = { -6.4, 0.6, 1.5 }, holotable = { -5.0, 0.6, 1.3 }, tv = { -6.55, 0.6, -0.2 }, books = { -7.0, 0.6, -3.45 },
       planner = { -2.4, 0.6, 3.2 }, display1 = { -4.2, 0.6, 5.3 }, display4 = { 4.2, 0.6, 5.3 },
       display3 = { -2.6, 0.6, 6.5 }, display2 = { -5.6, 0.6, 4.3 }, display5 = { 5.4, 0.6, 4.6 }, display6 = { 2.6, 0.6, 6.5 }, trade_w = { 4.0, 0.6, -6.5 }, garden = { 0.3, 0.6, -6.6 },
       hatch_a = { -3.6, -3.0, -6.9 }, hatch = { 0.0, -3.0, -7.4 }, hatch_out = { 0.0, -3.0, -8.3 },
@@ -155,7 +160,7 @@ return {
       { "engine_w", "belly_top" }, { "belly_top", "belly_in" }, { "belly_in", "belly_low" }, { "belly_low", "belly_mid" },
       { "belly_mid", "belly_side" }, { "belly_side", "tractor" },
       { "engine_e", "holodeck" }, { "holodeck", "holo_arch" }, { "holo_arch", "holo_in" },
-      { "living", "living_s" }, { "living_s", "tv" }, { "lab_in", "books" },
+      { "living", "living_s" }, { "living", "holotable" }, { "living_s", "tv" }, { "lab_in", "books" },
       { "dome", "planner" }, { "planner", "display1" }, { "dome", "display4" }, { "dome", "display3" },
       { "dome", "display6" }, { "stair_foot", "hatch_a" }, { "hatch_a", "hatch" }, { "hatch", "hatch_out" }, { "display1", "display2" }, { "display4", "display5" }, { "trade", "trade_w" }, { "trade_w", "garden" },
     },
@@ -192,7 +197,7 @@ return {
     -- living room (-x side)
     { deck = 1, kind = "rug",     box = { -7.0, -2.6, -3.4, 2.4 }, h = 0.02, color = { 0.55, 0.25, 0.35 }, solid = false },
     { deck = 1, kind = "sofa",    box = { -8.0, -3.0, -7.0, 2.5 }, h = 0.85, color = { 0.25, 0.45, 0.70 } },
-    { deck = 1, kind = "table",   box = { -5.6, -1.2, -4.4, 0.8 }, h = 0.45, color = { 0.45, 0.30, 0.20 } },
+    { deck = 1, kind = "holotable", box = { -5.6, -1.2, -4.4, 0.8 }, h = 0.75, color = { 0.30, 0.34, 0.42 } },
     { deck = 1, kind = "armchair",box = { -5.6, 2.7, -4.4, 3.9 }, h = 0.9, color = { 0.25, 0.45, 0.70 } },
     { deck = 1, kind = "plant",   box = { -7.1, -5.6, -6.3, -4.8 }, h = 1.6, color = { 0.25, 0.65, 0.30 } },
     -- add-home-among-stars: six display plinths and the four garden beds
