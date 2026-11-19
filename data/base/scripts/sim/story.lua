@@ -30,7 +30,14 @@ local function fill(text, vars)
 end
 M.fill = fill
 
-function M.vocab() return data.load("story/vocab.lua") end
+function M.vocab()
+  local V = data.load("story/vocab.lua")
+  V.echo_text = V.echo_text or function(id)
+    for _, e in ipairs(V.echo) do if e.id == id then return e.text end end
+    return id
+  end
+  return V
+end
 function M.skeletons() return data.load("story/skeletons.lua") end
 function M.twists() return data.load("story/twists.lua") end
 
@@ -373,6 +380,123 @@ function M.read(state, i, p, ctx)
   ctx.fx(state, p, "echo")
   saucer.events.emit({ type = "story_clue", player = p.index, beat = i })
   return true
+end
+
+-- ---------------------------------------------------------------- notice, hints, the finale
+
+-- walking or flying near the next clue says so once (p.hints is saved: the notice is not repeated after a load)
+M.NOTICE_RANGE = 90
+function M.notice(state, p, ctx)
+  if p.site == 0 or state.tick % 20 ~= 0 or not M.active(state) then return false end
+  local c = M.candidates(state, p, p.site, require("sim.game").ruin(p.site))[1]
+  if not c then return false end
+  local e = p.ship.pos
+  local d = math.sqrt((e[1] - c.pos[1]) ^ 2 + (e[2] - c.pos[2]) ^ 2 + (e[3] - c.pos[3]) ^ 2)
+  p.hints = p.hints or {}
+  local key = "story" .. c.story
+  if d > M.NOTICE_RANGE or p.hints[key] then return false end
+  p.hints[key] = state.tick
+  ctx.msg(state, p, string.format("STORY: %s lies nearby. Beam it up to read it.", M.vocab().carriers[c.carrier].noun))
+  ctx.fx(state, p, "scan")
+  return true
+end
+
+-- "STORY 2/4" for the HUD (nil when the story is off)
+function M.counter(state)
+  if not M.active(state) then return nil end
+  local s = state.story
+  return string.format("STORY %d/%d", M.found_count(s), M.clue_count(s))
+end
+
+-- the line "hints" mode adds: where the next clue is (nil in the other modes)
+function M.hint(state)
+  if not M.active(state) or state.mystery.mode ~= "hints" or state.story.done then return nil end
+  local s = state.story
+  local i = M.next_clue(s)
+  if not i then return "STORY: the truth waits at the Heart" end
+  local b = s.beats[i]
+  return string.format("STORY: %s at %s", M.vocab().carriers[b.carrier].noun, b.loc)
+end
+
+-- the Heart is resolved: the finale is told, by the ending and the twist, and filed on every shelf. -> true when new
+function M.finish(state, ending_id, ctx)
+  local s = state.story
+  if not s or s.done or not M.active(state) then return false end
+  local f = M.finale(s)
+  s.done, s.ending = true, ending_id
+  f.found_by, f.tick = (state.mystery and state.mystery.last_key_by) or 1, state.tick
+  if f.found_by == 0 then f.found_by = 1 end
+  local books = require("sim.books")
+  local n, total = M.found_count(s), M.clue_count(s)
+  for _, o in ipairs(state.players) do
+    books.add(o, "story:" .. #s.beats)
+    ctx.msg(state, o, string.format("THE STORY: %s (you found %d of %d clues)", s.title, n, total))
+    for k, chunk in ipairs(M.chunks(M.finale_text(s, ending_id), 100)) do
+      if k <= 4 then ctx.msg(state, o, chunk) end
+    end
+  end
+  saucer.events.emit({ type = "story_end", ending = ending_id, found = n })
+  return true
+end
+
+-- ---------------------------------------------------------------- the holotable's Story page
+
+local ROMAN = { "I", "II", "III", "IV", "V" }
+local function short(t, n) return #t > n and (t:sub(1, n - 3) .. "...") or t end
+
+-- rows of the Story page at the holotable: the clues in order (found ones read on, the next one says where),
+-- what they add up to (the Echo, the ending, the twist), the Echoes decoded, the switch
+function M.rows(state, p, ctx)
+  local s, m = state.story, state.mystery
+  local books = require("sim.books")
+  local rows = {}
+  local function close() return { text = "Close", act = function(_, pl) pl.panel = false end } end
+  if not s then
+    return { { text = "No story in this universe", enabled = false }, close() }
+  end
+  local V = M.vocab()
+  local total = M.clue_count(s)
+  rows[#rows + 1] = { text = s.title:upper(), enabled = false }
+  if not M.active(state) then
+    rows[#rows + 1] = { text = m.mode == "off" and "Sandbox: no story (Mystery: off)" or "The story is switched off", enabled = false }
+  else
+    rows[#rows + 1] = { text = string.format("Clues found %d/%d%s", M.found_count(s), total, s.done and "  - told" or ""),
+                        enabled = false }
+    for i = 1, total do
+      local b = s.beats[i]
+      if b.found_by ~= 0 then
+        rows[#rows + 1] = { text = string.format("%d %s: %s", i, V.carriers[b.carrier].name, b.loc),
+          hint = short(b.text, 70), act = function(st, pl) books.open(st, pl, "story:" .. i, ctx) end }
+      elseif M.unlocked(s, i) then
+        rows[#rows + 1] = { text = string.format("%d ???  next: %s at %s", i, V.carriers[b.carrier].noun, b.loc), enabled = false }
+      else
+        rows[#rows + 1] = { text = i .. " ???", enabled = false }
+      end
+    end
+    -- what the clues add up to
+    local reveal
+    for i = 1, total do if s.beats[i].id == "reveal" and s.beats[i].found_by ~= 0 then reveal = true end end
+    rows[#rows + 1] = { text = "The Echo is " .. (reveal and V.echo_text(s.echo) or "???"), enabled = false }
+    if s.done then
+      local e = require("sim.mystery").ending_of(m, s.ending)
+      rows[#rows + 1] = { text = "Ending: " .. (e and e.title or s.ending), hint = "Read how the story ended",
+        act = function(st, pl) books.open(st, pl, "story:" .. #s.beats, ctx) end }
+      if s.twist then rows[#rows + 1] = { text = "Twist: " .. s.twist_title, enabled = false } end
+    else
+      rows[#rows + 1] = { text = "The truth waits at the Heart", enabled = false }
+    end
+    -- the Echoes decoded at the lab bench, in the order of the mystery
+    for i, e in ipairs(m.echoes) do
+      if e.decoded then
+        rows[#rows + 1] = { text = string.format("Echo %s (%s): %s", ROMAN[i] or i, e.role, short(e.text:gsub("^Echo %w+: ", ""), 40)),
+          act = function(st, pl) books.open(st, pl, "echo:" .. i, ctx) end }
+      end
+    end
+  end
+  rows[#rows + 1] = { text = "Story clues: " .. (s.mode == "off" and "OFF" or "ON") .. " (pick to switch)",
+    act = function(_, pl) s.mode = s.mode == "off" and "on" or "off" end }
+  rows[#rows + 1] = close()
+  return rows
 end
 
 -- ---------------------------------------------------------------- saving

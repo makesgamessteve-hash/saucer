@@ -8,7 +8,7 @@
 - [x] 2.2 `game.pick_up` kind `story`: found, shared by the party, filed on the shelf, lead message
 - [x] 2.3 Render the clue markers by carrier; tests and the game test `tests/game/story.lua`
 ## 3. Codex, hints and ending (slice 3)
-- [ ] 3.1 The Story page at the holotable (panel `story`), stitched from clues, Echoes and places
-- [ ] 3.2 HUD hint in hints mode; Mystery: off hides the story
-- [ ] 3.3 The finale at the Heart (ending and twist), final book, the story in the ending screen
-- [ ] 3.4 Screenshots, ROADMAP, README
+- [x] 3.1 The Story page at the holotable (panel `story`), stitched from clues, Echoes and places
+- [x] 3.2 HUD hint in hints mode; Mystery: off hides the story
+- [x] 3.3 The finale at the Heart (ending and twist), final book, the story in the ending screen
+- [x] 3.4 Screenshots, ROADMAP, README

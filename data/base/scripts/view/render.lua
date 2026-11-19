@@ -406,6 +406,16 @@ function M.home_parts(v, A, o, d, tick)
       n = n + 5
     end
   end
+  -- add-run-story: a small hologram turns over the holotable
+  local H = L.holotable
+  if H then
+    local pulse = 0.7 + 0.3 * sm.sin(tick * 0.04)
+    local y = L.decks[1].floor + H.y
+    v:billboard(A.tex.glow, at(d, { H.x, y, H.z }), 1.1 * d.scale, { palette = A.pal.base, tint = { 0.4, 0.9, 1.0, 0.5 * pulse } })
+    v:mesh(A.unit, { pos = at(d, { H.x, y, H.z }), yaw = d.yaw + tick * 0.03, roll = d.roll,
+                     scale = { 0.22 * d.scale, 0.32 * d.scale, 0.22 * d.scale }, tint = { 0.5, 1.0, 1.0, 1 } })
+    n = n + 2
+  end
   local S = L.stove
   if S and o.cooking then
     local pot = S.pot

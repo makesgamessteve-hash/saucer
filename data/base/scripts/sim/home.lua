@@ -147,6 +147,8 @@ M.USE.kitchen = function(_, p) panel.open(p, "kitchen") end
 M.USE.books = function(_, p) panel.open(p, "books") end
 M.USE.tv = function(_, p) panel.open(p, "tv") end
 M.USE.holodeck = function(_, p) panel.open(p, "holodeck") end
+-- add-run-story: the holotable in the living room stitches the clues of the run's story together
+M.USE.holotable = function(_, p) panel.open(p, "story") end
 
 M.USE.shower = function(state, p, _, ctx)
   p.showers = (p.showers or 0) + 1
