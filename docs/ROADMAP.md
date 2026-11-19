@@ -528,8 +528,11 @@ a silhouette per civilisation (ziggurats, spires, domes, arcologies; hanging, in
 built as stacked tier solids so the collision is the drawing, civ light colours, window patterns, lit signs,
 ledges and roof greebles, per-district lights that are dark until the grid is restored and then flicker and
 ramp up, landmark light pillars and a far glow per district, and the helm hint moved clear of the console
-and alerts. Slices still to come: a vast outer ring and horizon impostors, transit and a flooded undercity,
-storms, collapses and dark patrols, archive clues and trader stations.
+and alerts. *Slice 2 — vast (done):* a skyline ring of collision-only towers (tens of districts, several
+km), drawn as one coarse mesh per district with streamed windows and, on planets, horizon impostors (true
+lazy interior generation is deferred). *Slice 3 — transit and dynamics (done):* mag-rails and lift shafts,
+a flooded or overgrown undercity, storms with wind and lightning, sky-bridges that fall, and roaming
+Watchers in dark districts. Still to come: archive clues and trader stations.
 
 ## Remaining work after milestone 10
 

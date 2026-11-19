@@ -9,7 +9,7 @@
 - [x] 2.2 Renderer: coarse mesh and glow per skyline district, windows built near the camera (LRU of 8), planet horizon impostors
 - [x] 2.3 Tests in `tests/lua/city2_spec.lua`; screenshots `09_vast_high`, `10_skyline_ring`
 ## 3. Transit, undercity, dynamics (slice 3)
-- [ ] 3.1 Mag-rails, lift shafts, canals; flooded and overgrown undercity
-- [ ] 3.2 Storms, collapsing structures, dark-district patrols
+- [x] 3.1 Mag-rails and pylons, lift shafts, drawn trains and cabins, flooded and overgrown undercity decor
+- [x] 3.2 Storms and wind, falling sky-bridges, roaming dark-district Watchers, `hud.weather`
 ## 4. Mystery and traders (slice 4)
 - [ ] 4.1 Archive clues; trader stations near cities
