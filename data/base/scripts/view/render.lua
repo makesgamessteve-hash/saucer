@@ -774,7 +774,8 @@ end
 
 local function draw_saucer(v, A, o, own_eyes, state, xr, cam)
   -- add-pocket-station-visits: a pocketed saucer is a coin inside a station
-  if o.mode == "foot" then return end
+  -- (add-dock-land-eva: a Villa standing on its gear outside is drawn)
+  if o.mode == "foot" and not (o.excursion and o.excursion.coin == "stand") then return end
   local d = M.pose(o.ship, xr)
   local c = configs.get(d.size)
   local m = A.saucer[d.size]
@@ -786,6 +787,7 @@ local function draw_saucer(v, A, o, own_eyes, state, xr, cam)
   elseif c.interior then
     M.rooms(v, A, o, d, state)
     if not o.ship.morph then M.draw_hatch(v, A, o, d) end
+    if not o.ship.morph then require("view.gear").draw(v, A, o, d) end
     v:mesh(A.glass, { pos = d.pos, yaw = d.yaw, roll = d.roll, scale = d.scale, ghost = true, tint = { 0.55, 0.8, 1, 0.3 } })
     if o.mode == "walk" and not own_eyes and not o.ship.morph then
       local L = avatar.layout()

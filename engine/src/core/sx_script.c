@@ -1070,14 +1070,27 @@ static int build_part(lua_State *L, int idx, sx_mesh *m) {
       lua_pop(L, 1);
       if (k[0] == 'e') sx_mesh_extrude(m, buf, n / 2, field_num(L, idx, "y0", 0), field_num(L, idx, "y1", 1), &s);
       else {
-        /* lathe: profile pairs (radius, y) revolved as stacked frustums */
+        /* lathe: profile pairs (radius, y) revolved as stacked frustums; gap = { azimuth, half width } (with
+         * open = true) leaves a doorway in the shell */
         int i;
+        float gap_at = 0.0f, gap_half = 0.0f;
+        lua_getfield(L, idx, "gap");
+        if (open && lua_istable(L, -1)) {
+          lua_rawgeti(L, -1, 1);
+          gap_at = (float)lua_tonumber(L, -1);
+          lua_pop(L, 1);
+          lua_rawgeti(L, -1, 2);
+          gap_half = (float)lua_tonumber(L, -1);
+          lua_pop(L, 1);
+        }
+        lua_pop(L, 1);
         for (i = 0; i + 3 < n; i += 2) {
           float cc[3];
           cc[0] = c[0];
           cc[1] = c[1] + buf[i + 1];
           cc[2] = c[2];
-          fr(m, cc, buf[i], buf[i + 2], buf[i + 3] - buf[i + 1], seg, &s);
+          if (gap_half > 0.0f) sx_mesh_tube_gap(m, cc, buf[i], buf[i + 2], buf[i + 3] - buf[i + 1], seg, gap_at, gap_half, &s);
+          else fr(m, cc, buf[i], buf[i + 2], buf[i + 3] - buf[i + 1], seg, &s);
         }
       }
     } else if (strcmp(k, "stars") == 0) {

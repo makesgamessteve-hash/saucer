@@ -15,8 +15,12 @@ local HULL, RIM = { 0.78, 0.80, 0.86 }, { 0.32, 0.34, 0.42 }
 local function villa_hull()
   local parts = {
     -- open shell: no internal caps, so the lower deck is not cut by discs
-    P("lathe", { seg = 32, color = HULL, uv = 0.5, open = true, points = {
-      2.7, -5.6, 7.5, -4.9, 11.6, -2.6, 13.0, -0.9, 12.9, -0.3, 12.0, 0.3, 10.8, 0.62 } }),
+    -- add-dock-land-eva: 64 segments, with a doorway aft (azimuth pi) through the belly slope
+    -- from r 7.5 to the rim (the hull door's plates close it)
+    P("lathe", { seg = 64, color = HULL, uv = 0.5, open = true, points = { 2.7, -5.6, 7.5, -4.9 } }),
+    P("lathe", { seg = 64, color = HULL, uv = 0.5, open = true, gap = { sm.pi, 0.1 }, points = {
+      7.5, -4.9, 11.6, -2.6, 13.0, -0.9 } }),
+    P("lathe", { seg = 64, color = HULL, uv = 0.5, open = true, points = { 13.0, -0.9, 12.9, -0.3, 12.0, 0.3, 10.8, 0.62 } }),
     -- add-tractor-beam: the beam emitter ring round the Tractor Room's floor
     -- window (the window and the hatch iris sit inside it)
     P("ring", { c = { 0, -5.75, 0 }, rin = 1.98, r = 2.8, h = 0.15, seg = 24, color = { 0.3, 0.9, 1.0 }, emissive = 0.9 }),

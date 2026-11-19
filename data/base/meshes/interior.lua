@@ -487,6 +487,41 @@ local function belly_hole(L)
   return { math.min(b.low, b.high), b.z0, math.max(b.low, b.high), b.z1 }
 end
 
+-- add-dock-land-eva: the lower deck's wall is 24 panels round the deck, with the
+-- aft panel left out for the hull door: a frame (posts, lintel, sill) and a lit
+-- strip round the opening. The door's sliding leaves are drawn by view/gear.lua.
+local function lower_wall(out, L)
+  local d2 = L.decks[2]
+  local R = d2.radius + 0.2
+  local T = L.hatch_door
+  local w = 2 * R * sm.sin(sm.pi / 24) * 1.02
+  local h = d2.ceiling - d2.floor
+  for k = 0, 23 do
+    local a = sm.tau * k / 24
+    if not (T and k == 12) then
+      out[#out + 1] = P("box", { min = { -w / 2, 0, -0.1 }, max = { w / 2, h, 0.1 }, color = { 0.78, 0.76, 0.70 },
+                                 pos = { sm.sin(a) * R, d2.floor, sm.cos(a) * R }, yaw = a })
+    end
+  end
+  if T then
+    local W, H = T.width, T.height
+    local z = -R
+    for _, sx in ipairs({ -1, 1 }) do
+      out[#out + 1] = P("box", { min = { sx * (W / 2 + 0.07) - 0.07, d2.floor, z - 0.18 }, max = { sx * (W / 2 + 0.07) + 0.07, d2.floor + h, z + 0.18 },
+                                 color = { 0.34, 0.35, 0.42 } })
+      out[#out + 1] = P("box", { min = { sx * (W / 2) - 0.02, d2.floor + 0.1, z + 0.17 }, max = { sx * (W / 2) + 0.02, d2.floor + H, z + 0.19 },
+                                 color = { 1.0, 0.75, 0.2 }, emissive = 0.9 })
+    end
+    out[#out + 1] = P("box", { min = { -W / 2 - 0.14, d2.floor + H, z - 0.18 }, max = { W / 2 + 0.14, d2.floor + h, z + 0.18 },
+                               color = { 0.34, 0.35, 0.42 } })
+    out[#out + 1] = P("box", { min = { -W / 2, d2.floor + H - 0.04, z + 0.17 }, max = { W / 2, d2.floor + H, z + 0.19 },
+                               color = { 1.0, 0.75, 0.2 }, emissive = 0.9 })
+    -- the sill strip and a hazard-striped threshold
+    out[#out + 1] = P("box", { min = { -W / 2, d2.floor, z - 0.5 }, max = { W / 2, d2.floor + 0.02, z + 0.4 },
+                               color = { 0.95, 0.75, 0.15 } })
+  end
+end
+
 -- the lower deck's floor (with the belly stairwell open) and its rim
 local function lower_floor(out, L)
   local d2 = L.decks[2]
@@ -659,13 +694,28 @@ end
 local function lower_trim(out, L)
   local d2, st = L.decks[2], L.stairs
   local Rw = d2.radius + 0.2
-  out[#out + 1] = P("ring", { c = { 0, d2.floor, 0 }, rin = Rw - 0.1, r = Rw, h = 0.14, seg = 24, color = { 0.35, 0.34, 0.33 } })
+  if L.hatch_door then
+    -- the baseboard in 24 pieces, none across the hull door
+    local w = 2 * Rw * sm.sin(sm.pi / 24) * 1.02
+    for k = 0, 23 do
+      if k ~= 12 then
+        local a = sm.tau * k / 24
+        out[#out + 1] = P("box", { min = { -w / 2, 0, -0.1 }, max = { w / 2, 0.14, 0 }, yaw = a,
+                                   pos = { sm.sin(a) * Rw, d2.floor, sm.cos(a) * Rw }, color = { 0.35, 0.34, 0.33 } })
+      end
+    end
+  else
+    out[#out + 1] = P("ring", { c = { 0, d2.floor, 0 }, rin = Rw - 0.1, r = Rw, h = 0.14, seg = 24, color = { 0.35, 0.34, 0.33 } })
+  end
   out[#out + 1] = P("ring", { c = { 0, d2.ceiling - 0.14, 0 }, rin = Rw - 0.22, r = Rw, h = 0.05, seg = 24,
                               color = { 0.6, 0.85, 1.0 }, emissive = 1 })
   for k = 0, 11 do
     local a = k * sm.tau / 12
-    out[#out + 1] = P("box", { min = { -0.14, 0, -0.16 }, max = { 0.14, d2.ceiling - d2.floor, 0 }, yaw = a,
-                               pos = { sm.sin(a) * Rw, d2.floor, sm.cos(a) * Rw }, color = { 0.66, 0.64, 0.6 } })
+    -- add-dock-land-eva: no pilaster in the hull door's opening (azimuth pi)
+    if not (L.hatch_door and k == 6) then
+      out[#out + 1] = P("box", { min = { -0.14, 0, -0.16 }, max = { 0.14, d2.ceiling - d2.floor, 0 }, yaw = a,
+                                 pos = { sm.sin(a) * Rw, d2.floor, sm.cos(a) * Rw }, color = { 0.66, 0.64, 0.6 } })
+    end
   end
   local function in_well(x, z)
     return x > st.low - 0.25 and x < st.high + 0.25 and z > st.z0 - 0.25 and z < st.z1 + 0.25
@@ -772,8 +822,7 @@ local function group(L, gid)
     lower_floor(out, L)
     tag(out, 0, "floor")
     local n0 = #out
-    out[#out + 1] = P("cylinder", { c = { 0, d2.floor, 0 }, r = d2.radius + 0.2, h = d2.ceiling - d2.floor, seg = 24,
-                                    color = { 0.78, 0.76, 0.70 }, open = true })
+    lower_wall(out, L)
     tag(out, n0, "panel")
     for i = 0, 11 do
       local a = sm.tau * (i + 0.5) / 12
@@ -832,8 +881,7 @@ return function(params, rng)
   floor_strips(out, L)
   -- lower deck: floor, inner hull wall, ceiling trim
   lower_floor(out, L)
-  out[#out + 1] = P("cylinder", { c = { 0, d2.floor, 0 }, r = d2.radius + 0.2, h = d2.ceiling - d2.floor, seg = 24,
-                                  color = { 0.78, 0.76, 0.70 }, open = true })
+  lower_wall(out, L)
   belly_room(out, L)
   belly_stairs(out, L)
   -- portholes on the lower deck wall

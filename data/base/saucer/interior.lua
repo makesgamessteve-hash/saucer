@@ -118,6 +118,8 @@ return {
     { id = "bedroom",  deck = 2, box = { 2.0, 0.7, 3.4, 0.9 }, reach = 2.0, room = "Bedroom" },
     { id = "bathroom", deck = 2, box = { -3.4, 0.7, -2.0, 0.9 }, reach = 2.0, room = "Bathroom" },
   },
+  -- add-dock-land-eva: the hull door's frame in the lower deck's aft wall (the rest is in saucer/landing.lua)
+  hatch_door = { width = 2.2, height = 2.4 },
   door_speed = 3.0,          -- open fraction per second
   door_solid_below = 0.75,
   door_close_margin = 0.5,   -- m beyond `reach` before an open door starts to close

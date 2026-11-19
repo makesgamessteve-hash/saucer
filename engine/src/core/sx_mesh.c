@@ -148,8 +148,10 @@ void sx_mesh_box(sx_mesh *m, const float mn[3], const float mx[3], const sx_part
   sx_mesh_wedge(m, mn, mx, 1.0f, s);
 }
 
-static void frustum(sx_mesh *m, const float c[3], float r0, float r1, float h, int seg, int caps,
-                    const sx_part_style *s) {
+/* gap_half > 0 leaves out the segments whose middle lies within gap_half radians of azimuth gap_at
+   * (atan2(x, z) as everywhere else): a doorway in a hull shell. */
+static void frustum(sx_mesh *m, const float c[3], float r0, float r1, float h, int seg, int caps, float gap_at,
+                    float gap_half, const sx_part_style *s) {
   int i;
   float top[3], bot[3];
   if (seg < 3) seg = 3;
@@ -158,8 +160,19 @@ static void frustum(sx_mesh *m, const float c[3], float r0, float r1, float h, i
   set3(top, c[0], c[1] + h, c[2]);
   for (i = 0; i < seg; i++) {
     double a0 = SX_TAU * i / seg, a1 = SX_TAU * (i + 1) / seg;
-    float s0 = (float)sx_sin(a0), c0 = (float)sx_cos(a0), s1 = (float)sx_sin(a1), c1 = (float)sx_cos(a1);
+    float s0, c0, s1, c1;
     float b0[3], b1[3], t0[3], t1[3];
+    if (gap_half > 0.0f) {
+      double d = (a0 + a1) / 2 - gap_at;
+      while (d > SX_PI) d -= SX_TAU;
+      while (d < -SX_PI) d += SX_TAU;
+      if (d < 0) d = -d;
+      if (d <= gap_half) continue;
+    }
+    s0 = (float)sx_sin(a0);
+    c0 = (float)sx_cos(a0);
+    s1 = (float)sx_sin(a1);
+    c1 = (float)sx_cos(a1);
     set3(b0, c[0] + r0 * s0, c[1], c[2] + r0 * c0);
     set3(b1, c[0] + r0 * s1, c[1], c[2] + r0 * c1);
     set3(t0, c[0] + r1 * s0, c[1] + h, c[2] + r1 * c0);
@@ -175,11 +188,16 @@ static void frustum(sx_mesh *m, const float c[3], float r0, float r1, float h, i
 }
 
 void sx_mesh_frustum(sx_mesh *m, const float c[3], float r0, float r1, float h, int seg, const sx_part_style *s) {
-  frustum(m, c, r0, r1, h, seg, 1, s);
+  frustum(m, c, r0, r1, h, seg, 1, 0.0f, 0.0f, s);
 }
 
 void sx_mesh_tube(sx_mesh *m, const float c[3], float r0, float r1, float h, int seg, const sx_part_style *s) {
-  frustum(m, c, r0, r1, h, seg, 0, s);
+  frustum(m, c, r0, r1, h, seg, 0, 0.0f, 0.0f, s);
+}
+
+void sx_mesh_tube_gap(sx_mesh *m, const float c[3], float r0, float r1, float h, int seg, float gap_at, float gap_half,
+                      const sx_part_style *s) {
+  frustum(m, c, r0, r1, h, seg, 0, gap_at, gap_half, s);
 }
 
 void sx_mesh_cylinder(sx_mesh *m, const float c[3], float r, float h, int seg, const sx_part_style *s) {

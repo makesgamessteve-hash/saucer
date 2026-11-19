@@ -912,6 +912,7 @@ function M.status(state, p)
     if #p.hands >= M.tune().hands and t.cand.kind ~= "cache" then return where, "HANDS FULL: E DEPLOYS THE SEAT" end
     return where, "USE: TAKE " .. (t.cand.kind == "cache" and "YOUR CACHE" or items.label(t.cand.item):upper())
   end
+  if ex.coin == "stand" then return where, M.stand_text(state, p) end
   return where, nil
 end
 
@@ -921,6 +922,7 @@ function M.coin_text(p)
   if c == "pocket" then return "SAUCER: IN YOUR POCKET", "ok" end
   if c == "hand" then return "SAUCER: IN YOUR HAND", "ok" end
   if c == "fold" then return "SAUCER: FOLDING", "busy" end
+  if c == "stand" then return "SAUCER: LANDED, ON ITS GEAR", "ok" end
   return "SAUCER: DEPLOYING", "busy"
 end
 
