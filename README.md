@@ -432,6 +432,10 @@ that never ends fails instead of hanging CI.
   a planet and an asteroid city's plazas and a rooftop pad (checking what the saucer says it stands on and
   the suit's environment), then pulls the ground away from under the gear and watches the thrusters take over
   (also with `--restore-every-tick`);
+  `eva.lua` walks out of a landed Villa and uses the EVA kit: the jetpack's six directions and
+  automatic braking, oxygen and fuel, the return assist, the emergency teleport (charge-up, cancel,
+  lost loot, cooldown), the low-oxygen automatic teleport, a pocketed Villa that comes back, boost and
+  hover in a pull, and the helmet following the air (also with `--restore-every-tick`);
   `excursion.lua` sets the Seat down by a derelict's crawlspace, steps out,
   crawls to the chamber, lifts a Delicate find, turns the hand-lock, shuts
   the grid, saves, lets the suit run dry for the Lifeline, recovers the

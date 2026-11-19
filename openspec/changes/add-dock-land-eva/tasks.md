@@ -22,8 +22,8 @@
 
 ## 4. Slice 4: EVA kit
 
-- [ ] 4.1 Helmet overlay and HUD, oxygen and suit integrity
-- [ ] 4.2 Jetpack, return assist
-- [ ] 4.3 Emergency teleport and low-oxygen auto-teleport
-- [ ] 4.4 WebXR wrist HUD, touch buttons
-- [ ] 4.5 Tests
+- [x] 4.1 Helmet overlay and HUD, oxygen and suit integrity (`sim/eva.lua`, `saucer/eva.lua`, `view/hud.lua`)
+- [x] 4.2 Jetpack (six directions in zero-g, boost and hover in a pull), return assist
+- [x] 4.3 Emergency teleport and low-oxygen / suit-failure auto-teleport
+- [x] 4.4 WebXR wrist HUD (`view/xr.lua`), gamepad bindings; physical door use and touch buttons are open (see report)
+- [x] 4.5 Tests: `tests/game/eva.lua` (+ restore every tick), `tests/lua/eva_spec.lua`

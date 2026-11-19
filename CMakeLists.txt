@@ -180,6 +180,12 @@ if(SAUCER_BUILD_TESTS)
   add_test(NAME game_land_anywhere_restore_every_tick COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR}
            --user-dir ${USERDIR}-land-ret --quiet --seed 42 --ticks 60000 --script tests/game/land_anywhere.lua
            --restore-every-tick WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  # add-dock-land-eva slice 4: the EVA kit: helmet, jetpack, return assist, emergency teleport
+  add_test(NAME game_eva COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-eva --quiet
+           --seed 42 --ticks 60000 --script tests/game/eva.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  add_test(NAME game_eva_restore_every_tick COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR}
+           --user-dir ${USERDIR}-eva-ret --quiet --seed 42 --ticks 60000 --script tests/game/eva.lua
+           --restore-every-tick WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   # milestone 7: step out in a derelict, crawl, turn a hand-lock, shut the grid, fail with the Lifeline, recover the cache
   add_test(NAME game_excursion COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-excursion --quiet
            --seed 42 --ticks 40000 --script tests/game/excursion.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})

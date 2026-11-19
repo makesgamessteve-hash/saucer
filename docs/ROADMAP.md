@@ -553,8 +553,14 @@ either. *Slice 3 — land anywhere (done):* at the helm a landing readout shows 
 and whether it will land (green or red markers on the ground under the three feet); the Villa lands on any
 level solid — derelict hulls, a planet's, moon's or asteroid's plazas and, now, the landing pads marked on
 every third city rooftop — and says what it stands on; if the ground gives way (a sky-bridge tearing loose)
-the thrusters take over. *Slice 4 — EVA kit* (helmet, helmet HUD, jetpack, return assist, emergency
-teleport) follows.
+the thrusters take over. *Slice 4 — EVA kit (done):* walking out of a Villa you wear a fishbowl helmet
+(a faint rim) that goes on by itself in vacuum or toxic air; the helmet HUD shows oxygen, suit integrity,
+jetpack fuel, a dial and distance to the Villa, gravity, temperature, radiation and loot; the jetpack flies
+six ways in zero-g (with automatic braking) and boosts, hovers and descends in a pull; the Insert key
+flies you home (it also engages at critical oxygen); Backspace is the emergency teleport (2.5 s charge-up,
+half your loot left as a cache, a 4-minute cooldown, the Villa redeployed if it was in your pocket), and
+running out of oxygen or suit fires it by itself; the WebXR wrist shows oxygen, suit, fuel and the
+teleport, and the gamepad has bindings. Open: physical door use in XR and the touch buttons.
 
 ## Remaining work after milestone 10
 

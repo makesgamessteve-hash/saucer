@@ -77,3 +77,24 @@ The Villa SHALL land on any level solid surface: a derelict's hull, a plaza, a r
 #### Scenario: Landing on a moon city's rooftop pad
 - **WHEN** the player lands on a rooftop landing pad of a moon city
 - **THEN** the message names a moon city rooftop, and leaving the Villa there needs the helmet because the air is vacuum
+
+### Requirement: The EVA kit
+Outside a standing or pocketed Villa the player SHALL wear a helmet that goes on by itself in vacuum or toxic air, shown as a faint rim, and a HUD with oxygen, suit integrity, jetpack fuel, the distance and direction to the Villa, gravity, temperature, radiation, carried loot and the emergency teleport's state. Oxygen SHALL drain only where the air is not breathable and refill, with fuel and integrity, beside the standing Villa. Radiation, extreme temperature and hard landings SHALL wear down the suit.
+
+#### Scenario: Out of breath
+- **WHEN** oxygen falls to 30% and then 15% away from the Villa
+- **THEN** the player is warned, then the return assist flies them home, and at zero the suit teleports them to the Villa
+
+### Requirement: The jetpack and return assist
+In zero gravity the jetpack SHALL fly in all six directions along the view, with inertia and automatic braking when no thrust is asked for. In a pull, thrusting up SHALL boost, a neutral stick SHALL hover and thrusting down SHALL descend, all burning fuel. The return assist SHALL fly the player to the Villa's stairs until they take the controls, the fuel runs out or the way is blocked.
+
+#### Scenario: Letting go
+- **WHEN** the player stops thrusting in zero gravity
+- **THEN** they brake to a stop and hang in place
+
+### Requirement: The emergency teleport
+A button SHALL start a short charge-up that a second press cancels, after which the player SHALL be at the Villa's stairs, with the Villa redeployed where it stood if it was in the pocket. It SHALL cost half of what the player carries, left behind as a cache, and start a long cooldown. Running out of oxygen or suit integrity SHALL fire it without charge-up or cooldown check. It SHALL never be lethal.
+
+#### Scenario: Teleporting from the cooldown
+- **WHEN** the player presses the button during the cooldown
+- **THEN** nothing is teleported and the seconds left are shown

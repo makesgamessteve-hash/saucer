@@ -916,7 +916,7 @@ end
 -- add-on-foot-excursions: the suit (the only meter on foot), your four hand
 -- slots, the coin, a hand-lock's progress and your caches' bearing
 -- add-dock-land-eva: the fishbowl helmet: a faint rim, dark corners and a few glints (only while the helmet is on)
-M.HELMET_RX, M.HELMET_RY = 0.75, 0.78
+M.HELMET_RX, M.HELMET_RY = 0.62, 0.66
 function M.helmet(v, state, p)
   local W, H = v.width, v.height
   local cx, cy = W / 2, H / 2
