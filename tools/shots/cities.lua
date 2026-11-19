@@ -123,7 +123,7 @@ if tgt then
   local d = tgt.d
   local back = { port.pos[1] - d.pos[1], 0, port.pos[3] - d.pos[3] }
   local bl = math.sqrt(back[1] ^ 2 + back[3] ^ 2) + 1e-6
-  local from = { d.pos[1] + back[1] / bl * 230, d.pos[2] + 60, d.pos[3] + back[3] / bl * 230 }
+  local from = { d.pos[1] + back[1] / bl * (BODY == "planet" and 230 or 170), d.pos[2] + 60, d.pos[3] + back[3] / bl * (BODY == "planet" and 230 or 170) }
   local yaw = saucer.math.atan2(back[3], -back[1])
   put(from, yaw, -0.05)
   shot("06_grid_dark")
