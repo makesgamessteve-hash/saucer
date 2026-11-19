@@ -320,7 +320,7 @@ end
 function M.walk(body, cmd, dt, sc)
   local L = require("sim.avatar").layout()
   body.yaw = comfort.yaw(body.yaw, cmd, L.turn, dt)
-  body.pitch = vec.clamp(body.pitch + cmd:axis("look") * L.look * dt, -L.pitch_limit, L.pitch_limit)
+  body.pitch = comfort.pitch(body.pitch, cmd, L.look, dt, L.pitch_limit)
   local mx, mz = cmd:axis("move_x"), cmd:axis("move_z")
   if mx == 0 and mz == 0 then return 0 end
   local f, r = vec.fwd(body.yaw), vec.right(body.yaw)

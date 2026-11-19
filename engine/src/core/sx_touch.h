@@ -70,8 +70,23 @@ typedef struct sx_touch_metrics {
 #define SX_TOUCH_MIN_GAP 8.0f
 /* radial deadzone of the stick (fraction of its radius) */
 #define SX_TOUCH_DEADZONE 0.12f
-/* look drag gain: stick-units per CSS px of thumb travel (same on both axes) */
-#define SX_TOUCH_LOOK_GAIN (1.0f / 60.0f)
+/* touch-look-speed: a look drag turns the view by an angle, not a turn rate.
+ * Per tick: angle (rad) = d / short * SX_TOUCH_LOOK_TURN * sens * accel(v),
+ * d = CSS px of thumb travel, short = the image's shorter side in CSS px
+ * (so the device pixel ratio never enters), v = d / short this tick and
+ * accel(v) = clamp(1 + SX_TOUCH_LOOK_ACCEL * (v - SX_TOUCH_LOOK_V0), MIN, MAX):
+ * slow drags a little finer, flicks further. Half the short side in about a
+ * quarter second turns about 110 degrees at sens 1. */
+#define SX_TOUCH_LOOK_TURN 3.6651914f /* 210 degrees per short side */
+#define SX_TOUCH_LOOK_V0 0.025f
+#define SX_TOUCH_LOOK_ACCEL 6.0f
+#define SX_TOUCH_LOOK_ACCEL_MIN 0.85f
+#define SX_TOUCH_LOOK_ACCEL_MAX 1.6f
+/* the comfort setting's range (comfort.txt "look_sens") */
+#define SX_TOUCH_SENS_MIN 0.5f
+#define SX_TOUCH_SENS_MAX 2.0f
+float sx_touch_look_accel(float v);
+float sx_touch_clamp_sens(float s);
 
 #define SX_TOUCH_MAX_FINGERS 10
 #define SX_TOUCH_MAX_WIDGETS 32
@@ -87,6 +102,7 @@ typedef struct sx_touch {
   } fingers[SX_TOUCH_MAX_FINGERS];
   int nfingers;
   float look_acc[2];
+  float sens; /* look sensitivity (comfort setting), 1 = default */
   float values[SX_TOUCH_COUNT];
   /* add-presentation-packaging: a press landing on a button/hold widget
    * bumps buzz (the web build turns it into a short vibration) */

@@ -7,6 +7,7 @@
 #include "sx_engine.h"
 #include "sx_fs.h"
 #include "sx_render.h"
+#include "sx_touch.h"
 #include "sx_xr.h"
 #include "test.h"
 
@@ -115,12 +116,21 @@ TEST(xr_vignette_and_comfort_text) {
   x.pref_mode = 1;
   sx_xr_set_snap_deg(&x, 45.0f);
   sx_xr_set_vignette(&x, 0.75f);
+  /* touch-look-speed: the look sensitivity is clamped to 0.5..2 (junk: 1) */
+  CHECK(x.look_sens == 1.0f);
+  sx_xr_set_look_sens(&x, 9.0f);
+  CHECK(x.look_sens == SX_TOUCH_SENS_MAX);
+  sx_xr_set_look_sens(&x, 0.1f);
+  CHECK(x.look_sens == SX_TOUCH_SENS_MIN);
+  sx_xr_set_look_sens(&x, nanf(""));
+  CHECK(x.look_sens == 1.0f);
+  sx_xr_set_look_sens(&x, 1.5f);
   n = sx_xr_comfort_format(&x, buf, sizeof buf);
   CHECK(n > 0 && strstr(buf, "snap 0") && strstr(buf, "snap_turn 45") && strstr(buf, "vignette 0.75") &&
-        strstr(buf, "mode seated"));
+        strstr(buf, "mode seated") && strstr(buf, "look_sens 1.50"));
   sx_xr_init(&y);
-  CHECK(sx_xr_comfort_parse(&y, buf) == 4);
-  CHECK(y.snap == 0 && y.snap_units == 3 && y.vignette == 0.75f && y.pref_mode == 1);
+  CHECK(sx_xr_comfort_parse(&y, buf) == 5);
+  CHECK(y.snap == 0 && y.snap_units == 3 && y.vignette == 0.75f && y.pref_mode == 1 && y.look_sens == 1.5f);
   /* junk lines, unknown keys and bad modes change nothing */
   CHECK(sx_xr_comfort_parse(&y, "nonsense\nspeed 9\nmode floating\n\n") == 0);
   CHECK(y.pref_mode == 1);
@@ -145,6 +155,7 @@ TEST(xr_comfort_persists_in_the_user_dir) {
   e->xr.snap = 0;
   sx_xr_set_snap_deg(&e->xr, 60.0f);
   sx_xr_set_vignette(&e->xr, 0.25f);
+  sx_xr_set_look_sens(&e->xr, 1.75f);
   e->xr.pref_mode = 1;
   CHECK(sx_engine_save_comfort(e));
   sx_engine_destroy(e);
@@ -153,6 +164,7 @@ TEST(xr_comfort_persists_in_the_user_dir) {
   CHECK(e != NULL);
   if (!e) return;
   CHECK(e->xr.snap == 0 && e->xr.snap_units == 4 && e->xr.vignette == 0.25f && e->xr.pref_mode == 1);
+  CHECK(e->xr.look_sens == 1.75f);
   sx_engine_destroy(e);
   remove("build/test-tmp/comfort-user/comfort.txt");
 }

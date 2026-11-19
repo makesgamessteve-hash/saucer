@@ -1195,15 +1195,17 @@ function M.step_player(state, p, cmd, dt)
     -- at the beam console: trim thrusters in the operator's frame, look to aim the view
     local L = avatar.layout()
     flight.trim(ship, { move_x = cmd:axis("move_x"), move_z = cmd:axis("move_z"), lift = cmd:axis("lift"),
-                        turn = cmd:axis("turn") }, ship.yaw + L.tractor.yaw, dt, mover(state, p))
+                        turn = cmd:axis("turn"), aim_yaw = comfort.aim_yaw(cmd) }, ship.yaw + L.tractor.yaw, dt,
+      mover(state, p))
     ship.yaw = saucer.math.wrap(ship.yaw + comfort.snap(cmd))
-    p.body.pitch = vec.clamp(p.body.pitch + cmd:axis("look") * L.look * dt, -L.pitch_limit, L.pitch_limit)
+    p.body.pitch = comfort.pitch(p.body.pitch, cmd, L.look, dt, L.pitch_limit)
   else
     -- nobody at the helm: the saucer brakes to a stop and holds station
     flight.step(ship, STILL, dt, mover(state, p))
     local L = avatar.layout()
     avatar.step(p.body, { move_x = cmd:axis("move_x"), move_z = cmd:axis("move_z"), turn = cmd:axis("turn"),
-                          look = cmd:axis("look"), run = cmd:held("boost"), aim = cmd.aim }, dt, L, home.solids(L, p))
+                          look = cmd:axis("look"), run = cmd:held("boost"), aim = cmd.aim,
+                          aim_yaw = comfort.aim_yaw(cmd), aim_pitch = comfort.aim_pitch(cmd) }, dt, L, home.solids(L, p))
     p.body.yaw = saucer.math.wrap(p.body.yaw + comfort.snap(cmd))
   end
   world_step(state, p, dt)

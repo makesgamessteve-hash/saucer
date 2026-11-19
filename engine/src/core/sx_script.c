@@ -1495,6 +1495,8 @@ static int l_xr_comfort(lua_State *L) {
   lua_setfield(L, -2, "snap_turn");
   lua_pushnumber(L, e->xr.vignette);
   lua_setfield(L, -2, "vignette");
+  lua_pushnumber(L, e->xr.look_sens);
+  lua_setfield(L, -2, "look_sens");
   lua_pushboolean(L, 1);
   lua_setfield(L, -2, "xr_safe_retro");
   lua_pushboolean(L, e->xr.snap);
@@ -1509,7 +1511,7 @@ static int comfort_allowed(sx_engine *e, lua_Integer player) {
   return !(e->opt.play[0] || (e->net_on && player != e->net.local_slot));
 }
 /* add-presentation-packaging, add-webxr-cockpit: comfort is a client setting (never in the sim).
- * set_comfort({snap =, vignette =, snap_turn =, mode = "seated"|"standing"}, player) -> applied */
+ * set_comfort({snap =, vignette =, snap_turn =, look_sens =, mode = "seated"|"standing"}, player) -> applied */
 static int l_xr_set_comfort(lua_State *L) {
   sx_engine *e = get_engine(L);
   luaL_checktype(L, 1, LUA_TTABLE);
@@ -1522,6 +1524,7 @@ static int l_xr_set_comfort(lua_State *L) {
   lua_pop(L, 1);
   e->xr.snap_latch = 0;
   sx_xr_set_vignette(&e->xr, (float)field_num(L, 1, "vignette", e->xr.vignette));
+  sx_xr_set_look_sens(&e->xr, (float)field_num(L, 1, "look_sens", e->xr.look_sens));
   sx_xr_set_snap_deg(&e->xr, (float)field_num(L, 1, "snap_turn", sx_xr_snap_deg(&e->xr)));
   lua_getfield(L, 1, "mode");
   if (lua_isstring(L, -1)) {

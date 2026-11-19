@@ -672,6 +672,7 @@ static void apply_injection(sx_engine *e, sx_cmd *cmds, int n) {
 
 static void sample_devices(sx_engine *e, sx_cmd *cmds, int *n) {
   int i;
+  e->touch.sens = e->xr.look_sens; /* touch-look-speed: the comfort setting */
   sx_touch_apply(&e->touch, &e->input.raw);
   {
     float xv[SX_XR_COUNT];

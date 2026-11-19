@@ -17,6 +17,7 @@
 local vec = require("lib.vec")
 local items = require("sim.items")
 local avatar = require("sim.avatar")
+local comfort = require("sim.comfort")
 local configs = require("sim.config")
 local M = {}
 
@@ -227,7 +228,8 @@ function M.step_visit(state, p, cmd, dt, ctx)
   end
   local L = avatar.layout()
   avatar.step(p.vbody, { move_x = cmd:axis("move_x"), move_z = cmd:axis("move_z"), turn = cmd:axis("turn"),
-                         look = cmd:axis("look"), run = cmd:held("boost"), aim = cmd.aim }, dt, L,
+                         look = cmd:axis("look"), run = cmd:held("boost"), aim = cmd.aim,
+                         aim_yaw = comfort.aim_yaw(cmd), aim_pitch = comfort.aim_pitch(cmd) }, dt, L,
     require("sim.home").solids(L, host))
   if cmd:pressed("use") then
     -- add-home-among-stars: Use at a display slot admires what is on it

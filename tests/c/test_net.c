@@ -123,11 +123,11 @@ static void run(sim *sims, int count, int64_t *now, int ticks, int frames) {
 TEST(net_frame_codec_and_names) {
   unsigned char b[64];
   sx_cmd a = frame_for(3, 1234), c;
-  a.axes[5] = -32768;
+  a.axes[SX_NUM_AXES - 1] = -32768;
   a.aim[0] = 32767;
-  CHECK_EQ_INT(sx_net_put_frame(b, &a), 26);
+  CHECK_EQ_INT(sx_net_put_frame(b, &a), 8 + 2 * SX_NUM_AXES + 6);
   memset(&c, 0, sizeof c);
-  CHECK_EQ_INT(sx_net_get_frame(b, &c), 26);
+  CHECK_EQ_INT(sx_net_get_frame(b, &c), 8 + 2 * SX_NUM_AXES + 6);
   CHECK(c.buttons == a.buttons && c.edges == a.edges);
   CHECK(memcmp(c.axes, a.axes, sizeof a.axes) == 0 && memcmp(c.aim, a.aim, sizeof a.aim) == 0);
   CHECK_STR(sx_net_state_name(SX_NET_RUNNING), "running");

@@ -503,7 +503,7 @@ function M.move(state, p, cmd, dt)
   local A = avatar().layout()
   local b = p.excursion.body
   b.yaw = comfort.yaw(b.yaw, cmd, A.turn, dt)
-  b.pitch = vec.clamp(b.pitch + cmd:axis("look") * A.look * dt, -A.pitch_limit, A.pitch_limit)
+  b.pitch = comfort.pitch(b.pitch, cmd, A.look, dt, A.pitch_limit)
   local lift = cmd:axis("lift")
   local r = B.radius
   -- crouch while lift is held down; stand back up when there is headroom

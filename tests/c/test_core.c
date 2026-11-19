@@ -271,7 +271,11 @@ TEST(touch_widgets) {
   sx_touch_apply(&t, &raw);
   CHECK(raw.touch[SX_TOUCH_LOOK_X] > 0 && raw.touch[SX_TOUCH_LOOK_Y] < 0);
   CHECK(fabsf(raw.touch[SX_TOUCH_LOOK_X] + raw.touch[SX_TOUCH_LOOK_Y]) < 1e-4f);
-  CHECK(fabsf(raw.touch[SX_TOUCH_LOOK_X] - 12.0f * SX_TOUCH_LOOK_GAIN) < 1e-4f);
+  {
+    float d = 12.0f / 360.0f; /* the short side of the 16:9 default is 360 CSS px */
+    float hyp = sqrtf(2.0f) * d;
+    CHECK(fabsf(raw.touch[SX_TOUCH_LOOK_X] - d * SX_TOUCH_LOOK_TURN * sx_touch_look_accel(hyp)) < 1e-4f);
+  }
   sx_touch_up(&t, 2);
   sx_touch_move(&t, 99, 0, 0);
   sx_touch_up(&t, 99);
@@ -503,6 +507,95 @@ static int tray_widget(const sx_touch *t, int ctl) {
 
 /* declutter-touch-controls: context slots show and hide, never under a
  * pressing finger; the tray opens, takes a pick and closes; fades count frames */
+/* touch-look-speed: drag a look finger (dx, dy) CSS px evenly over `ticks`
+ * ticks; returns the summed look_x and look_y (radians) */
+static void look_swipe(sx_touch *t, float x0, float y0, float dx, float dy, int ticks, float out[2]) {
+  sx_raw_input raw;
+  int i;
+  memset(&raw, 0, sizeof raw);
+  out[0] = out[1] = 0;
+  sx_touch_down(t, 77, x0, y0);
+  for (i = 1; i <= ticks; i++) {
+    sx_touch_move(t, 77, x0 + dx * (float)i / (float)ticks / t->m.w, y0 + dy * (float)i / (float)ticks / t->m.h);
+    sx_touch_apply(t, &raw);
+    out[0] += raw.touch[SX_TOUCH_LOOK_X];
+    out[1] += raw.touch[SX_TOUCH_LOOK_Y];
+  }
+  sx_touch_up(t, 77);
+  sx_touch_apply(t, &raw);
+}
+
+TEST(touch_look_speed) {
+  static const int sizes[8][2] = {{320, 568}, {568, 320}, {360, 640}, {640, 360},
+                                  {390, 844}, {844, 390}, {768, 1024}, {1024, 768}};
+  const float deg = 180.0f / 3.14159265f;
+  int k, dpr;
+  float ref = 0;
+  for (k = 0; k < 8; k++)
+    for (dpr = 1; dpr <= 3; dpr++) {
+      /* the image is in CSS px whatever the pixel ratio: only the backbuffer
+       * (and so the HUD target) grows with it */
+      sx_touch t;
+      sx_touch_metrics m;
+      float W = (float)sizes[k][0], H = (float)sizes[k][1], sh = W < H ? W : H, a[2], b[2];
+      sx_touch_init(&t, 1.0f);
+      memset(&m, 0, sizeof m);
+      m.w = W;
+      m.h = H;
+      m.hud_w = sizes[k][0] * dpr / 2;
+      m.hud_h = sizes[k][1] * dpr / 2;
+      sx_touch_layout(&t, &m);
+      /* half the short side in a quarter second (15 ticks): 90..120 degrees, either way */
+      look_swipe(&t, 0.5f, 0.12f, sh * 0.5f, 0, 15, a);
+      CHECK(a[0] * deg >= 90.0f && a[0] * deg <= 120.0f && a[1] == 0);
+      look_swipe(&t, 0.5f, 0.12f, -sh * 0.5f, 0, 15, b);
+      CHECK(fabsf(a[0] + b[0]) < 1e-4f);
+      /* a slow half-second drag stays in the band too, and the same on the vertical */
+      look_swipe(&t, 0.5f, 0.12f, sh * 0.5f, 0, 30, b);
+      CHECK(b[0] * deg >= 90.0f && b[0] < a[0]);
+      look_swipe(&t, 0.5f, 0.12f, 0, sh * 0.5f, 15, b);
+      CHECK(fabsf(b[1] - a[0]) < 1e-4f && b[0] == 0);
+      /* the same at every size and every pixel ratio */
+      if (k == 0 && dpr == 1) ref = a[0];
+      CHECK(fabsf(a[0] - ref) < 1e-4f);
+    }
+  {
+    sx_touch t;
+    float slow[2], mid[2], fast[2], sens[2];
+    sx_touch_init(&t, 16.0f / 9.0f); /* short side 360 */
+    /* acceleration: a flick turns further than a drag over the same distance */
+    look_swipe(&t, 0.5f, 0.12f, 180, 0, 120, slow);
+    look_swipe(&t, 0.5f, 0.12f, 180, 0, 15, mid);
+    look_swipe(&t, 0.5f, 0.12f, 180, 0, 5, fast);
+    CHECK(slow[0] < mid[0] && mid[0] < fast[0]);
+    CHECK(slow[0] * deg > 80.0f && fast[0] * deg < 0.5f * 210.0f * SX_TOUCH_LOOK_ACCEL_MAX + 0.01f);
+    CHECK(sx_touch_look_accel(0) == SX_TOUCH_LOOK_ACCEL_MIN && sx_touch_look_accel(1) == SX_TOUCH_LOOK_ACCEL_MAX);
+    CHECK(fabsf(sx_touch_look_accel(SX_TOUCH_LOOK_V0) - 1.0f) < 1e-6f);
+    /* the sensitivity scales the turn, kept to its range; a relayout keeps it */
+    t.sens = 2.0f;
+    sx_touch_init(&t, 16.0f / 9.0f);
+    CHECK(t.sens == 1.0f);
+    t.sens = 2.0f;
+    {
+      sx_touch_metrics m;
+      memset(&m, 0, sizeof m);
+      m.w = 640;
+      m.h = 360;
+      sx_touch_layout(&t, &m);
+    }
+    CHECK(t.sens == 2.0f);
+    look_swipe(&t, 0.5f, 0.12f, 180, 0, 15, sens);
+    CHECK(fabsf(sens[0] - 2.0f * mid[0]) < 1e-4f);
+    t.sens = 0.5f;
+    look_swipe(&t, 0.5f, 0.12f, 180, 0, 15, sens);
+    CHECK(fabsf(sens[0] - 0.5f * mid[0]) < 1e-4f);
+    t.sens = 9.0f;
+    look_swipe(&t, 0.5f, 0.12f, 180, 0, 15, sens);
+    CHECK(fabsf(sens[0] - SX_TOUCH_SENS_MAX * mid[0]) < 1e-4f);
+    CHECK(sx_touch_clamp_sens(0) == 1.0f && sx_touch_clamp_sens(0.2f) == SX_TOUCH_SENS_MIN);
+  }
+}
+
 TEST(touch_declutter) {
   sx_touch t;
   sx_raw_input raw;

@@ -138,12 +138,14 @@ function M.head_yaw(aim)
   return sm.atan2(ax, az)
 end
 
--- step(body, input, dt, L, extra) ; input = { move_x, move_z, turn, look, run, aim }
+-- step(body, input, dt, L, extra) ; input = { move_x, move_z, turn, look, run, aim, aim_yaw, aim_pitch }
+-- (aim_yaw / aim_pitch: radians this tick from a touch look drag)
 -- extra: closed doors (see M.blocked). Returns the number of blocked axes (0..2)
 function M.step(body, input, dt, L, extra)
   L = L or M.layout()
-  body.yaw = sm.wrap(body.yaw - (input.turn or 0) * L.turn * dt)
-  body.pitch = vec.clamp(body.pitch + (input.look or 0) * L.look * dt, -L.pitch_limit, L.pitch_limit)
+  body.yaw = sm.wrap(body.yaw - (input.turn or 0) * L.turn * dt - (input.aim_yaw or 0))
+  body.pitch = vec.clamp(body.pitch + (input.look or 0) * L.look * dt + (input.aim_pitch or 0), -L.pitch_limit,
+    L.pitch_limit)
   local mx, mz = input.move_x or 0, input.move_z or 0
   if mx == 0 and mz == 0 then return 0 end
   local heading = body.yaw + M.head_yaw(input.aim)

@@ -47,6 +47,7 @@ typedef struct sx_xr {
   float values[SX_XR_COUNT];
   float snap_turn_deg;
   float vignette;
+  float look_sens; /* touch-look-speed: touch look sensitivity (0.5..2, 1 default) */
   /* add-presentation-packaging: comfort. snap = 1 turns the right stick into
    * snap-turn presses (smooth turning when 0); snap_latch re-arms once the
    * stick returns to the centre. hands: grip poses (pos3 fwd3) in the same
@@ -92,7 +93,9 @@ void sx_xr_filter(sx_xr *x, float out[SX_XR_COUNT]);
 int sx_xr_set_snap_deg(sx_xr *x, float deg);
 float sx_xr_snap_deg(const sx_xr *x);
 void sx_xr_set_vignette(sx_xr *x, float v);
-/* comfort.txt text: "snap 1\nsnap_turn 30\nvignette 0.5\nmode standing\n" */
+/* touch-look-speed: clamps to SX_TOUCH_SENS_MIN..MAX (NaN or <= 0: 1) */
+void sx_xr_set_look_sens(sx_xr *x, float v);
+/* comfort.txt text: "snap 1\nsnap_turn 30\nvignette 0.5\nmode standing\nlook_sens 1.00\n" */
 int sx_xr_comfort_format(const sx_xr *x, char *buf, int cap);
 int sx_xr_comfort_parse(sx_xr *x, const char *text);
 

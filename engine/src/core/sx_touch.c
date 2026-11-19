@@ -106,6 +106,7 @@ static const struct {
 void sx_touch_layout(sx_touch *t, const sx_touch_metrics *m) {
   int active = t->active, tray_open = t->tray_open, i;
   unsigned ctx_hide = t->ctx_hide, frame = t->frame;
+  float sens = t->sens;
   float W, H, s, u, g, mg, p, px, L, R, B, top, gr, gt, gl, lh, sr, band, b0, b1;
   box lift, map, zone, home, msg;
   memset(t, 0, sizeof *t);
@@ -113,6 +114,7 @@ void sx_touch_layout(sx_touch *t, const sx_touch_metrics *m) {
   t->tray_open = tray_open;
   t->ctx_hide = ctx_hide & ~CORE_CTLS;
   t->frame = frame;
+  t->sens = sens;
   t->m = *m;
   t->m.w = W = m->w >= 1 ? m->w : 1;
   t->m.h = H = m->h >= 1 ? m->h : 1;
@@ -304,6 +306,7 @@ void sx_touch_init(sx_touch *t, float aspect) {
   t->tray_open = 0;
   t->ctx_hide = 0;
   t->frame = 0;
+  t->sens = 1.0f;
   m.w = aspect >= 1.0f ? 360.0f * aspect : 360.0f;
   m.h = aspect >= 1.0f ? 360.0f : 360.0f / aspect;
   sx_touch_fit_target((int)m.w, (int)m.h, &m.hud_w, &m.hud_h);
@@ -480,10 +483,22 @@ void sx_touch_up(sx_touch *t, long long id) {
   sx_touch_settle(t);
 }
 
+float sx_touch_look_accel(float v) {
+  return clampf(1.0f + SX_TOUCH_LOOK_ACCEL * (v - SX_TOUCH_LOOK_V0), SX_TOUCH_LOOK_ACCEL_MIN, SX_TOUCH_LOOK_ACCEL_MAX);
+}
+
+float sx_touch_clamp_sens(float s) {
+  if (!(s > 0.0f)) return 1.0f; /* unset or NaN */
+  return clampf(s, SX_TOUCH_SENS_MIN, SX_TOUCH_SENS_MAX);
+}
+
 void sx_touch_apply(sx_touch *t, sx_raw_input *raw) {
   int i;
-  t->values[SX_TOUCH_LOOK_X] = clampf(t->look_acc[0] * SX_TOUCH_LOOK_GAIN, -1, 1);
-  t->values[SX_TOUCH_LOOK_Y] = clampf(t->look_acc[1] * SX_TOUCH_LOOK_GAIN, -1, 1);
+  /* touch-look-speed: radians this tick (see sx_touch.h), the same on both axes */
+  float sh = minf(t->m.w, t->m.h), dx = t->look_acc[0] / sh, dy = t->look_acc[1] / sh;
+  float k = SX_TOUCH_LOOK_TURN * sx_touch_clamp_sens(t->sens) * sx_touch_look_accel(sqrtf(dx * dx + dy * dy));
+  t->values[SX_TOUCH_LOOK_X] = dx * k;
+  t->values[SX_TOUCH_LOOK_Y] = dy * k;
   t->look_acc[0] = t->look_acc[1] = 0;
   for (i = 0; i < SX_TOUCH_COUNT; i++) raw->touch[i] = t->values[i];
   t->frame++;

@@ -158,7 +158,8 @@ describe("comfort options (webxr)", function()
   end
   before_each(function() saved = saucer.xr.comfort() end)
   local function restore()
-    saucer.xr.set_comfort({ snap = saved.snap, snap_turn = saved.snap_turn, vignette = saved.vignette, mode = saved.mode })
+    saucer.xr.set_comfort({ snap = saved.snap, snap_turn = saved.snap_turn, vignette = saved.vignette, mode = saved.mode,
+                            look_sens = saved.look_sens })
     saucer.xr.save_comfort()
   end
 
@@ -189,7 +190,7 @@ describe("comfort options (webxr)", function()
     xrv.reset()
     local v = fake_view({ width = 1440, height = 1440 })
     local n = xrv.panel(v, st, p)
-    expect(n).to_be(5)
+    expect(n).to_be(6)
     expect(v.calls.rect).to_be_greater(1)
     local seen = table.concat(v.texts, "|")
     expect(seen).to_contain("COMFORT SETTINGS")
