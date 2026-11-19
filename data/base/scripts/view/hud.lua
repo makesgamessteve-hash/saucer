@@ -952,14 +952,14 @@ end
 -- the world (gravity, temperature, radiation); right: a dial to the Villa; bottom: the emergency teleport.
 local function gauge(v, y, label, frac, col, alert, tick)
   v:text(8, y, label, (alert and (tick // 15) % 2 == 0) and WHITE or col)
-  v:rect(60, y + 2, 82, 5, { 0.15, 0.15, 0.2, 1 })
-  v:rect(60, y + 2, 82 * vec.clamp(frac, 0, 1), 5, col)
+  v:rect(74, y + 2, 70, 5, { 0.15, 0.15, 0.2, 1 })
+  v:rect(74, y + 2, 70 * vec.clamp(frac, 0, 1), 5, col)
 end
 function M.eva(v, state, p)
   local eva = require("sim.eva")
   local st = eva.status(state, p)
   local W, H = v.width, v.height
-  v:rect(4, 60, 142, 64, { 0, 0, 0, 0.45 })
+  v:rect(4, 60, 144, 74, { 0, 0, 0, 0.55 })
   local o = st.o2 / st.o2_max
   local ig = st.integrity / st.integrity_max
   local fu = st.fuel / st.fuel_max
@@ -984,9 +984,9 @@ function M.eva(v, state, p)
   v:text(W - 4 - #up * 8, dy + dr + 16, up, DIM)
   -- warnings and the emergency teleport
   if st.o2 / st.o2_max <= 0.3 and vac then
-    M.ct(v, H // 2 - 56, o <= 0.15 and "! OXYGEN CRITICAL - INSERT: ASSIST, BACKSPACE: TELEPORT !" or "OXYGEN LOW", o <= 0.15 and RED or AMBER)
+    M.ct(v, H // 2 - 40, o <= 0.15 and "! OXYGEN CRITICAL !" or "OXYGEN LOW", o <= 0.15 and RED or AMBER)
   elseif ig <= 0.3 then
-    M.ct(v, H // 2 - 56, "SUIT INTEGRITY LOW", ig <= 0.15 and RED or AMBER)
+    M.ct(v, H // 2 - 40, "SUIT INTEGRITY LOW", ig <= 0.15 and RED or AMBER)
   end
   if st.tele then
     v:rect(W // 2 - 60, H - 60, 120, 6, { 0.15, 0.15, 0.2, 1 })
@@ -1016,7 +1016,7 @@ function M.excursion(v, state, p)
   local oy = 0
   if kit then
     M.eva(v, state, p)
-    oy = 66
+    oy = 74
     if p.suited then M.helmet(v, state, p) end
   else
     v:rect(4, 60, 120, 40, { 0, 0, 0, 0.45 })
