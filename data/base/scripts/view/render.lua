@@ -15,6 +15,7 @@ local fold = require("sim.fold")
 local panelm = require("sim.panel")
 local sm = saucer.math
 local ruinm = require("sim.ruin")
+local cities = require("sim.cities")
 local M = {}
 
 -- add-presentation-packaging: sounds live in view/audio.lua (kept here for mods)
@@ -909,6 +910,8 @@ function M.draw_ruins(v, A, state, cam, xr)
             elseif M.visible(cam, dm.center, dm.radius, xr) then
               v:mesh(dm.mesh, { tex = tex, palette = A.pal.base })
               st.lod = st.lod + 1
+              local lk = dm.glow and cities.light(state, i, r, d) or 0
+              if lk > 0 then v:mesh(dm.glow, { palette = A.pal.base, tint = { lk, lk, lk, 1 } }) end
             end
           end
         end
@@ -917,6 +920,18 @@ function M.draw_ruins(v, A, state, cam, xr)
             st.culled = st.culled + 1
           elseif M.visible(cam, ch.center, ch.radius, xr) then
             v:mesh(ch.mesh, { tex = tex, palette = A.pal.base })
+            -- add-cities: the lights of a lit district (built the first time they are wanted)
+            if r.city and (ch.light_parts or ch.lights) then
+              local lk = cities.light(state, i, r, ch.district)
+              if lk > 0 and (ch.lights ~= nil or st.built < M.DETAIL_BUILDS) then
+                if ch.lights == nil then st.built = st.built + 1 end
+                local lm = assets.chunk_lights(ch)
+                if lm then
+                  v:mesh(lm, { palette = A.pal.base, tint = { lk, lk, lk, 1 } })
+                  st.lit = (st.lit or 0) + 1
+                end
+              end
+            end
             if ch.floor then v:mesh(ch.floor, { tex = ftex or tex, palette = ftex and A.pal.kits or A.pal.base }) end
             st.chunks = st.chunks + 1
             draw_detail(set, ch)
@@ -925,6 +940,14 @@ function M.draw_ruins(v, A, state, cam, xr)
           end
         end
         if set.links and M.visible(cam, set.links.center, set.links.radius, xr) then draw_detail(set, set.links) end
+        -- add-cities: a light pillar over each landmark district, dim while it is dark
+        for d, b in pairs(set.beacons or {}) do
+          if M.visible(cam, b.center, b.radius, xr) then
+            local lk = 0.3 + 0.7 * cities.light(state, i, r, d)
+            v:mesh(b.mesh, { palette = A.pal.base, tint = { lk, lk, lk, 1 } })
+            st.beacons = (st.beacons or 0) + 1
+          end
+        end
         -- add-cities: the gates of dark districts, a shutter in each shut door
         if r.city then
           for id, g in pairs(game.gates(i)) do

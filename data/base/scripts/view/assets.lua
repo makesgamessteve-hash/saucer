@@ -260,7 +260,7 @@ function M.room_decor(ruin, r, k, origin)
   local parts = {}
   local function box(mn, mx, color, extra)
     local p = { kind = "box", min = mn, max = mx, color = color, uv = 0.5 }
-    if extra then p.emissive = 1 end
+    if extra then p.emissive, p.light = 1, true end
     parts[#parts + 1] = p
   end
   local mn, mx = ruinm.room_box(r, k, origin)
@@ -374,6 +374,13 @@ function M.room_decor(ruin, r, k, origin)
   return parts
 end
 
+-- a small integer hash of three numbers: the same everywhere, for patterns that must not change
+function M.hash3(a, b, c)
+  local x = (math.floor(a) * 73856093) ~ (math.floor(b) * 19349663) ~ (math.floor(c) * 83492791)
+  x = x ~ (x >> 13)
+  return x & 0x7fffffff
+end
+
 -- exterior solid: plain block plus lit window bands (towers) or tip beacons.
 -- A tower hanging under the city points its mast down (hanging = true).
 function M.solid_parts(s, k, hanging)
@@ -387,24 +394,88 @@ function M.solid_parts(s, k, hanging)
     parts[#parts + 1] = { kind = "ring", c = c, rin = r * 0.98, r = r * 1.08, h = 0.25, seg = 12,
                           color = { 1.0, 0.62, 0.2 }, emissive = 0.9 }
   elseif s.kind == "tower" then
-    -- lit floors every 6 m, a dark gap every fourth floor, and a beacon on top
+    -- add-cities: a tier of a civ-styled tower: window patterns by face and floor (lit parts are
+    -- `light`, switched per district), a ledge, roof greebles, a lit sign on the base, a mast on the apex
     local win = k.window_color or { 1.0, 0.85, 0.5 }
+    local accent = k.accent or win
+    local lx, lz, hgt = mx[1] - mn[1], mx[3] - mn[3], mx[2] - mn[2]
+    local base = k.solid_color or k.color
+    local shade = 0.9 + 0.1 * ((s.tier or 1) % 2)
+    parts[1].color = { base[1] * shade, base[2] * shade, base[3] * shade }
+    local step = hgt > 120 and 9 or 6
     local y, n = mn[2] + 3, 0
-    while y < mx[2] - 2 do
+    while y < mx[2] - 2 and n < 26 do
       n = n + 1
+      local hv = M.hash3(mn[1], y, mn[3])
       if n % 4 ~= 0 then
-        parts[#parts + 1] = { kind = "box", min = { mn[1] - 0.15, y, mn[3] - 0.15 }, max = { mx[1] + 0.15, y + 1.2, mx[3] + 0.15 },
-                              color = win, emissive = 1 }
+        for f = 0, 3 do
+          for seg = 0, 2 do
+            if (hv >> (f * 3 + seg)) & 1 == 1 then
+              local lo, hi
+              if f < 2 then
+                local x0 = mn[1] + seg * lx / 3
+                local z0 = f == 0 and mn[3] - 0.15 or mx[3] - 0.15
+                lo, hi = { x0 + 0.8, y, z0 }, { x0 + lx / 3 - 0.8, y + 1.2, z0 + 0.3 }
+              else
+                local z0 = mn[3] + seg * lz / 3
+                local x0 = f == 2 and mn[1] - 0.15 or mx[1] - 0.15
+                lo, hi = { x0, y, z0 + 0.8 }, { x0 + 0.3, y + 1.2, z0 + lz / 3 - 0.8 }
+              end
+              parts[#parts + 1] = { kind = "box", min = lo, max = hi, color = win, emissive = 1, light = true }
+            end
+          end
+        end
       end
-      y = y + 6
+      y = y + step
     end
-    local c = { (mn[1] + mx[1]) / 2, hanging and mn[2] or mx[2], (mn[3] + mx[3]) / 2 }
-    local d = hanging and -1 or 1
-    parts[#parts + 1] = { kind = "box", min = { c[1] - 0.25, math.min(c[2], c[2] + 9 * d), c[3] - 0.25 },
-                          max = { c[1] + 0.25, math.max(c[2], c[2] + 9 * d), c[3] + 0.25 }, color = { 0.5, 0.5, 0.55 } }
-    parts[#parts + 1] = { kind = "box", min = { c[1] - 0.8, math.min(c[2] + 9 * d, c[2] + 10.6 * d), c[3] - 0.8 },
-                          max = { c[1] + 0.8, math.max(c[2] + 9 * d, c[2] + 10.6 * d), c[3] + 0.8 }, color = { 1, 0.3, 0.25 },
-                          emissive = 1 }
+    -- the ledge at the top of the tier, and roof greebles
+    parts[#parts + 1] = { kind = "box", min = { mn[1] - 0.4, mx[2] - 0.7, mn[3] - 0.4 }, max = { mx[1] + 0.4, mx[2] + 0.2, mx[3] + 0.4 },
+                          color = { base[1] * 0.6, base[2] * 0.6, base[3] * 0.65 } }
+    local hg = M.hash3(mx[1], mx[2], mx[3])
+    for i = 0, 2 do
+      local gx = mn[1] + 2 + ((hg >> (i * 5)) % 100) / 100 * math.max(0.1, lx - 6)
+      local gz = mn[3] + 2 + ((hg >> (i * 5 + 2)) % 100) / 100 * math.max(0.1, lz - 6)
+      local gh = 1 + (hg >> (i * 3)) % 3
+      parts[#parts + 1] = { kind = "box", min = { gx, mx[2] + 0.2, gz }, max = { gx + 2.5, mx[2] + 0.2 + gh, gz + 2.5 },
+                            color = { base[1] * 0.5, base[2] * 0.5, base[3] * 0.55 } }
+    end
+    -- a lit sign high on the base tier: a panel in the civ's accent with white bars for its letters
+    if (s.tier or 1) == 1 and hgt > 24 and hg % 3 ~= 0 then
+      local f = hg % 4
+      local sw = math.min(12, (f < 2 and lx or lz) * 0.6)
+      local sy = mn[2] + math.min(32, hgt * 0.6)
+      local mid = f < 2 and (mn[1] + mx[1]) / 2 or (mn[3] + mx[3]) / 2
+      local function at(u0, u1, y0, y1, depth, color)
+        if f == 0 then return { kind = "box", min = { mid + u0, y0, mn[3] - depth }, max = { mid + u1, y1, mn[3] }, color = color, emissive = 1, light = true }
+        elseif f == 1 then return { kind = "box", min = { mid + u0, y0, mx[3] }, max = { mid + u1, y1, mx[3] + depth }, color = color, emissive = 1, light = true }
+        elseif f == 2 then return { kind = "box", min = { mn[1] - depth, y0, mid + u0 }, max = { mn[1], y1, mid + u1 }, color = color, emissive = 1, light = true }
+        end
+        return { kind = "box", min = { mx[1], y0, mid + u0 }, max = { mx[1] + depth, y1, mid + u1 }, color = color, emissive = 1, light = true }
+      end
+      parts[#parts + 1] = at(-sw / 2, sw / 2, sy, sy + 4, 0.6, accent)
+      for b = 0, 4 do
+        if (hg >> (b + 7)) & 1 == 1 then
+          parts[#parts + 1] = at(-sw / 2 + 0.8 + b * (sw - 1.6) / 5, -sw / 2 + 0.8 + (b + 0.7) * (sw - 1.6) / 5, sy + 0.7, sy + 3.3, 0.9, { 1, 1, 1 })
+        end
+      end
+    end
+    if s.apex then
+      local c = { (mn[1] + mx[1]) / 2, hanging and mn[2] or mx[2], (mn[3] + mx[3]) / 2 }
+      local d = hanging and -1 or 1
+      parts[#parts + 1] = { kind = "box", min = { c[1] - 0.25, math.min(c[2], c[2] + 9 * d), c[3] - 0.25 },
+                            max = { c[1] + 0.25, math.max(c[2], c[2] + 9 * d), c[3] + 0.25 }, color = { 0.5, 0.5, 0.55 } }
+      parts[#parts + 1] = { kind = "box", min = { c[1] - 0.8, math.min(c[2] + 9 * d, c[2] + 10.6 * d), c[3] - 0.8 },
+                            max = { c[1] + 0.8, math.max(c[2] + 9 * d, c[2] + 10.6 * d), c[3] + 0.8 }, color = { 1, 0.3, 0.25 },
+                            emissive = 1, light = true }
+    end
+  elseif s.kind == "platform" or s.kind == "bridge" then
+    -- lit edge strips: a plaza or a sky-bridge reads from afar at night
+    local acc = k.accent or { 1, 0.8, 0.4 }
+    local y1 = mx[2] + 0.05
+    parts[#parts + 1] = { kind = "box", min = { mn[1], y1, mn[3] }, max = { mx[1], y1 + 0.3, mn[3] + 0.5 }, color = acc, emissive = 1, light = true }
+    parts[#parts + 1] = { kind = "box", min = { mn[1], y1, mx[3] - 0.5 }, max = { mx[1], y1 + 0.3, mx[3] }, color = acc, emissive = 1, light = true }
+    parts[#parts + 1] = { kind = "box", min = { mn[1], y1, mn[3] }, max = { mn[1] + 0.5, y1 + 0.3, mx[3] }, color = acc, emissive = 1, light = true }
+    parts[#parts + 1] = { kind = "box", min = { mx[1] - 0.5, y1, mn[3] }, max = { mx[1], y1 + 0.3, mx[3] }, color = acc, emissive = 1, light = true }
   else
     local c = { (mn[1] + mx[1]) / 2, mx[2], (mn[3] + mx[3]) / 2 }
     parts[#parts + 1] = { kind = "box", min = { c[1] - 0.6, c[2], c[3] - 0.6 }, max = { c[1] + 0.6, c[2] + 1.2, c[3] + 0.6 },
@@ -412,6 +483,9 @@ function M.solid_parts(s, k, hanging)
   end
   return parts
 end
+
+local BEACON = { spaceport = { 0.9, 0.95, 1 }, reactor = { 1, 0.45, 0.2 }, archive = { 0.4, 0.9, 1 }, foundry = { 1, 0.75, 0.25 },
+  garden = { 0.45, 1, 0.5 }, palace = { 1, 0.5, 0.9 } }
 
 local function sphere_of(parts)
   local lo, hi = { 1e30, 1e30, 1e30 }, { -1e30, -1e30, -1e30 }
@@ -427,11 +501,37 @@ local function sphere_of(parts)
 end
 
 -- -> { chunks = { { mesh, center, radius, room } ... }, lod = { mesh, center, radius } }
+-- add-cities: a city's kit wearing its civ's light colours (the kit table itself is shared and untouched)
+function M.styled_kit(ruin)
+  local k = ruinm.kit_of(ruin.kit)
+  local st = ruin.city and ruin.city.style
+  if not st then return k end
+  return setmetatable({ window_color = st.window, accent = st.accent }, { __index = k })
+end
+
+-- split off the parts that are lights (windows, signs, strips), which a city switches per district
+local function split_lights(parts)
+  local main, lights = {}, {}
+  for _, p in ipairs(parts) do
+    if p.light then lights[#lights + 1] = p else main[#main + 1] = p end
+  end
+  return main, lights
+end
+
+-- the lights mesh of a chunk, built the first time its district is lit (nil when it has none)
+function M.chunk_lights(ch)
+  if ch.light_parts and ch.lights == nil then
+    ch.lights = #ch.light_parts > 0 and saucer.mesh.build({ parts = ch.light_parts }) or false
+    ch.light_parts = nil
+  end
+  return ch.lights or nil
+end
+
 function M.ruin_chunks(ruin, origin)
   local hit = cache.chunks and cache.chunks[ruin.hash]
   if hit then return hit end
   cache.chunks = cache.chunks or {}
-  local k = ruinm.kit_of(ruin.kit)
+  local k = M.styled_kit(ruin)
   local by_room = {}
   for _, r in ipairs(ruin.rooms) do by_room[r.id] = {} end
   local function add(list, b, color, uv)
@@ -450,7 +550,7 @@ function M.ruin_chunks(ruin, origin)
   local out = { chunks = {} }
   local coarse = {}
   -- add-cities: a city's coarse silhouette is also kept per district, so a far district costs one draw
-  local dparts = {}
+  local dparts, dglow = {}, {}
   local function dpart(d, b)
     if not ruin.city then return end
     local g = dparts[d or 0] or { parts = {}, mn = { 1e9, 1e9, 1e9 }, mx = { -1e9, -1e9, -1e9 } }
@@ -464,9 +564,11 @@ function M.ruin_chunks(ruin, origin)
   for _, r in ipairs(ruin.rooms) do
     local parts = by_room[r.id]
     for _, p in ipairs(M.room_decor(ruin, r, k, origin)) do parts[#parts + 1] = p end
+    local lights
+    if ruin.city then parts, lights = split_lights(parts) end
     local c, rad = sphere_of(parts)
     local fl = floors[r.id]
-    out.chunks[#out.chunks + 1] = { district = r.district, mesh = saucer.mesh.build({ parts = parts }), center = c, radius = rad, room = r.id,
+    out.chunks[#out.chunks + 1] = { light_parts = lights, district = r.district, mesh = saucer.mesh.build({ parts = parts }), center = c, radius = rad, room = r.id,
                                     floor = #fl > 0 and saucer.mesh.build({ parts = fl }) or nil,
                                     glyphs = M.room_glyphs(r, k, origin) }
     local mn, mx = ruinm.room_box(r, k, origin)
@@ -475,9 +577,24 @@ function M.ruin_chunks(ruin, origin)
   end
   for i, s in ipairs(ruin.solids or {}) do
     local parts = M.solid_parts(s, k, detail.hanging(ruin, s, k, origin))
+    local lights
+    if ruin.city then parts, lights = split_lights(parts) end
     local c, rad = sphere_of(parts)
     local sd = not s.global and (s.district or (s.room and ruin.rooms[s.room] and ruin.rooms[s.room].district)) or nil
-    out.chunks[#out.chunks + 1] = { district = sd, mesh = saucer.mesh.build({ parts = parts }), center = c, radius = rad, solid = i }
+    out.chunks[#out.chunks + 1] = { light_parts = lights, district = sd, mesh = saucer.mesh.build({ parts = parts }), center = c, radius = rad, solid = i }
+    -- the far glow of a lit district: one band and a beacon per tower
+    if ruin.city and s.kind == "tower" and s.apex then
+      local gp = dglow[sd or 0] or {}
+      dglow[sd or 0] = gp
+      local cxm, czm = (s[1][1] + s[2][1]) / 2, (s[1][3] + s[2][3]) / 2
+      gp[#gp + 1] = { kind = "box", min = { cxm - 1.2, s[2][2] - 8, czm - 1.2 }, max = { cxm + 1.2, s[2][2] + 4, czm + 1.2 }, color = k.window_color, emissive = 1 }
+    end
+    if ruin.city and s.kind == "tower" and s.tier == 1 then
+      local gp = dglow[sd or 0] or {}
+      dglow[sd or 0] = gp
+      local yy = s[1][2] + (s[2][2] - s[1][2]) * 0.55
+      gp[#gp + 1] = { kind = "box", min = { s[1][1] - 0.3, yy, s[1][3] - 0.3 }, max = { s[2][1] + 0.3, yy + 2, s[2][3] + 0.3 }, color = k.window_color, emissive = 1 }
+    end
     coarse[#coarse + 1] = { kind = "box", min = s[1], max = s[2], color = k.solid_color or k.color, uv = 0.25 }
     dpart(sd, coarse[#coarse])
   end
@@ -485,7 +602,22 @@ function M.ruin_chunks(ruin, origin)
     if d ~= 0 then
       local c, rad = sphere_of(g.parts)
       out.districts = out.districts or {}
-      out.districts[d] = { mesh = saucer.mesh.build({ parts = g.parts }), center = c, radius = rad, mn = g.mn, mx = g.mx }
+      out.districts[d] = { mesh = saucer.mesh.build({ parts = g.parts }), center = c, radius = rad, mn = g.mn, mx = g.mx,
+                           glow = dglow[d] and #dglow[d] > 0 and saucer.mesh.build({ parts = dglow[d] }) or nil }
+    end
+  end
+  -- add-cities: a light pillar over every landmark district, to find them from afar
+  if ruin.city then
+    local top = origin[2] + k.grid[2] * k.cell - 10
+    out.beacons = {}
+    for _, pd in ipairs(ruin.city.districts) do
+      local col = BEACON[pd.kind]
+      if col then
+        local y0 = pd.pos[2] + 30
+        out.beacons[pd.id] = { center = { pd.pos[1], (y0 + top) / 2, pd.pos[3] }, radius = (top - y0) / 2 + 4,
+          mesh = saucer.mesh.build({ parts = { { kind = "box", min = { pd.pos[1] - 1.5, y0, pd.pos[3] - 1.5 },
+            max = { pd.pos[1] + 1.5, top, pd.pos[3] + 1.5 }, color = col, emissive = 1 } } }) }
+      end
     end
   end
   local c, rad = sphere_of(coarse)
