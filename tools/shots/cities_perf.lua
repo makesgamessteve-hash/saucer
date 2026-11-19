@@ -10,6 +10,7 @@ local ap = require("sim.autopilot")
 local vec = require("lib.vec")
 local ruinm = require("sim.ruin")
 local render = require("view.render")
+-- OVERRIDES
 local BODY = "planet"
 local FRAMES = 900
 local function p1() return T.state().players[1] end

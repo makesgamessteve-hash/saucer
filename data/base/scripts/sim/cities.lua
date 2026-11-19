@@ -37,9 +37,10 @@ function M.restore(state, site, d)
   state.locks[lockkey(site, d)] = state.tick
 end
 
--- how brightly a district's lights burn (0 dark .. 1 full) at this tick: dark until its coupling is
--- restored, then a flicker for a second and a half and a ramp up. Render only: a function of the tick.
-M.RAMP = 150
+-- how brightly a district's lights burn as a whole (0 dark .. 1 full) at this tick: dark until its coupling is
+-- restored, then a flicker for two thirds of a second and a quick ramp up. The beacons, spire lights and the
+-- district's far glow follow this. Render only: a function of the tick.
+M.RAMP = 100
 function M.light(state, site, ruin, d)
   local pd = d and ruin.city.districts[d]
   if not pd or pd.powered then return 1 end
@@ -47,8 +48,56 @@ function M.light(state, site, ruin, d)
   if not t0 then return 0 end
   local dt = state.tick - t0
   if dt >= M.RAMP then return 1 end
-  if dt < 90 then return ((dt // 7 + d) % 3 == 0) and 0.8 or 0 end
-  return (dt - 90) / (M.RAMP - 90)
+  if dt < 40 then return ((dt // 5 + d) % 3 == 0) and 0.8 or 0 end
+  return (dt - 40) / (M.RAMP - 40)
+end
+
+-- add-cities-2 slice 5: the payoff. Once the beacon is up, a wave of light runs out from the coupling:
+-- every window and sign inside the front is on, those outside are still dark.
+M.WAVE_START = 40   -- ticks after the restore that the front leaves the coupling
+M.WAVE_SPEED = 2.5  -- m per tick (150 m/s)
+M.WAVE_EDGE = 30    -- m over which the front fades in
+M.WAVE_REACH = 520  -- m: the front has passed every chunk of a district by then
+M.WAVE_TICKS = M.WAVE_START + math.ceil(M.WAVE_REACH / M.WAVE_SPEED)
+local couplings_of = setmetatable({}, { __mode = "k" })
+local function coupling_pos(ruin, d)
+  local by = couplings_of[ruin]
+  if not by then
+    by = {}
+    for _, c in ipairs(ruin.city.couplings) do by[c.district] = c.pos end
+    couplings_of[ruin] = by
+  end
+  return by[d]
+end
+
+-- how brightly the lights at `pos` (a chunk's centre) burn in district d
+function M.light_at(state, site, ruin, d, pos)
+  local pd = d and ruin.city.districts[d]
+  if not pd or pd.powered then return 1 end
+  local t0 = state.locks and state.locks[lockkey(site, d)]
+  if not t0 then return 0 end
+  local dt = state.tick - t0
+  if dt >= M.WAVE_TICKS then return 1 end
+  if dt < M.WAVE_START then return 0 end
+  local c = coupling_pos(ruin, d)
+  if not c then return M.light(state, site, ruin, d) end
+  local dx, dy, dz = pos[1] - c[1], pos[2] - c[2], pos[3] - c[3]
+  local dist = saucer.math.sqrt(dx * dx + dy * dy + dz * dz)
+  local k = ((dt - M.WAVE_START) * M.WAVE_SPEED - dist) / M.WAVE_EDGE
+  return k <= 0 and 0 or (k >= 1 and 1 or k)
+end
+
+-- districts restored in the last `window` ticks: -> { { id =, label =, age = ticks } } in district order
+function M.fresh(state, site, ruin, window)
+  local out = {}
+  if not M.is_city(ruin) then return out end
+  for _, pd in ipairs(ruin.city.districts) do
+    local t0 = not pd.powered and state.locks and state.locks[lockkey(site, pd.id)]
+    if t0 and state.tick >= t0 and state.tick - t0 < window then
+      out[#out + 1] = { id = pd.id, label = pd.label, age = state.tick - t0 }
+    end
+  end
+  return out
 end
 
 -- ------------------------------------------------------------------ weather and collapses

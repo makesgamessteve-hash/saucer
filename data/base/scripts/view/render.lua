@@ -1022,7 +1022,7 @@ function M.draw_ruins(v, A, state, cam, xr)
             v:mesh(ch.mesh, { tex = tex, palette = A.pal.base })
             -- add-cities: the lights of a lit district (built the first time they are wanted)
             if r.city and (ch.light_parts or ch.lights) then
-              local lk = cities.light(state, i, r, ch.district)
+              local lk = cities.light_at(state, i, r, ch.district, ch.center)
               if lk > 0 and (ch.lights ~= nil or st.built < M.DETAIL_BUILDS) then
                 if ch.lights == nil then st.built = st.built + 1 end
                 local lm = assets.chunk_lights(ch)

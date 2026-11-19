@@ -83,6 +83,25 @@ TEST(realtime_pacing) {
   CHECK(parse(&o, 2, rt) && o.realtime);
 }
 
+TEST(frame_stats) {
+  double ms[20];
+  sx_frame_summary s;
+  sx_options o;
+  char *fs[] = {"x", "--frame-stats"};
+  int i;
+  for (i = 0; i < 20; i++) ms[i] = 20 - i; /* 20..1, unsorted */
+  sx_frame_summarize(ms, 20, &s);
+  CHECK(s.n == 20 && s.max == 20 && s.p50 == 11 && s.p95 == 20 && s.avg > 10.49 && s.avg < 10.51);
+  ms[0] = 5;
+  sx_frame_summarize(ms, 1, &s);
+  CHECK(s.n == 1 && s.avg == 5 && s.p95 == 5 && s.max == 5);
+  sx_frame_summarize(ms, 0, &s);
+  CHECK(s.n == 0 && s.avg == 0 && s.max == 0);
+  sx_options_default(&o);
+  CHECK(!o.frame_stats && parse(&o, 2, fs) && o.frame_stats);
+  CHECK(strstr(sx_usage(), "--frame-stats") != NULL);
+}
+
 TEST(ticks_for_frame) {
   double acc = 0;
   CHECK(sx_ticks_for_frame(&acc, 1.0 / 60) == 1);

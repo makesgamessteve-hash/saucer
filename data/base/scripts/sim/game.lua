@@ -756,7 +756,9 @@ function M.pick_up(state, p, cand, site_idx)
       for _, o in ipairs(state.players) do
         if o ~= p and o.site == site_idx then msg(state, o, string.format("P%d restored the %s district", p.index, r.city.districts[cand.district].label)) end
       end
-      fx(state, p, "echo")
+      for _, o in ipairs(state.players) do
+        if o.site == site_idx then fx(state, o, "gridon") end
+      end
     end
   elseif cand.kind == "clue" then
     -- add-cities-2: an archive record is read in place

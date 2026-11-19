@@ -16,7 +16,7 @@ M.SOUNDS = {
   pickup = S .. "pickup.wav", denied = S .. "denied.wav", bank = S .. "bank.wav",
   echo = S .. "echo.wav", scan = S .. "scan.wav", jam = S .. "jam.wav", alert = S .. "alert.wav",
   locked = S .. "locked.wav", hit = S .. "hit.wav", door = S .. "door.wav", click = S .. "click.wav",
-  coin = S .. "coin.wav",
+  coin = S .. "coin.wav", gridon = S .. "gridon.wav",
 }
 M.LOOPS = {
   engine = S .. "engine_hum.wav", beam = S .. "beam_loop.wav", holo = S .. "holo_loop.wav",

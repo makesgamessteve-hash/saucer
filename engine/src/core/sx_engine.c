@@ -59,6 +59,7 @@ const char *sx_usage(void) {
          "  --windowed            run a --script in the game window (screenshot tours)\n"
          "  --ticks-per-frame N   windowed scripts: N ticks per drawn frame (1-600, default 1)\n"
          "  --realtime            windowed scripts: pace to wall clock, 60 ticks a second (env SAUCER_REALTIME=1)\n"
+         "  --frame-stats         windowed: print frame time avg/p50/p95/max at exit (env SAUCER_FRAME_STATS=1)\n"
          "  --width W --height H  window size\n"
          "  --coop                allow extra devices to join as P2-P4 (gamepad A, F2)\n"
          "  --split-keyboard      P2 plays on the right half of the keyboard\n"
@@ -138,6 +139,7 @@ int sx_options_parse(sx_options *o, int argc, char **argv, char *err, int errlen
       }
     }
     else if (strcmp(a, "--realtime") == 0) o->realtime = 1;
+    else if (strcmp(a, "--frame-stats") == 0) o->frame_stats = 1;
     else if (strcmp(a, "--help") == 0 || strcmp(a, "-h") == 0) o->show_help = 1;
     else {
       snprintf(err, (size_t)errlen, "unknown option %s", a);
@@ -146,6 +148,7 @@ int sx_options_parse(sx_options *o, int argc, char **argv, char *err, int errlen
 #undef NEEDV
   }
   if (sx_env_flag(getenv("SAUCER_REALTIME"))) o->realtime = 1;
+  if (sx_env_flag(getenv("SAUCER_FRAME_STATS"))) o->frame_stats = 1;
   if (o->windowed) o->headless = 0;
   if (o->local_players < 1 || o->local_players > SX_MAX_PLAYERS) {
     snprintf(err, (size_t)errlen, "--local-players must be 1-4");
@@ -190,6 +193,26 @@ double sx_pace_wait(sx_pace *p, double now, int ticks) {
     return 0;
   }
   return wait > 0 ? wait : 0;
+}
+
+static int cmp_double(const void *a, const void *b) {
+  double x = *(const double *)a, y = *(const double *)b;
+  return (x > y) - (x < y);
+}
+
+void sx_frame_summarize(double *ms, int n, sx_frame_summary *out) {
+  int i, k;
+  double sum = 0;
+  memset(out, 0, sizeof *out);
+  if (n <= 0) return;
+  qsort(ms, (size_t)n, sizeof *ms, cmp_double);
+  for (i = 0; i < n; i++) sum += ms[i];
+  out->n = n;
+  out->avg = sum / n;
+  out->p50 = ms[n / 2];
+  k = (int)(n * 0.95);
+  out->p95 = ms[k >= n ? n - 1 : k];
+  out->max = ms[n - 1];
 }
 
 int sx_ticks_for_frame(double *acc, double elapsed) {
