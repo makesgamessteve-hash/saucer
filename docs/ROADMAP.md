@@ -534,7 +534,7 @@ lazy interior generation is deferred). *Slice 3 — transit and dynamics (done):
 a flooded or overgrown undercity, storms with wind and lightning, sky-bridges that fall, and roaming
 Watchers in dark districts. *Slice 4 — mystery and traders (done):* an archive record in each archive district points at the next Echo, and a trader outpost hangs off every city's spaceport mouth. *Slice 5 — polish and performance (done):* the helm hint is docked bottom-left and fades, restoring a grid is a visible moment (beacons first, a wave of light from the coupling, a `gridon` sting, a HUD banner), and the city frame cost was cut with a sentry distance cull, tuned LOD distances and generational GC; `--frame-stats` (native and `?script=&frame_stats=1` on the web) reports the real per-frame ms (see `cities2_report.md`).
 
-## 12. Dock, land, EVA — in progress
+## 13. Dock, land, EVA — in progress
 
 OpenSpec `add-dock-land-eva`. Entering and leaving the saucer stops being a teleport. *Slice 1 — hull
 door and landing gear (done):* the Villa lands on three telescoping legs (the helm's Land button probes
@@ -542,7 +542,7 @@ the ground under the feet, refuses a drop-off or a slope, settles at a walking p
 hatch aft of the engine room slides open (never while flying, and only once the suit has sealed in
 vacuum or toxic air) and unfolds stairs to the ground; you walk out and back in first person, fold the
 standing Villa into your hand from outside, pocket it and unfold it again on its gear. The Villa no
-longer pockets from aboard in a derelict. State version 13. *Slice 2 — station tractor dock*,
+longer pockets from aboard in a derelict. State version 14. *Slice 2 — station tractor dock*,
 *slice 3 — land anywhere* and *slice 4 — EVA kit* (helmet, helmet HUD, jetpack, return assist, emergency
 teleport) follow.
 

@@ -418,6 +418,10 @@ that never ends fails instead of hanging CI.
   stall, tops up at the chandler, drinks at the bar, gets robbed and runs the
   thief down, saves, unpockets in the far hangar and flies away (also with
   `--restore-every-tick` and on seed 7);
+  `hatch.lua` lands the Villa on a platform (refusing a drop-off and a slope), opens
+  the hull hatch after the suit seals, walks down the stairs, walks away so the
+  hatch shuts, folds the Villa into the pocket from outside, unfolds it on its
+  gear, climbs back in and lifts off (also with `--restore-every-tick`);
   `excursion.lua` sets the Seat down by a derelict's crawlspace, steps out,
   crawls to the chamber, lifts a Delicate find, turns the hand-lock, shuts
   the grid, saves, lets the suit run dry for the Lifeline, recovers the

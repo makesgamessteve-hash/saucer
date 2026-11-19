@@ -60,7 +60,42 @@ ap.look(T, 1, get, sm.pi, -0.45, 300)
 shot("06_top_of_stairs")
 ap.look(T, 1, get, sm.pi, 0, 300)
 ap.push(T, 1, function() return get().mode == "foot" end, 60 * 14)
+ap.hold(T, 1, {})
 T.wait(10)
-local b = get().excursion.body
-ap.look(T, 1, get, b.yaw + sm.pi, 0.15, 300)
+-- turn the on-foot body (ap.look steers the saucer or the home body)
+local function ex_look(yaw, pitch)
+  for _ = 1, 400 do
+    local b = get().excursion.body
+    local dy, dp = sm.wrap(yaw - b.yaw), pitch - b.pitch
+    if math.abs(dy) < 0.02 and math.abs(dp) < 0.02 then break end
+    T.axis(1, "turn", math.max(-1, math.min(1, -dy * 2)), 1, true)
+    T.axis(1, "look", math.max(-1, math.min(1, dp * 2)), 1, true)
+    T.wait(1)
+  end
+  T.axis(1, "turn", 0, 1, true)
+  T.axis(1, "look", 0, 1, true)
+end
+local function face_ship(pitch)
+  local b, sp = get().excursion.body, get().ship.pos
+  ex_look(sm.atan2(sp[1] - b.pos[1], sp[3] - b.pos[3]), pitch or 0.1)
+end
+face_ship(0.25)
 shot("07_outside_looking_back")
+local b = get().excursion.body
+local sp = get().ship.pos
+local dx, dz = b.pos[1] - sp[1], b.pos[3] - sp[3]
+local dl = sm.sqrt(dx * dx + dz * dz)
+local away = { b.pos[1] + 30 * dx / dl, b.pos[2], b.pos[3] + 30 * dz / dl }
+ap.ex_to(T, 1, get, away, 1, 1500)
+ap.wait_until(T, 1, function() return get().door.open == 0 end, 60 * 10)
+face_ship(0.1)
+shot("08_walked_away_hatch_shut")
+T.press(1, "shrink")
+T.wait(40)
+shot("09_folding_into_hand")
+ap.wait_until(T, 1, function() return get().excursion.coin == "pocket" end, 600)
+shot("10_in_the_pocket")
+T.press(1, "grow")
+ap.wait_until(T, 1, function() return get().excursion.coin == "stand" end, 600)
+face_ship(0.1)
+shot("11_unfolded_on_its_gear")

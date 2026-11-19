@@ -249,12 +249,12 @@ function M.new_player(index, pos, yaw)
   return p
 end
 
-M.VERSION = 13 -- state version; saves made by a newer game are refused
+M.VERSION = 14 -- state version; saves made by a newer game are refused
 
 function M.init(state, ctx)
   M.state_ref = state
   local seed = ctx.seed
-  state.version = M.VERSION  -- v12: sliding doors keep a goal and a hold timer (fix-bedroom-door); v11: seed-plus-diff saves (save format 3); v10: playtest recommendations (add-playtest-recs); v9: the wider dark (add-wider-dark); v8: on-foot excursions; v7: station visits
+  state.version = M.VERSION  -- v14: landing gear, the hull hatch and the suit (add-dock-land-eva); v12: sliding doors keep a goal and a hold timer (fix-bedroom-door); v11: seed-plus-diff saves (save format 3); v10: playtest recommendations (add-playtest-recs); v9: the wider dark (add-wider-dark); v8: on-foot excursions; v7: station visits
   state.seed = seed
   state.tick = 0
   civs.use(seed)
