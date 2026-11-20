@@ -71,11 +71,23 @@ end
 
 local CHARGE, HOLD, LOCK, DIM, FRAME = { 0.3, 0.9, 1, 1 }, { 1, 0.7, 0.25, 1 }, { 0.3, 1, 0.4, 1 }, { 0.25, 0.3, 0.35, 1 },
   { 0.12, 0.14, 0.18, 1 }
+local ALERT = { 1, 0.25, 0.2, 1 }
 
 -- wrist panel bars -> list of { frac, colour } (charge, hold fill, beam lock)
 function M.wrist(p, scan)
   local all = configs.all()
   -- add-on-foot-excursions: on foot the wrist shows the suit, the hands, a hand-lock's progress
+  if p.mode == "foot" and p.excursion and p.excursion.home and p.eva then
+    -- add-dock-land-eva: the EVA kit's wrist: oxygen, suit integrity, jetpack fuel, teleport charge / cooldown
+    local E = require("sim.eva").tune()
+    local e = p.eva
+    local o = math.max(0, math.min(1, e.o2 / E.o2_max))
+    local ig = math.max(0, math.min(1, e.integrity / E.integrity_max))
+    local fu = math.max(0, math.min(1, e.fuel / E.fuel_max))
+    local tl = e.tele and math.min(1, e.tele) or (e.cool > 0 and 1 - e.cool / E.tele_cool or 1)
+    return { { o, o > 0.3 and CHARGE or ALERT }, { ig, ig > 0.3 and LOCK or ALERT }, { fu, HOLD },
+             { tl, e.tele and ALERT or (e.cool > 0 and DIM or LOCK) } }
+  end
   if p.mode == "foot" and p.excursion then
     local T = require("sim.excursion").tune()
     local s = math.max(0, math.min(1, (p.suit or 0) / T.suit.max))
@@ -113,11 +125,13 @@ function M.hands(v, A, cam, p, scan)
       box(v, A, c, fy, 0.12, 0.065, 1, FRAME)
       local cy, sy = saucer.math.cos(fy), saucer.math.sin(fy)
       local out = { sy * 0.004, 0, cy * 0.004 }
-      for i, b in ipairs(M.wrist(p, scan)) do
+      local bars = M.wrist(p, scan)
+      local gap = #bars > 3 and 0.0125 or 0.016
+      for i, b in ipairs(bars) do
         local w = 0.1 * math.max(0.02, b[1])
         local off = -0.05 + w / 2
-        local bc = { c[1] + cy * off + out[1], c[2] + 0.03 - i * 0.016 + 0.004, c[3] - sy * off + out[3] }
-        box(v, A, bc, fy, w, 0.01, 1, b[2])
+        local bc = { c[1] + cy * off + out[1], c[2] + 0.03 - i * gap + 0.004, c[3] - sy * off + out[3] }
+        box(v, A, bc, fy, w, #bars > 3 and 0.008 or 0.01, 1, b[2])
         n = n + 1
       end
       n = n + 1

@@ -44,10 +44,14 @@ return {
     spike  = { "key:N", "pad:b", "key2:P" },
     -- add-playtest-recs: the grapple has its own key (it used to share X with the Shroud)
     grapple = { "key:Y", "pad:dpup", "touch:grapple", "key2:0" },
+    -- add-dock-land-eva: land / lift off at the helm, the emergency teleport home and the return assist on foot
+    land   = { "key:L", "pad:b" },
+    home   = { "key:Backspace", "pad:back" },
+    assist = { "key:Insert", "pad:rightstick" },
   },
   -- stable order so action slots (and therefore replays) never depend on table order
   axis_order = { "move_x", "move_z", "lift", "turn", "look" },
   button_order = { "shrink", "grow", "size1", "size2", "tractor", "scan", "boost", "use",
                    "camera", "menu", "jam", "mystery_mode", "size3", "snap_left", "snap_right",
-                   "map", "decoy", "shroud", "spike", "grapple", "snap_a", "snap_b" },
+                   "map", "decoy", "shroud", "spike", "grapple", "snap_a", "snap_b", "land", "home", "assist" },
 }

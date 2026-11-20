@@ -159,6 +159,8 @@ function M.ladder(v, p, x, y)
 end
 
 -- where the player is and what Use would do right now
+M.LAND_READOUT = 90   -- m: the landing readout shows when the ground is this close
+
 function M.status(p, state)
   local L = avatar.layout()
   if p.mode == "wake" then return "BEDROOM", nil end
@@ -182,7 +184,12 @@ function M.status(p, state)
     if st then return room, st.label end
     return room, nil
   end
-  if configs.get(p.ship.size).interior then return "AT THE HELM", "USE: STAND UP" end
+  if configs.get(p.ship.size).interior then
+    local w, h
+    if state then w, h = require("sim.dock").hint(state, p) end
+    if w then return w, h end
+    return "AT THE HELM", "USE: STAND UP"
+  end
   return "SEAT", "F: MINI BEAM  E: UNFOLD THE VILLA"
 end
 
@@ -631,6 +638,14 @@ function M.draw(v, state, p, target)
       for i = #parts, 1, -1 do v:text(hx, hy - (#parts - i) * 10, parts[i]:sub(1, hc), AMBER) end
     else M.ct(v, H // 2 + 40, hint, AMBER) end
   end
+  -- add-dock-land-eva: the landing readout while the gear has ground to look at
+  local lr = p.mode == "helm" and not compact and state and require("sim.landing").readout(state, p)
+  if lr and not lr.void and lr.dist <= M.LAND_READOUT then
+    local landing = require("sim.landing")
+    local txt = string.format("GROUND %dM  SLOPE %d DEG  %s", lr.dist // 1, lr.slope // 1,
+      lr.ok and "L: LAND" or landing.SHORT[lr.why] or "NO")
+    M.ct(v, H // 2 + 54, txt, lr.ok and GREEN or AMBER)
+  end
   -- navigation
   local site, d = M.nav(state, p)
   if p.holo_run or p.mode == "foot" then site = nil end
@@ -913,6 +928,95 @@ end
 
 -- add-on-foot-excursions: the suit (the only meter on foot), your four hand
 -- slots, the coin, a hand-lock's progress and your caches' bearing
+-- add-dock-land-eva: the fishbowl helmet: a faint rim, dark corners and a few glints (only while the helmet is on)
+M.HELMET_RX, M.HELMET_RY = 0.62, 0.66
+function M.helmet(v, state, p)
+  local W, H = v.width, v.height
+  local cx, cy = W / 2, H / 2
+  local rx, ry = W * M.HELMET_RX, H * M.HELMET_RY
+  local n = 0
+  local step = 3
+  local alert = p.eva and p.eva.o2 / require("sim.eva").tune().o2_max <= 0.15 and (state.tick // 20) % 2 == 0
+  local rim = alert and { 1, 0.35, 0.3, 0.5 } or { 0.75, 0.9, 1, 0.32 }
+  for y = 0, H - 1, step do
+    local dy = (y + step / 2 - cy) / ry
+    local hw = dy * dy >= 1 and 0 or rx * math.sqrt(1 - dy * dy)
+    local l, r = cx - hw, cx + hw
+    if l > 0 then
+      v:rect(0, y, l, step, { 0.02, 0.05, 0.09, 0.28 })
+      v:rect(r, y, W - r, step, { 0.02, 0.05, 0.09, 0.28 })
+      -- the rim itself, two px wide
+      v:rect(l - 2, y, 2, step, rim)
+      v:rect(r, y, 2, step, rim)
+      n = n + 4
+    end
+  end
+  -- glints: two short diagonal strokes upper left, a dot lower right
+  local gl = { 1, 1, 1, 0.22 }
+  for i = 0, 11 do
+    v:rect(W * 0.1 + i * 2.2, H * 0.2 - i * 1.6, 2, 2, gl)
+    v:rect(W * 0.1 + 20 + i * 2.2, H * 0.2 - i * 1.6 + 8, 2, 2, { 1, 1, 1, 0.12 })
+  end
+  v:rect(W * 0.9, H * 0.84, 3, 3, gl)
+  return n
+end
+
+-- add-dock-land-eva: the helmet's readout. The top-left stack is oxygen, suit integrity and fuel; below it
+-- the world (gravity, temperature, radiation); right: a dial to the Villa; bottom: the emergency teleport.
+local function gauge(v, y, label, frac, col, alert, tick)
+  v:text(8, y, label, (alert and (tick // 15) % 2 == 0) and WHITE or col)
+  v:rect(74, y + 2, 70, 5, { 0.15, 0.15, 0.2, 1 })
+  v:rect(74, y + 2, 70 * vec.clamp(frac, 0, 1), 5, col)
+end
+function M.eva(v, state, p)
+  local eva = require("sim.eva")
+  local st = eva.status(state, p)
+  local W, H = v.width, v.height
+  v:rect(4, 60, 144, 74, { 0, 0, 0, 0.55 })
+  local o = st.o2 / st.o2_max
+  local ig = st.integrity / st.integrity_max
+  local fu = st.fuel / st.fuel_max
+  local vac = not st.breathable
+  gauge(v, 63, vac and string.format("O2 %3d%%", st.o2 // 1) or "AIR OK ", o, o > 0.3 and CYAN or (o > 0.15 and AMBER or RED), vac and o <= 0.15, state.tick)
+  gauge(v, 73, string.format("SUIT %3d", st.integrity // 1), ig, ig > 0.3 and GREEN or (ig > 0.15 and AMBER or RED), ig <= 0.15, state.tick)
+  gauge(v, 83, string.format("FUEL %3d", st.fuel // 1), fu, fu > 0.3 and CYAN or (fu > 0.1 and AMBER or RED), fu <= 0.1 and st.jet, state.tick)
+  v:text(8, 94, string.format("G %.2f  %+dC", st.g, st.temp // 1), DIM)
+  v:text(8, 104, string.format("RAD %.2f  LOOT %d", st.rad, st.loot), st.rad > 0.3 and AMBER or DIM)
+  v:text(8, 114, st.jet and (st.assist and "ASSIST" or "JET ON") or (st.refill and "REFILLING" or st.env:upper()), (st.jet or st.refill) and GREEN or DIM)
+  -- the dial to the Villa: a ring and a dot at the bearing (up = ahead)
+  local dx, dy, dr = W - 34, 62, 14
+  v:rect(dx - dr - 2, dy - dr - 2, dr * 2 + 4, dr * 2 + 4, { 0, 0, 0, 0.45 })
+  M.ring(v, dx, dy, dr, DIM)
+  local a = st.bearing
+  local px, py = dx + math.sin(a) * (dr - 3), dy - math.cos(a) * (dr - 3)
+  v:rect(px - 2, py - 2, 5, 5, GREEN)
+  v:rect(dx, dy - dr, 1, 3, DIM)
+  local t = string.format("VILLA %dM", st.dist // 1)
+  v:text(W - 4 - #t * 8, dy + dr + 6, t, GREEN)
+  local up = st.dy > 2 and "ABOVE" or (st.dy < -2 and "BELOW" or "LEVEL")
+  v:text(W - 4 - #up * 8, dy + dr + 16, up, DIM)
+  -- warnings and the emergency teleport
+  if st.o2 / st.o2_max <= 0.3 and vac then
+    M.ct(v, H // 2 - 40, o <= 0.15 and "! OXYGEN CRITICAL !" or "OXYGEN LOW", o <= 0.15 and RED or AMBER)
+  elseif ig <= 0.3 then
+    M.ct(v, H // 2 - 40, "SUIT INTEGRITY LOW", ig <= 0.15 and RED or AMBER)
+  end
+  if st.tele then
+    v:rect(W // 2 - 60, H - 60, 120, 6, { 0.15, 0.15, 0.2, 1 })
+    v:rect(W // 2 - 60, H - 60, 120 * vec.clamp(st.tele, 0, 1), 6, WHITE)
+    M.ct(v, H - 74, "EMERGENCY TELEPORT CHARGING - BACKSPACE CANCELS", WHITE)
+  elseif st.cool > 0 then
+    local t2 = string.format("HOME %d:%02d", st.cool // 60, st.cool % 60 // 1)
+    v:text(8, 124, t2, DIM)
+  else
+    v:text(8, 124, "HOME READY", GREEN)
+  end
+  -- the flash
+  local k = 1 - (state.tick - st.flash) / (eva.tune().flash * 60)
+  if k > 0 then v:rect(0, 0, W, H, { 1, 1, 1, k }) end
+  return 1
+end
+
 function M.excursion(v, state, p)
   local ex = require("sim.excursion")
   local T = ex.tune()
@@ -921,21 +1025,29 @@ function M.excursion(v, state, p)
   local s = math.max(0, (p.suit or 0) / T.suit.max)
   local col = s > 0.3 and CYAN or (s > 0.1 and AMBER or RED)
   local blink = s <= 0.1 and (state.tick // 15) % 2 == 0
-  v:rect(4, 60, 120, 40, { 0, 0, 0, 0.45 })
-  v:text(8, 63, string.format("SUIT %d%%", (p.suit or 0) // 1), blink and WHITE or col)
-  v:rect(8, 73, 100, 5, { 0.15, 0.15, 0.2, 1 })
-  v:rect(8, 73, 100 * s, 5, col)
+  local kit = require("sim.eva").active(p)
+  local oy = 0
+  if kit then
+    M.eva(v, state, p)
+    oy = 56
+    if p.suited then M.helmet(v, state, p) end
+  else
+    v:rect(4, 60, 120, 40, { 0, 0, 0, 0.45 })
+    v:text(8, 63, string.format("SUIT %d%%", (p.suit or 0) // 1), blink and WHITE or col)
+    v:rect(8, 73, 100, 5, { 0.15, 0.15, 0.2, 1 })
+    v:rect(8, 73, 100 * s, 5, col)
+  end
   -- hands: four slots
   for i = 1, T.hands do
     local it = p.hands[i]
     local x = 8 + (i - 1) * 14
-    v:rect(x, 82, 12, 12, it and (it.delicate and { 0.2, 0.5, 0.6, 0.9 } or { 0.5, 0.38, 0.15, 0.9 }) or { 0.15, 0.15, 0.2, 0.8 })
-    if it then v:text(x + 2, 84, (it.name or "?"):sub(1, 1), WHITE) end
+    v:rect(x, 82 + oy, 12, 12, it and (it.delicate and { 0.2, 0.5, 0.6, 0.9 } or { 0.5, 0.38, 0.15, 0.9 }) or { 0.15, 0.15, 0.2, 0.8 })
+    if it then v:text(x + 2, 84 + oy, (it.name or "?"):sub(1, 1), WHITE) end
   end
-  v:text(70, 84, "HANDS", DIM)
+  v:text(70, 84 + oy, "HANDS", DIM)
   local text, kind = ex.coin_text(p)
-  v:text(8, 104, text, kind == "busy" and AMBER or GREEN)
-  if s <= 0.3 then
+  v:text(8, 104 + oy, text, kind == "busy" and AMBER or GREEN)
+  if s <= 0.3 and not kit then
     local t = s <= 0.1 and "! SUIT CHARGE CRITICAL - DEPLOY (E) !" or "SUIT CHARGE LOW"
     M.ct(v, H // 2 - 56, t, s <= 0.1 and RED or AMBER)
   end

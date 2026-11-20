@@ -33,6 +33,9 @@ void sx_mesh_cylinder(sx_mesh *m, const float c[3], float r, float h, int seg, c
 void sx_mesh_frustum(sx_mesh *m, const float c[3], float r0, float r1, float h, int seg, const sx_part_style *s);
 /* Frustum without end caps (open tube): hull shells you can stand inside. */
 void sx_mesh_tube(sx_mesh *m, const float c[3], float r0, float r1, float h, int seg, const sx_part_style *s);
+/* An open tube with a doorway: the segments within gap_half radians of azimuth gap_at (atan2(x, z)) are left out. */
+void sx_mesh_tube_gap(sx_mesh *m, const float c[3], float r0, float r1, float h, int seg, float gap_at, float gap_half,
+                      const sx_part_style *s);
 void sx_mesh_ring(sx_mesh *m, const float c[3], float rin, float rout, float h, int seg, const sx_part_style *s);
 /* Upper hemisphere (scaled ellipsoid) of radius r and height h. */
 void sx_mesh_dome(sx_mesh *m, const float c[3], float r, float h, int seg, int rings, const sx_part_style *s);

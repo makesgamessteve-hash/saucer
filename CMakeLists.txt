@@ -169,6 +169,30 @@ if(SAUCER_BUILD_TESTS)
            --restore-every-tick WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_station_seed7 COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-station7
            --quiet --seed 7 --ticks 40000 --script tests/game/station.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  # add-dock-land-eva slice 1: land on gear, the hull door and stairs, fold and unfold the Villa from outside
+  add_test(NAME game_hatch COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-hatch --quiet
+           --seed 42 --ticks 40000 --script tests/game/hatch.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  add_test(NAME game_hatch_restore_every_tick COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR}
+           --user-dir ${USERDIR}-hatch-ret --quiet --seed 42 --ticks 40000 --script tests/game/hatch.lua
+           --restore-every-tick WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  # add-dock-land-eva slice 2: the station's tractor dock, the bay, the station door, pocket and unpocket in the bay
+  add_test(NAME game_dock COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-dock --quiet
+           --seed 42 --ticks 60000 --script tests/game/dock.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  add_test(NAME game_dock_restore_every_tick COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR}
+           --user-dir ${USERDIR}-dock-ret --quiet --seed 42 --ticks 60000 --script tests/game/dock.lua
+           --restore-every-tick WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  # add-dock-land-eva slice 3: land on a wreck, a moon, a planet, an asteroid, a rooftop pad and a plaza; the ground gives way
+  add_test(NAME game_land_anywhere COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-land --quiet
+           --seed 42 --ticks 60000 --script tests/game/land_anywhere.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  add_test(NAME game_land_anywhere_restore_every_tick COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR}
+           --user-dir ${USERDIR}-land-ret --quiet --seed 42 --ticks 60000 --script tests/game/land_anywhere.lua
+           --restore-every-tick WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  # add-dock-land-eva slice 4: the EVA kit: helmet, jetpack, return assist, emergency teleport
+  add_test(NAME game_eva COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-eva --quiet
+           --seed 42 --ticks 60000 --script tests/game/eva.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  add_test(NAME game_eva_restore_every_tick COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR}
+           --user-dir ${USERDIR}-eva-ret --quiet --seed 42 --ticks 60000 --script tests/game/eva.lua
+           --restore-every-tick WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   # milestone 7: step out in a derelict, crawl, turn a hand-lock, shut the grid, fail with the Lifeline, recover the cache
   add_test(NAME game_excursion COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-excursion --quiet
            --seed 42 --ticks 40000 --script tests/game/excursion.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})

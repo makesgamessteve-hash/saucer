@@ -672,6 +672,16 @@ function M.render(v, state, p)
     end
     n = n + 3
   end
+  -- add-dock-land-eva: the Villa docked in the arrival hangar stands on its pad
+  if st.coin == "docked" then
+    local h = sg.hangars(L)[1]
+    if h then
+      local at = { h.pad[1], L.pad_y + 0.2, h.pad[2] }
+      v:mesh(A.saucer[1].hull, { pos = at, yaw = sm.pi, tex = A.tex.hull, palette = A.pal.base })
+      v:mesh(A.glass, { pos = at, yaw = sm.pi, ghost = true, tint = { 0.55, 0.8, 1, 0.3 } })
+      n = n + 2
+    end
+  end
   local show_hand = st.coin == "hand" or st.coin == "fold" or (st.coin == "grow" and visit.morph_t(p) < 0.25)
   if show_hand and not v.xr then
     v:mesh(A.hand, { pos = hand, yaw = yaw, pitch = 0 })

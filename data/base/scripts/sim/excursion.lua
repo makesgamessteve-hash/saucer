@@ -271,6 +271,197 @@ local function board(state, p, ctx)
   ctx.fx(state, p, "bank")
 end
 
+-- ---- add-dock-land-eva: the saucer stands on its gear beside you (coin = "stand") ----
+
+-- came down the hull stairs: the Villa stands behind you
+function M.leave_hatch(state, p, ctx)
+  M.ensure(p)
+  local hd = require("sim.hulldoor")
+  local ship = p.ship
+  local feet = hd.foot_world(state, p)
+  local o = avatar().rot(ship.yaw, { 0, 0, -1.0 })
+  feet = { feet[1] + o[1], feet[2], feet[3] + o[3] }
+  local yaw = sm.wrap(ship.yaw + (p.body and p.body.yaw or sm.pi))
+  p.excursion = {
+    site = p.site, t = 0, coin = "stand", from = ship.size, hand_t = 0, held = false,
+    body = { pos = feet, yaw = yaw, pitch = -0.05, vy = 0, crouch = false, ground = true },
+    path = { vec.copy(feet) }, work = false, warned = 0, area = "hall", deploy = false,
+  }
+  p.mode = "foot"
+  require("sim.eva").set_home(p)
+  p.door.on = false
+  p.panel = false
+  p.tractor, p.beam_console = false, false
+  p.suited = not require("sim.env").breathable(state, p)
+  p.excursions = (p.excursions or 0) + 1
+  ctx.msg(state, p, p.suited and "Helmet on. You step off the stairs. The Villa stands on its gear behind you."
+    or "You step off the stairs. The Villa stands on its gear behind you.")
+  ctx.fx(state, p, "door")
+  return true
+end
+
+-- walked back to the stairs' foot with the hatch open: up you go, first person
+function M.board_hatch(state, p, ctx)
+  local ex = p.excursion
+  local hd = require("sim.hulldoor")
+  local A = avatar()
+  local L = A.layout()
+  local n = stow(state, p, ctx, ex.body.pos)
+  local yaw_local = 0
+  p.mode = "walk"
+  p.excursion = false
+  p.door.on = true
+  local loc = hd.local_at(p, hd.total(p), 0)
+  p.body = { pos = loc, yaw = yaw_local, pitch = 0 }
+  p.suit = M.tune().suit.max
+  ctx.msg(state, p, n > 0 and string.format("You climb the stairs. %d item%s from your hands into the hold.", n, n == 1 and "" or "s")
+    or "You climb the stairs into the Villa.")
+  ctx.fx(state, p, "door")
+  return true
+end
+
+M.FOLD_REACH = 60
+M.TETHER = 150
+
+function M.stairs_ready(p)
+  local d = p.door
+  return d and d.open >= 0.95 and d.stairs >= 0.95 and d.goal == 1
+end
+
+-- is the body within r of the stairs' foot?
+function M.near_foot(state, p, r)
+  local f = require("sim.hulldoor").foot_world(state, p)
+  local b = p.excursion.body
+  local dx, dz = b.pos[1] - f[1], b.pos[3] - f[3]
+  return sm.sqrt(dx * dx + dz * dz) <= r and math.abs(b.pos[2] - f[2]) < 1.5
+end
+
+-- fold the standing saucer into your hand (it needs its hatch shut first)
+function M.fold_stand(state, p, ctx)
+  local ex = p.excursion
+  local ship = p.ship
+  local d = p.door
+  if d and (d.open > 0 or d.goal == 1) then
+    d.goal, d.hold = 0, 0
+    ex.fold_wait = true
+    ctx.msg(state, p, "The stairs fold away and the hatch closes first...")
+    return false
+  end
+  local to = M.pocket_size()
+  if ship.charge < shipm.cost(ship.size, to) then
+    ctx.msg(state, p, M.REASONS.charge)
+    ctx.fx(state, p, "denied")
+    return false
+  end
+  if vec.dist(ship.pos, M.center(ex.body)) > M.FOLD_REACH then
+    ctx.msg(state, p, "Too far from the Villa to fold it: walk back toward it")
+    ctx.fx(state, p, "denied")
+    return false
+  end
+  local from = ship.size
+  local cfg = configs.get(to)
+  ship.charge = ship.charge - shipm.cost(from, to)
+  ship.morph = { from = from, pos = vec.copy(ship.pos), yaw = ship.yaw, total = cfg.morph_time or 2.4,
+                 eye = vec.copy(ship.pos), pocket = "fold" }
+  ship.t_left = ship.morph.total
+  ship.size = to
+  ship.vel = { 0, 0, 0 }
+  ship.bank, ship.pitch = 0, 0
+  p.berth = false
+  ex.coin, ex.fold_wait = "fold", false
+  ctx.msg(state, p, "The Villa folds down, gear and all, into your hand...")
+  ctx.fx(state, p, "shrink")
+  saucer.events.emit({ type = "size_change", player = p.index, from = from, to = to })
+  return true
+end
+
+-- where a Villa deployed now would stand: ahead of you, on level ground -> pose, report
+M.VILLA_AHEAD = 20
+function M.villa_spot(state, p)
+  local b = p.excursion.body
+  local f = vec.fwd(b.yaw)
+  local landing = require("sim.landing")
+  local pos = { b.pos[1] + f[1] * M.VILLA_AHEAD, b.pos[2] + 4, b.pos[3] + f[3] * M.VILLA_AHEAD }
+  local rep = landing.probe(state, p, pos, b.yaw)
+  return pos, rep
+end
+
+M.VILLA_REASONS = {
+  void = "No room to unfold the Villa: there is no ground ahead of you",
+  wall = "No room to unfold the Villa: the ground ahead is not level",
+  slope = "No room to unfold the Villa: the ground ahead is too steep",
+  room = "No room to unfold the Villa: it needs about 27 m clear and 12 m of headroom",
+  busy = "Wait for the fold to finish",
+  charge = "Not enough Charge to unfold",
+}
+
+-- can the Villa grow ahead of you? -> ok, why, rest pose, ghost pos
+function M.can_deploy_villa(state, p)
+  local ex = p.excursion
+  if ex.coin ~= "pocket" and ex.coin ~= "hand" then return false, "busy" end
+  if p.ship.morph then return false, "busy" end
+  if p.ship.charge < shipm.cost(p.ship.size, 1) then return false, "charge" end
+  local pos, rep = M.villa_spot(state, p)
+  if not rep.ok then return false, rep.why, nil, pos end
+  local rest = { pos[1], rep.target, pos[3] }
+  local r, hh = shipm.dims_of(1)
+  if game().blocked(state, p, rest, r, hh, 0) then return false, "room", nil, rest end
+  return true, nil, rest, rest
+end
+
+function M.deploy_villa(state, p, ctx)
+  local ok, why, rest, ghost = M.can_deploy_villa(state, p)
+  if not ok then
+    ctx.msg(state, p, M.VILLA_REASONS[why] or M.VILLA_REASONS.room)
+    ctx.fx(state, p, "denied")
+    if ghost and why ~= "busy" and why ~= "charge" then p.ghost, p.ghost_size, p.ghost_pos = 45, 1, ghost end
+    return false, why
+  end
+  local ex = p.excursion
+  local ship = p.ship
+  local from, to = ship.size, 1
+  ship.charge = ship.charge - shipm.cost(from, to)
+  ship.morph = { from = from, pos = vec.copy(rest), yaw = ex.body.yaw, total = configs.get(from).unmorph_time or 2.2,
+                 eye = vec.copy(rest), pocket = "grow" }
+  ship.t_left = ship.morph.total
+  ship.size = to
+  ship.pos = vec.copy(rest)
+  ship.yaw = ex.body.yaw
+  ship.vel = { 0, 0, 0 }
+  ex.coin = "grow"
+  ex.deploy = { pos = vec.copy(rest), hand = M.eye(ex.body), villa = true }
+  ex.work = false
+  ctx.msg(state, p, "You toss the coin ahead. The Villa unfolds onto its gear...")
+  ctx.fx(state, p, "grow")
+  saucer.events.emit({ type = "size_change", player = p.index, from = from, to = to })
+  return true
+end
+
+-- the Villa has grown and stands on its gear: you stay outside, beside it
+function M.stand_up(state, p, ctx)
+  local ex = p.excursion
+  local landing = require("sim.landing")
+  local ship = p.ship
+  local rep = landing.probe(state, p, ship.pos, ship.yaw)
+  local bay = require("sim.dock").inside(state, ship.pos)
+  p.berth = { phase = "landed", kind = bay and "bay" or "surface", bay = bay, clamp = 0, legs = 1, t = 0, ref = rep.ref or ship.pos[2] - landing.tune().leg_len,
+              feet = rep.feet or {}, at = vec.copy(ship.pos), yaw = ship.yaw, site = p.site }
+  ex.coin, ex.deploy = "stand", false
+  require("sim.hulldoor").ensure(p)
+  require("sim.eva").set_home(p)
+  ctx.msg(state, p, "The Villa stands on its gear. Walk to the foot of the stairs to board.")
+  ctx.fx(state, p, "bank")
+end
+
+-- the HUD/prompt for the standing saucer
+function M.stand_text(state, p)
+  local hd = require("sim.hulldoor")
+  local d = p.door
+  if d and d.goal == 1 and d.open < 1 then return "THE HATCH IS OPENING" end
+  if d and d.goal == 1 and d.stairs < 1 then return "THE STAIRS ARE UNFOLDING" end
+  return "WALK TO THE STAIRS TO BOARD  /  Q FOLDS THE VILLA INTO YOUR HAND"
+end
+
 -- the Lifeline: suit at zero. Whiteout, the Seat deploys on your trail, the
 -- hands drop as a cache where you fell. -> the cache (or nil)
 function M.lifeline(state, p, ctx)
@@ -497,8 +688,9 @@ local function work_step(state, p, cmd, dt, ctx)
 end
 
 -- walk, crouch, crawl, jet-hop and fall against the derelict's boxes
-function M.move(state, p, cmd, dt)
+function M.move(state, p, cmd, dt, ctx)
   local T = M.tune()
+  if ctx and require("sim.eva").move(state, p, cmd, dt, ctx) then return 0 end
   local B = T.body
   local A = avatar().layout()
   local b = p.excursion.body
@@ -514,10 +706,11 @@ function M.move(state, p, cmd, dt)
     if saucer.physics.clearance(q, r, B.stand / 2, 0, 1) then b.crouch = false end
   end
   -- jet-hop
-  if lift > 0.5 and b.ground and p.suit > T.suit.hop and not b.crouch then
+  local kit = require("sim.eva").active(p) -- the jetpack's own fuel pays for it
+  if lift > 0.5 and b.ground and (kit or p.suit > T.suit.hop) and not b.crouch then
     b.vy = B.hop
     b.ground = false
-    p.suit = p.suit - T.suit.hop
+    if not kit then p.suit = p.suit - T.suit.hop end
   end
   -- vertical: the mag-boots' pull, a capped fall
   b.vy = math.max(-B.max_fall, (b.vy or 0) - B.gravity * dt)
@@ -555,6 +748,12 @@ function M.move(state, p, cmd, dt)
     end
   end
   b.pos = { moved[1], b.pos[2], moved[3] }
+  if p.berth then
+    -- add-dock-land-eva: you cannot walk through the standing Villa or under its stairs
+    local hy = B.stand
+    local x, z = require("sim.landing").push_out(p, b.pos[1], b.pos[2], b.pos[3], b.pos[2] + hy)
+    b.pos = { x, b.pos[2], z }
+  end
   return blocked
 end
 
@@ -579,6 +778,9 @@ end
 -- Suit Charge per second right now
 function M.drain(state, p)
   local S = M.tune().suit
+  -- add-dock-land-eva: with the Villa standing within reach the suit rides its field
+  if p.excursion.coin == "stand" and vec.dist(p.ship.pos, M.center(p.excursion.body)) <= M.TETHER then return 0 end
+  if require("sim.eva").active(p) then return 0 end -- the EVA kit has its own gauges
   local k = 1
   if p.excursion.area == "crawl" then k = k * S.crawl end
   if require("sim.sentry").locked_on(state, p) then k = k * S.locked end
@@ -598,8 +800,11 @@ function M.step(state, p, cmd, dt, ctx)
   M.ensure(p)
   ex.t = ex.t + dt
   if ex.coin == "grow" then
-    if not ship.morph then board(state, p, ctx) end
-    return
+    if not ship.morph then
+      if ex.deploy and ex.deploy.villa then M.stand_up(state, p, ctx) else board(state, p, ctx) return end
+    else
+      return
+    end
   end
   if ex.coin == "fold" and not ship.morph then
     ex.coin, ex.hand_t = "hand", 0
@@ -625,6 +830,7 @@ function M.step(state, p, cmd, dt, ctx)
     M.lifeline(state, p, ctx)
     return
   end
+  if require("sim.eva").step(state, p, cmd, dt, ctx) then return end
   if cmd:pressed("use") then M.use(state, p, ctx) end
   if cmd:pressed("tractor") and (ex.coin == "pocket" or ex.coin == "hand") then
     if ex.coin == "pocket" then
@@ -635,17 +841,43 @@ function M.step(state, p, cmd, dt, ctx)
       ctx.msg(state, p, "Back into your pocket.")
     end
   end
-  if cmd:pressed("shrink") then
-    ctx.msg(state, p, "The saucer is already as small as it gets")
-    ctx.fx(state, p, "denied")
-  end
   local ps = M.pocket_size()
-  local want = cmd:pressed("grow")
-  for i, k in ipairs({ "size1", "size2" }) do
-    if cmd:pressed(k) and i < ps then want = true end
-  end
-  if want then
-    if M.deploy(state, p, ctx) then return end
+  if ex.coin == "stand" then
+    -- add-dock-land-eva: the Villa stands beside you
+    local d = p.door
+    if d and M.stairs_ready(p) and M.near_foot(state, p, require("sim.hulldoor").tune().enter) then
+      M.board_hatch(state, p, ctx)
+      return
+    end
+    if cmd:pressed("shrink") or cmd:pressed("size3") or (ex.fold_wait and (not d or (d.open == 0 and d.stairs == 0))) then
+      M.fold_stand(state, p, ctx)
+    end
+    if cmd:pressed("grow") or cmd:pressed("size1") or cmd:pressed("size2") then
+      ctx.msg(state, p, "The Villa is already standing here: walk to the stairs, or Q folds it into your hand")
+    end
+  else
+    if cmd:pressed("shrink") then
+      ctx.msg(state, p, "The saucer is already as small as it gets")
+      ctx.fx(state, p, "denied")
+    end
+    local want, which = cmd:pressed("grow"), nil
+    if cmd:pressed("size1") then want, which = true, "villa" end
+    if cmd:pressed("size2") then want, which = true, "seat" end
+    if want then
+      if which ~= "seat" and (ex.coin == "pocket" or ex.coin == "hand") then
+        local ok, why = M.can_deploy_villa(state, p)
+        if ok then
+          M.deploy_villa(state, p, ctx)
+          return
+        elseif which == "villa" then
+          M.deploy_villa(state, p, ctx) -- says why (and shows the ghost)
+          return
+        elseif why ~= "busy" and why ~= "charge" then
+          ctx.msg(state, p, M.VILLA_REASONS[why] .. ": unfolding the Seat instead")
+        end
+      end
+      if M.deploy(state, p, ctx) then return end
+    end
   end
   if ex.grapple and require("sim.tools").grapple_step(state, p, dt) then
     -- add-home-among-stars: reeling in on the Grapple line
@@ -656,12 +888,12 @@ function M.step(state, p, cmd, dt, ctx)
                     held = function() return false end, pressed = function(_, k) return cmd:pressed(k) end, aim = cmd.aim }
     M.move(state, p, STILL, dt)
   elseif ex.coin ~= "fold" then
-    M.move(state, p, cmd, dt)
+    M.move(state, p, cmd, dt, ctx)
   else
     M.move(state, p, { axis = function(_, a) return (a == "turn" or a == "look") and cmd:axis(a) or 0 end,
                        held = function() return false end, pressed = function() return false end, aim = cmd.aim }, dt)
   end
-  ship.pos = M.center(ex.body)
+  if ex.coin ~= "stand" and not (ex.coin == "grow" and ex.deploy and ex.deploy.villa) then ship.pos = M.center(ex.body) end
   local a = M.area(state, p)
   if a ~= ex.area then
     ex.area = a
@@ -674,7 +906,7 @@ end
 function M.status(state, p)
   local ex = p.excursion
   local names = { crawl = "CRAWLSPACE", chamber = "CHAMBER", strong = "STRONGROOM", hall = "HALL" }
-  local where = string.format("ON FOOT: DERELICT %d %s", ex.site, names[ex.area] or "HALL")
+  local where = ex.site == 0 and (require("sim.dock").inside(state, ex.body.pos) and "ON FOOT: STATION BAY" or "ON FOOT: OPEN SPACE") or string.format("ON FOOT: DERELICT %d %s", ex.site, names[ex.area] or "HALL")
   if ex.coin == "fold" then return where, "THE SAUCER IS FOLDING INTO YOUR HAND" end
   if ex.coin == "grow" then return where, "STAND BACK: THE SEAT IS UNFOLDING" end
   if ex.work then
@@ -687,6 +919,8 @@ function M.status(state, p)
     if #p.hands >= M.tune().hands and t.cand.kind ~= "cache" then return where, "HANDS FULL: E DEPLOYS THE SEAT" end
     return where, "USE: TAKE " .. (t.cand.kind == "cache" and "YOUR CACHE" or items.label(t.cand.item):upper())
   end
+  if ex.coin == "stand" then return where, M.stand_text(state, p) end
+  if ex.site == 0 then return where, "THE DOOR IN THE BACK WALL LEADS INTO THE STATION" end
   return where, nil
 end
 
@@ -696,6 +930,7 @@ function M.coin_text(p)
   if c == "pocket" then return "SAUCER: IN YOUR POCKET", "ok" end
   if c == "hand" then return "SAUCER: IN YOUR HAND", "ok" end
   if c == "fold" then return "SAUCER: FOLDING", "busy" end
+  if c == "stand" then return "SAUCER: LANDED, ON ITS GEAR", "ok" end
   return "SAUCER: DEPLOYING", "busy"
 end
 

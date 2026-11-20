@@ -164,6 +164,9 @@ end
 
 M.USE.bed = function(_, p) panel.open(p, "bed") end
 
+-- add-dock-land-eva: the hull hatch panel
+M.USE.hatch = function(state, p, _, ctx) require("sim.hulldoor").use(state, p, ctx) end
+
 -- milestone 3: the lab bench identifies and decodes; the terminal trades when docked
 M.USE.lab = function(_, p) panel.open(p, "lab") end
 

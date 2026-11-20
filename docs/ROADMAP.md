@@ -555,6 +555,34 @@ The sandbox (Mystery: off) has no story. Tests: `tests/lua/story_spec.lua`, `tes
 `tests/game/widerdark.lua`. Screenshots: `tools/shots/story.lua`.
 Not built: painted murals (clues are glowing markers), translation of scripts, contracts, restoring cities.
 
+## 13. Dock, land, EVA — in progress
+
+OpenSpec `add-dock-land-eva`. Entering and leaving the saucer stops being a teleport. *Slice 1 — hull
+door and landing gear (done):* the Villa lands on three telescoping legs (the helm's Land button probes
+the ground under the feet, refuses a drop-off or a slope, settles at a walking pace and anchors); a hull
+hatch aft of the engine room slides open (never while flying, and only once the suit has sealed in
+vacuum or toxic air) and unfolds stairs to the ground; you walk out and back in first person, fold the
+standing Villa into your hand from outside, pocket it and unfold it again on its gear. The Villa no
+longer pockets from aboard in a derelict. State version 14. *Slice 2 — station tractor dock (done):* every
+trader station carries a fixed hangar cell above its ring (floor, walls, force field, a door in the back
+wall); slow in front of it and the tractor beam takes over, tows the Villa in along a curve and sets it on
+the dock pad where clamps close on its feet (pull away, or Land, to cancel; Land also asks for a tow);
+the hull door opens onto the bay's own air (no helmet), the bay door leads into the walkable station and
+back, the Villa folds into the pocket and unfolds in the bay (a clear-space prompt if there is none), and
+lift-off opens the clamps and carries the saucer out. The Villa no longer pockets from aboard at a station
+either. *Slice 3 — land anywhere (done):* at the helm a landing readout shows the ground distance and slope
+and whether it will land (green or red markers on the ground under the three feet); the Villa lands on any
+level solid — derelict hulls, a planet's, moon's or asteroid's plazas and, now, the landing pads marked on
+every third city rooftop — and says what it stands on; if the ground gives way (a sky-bridge tearing loose)
+the thrusters take over. *Slice 4 — EVA kit (done):* walking out of a Villa you wear a fishbowl helmet
+(a faint rim) that goes on by itself in vacuum or toxic air; the helmet HUD shows oxygen, suit integrity,
+jetpack fuel, a dial and distance to the Villa, gravity, temperature, radiation and loot; the jetpack flies
+six ways in zero-g (with automatic braking) and boosts, hovers and descends in a pull; the Insert key
+flies you home (it also engages at critical oxygen); Backspace is the emergency teleport (2.5 s charge-up,
+half your loot left as a cache, a 4-minute cooldown, the Villa redeployed if it was in your pocket), and
+running out of oxygen or suit fires it by itself; the WebXR wrist shows oxygen, suit, fuel and the
+teleport, and the gamepad has bindings. Open: physical door use in XR and the touch buttons.
+
 ## Remaining work after milestone 10
 
 Steve asked for the leftover items of the plan to be worked through in

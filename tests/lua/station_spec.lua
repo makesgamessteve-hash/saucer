@@ -183,11 +183,18 @@ describe("the Pocket configuration", function()
   it("folds into your hand in the arrival hangar, then you pocket it", function()
     local st = docked()
     local p = st.players[1]
+    -- the Villa is not folded from aboard any more: dock, step out, fold it from outside
+    run(st, cmd({ pressed = { "size3" } }))
+    expect(p.mode).to_be("helm")
+    expect(p.ship.size).to_be(1)
+    local told = false
+    for _, m in ipairs(p.msgs) do if m.text:find("Dock in a station's bay", 1, true) then told = true end end
+    expect(told).to_be(true)
+    p.ship.size = 2
     run(st, cmd({ pressed = { "size3" } }))
     expect(p.mode).to_be("foot")
     expect(p.ship.size).to_be(visit.pocket_size())
     expect(p.station.coin).to_be("fold")
-    expect(p.ship.charge).to_be(70)
     expect(visit.area(st, p).name).to_be("Arrival hangar")
     -- the viewpoint is in the station; the world draws no saucer for you
     local eye = game.viewpoint(p)
