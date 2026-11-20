@@ -84,7 +84,6 @@ function M.init()
   cache.decal = saucer.mesh.build({ parts = { { kind = "box", min = { 0, 0, 0 }, max = { 1, 1, 0.02 }, color = { 1, 1, 1 },
                                                 uv = 1, emissive = 0.6 } } })
   cache.stars = saucer.mesh.build({ parts = { { kind = "stars", count = 1400, r = 900, size = 2.2, seed = 7 } } })
-  cache.station = kit.build("station", {}, 11)
   cache.cache_mesh = kit.build("loot_cache", { size = 1 }, 1)
   -- milestone 3: sentries, nests and the Resonant vault (closed and open)
   -- add-mesh-builder: rigs (a base mesh, named nodes to animate, declared collision volumes); the

@@ -44,27 +44,36 @@ end
 
 function M.count(state) return #traders(state) end
 
--- the solid boxes of every bay: floor, ceiling, side walls and a back wall with its doorway
-function M.solids(state)
+-- the eleven solid boxes of one hangar cell at anchor tp: floor, ceiling, side walls and a back wall with its doorway
+function M.cell_solids(tp)
   local T = M.tune()
   local out = {}
-  for i in ipairs(traders(state)) do
-    local b = M.bay(state, i)
-    local w = T.wall
-    local lo, hi = b.lo, b.hi
-    local function box(a, c) out[#out + 1] = { a, c } end
-    box({ lo[1], lo[2] - 2, lo[3] - w }, { hi[1], lo[2], hi[3] + w })           -- floor
-    box({ lo[1], hi[2], lo[3] - w }, { hi[1], hi[2] + w, hi[3] + w })           -- ceiling
-    box({ lo[1], lo[2], lo[3] - w }, { hi[1], hi[2], lo[3] })                    -- side walls
-    box({ lo[1], lo[2], hi[3] }, { hi[1], hi[2], hi[3] + w })
-    local dz, dh = T.door.half, T.door.height
-    box({ lo[1] - w, lo[2], lo[3] }, { lo[1], hi[2], b.door.z - dz })            -- back wall, either side of the door
-    box({ lo[1] - w, lo[2], b.door.z + dz }, { lo[1], hi[2], hi[3] })
-    box({ lo[1] - w, lo[2] + dh, b.door.z - dz }, { lo[1], hi[2], b.door.z + dz })   -- lintel
-    box({ lo[1] - 3.5, lo[2] - 0.01, b.door.z - dz }, { lo[1] - w, lo[2], b.door.z + dz })  -- the sill's tongue
-    box({ lo[1] - 3.5, lo[2], b.door.z - dz - w }, { lo[1] - w, hi[2], b.door.z - dz })      -- the short passage behind the door
-    box({ lo[1] - 3.5, lo[2], b.door.z + dz }, { lo[1] - w, hi[2], b.door.z + dz + w })
-    box({ lo[1] - 3.5 - w, lo[2], b.door.z - dz - w }, { lo[1] - 3.5, hi[2], b.door.z + dz + w })
+  local fy = tp[2] + T.floor_y
+  local lo = { tp[1] + T.back_x, fy, tp[3] - T.half_w }
+  local hi = { tp[1] + T.front_x, fy + T.height, tp[3] + T.half_w }
+  local w = T.wall
+  local function box(a, c) out[#out + 1] = { a, c } end
+  box({ lo[1], lo[2] - 2, lo[3] - w }, { hi[1], lo[2], hi[3] + w })           -- floor
+  box({ lo[1], hi[2], lo[3] - w }, { hi[1], hi[2] + w, hi[3] + w })           -- ceiling
+  box({ lo[1], lo[2], lo[3] - w }, { hi[1], hi[2], lo[3] })                    -- side walls
+  box({ lo[1], lo[2], hi[3] }, { hi[1], hi[2], hi[3] + w })
+  local dz, dh = T.door.half, T.door.height
+  local dzc = tp[3]
+  box({ lo[1] - w, lo[2], lo[3] }, { lo[1], hi[2], dzc - dz })            -- back wall, either side of the door
+  box({ lo[1] - w, lo[2], dzc + dz }, { lo[1], hi[2], hi[3] })
+  box({ lo[1] - w, lo[2] + dh, dzc - dz }, { lo[1], hi[2], dzc + dz })   -- lintel
+  box({ lo[1] - 3.5, lo[2] - 0.01, dzc - dz }, { lo[1] - w, lo[2], dzc + dz })  -- the sill's tongue
+  box({ lo[1] - 3.5, lo[2], dzc - dz - w }, { lo[1] - w, hi[2], dzc - dz })      -- the short passage behind the door
+  box({ lo[1] - 3.5, lo[2], dzc + dz }, { lo[1] - w, hi[2], dzc + dz + w })
+  box({ lo[1] - 3.5 - w, lo[2], dzc - dz - w }, { lo[1] - 3.5, hi[2], dzc + dz + w })
+  return out
+end
+
+-- the solid boxes of every bay
+function M.solids(state)
+  local out = {}
+  for i, tr in ipairs(traders(state)) do
+    for _, b in ipairs(M.cell_solids(tr.pos)) do out[#out + 1] = b end
   end
   return out
 end

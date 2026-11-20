@@ -77,6 +77,8 @@ function M.rebuild(state)
   for _, b in ipairs(M.extra_solids) do saucer.physics.add_box(b[1], b[2], 1) end
   -- add-dock-land-eva: every station's hangar bay
   for _, b in ipairs(require("sim.dock").solids(state)) do saucer.physics.add_box(b[1], b[2], 1) end
+  -- add-huge-stations: the hulls the cells hang from (arms, hubs, rings, pods and arrays)
+  for _, b in ipairs(require("sim.stationhull").world_solids(state)) do saucer.physics.add_box(b[1], b[2], 1) end
   civs.use(state.seed)
   rt.ruins, rt.bounds, rt.sentries, rt.shutters, rt.seals, rt.gates = {}, {}, {}, {}, {}, {}
   rt.fallen, rt.bridge_box = {}, {}
@@ -256,12 +258,12 @@ function M.new_player(index, pos, yaw)
   return p
 end
 
-M.VERSION = 14 -- state version; saves made by a newer game are refused
+M.VERSION = 15 -- state version; saves made by a newer game are refused
 
 function M.init(state, ctx)
   M.state_ref = state
   local seed = ctx.seed
-  state.version = M.VERSION  -- v14: landing gear, the hull hatch and the suit (add-dock-land-eva); v13: the run story (add-run-story); v12: sliding doors keep a goal and a hold timer (fix-bedroom-door); v11: seed-plus-diff saves (save format 3); v10: playtest recommendations (add-playtest-recs); v9: the wider dark (add-wider-dark); v8: on-foot excursions; v7: station visits
+  state.version = M.VERSION  -- v15: megastructure stations move the trader and the far hangar (add-huge-stations); v14: landing gear, the hull hatch and the suit (add-dock-land-eva); v13: the run story (add-run-story); v12: sliding doors keep a goal and a hold timer (fix-bedroom-door); v11: seed-plus-diff saves (save format 3); v10: playtest recommendations (add-playtest-recs); v9: the wider dark (add-wider-dark); v8: on-foot excursions; v7: station visits
   state.seed = seed
   state.tick = 0
   civs.use(seed)

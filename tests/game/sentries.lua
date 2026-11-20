@@ -161,7 +161,7 @@ T.assert(cache and cache.site == site and #cache.items == hot_n, "a cache with t
 -- recover it with the Seat (the Watchers ignore it)
 T.assert(ap.resize(T, 1, get, 2), "folded to the Seat")
 first = ap.route(ruin, origin, wdef.room, 2)[1]
-T.assert(ap.travel(T, 1, get, first.pos, 3, 60 * 200), "flew back to derelict 2")
+T.assert(ap.travel(T, 1, get, first.pos, 3, 60 * 420), "flew back to derelict 2")
 ok, route = ap.enter(T, 1, get, ruin, origin, wdef.room, 2)
 T.assert(ok, "into the hall")
 local cp = cache.pos

@@ -18,6 +18,48 @@ function M.extent(kit_id)
   return { g[1] * k.cell, g[2] * k.cell, g[3] * k.cell }, k
 end
 
+
+-- add-huge-stations: a trader station is a kilometre-scale megastructure that hangs off its dock anchor
+-- (the trader's `pos`) toward -x (sim/stationhull.lua). Place the anchor so the whole hull clears every
+-- site, the vault and the arrival point: of 24 bearings x 3 distances x 3 heights round the sector's
+-- origin, the hull's centre goes where its sphere has the most room. Pure; no rng. obstacles are
+-- { x, y, z, r } spheres. -> anchor pos
+M.STATION_BEARINGS = 24
+M.STATION_DISTANCES = { 700, 950, 1200 }
+M.STATION_HEIGHTS = { 0, 160, -160 }
+function M.place_station(seed, sid, obstacles)
+  local sh = require("sim.stationhull")
+  local L = sh.get(sh.seed_of(seed, sid, 1), "port")
+  local ctr, rad = L.info.centre, L.info.radius
+  local best, best_score
+  for k = 0, M.STATION_BEARINGS - 1 do
+    local a = saucer.math.tau * k / M.STATION_BEARINGS
+    for _, d in ipairs(M.STATION_DISTANCES) do
+      for _, hy in ipairs(M.STATION_HEIGHTS) do
+        local hx, hz = saucer.math.sin(a) * d, saucer.math.cos(a) * d
+        local room = math.huge
+        for _, o in ipairs(obstacles) do
+          local dx, dy, dz = hx - o[1], hy - o[2], hz - o[3]
+          room = math.min(room, saucer.math.sqrt(dx * dx + dy * dy + dz * dz) - o[4] - rad)
+        end
+        local score = math.min(room, 400) - 0.05 * d - math.abs(hy) * 0.1
+        if not best_score or score > best_score + 1e-9 then
+          best_score = score
+          best = { hx - ctr[1], hy - ctr[2], hz - ctr[3] }
+        end
+      end
+    end
+  end
+  return { best[1] // 1, best[2] // 1, best[3] // 1 }
+end
+
+-- a site's bounding sphere as an obstacle
+local function site_ball(site)
+  local ext = M.extent(site.kit)
+  return { site.pos[1] + ext[1] / 2, site.pos[2] + ext[2] / 2, site.pos[3] + ext[3] / 2,
+           0.5 * saucer.math.sqrt(ext[1] * ext[1] + ext[2] * ext[2] + ext[3] * ext[3]) }
+end
+
 -- generate(seed, sid, info): the home sector (sid 1, the milestone 3 layout,
 -- unchanged) or a far sector from the galaxy (sim/galaxy.lua)
 function M.generate(seed, sid, info)
@@ -54,7 +96,10 @@ function M.generate(seed, sid, info)
   local va = 0.8 + rng:float() * 0.6
   local vd = 620 + rng:int(0, 120)
   local vault = { pos = { saucer.math.sin(va) * vd // 1, rng:int(-120, 120), saucer.math.cos(va) * vd // 1 } }
-  return { id = 1, sites = sites, trader = { pos = { -260, 30, -140 } }, vault = vault, arrival = { 0, 0, -120 } }
+  -- add-huge-stations: the trader's station is vast, so it takes the empty wedge of the sector
+  local obstacles = { { 0, 0, -120, 260 }, { vault.pos[1], vault.pos[2], vault.pos[3], 80 } }
+  for _, site in ipairs(sites) do obstacles[#obstacles + 1] = site_ball(site) end
+  return { id = 1, sites = sites, trader = { pos = M.place_station(seed, 1, obstacles) }, vault = vault, arrival = { 0, 0, -120 } }
 end
 
 -- add-cities: some far sectors hold a body city (a planet, a moon or an asteroid) in addition to
@@ -115,7 +160,10 @@ function M.far(seed, sid, info)
                           seed = saucer.seed_child(seed, "site", sid * 100 + #sites + 1), kit = ckit, civ = ci, city = true, tutorial = false,
                           danger = info and info.danger or 2 }
   end
-  local tp = { rng:int(-200, 200), rng:int(-60, 60), rng:int(-200, 200) }
+  -- add-huge-stations: the station takes the largest gap between the sites
+  local obstacles = {}
+  for _, site in ipairs(sites) do obstacles[#obstacles + 1] = site_ball(site) end
+  local tp = M.place_station(seed, sid, obstacles)
   local out = { id = sid, sites = sites, trader = { pos = tp }, arrival = { tp[1] + 60, tp[2] + 20, tp[3] - 260 } }
   -- add-cities-2: a trader outpost hangs off the city's spaceport mouth, so a haul can be sold without the long
   -- flight back to the hub

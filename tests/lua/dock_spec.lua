@@ -323,7 +323,7 @@ describe("drawing the bay", function()
     local v = fake_view()
     local cam = { pos = vec.copy(b.pad) }
     local n0 = dockv.draw(v, A, st, cam)
-    expect(n0).to_be_greater(30)
+    expect(n0).to_be(9)                                 -- the frame, the force field and the emitters
     run(st)
     expect(p.berth.phase).to_be("guide")
     local n1 = dockv.draw(v, A, st, cam)

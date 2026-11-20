@@ -82,6 +82,28 @@ function M.linear_array(parts, n, step)
   return out
 end
 
+
+-- a small parked craft as mesh parts: fuselage, canopy, swept wings, engine glow and a fin; the nose points
+-- along +x turned by yaw about y, at (x, y, z) (y = the belly), scale s (1 = about 8 m long)
+function M.ship(x, y, z, yaw, s, col, acc)
+  local cs, sn = sm.cos(yaw), sm.sin(yaw)
+  local out = {}
+  local function b(x0, y0, z0, x1, y1, z1, color, emi, wy)
+    local mx, my, mz = (x0 + x1) / 2 * s, (y0 + y1) / 2 * s, (z0 + z1) / 2 * s
+    local hx, hy, hz = (x1 - x0) / 2 * s, (y1 - y0) / 2 * s, (z1 - z0) / 2 * s
+    out[#out + 1] = { kind = "box", min = { -hx, -hy, -hz }, max = { hx, hy, hz }, color = color, emissive = emi,
+                      yaw = yaw + (wy or 0), pos = { x + mx * cs + mz * sn, y + my, z - mx * sn + mz * cs } }
+  end
+  local dark = { col[1] * 0.8, col[2] * 0.8, col[3] * 0.8 }
+  b(-4, 0, -1.2, 4, 1.8, 1.2, col)
+  b(2.5, 1.7, -0.7, 4, 2.3, 0.7, { 0.5, 0.85, 1.0 }, 0.8)
+  b(-3, 0.7, -4.2, 0.5, 1.1, -1.1, dark, nil, -0.35)
+  b(-3, 0.7, 1.1, 0.5, 1.1, 4.2, dark, nil, 0.35)
+  b(-4.2, 0.4, -0.9, -4, 1.4, 0.9, acc, 1)
+  b(-0.5, 1.8, -0.15, 0.5, 2.5, 0.15, acc)
+  return out
+end
+
 -- ---------------------------------------------------------------------------
 -- Recipes, rigs, collision and the build budget (OpenSpec add-mesh-builder).
 -- A recipe table is { parts = {...} } and may also declare

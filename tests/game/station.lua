@@ -117,6 +117,8 @@ T.assert(ap.pick(T, 1, get, "Close"), "closed the bar")
 
 -- 6. the pickpocket: walk over to his haunt holding the coin in your fist (safe
 -- from him), turn your back on him, pocket the coin and stand still
+-- (the thief may already have found the pocketed coin on the long way round the bigger concourse: then run him down)
+if get().station.coin ~= "thief" then
 local home = visit.layout(T.state(), get()).thief.home
 T.press(1, "tractor")
 T.wait(1)
@@ -131,6 +133,7 @@ T.wait(1)
 T.assert(get().station.coin == "pocket", "back in the pocket")
 T.assert(ap.wait_until(T, 1, function() return get().station.coin == "thief" end, 60 * 90),
   "the pickpocket lifted the saucer (" .. get().station.thief.mode .. ")")
+end
 T.assert(get().station.thief.mode == "flee" and said("pocket is light"), "and runs for it")
 T.press(1, "size1")
 T.wait(1)

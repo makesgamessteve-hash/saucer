@@ -1117,9 +1117,8 @@ function M.render(v, state, alpha)
   if not (cenv and cenv.day > 0.55) then M.sky(v, A, cam.pos) end
   -- derelicts, in chunks: culled against the view, far sites as one silhouette
   M.draw_ruins(v, A, state, cam, v.xr)
-  for _, tr in ipairs(state.sector.traders or { state.sector.trader }) do
-    v:mesh(A.station, { pos = tr.pos, yaw = state.tick * 0.002 })
-  end
+  -- add-huge-stations: every trader's station, a kilometre-scale megastructure (view/stationhull.lua)
+  require("view.stationhull").draw(v, A, state, cam, state.tick + (alpha or 0))
   require("view.dock").draw(v, A, state, cam)
   M.draw_sentries(v, A, state, p)
   -- add-on-foot-excursions: shutters, hand-locks, grid consoles, Delicate finds
