@@ -1,7 +1,11 @@
 ## MODIFIED Requirements
 
 ### Requirement: Virtual controls on touch screens
-The web build SHALL show on-screen controls when the player touches the screen: a move stick, a look area, a lift slider and buttons for shrink, grow, tractor, scan, Use and boost, mapped through the same action map as every other device. On the web the image SHALL fill the window, and the controls SHALL be laid out in CSS pixels from the shorter window side: every button SHALL be at least 44 px (48 px on phones) with gaps of at least 8 px, inside the safe area, and the layout SHALL be redone when the window is resized or rotated.
+The web build SHALL show on-screen controls when the player touches the screen: a move stick, a look area, a lift slider and buttons for shrink, grow, tractor, scan, Use and boost, mapped through the same action map as every other device. On the web the image SHALL fill the window, and the controls SHALL be laid out in CSS pixels from the shorter window side and redone when the window is resized or rotated.
+
+#### Scenario: Button sizes and spacing
+- **WHEN** the controls are laid out on any window size
+- **THEN** every button is at least 44 px (48 px on phones) with gaps of at least 8 px, inside the safe area
 
 #### Scenario: Touch stick flies the saucer
 - **WHEN** a finger pushes the virtual stick upward for one second
