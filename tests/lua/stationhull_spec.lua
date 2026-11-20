@@ -45,6 +45,32 @@ describe("the megastructure generator", function()
     expect(n).to_be(8)
     expect(m >= 4).to_be(true)
   end)
+  it("builds the same station with or without the triangles, and the view gets them on demand", function()
+    local a = sh.generate(321, "port", 7, false)
+    local b = sh.generate(321, "port", 7, true)
+    expect(a.parts == nil).to_be(true)
+    expect(a.hash).to_be(b.hash)
+    expect(#a.solids).to_be(#b.solids)
+    expect(#a.lights).to_be(#b.lights)
+    expect(b.counts.core).to_be_greater(100)
+    local parts = sh.parts(a)
+    expect(#parts.core).to_be(b.counts.core)
+    expect(sh.parts(a)).to_be(parts)
+    expect(sh.parts(b)).to_be(b.parts)
+    for s2 = 1, 5 do sh.parts(sh.get(s2 * 13, "outpost", 1)) end
+  end)
+  it("knows a station's sphere without building it", function()
+    for _, class in ipairs({ "port", "outpost" }) do
+      for _, seed in ipairs({ 1, 42, 99, 4242 }) do
+        local c, r = sh.envelope(seed, class)
+        local L = sh.generate(seed, class, 3, false)
+        expect(c[1]).to_be_near(L.info.centre[1], 1e-9)
+        expect(c[2]).to_be_near(L.info.centre[2], 1e-9)
+        expect(r).to_be_near(L.info.radius, 1e-9)
+      end
+    end
+    expect(sh.envelope(1)).to_be_truthy()
+  end)
   it("is kilometre-scale with the hangar cell a tiny part of it", function()
     local L = sh.generate(42, "port", 7)
     local i = L.info
@@ -148,6 +174,12 @@ describe("placing the station in a sector", function()
     for _, o in ipairs(obs) do expect(vec.dist(c, o) > o[4] + L.info.radius - 1).to_be(true) end
     local q = sector.place_station(1, 1, {})
     expect(#q).to_be(3)
+    -- asked again it answers the same (from its memory) and the caller's copy is its own
+    local p2 = sector.place_station(1, 1, obs)
+    expect(p2[1]).to_be(p[1])
+    p2[1] = 0
+    expect(sector.place_station(1, 1, obs)[1]).to_be(p[1])
+    for sd = 1, 70 do sector.place_station(sd + 1000, 1, {}) end
   end)
   it("reaches the far sectors too", function()
     local st = new_state(42)
@@ -173,8 +205,9 @@ describe("drawing the stations", function()
     local e = L.info.extent
     -- a camera d metres past the box's +x face
     local cam = { pos = { tp[1] + e.hi[1] + d, tp[2], tp[3] } }
-    vhull.draw(v, A, st, cam, 100)
-    return vhull.M and vhull.M.stats or vhull.stats, v
+    -- a few frames, so every layer the level wants has had its turn to be built (one build a frame)
+    for _ = 1, 8 do vhull.draw(v, A, st, cam, 100) end
+    return vhull.stats, v
   end
   it("draws the silhouette far away, the hull nearer and everything close up", function()
     local st = new_state(42)
@@ -188,6 +221,24 @@ describe("drawing the stations", function()
     expect(s.draws).to_be(4)
     expect(s.levels[1]).to_be("detail")
     expect(s.tris).to_be_greater(10000)
+    vhull.free_all()
+  end)
+  it("builds one thing a frame: a cold station shows up over a few frames, not in one long one", function()
+    vhull.free_all()
+    local st = new_state(1234)
+    local tp = st.sector.trader.pos
+    local e = sh.for_trader(st, 1).info.extent
+    local cam = { pos = { tp[1] + e.hi[1] + 50, tp[2], tp[3] } }
+    local A = assets.init()
+    local drawn = {}
+    for f = 1, 8 do
+      vhull.draw(fake_view(), A, st, cam, 100)
+      drawn[f] = vhull.stats.draws
+    end
+    expect(drawn[1]).to_be(0)                    -- the layout's triangles take the first frame
+    expect(drawn[2]).to_be(1)                    -- then a layer a frame
+    expect(drawn[3]).to_be(2)
+    expect(drawn[8]).to_be(4)
     vhull.free_all()
   end)
   it("limits the blinking beacons and lights the approach corridor", function()

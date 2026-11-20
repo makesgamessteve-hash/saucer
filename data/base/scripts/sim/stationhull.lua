@@ -44,7 +44,7 @@ local DIGITS = {
 -- the builder: a context with the layers, a counter per layer and primitive helpers. y is relative to the
 -- station's axis (AY above the anchor) unless a helper says it is spinning (then it is about the axis).
 -- ---------------------------------------------------------------------------------------------------
-local function new_ctx(seed, class)
+local function new_ctx(seed, class, mesh)
   local H = M.kit()
   local K = H.classes[class]
   if not K then error("unknown station class " .. tostring(class)) end
@@ -53,9 +53,10 @@ local function new_ctx(seed, class)
     H = H, K = K, T = T, class = class, seed = seed,
     AY = T.floor_y + T.height / 2,
     parts = { core = {}, detail = {}, ring = {}, ringd = {}, far = {} },
-    solids = {}, lights = {},
+    solids = {}, lights = {}, mesh = mesh,
     rng = saucer.rng.new(saucer.seed_child(seed, "hull", 1)),
     drng = saucer.rng.new(saucer.seed_child(seed, "hull", 2)),
+    mrng = saucer.rng.new(saucer.seed_child(seed, "hull", 3)),   -- only for what the triangles need (skipped in a layout-only pass)
   }
   c.pal = H.palettes[c.rng:int(1, #H.palettes)]
   return c
@@ -68,6 +69,7 @@ local function add(c, layer, part)
 end
 
 local function box(c, layer, x0, y0, z0, x1, y1, z1, color, emi)
+  if not c.mesh then return end   -- layout only: the sim wants the solids, not the triangles
   local AY = (layer == "ring" or layer == "ringd") and 0 or c.AY
   return add(c, layer, { kind = "box", min = { math.min(x0, x1), math.min(y0, y1) + AY, math.min(z0, z1) },
                          max = { math.max(x0, x1), math.max(y0, y1) + AY, math.max(z0, z1) }, color = color, emissive = emi })
@@ -75,6 +77,7 @@ end
 
 -- a cylinder along x from x0 to x1 about the axis through (y, z)
 local function xcyl(c, layer, x0, x1, y, z, r, color, seg, emi, r1)
+  if not c.mesh then return end   -- layout only: the sim wants the solids, not the triangles
   local AY = (layer == "ring" or layer == "ringd") and 0 or c.AY
   local lo, hi = math.min(x0, x1), math.max(x0, x1)
   local kind = r1 and "cone" or "cylinder"
@@ -85,6 +88,7 @@ end
 
 -- an annulus about the x axis, thick along x from x0 to x1
 local function xring(c, layer, x, w, rin, rout, seg, color, emi)
+  if not c.mesh then return end   -- layout only: the sim wants the solids, not the triangles
   local AY = (layer == "ring" or layer == "ringd") and 0 or c.AY
   return add(c, layer, { kind = "ring", c = { 0, -w / 2, 0 }, rin = rin, r = rout, h = w, seg = seg, color = color, emissive = emi,
                          roll = -PI / 2, pos = { x, AY, 0 } })
@@ -92,6 +96,7 @@ end
 
 -- a box at radius r0..r1 on the axis' circle, angle a (0 = +z, pi/2 = +y), x0..x1 along the axis, half-width hw
 local function rbox(c, layer, x0, x1, r0, r1, hw, a, color, emi)
+  if not c.mesh then return end   -- layout only: the sim wants the solids, not the triangles
   local AY = (layer == "ring" or layer == "ringd") and 0 or c.AY
   return add(c, layer, { kind = "box", min = { x0, -hw, r0 }, max = { x1, hw, r1 }, color = color, emissive = emi,
                          pitch = a, pos = { 0, AY, 0 } })
@@ -99,6 +104,7 @@ end
 
 -- a square rod between two points (anchor meters, y relative to the axis), half-thickness w
 local function rod(c, layer, a, b, w, color, emi)
+  if not c.mesh then return end   -- layout only: the sim wants the solids, not the triangles
   local AY = (layer == "ring" or layer == "ringd") and 0 or c.AY
   local dx, dy, dz = b[1] - a[1], b[2] - a[2], b[3] - a[3]
   local hz = sm.sqrt(dx * dx + dz * dz)
@@ -109,6 +115,7 @@ local function rod(c, layer, a, b, w, color, emi)
 end
 
 local function sphere(c, layer, x, y, z, r, color, emi, seg)
+  if not c.mesh then return end   -- layout only: the sim wants the solids, not the triangles
   local AY = (layer == "ring" or layer == "ringd") and 0 or c.AY
   return add(c, layer, { kind = "sphere", c = { x, y + AY, z }, r = r, h = r, seg = seg or 8, rings = 3, color = color, emissive = emi })
 end
@@ -128,6 +135,7 @@ end
 
 -- digits as lit boxes on a wall facing +x (face = +1) or -x, centred at (x, y, z), pixel size s
 local function sign(c, layer, text, x, y, z, s, color, face)
+  if not c.mesh then return end   -- layout only: the sim wants the solids, not the triangles
   local n = #text
   local width = n * 4 * s - s
   for i = 1, n do
@@ -147,6 +155,7 @@ end
 
 -- a small parked craft (lib/meshkit.lua ship): y is the belly, relative to the axis
 local function parked_ship(c, layer, x, y, z, yaw, s, col, acc)
+  if not c.mesh then return end   -- layout only: the sim wants the solids, not the triangles
   local AY = (layer == "ring" or layer == "ringd") and 0 or c.AY
   for _, part in ipairs(require("lib.meshkit").ship(x, y + AY, z, yaw, s, col, acc)) do add(c, layer, part) end
 end
@@ -315,7 +324,8 @@ end
 -- ---------------------------------------------------------------------------------------------------
 local function window_rows(c, layer, x, hw, r, rows, spacing, a0, a1, glow, density, facing)
   -- lit window strips on a cylinder of radius r about the axis: `rows` rows across hw*2 at x +/- ...
-  local rng = c.drng
+  if not c.mesh then return end
+  local rng = c.mrng
   local n = math.max(6, math.floor((a1 - a0) * r / spacing))
   for row = 1, rows do
     local xx = x - hw + (row - 0.5) * (2 * hw / rows)
@@ -400,9 +410,29 @@ local function mast(c, x, a, r0, len)
   solid(c, x - 1.0, c.AY + math.min(y0, y1) - 1, math.min(z0, z1) - 1, x + 1.0, c.AY + math.max(y0, y1) + 1, math.max(z0, z1) + 1)
 end
 
-function M.generate(seed, class, bay_no_in)
+-- the sphere that holds a station of this seed, without building it (sector placement asks for every sector):
+-- centre and radius in anchor meters; the draws are the first ones of generate's stream (kept in step by the tests)
+function M.envelope(seed, class)
   class = class or "port"
-  local c = new_ctx(seed, class)
+  local c = new_ctx(seed, class, false)
+  local K, T, rng = c.K, c.T, c.rng
+  local s = (class == "outpost") and 0.3 or 1.0
+  local R = rint(rng, K.radius)
+  local arm = rint(rng, K.arm)
+  local _, hub_len = rint(rng, K.hub_r), rint(rng, K.hub_len)
+  for _, k in ipairs({ K.rings, K.spokes, K.arms, K.drums, K.masts, K.wings, K.cargo }) do rint(rng, k) end
+  local aft = rint(rng, K.aft)
+  local hub_front = T.back_x - 3.5 - T.wall - arm
+  local aft_end = hub_front - hub_len - aft
+  local lo, hi = aft_end - 14, T.front_x + 6
+  return { hub_front - hub_len / 2, c.AY, 0 }, sm.sqrt(((hi - lo) / 2) ^ 2 + R * R)
+end
+
+-- mesh ~= false builds the triangles too; the sim asks for the layout alone (M.get) and the view builds the parts
+-- the first time it draws (M.parts): the same stream of random numbers either way, so the same station
+function M.generate(seed, class, bay_no_in, mesh)
+  class = class or "port"
+  local c = new_ctx(seed, class, mesh ~= false)
   local K, P, T, rng, H = c.K, c.pal, c.T, c.rng, c.H
   local s = (class == "outpost") and 0.3 or 1.0
   local R = rint(rng, K.radius)
@@ -474,11 +504,11 @@ function M.generate(seed, class, bay_no_in)
   solid(c, hx - 12 * s, c.AY + hub_r - 4, -7 * s, hx + 12 * s, c.AY + hub_r + 24 * s, 7 * s)
   light(c, hx, hub_r + 36 * s, 0, { 1, 1, 1 }, "strobe", 5, 150)
   -- hub detail: window grids and panel seams around the drum
-  for k = 0, 23 do
+  for k = 0, c.mesh and 23 or -1 do
     local a = k * TAU / 24
     if k % 2 == 0 then rbox(c, "detail", hub_back + 4, hub_front - 4, hub_r - 0.2, hub_r + 0.5, 0.7 * (hub_r / 60), a, P.panel) end
     for row = 1, 4 do
-      if c.drng:int(1, 10) > 3 then
+      if c.mrng:int(1, 10) > 3 then
         local xx = hub_back + 10 + (row - 1) * (hub_len - 20) / 3
         rbox(c, "detail", xx, xx + 5, hub_r - 0.2, hub_r + 0.7, 1.4 * math.max(s, 0.5), a + 0.065, P.glow, 1)
       end
@@ -687,22 +717,22 @@ function M.generate(seed, class, bay_no_in)
   -- greeble pass on the hub, arm and spine: small boxes (vents, hatches, tanks) seeded round the surfaces
   local dg = K.detail
   local n_greeble = math.floor(380 * dg)
-  for _ = 1, n_greeble do
-    local x = rfloat(c.drng, aft_end + 10, hub_front)
-    local a = c.drng:float() * TAU
+  for _ = 1, c.mesh and n_greeble or 0 do
+    local x = rfloat(c.mrng, aft_end + 10, hub_front)
+    local a = c.mrng:float() * TAU
     local rr
     local hwid
     if x > hub_back then rr, hwid = hub_r, 6 * s
     elseif x < hub_back - 18 * s then rr, hwid = sr, 2 * s
     else rr, hwid = hub_r * 0.55, 3 * s end
-    local kind = c.drng:int(1, 4)
+    local kind = c.mrng:int(1, 4)
     local col = kind == 1 and P.panel or (kind == 2 and P.trim or (kind == 3 and P.accent or shade(P.plate, 0.85)))
-    local lx = c.drng:int(2, 7) * s * 1.2
-    rbox(c, "detail", x, x + lx, rr - 0.3, rr + (0.5 + c.drng:float() * 1.4) * math.max(s, 0.6), hwid * (0.3 + c.drng:float() * 0.7) * 0.5, a, col, kind == 3 and 0.2 or nil)
+    local lx = c.mrng:int(2, 7) * s * 1.2
+    rbox(c, "detail", x, x + lx, rr - 0.3, rr + (0.5 + c.mrng:float() * 1.4) * math.max(s, 0.6), hwid * (0.3 + c.mrng:float() * 0.7) * 0.5, a, col, kind == 3 and 0.2 or nil)
   end
 
   -- ---- the silhouette: everything as a few dozen parts -------------------------------------------
-  local f = c.parts.far
+  local f = c.mesh and c.parts.far or {}
   local function fbox(x0, y0, z0, x1, y1, z1, col, emi) f[#f + 1] = { kind = "box", min = { x0, y0 + c.AY, z0 }, max = { x1, y1 + c.AY, z1 }, color = col, emissive = emi } end
   f[#f + 1] = { kind = "ring", c = { 0, -tube_w / 2, 0 }, rin = rin, r = rout, h = tube_w, seg = 28, color = P.plate, roll = -PI / 2, pos = { hx, c.AY, 0 } }
   f[#f + 1] = { kind = "ring", c = { 0, -0.6, 0 }, rin = rout - 0.5, r = rout + 1.0, h = 1.2, seg = 28, color = P.glow, emissive = 0.8, roll = -PI / 2, pos = { hx, c.AY, 0 } }
@@ -749,26 +779,18 @@ function M.generate(seed, class, bay_no_in)
   info.pods = #pods
   info.length = ext.hi[1] - ext.lo[1]
   info.width = 2 * (R + tube_t / 2)
-  local L = { seed = seed, class = class, info = info, parts = c.parts, solids = c.solids, lights = c.lights, far_bay = info.far_bay,
+  local L = { seed = seed, class = class, info = info, parts = c.mesh and c.parts or nil, solids = c.solids, lights = c.lights, far_bay = info.far_bay,
               pal = P, spin_pos = { hx, c.AY, 0 }, bay = cell, ring_r = R }
   L.counts = {}
-  for k, v in pairs(c.parts) do L.counts[k] = #v end
+  if c.mesh then for k, v in pairs(c.parts) do L.counts[k] = #v end end
   L.hash = M.hash(L)
   return L
 end
 
 function M.hash(L)
   local parts = { L.class, L.info.palette, string.format("%.1f,%.1f,%.1f,%d,%d", L.info.R, L.info.arm, L.info.hub_r, L.info.pods, L.info.bay_no) }
-  for _, name in ipairs({ "core", "detail", "ring", "ringd", "far" }) do
-    local l = L.parts[name]
-    parts[#parts + 1] = name .. #l
-    for i = 1, #l, math.max(1, #l // 40) do
-      local p = l[i]
-      local a = p.min or p.pos or p.c
-      parts[#parts + 1] = string.format("%s%.1f,%.1f,%.1f", p.kind, a[1], a[2], a[3])
-    end
-  end
-  for _, b in ipairs(L.solids) do parts[#parts + 1] = string.format("s%.1f,%.1f,%.1f", b[1][1], b[1][2], b[1][3]) end
+  for _, b in ipairs(L.solids) do parts[#parts + 1] = string.format("s%.1f,%.1f,%.1f,%.1f", b[1][1], b[1][2], b[1][3], b[2][1]) end
+  for _, l in ipairs(L.lights) do parts[#parts + 1] = string.format("l%.1f,%.1f,%.1f,%d", l.p[1], l.p[2], l.p[3], l.phase) end
   return string.format("%016x", saucer.hash64(table.concat(parts, ";"), 1))
 end
 
@@ -785,13 +807,29 @@ function M.get(seed, class, bay_no)
   local key = class .. ":" .. seed .. ":" .. tostring(bay_no)
   local L = cache[key]
   if not L then
-    L = M.generate(seed, class, bay_no)
+    L = M.generate(seed, class, bay_no, false)
     cache[key] = L
     order[#order + 1] = key
-    if #order > 8 then cache[table.remove(order, 1)] = nil end
+    if #order > 24 then cache[table.remove(order, 1)] = nil end
   end
   return L
 end
+
+-- the triangles of a layout from M.get (built on demand, a few kept)
+local full, full_order = {}, {}
+function M.parts(L)
+  if L.parts then return L.parts end
+  local F = full[L.hash]
+  if not F then
+    F = M.generate(L.seed, L.class, L.info.bay_no, true)
+    full[L.hash] = F
+    full_order[#full_order + 1] = L.hash
+    if #full_order > 3 then full[table.remove(full_order, 1)] = nil end
+  end
+  return F.parts
+end
+
+function M.parts_ready(L) return L.parts ~= nil or full[L.hash] ~= nil end
 
 function M.for_trader(state, idx)
   local list = state.sector.traders or { state.sector.trader }

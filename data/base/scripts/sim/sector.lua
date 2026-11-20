@@ -27,24 +27,46 @@ end
 M.STATION_BEARINGS = 24
 M.STATION_DISTANCES = { 700, 950, 1200 }
 M.STATION_HEIGHTS = { 0, 160, -160 }
+local placed, placed_order = {}, {}
 function M.place_station(seed, sid, obstacles)
+  -- the same sector is generated again and again (loads, tests): the answer is a pure function of its inputs
+  local key = { tostring(seed), tostring(sid) }
+  for _, o in ipairs(obstacles) do key[#key + 1] = string.format("%.2f,%.2f,%.2f,%.2f", o[1], o[2], o[3], o[4]) end
+  key = table.concat(key, ";")
+  local hit = placed[key]
+  if not hit then
+    hit = M.place_station_uncached(seed, sid, obstacles)
+    placed[key] = hit
+    placed_order[#placed_order + 1] = key
+    if #placed_order > 64 then placed[table.remove(placed_order, 1)] = nil end
+  end
+  return { hit[1], hit[2], hit[3] }
+end
+
+function M.place_station_uncached(seed, sid, obstacles)
   local sh = require("sim.stationhull")
-  local L = sh.get(sh.seed_of(seed, sid, 1), "port")
-  local ctr, rad = L.info.centre, L.info.radius
+  -- (the station's envelope alone: building the whole layout for every sector would be slow)
+  local ctr, rad = sh.envelope(sh.seed_of(seed, sid, 1), "port")
   local best, best_score
+  local sin, cos, sqrt = saucer.math.sin, saucer.math.cos, saucer.math.sqrt
   for k = 0, M.STATION_BEARINGS - 1 do
     local a = saucer.math.tau * k / M.STATION_BEARINGS
+    local sa, ca = sin(a), cos(a)
     for _, d in ipairs(M.STATION_DISTANCES) do
       for _, hy in ipairs(M.STATION_HEIGHTS) do
-        local hx, hz = saucer.math.sin(a) * d, saucer.math.cos(a) * d
+        local hx, hz = sa * d, ca * d
+        local pen = 0.05 * d + math.abs(hy) * 0.1
+        -- a spot only wins with a room above this; the first obstacle that rules it out ends the check
+        local need = best_score and (best_score + pen + 1e-9) or -math.huge
         local room = math.huge
         for _, o in ipairs(obstacles) do
           local dx, dy, dz = hx - o[1], hy - o[2], hz - o[3]
-          room = math.min(room, saucer.math.sqrt(dx * dx + dy * dy + dz * dz) - o[4] - rad)
+          local r = sqrt(dx * dx + dy * dy + dz * dz) - o[4] - rad
+          if r < room then room = r end
+          if room <= need then room = nil break end
         end
-        local score = math.min(room, 400) - 0.05 * d - math.abs(hy) * 0.1
-        if not best_score or score > best_score + 1e-9 then
-          best_score = score
+        if room and need < 400 then
+          best_score = math.min(room, 400) - pen
           best = { hx - ctr[1], hy - ctr[2], hz - ctr[3] }
         end
       end

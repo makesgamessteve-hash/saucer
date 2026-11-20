@@ -19,7 +19,10 @@ local cache_order = {}
 local LAYERS = { "core", "detail", "ring", "ringd", "far" }
 
 -- the meshes of a layout, built on first use (a layer that is not asked for is not built)
-function M.mesh(L, layer)
+-- lazy (the frame loop): at most one build per frame (M.budget), the layout's triangles count as one, so a station
+-- shows up over a few frames instead of costing one long one; returns nothing for a layer that is not built yet
+M.budget = 1
+function M.mesh(L, layer, lazy)
   local ent = cache[L.hash]
   if not ent then
     ent = { tris = {} }
@@ -35,7 +38,15 @@ function M.mesh(L, layer)
   end
   local id = ent[layer]
   if not id then
-    local mesh = saucer.mesh.build({ parts = L.parts[layer] })
+    if lazy then
+      if M.budget <= 0 then return nil end
+      M.budget = M.budget - 1
+      if not sh.parts_ready(L) then
+        sh.parts(L)
+        return nil
+      end
+    end
+    local mesh = saucer.mesh.build({ parts = sh.parts(L)[layer] })
     ent[layer] = mesh
     ent.tris[layer] = saucer.mesh.info(mesh).triangles
     id = mesh
@@ -151,6 +162,7 @@ end
 -- draw every trader's station; returns the draw count
 function M.draw(v, A, state, cam, tick)
   local n = 0
+  M.budget = 1
   local stats = { draws = 0, tris = 0, lights = 0, levels = {} }
   local list = state.sector.traders or { state.sector.trader }
   tick = tick or state.tick
@@ -165,7 +177,8 @@ function M.draw(v, A, state, cam, tick)
     local tint = { k, k, k, 1 }
     stats.levels[idx] = level
     local function draw(layer, opts)
-      local id, tris = M.mesh(L, layer)
+      local id, tris = M.mesh(L, layer, true)
+      if not id then return end
       opts.tint = tint
       v:mesh(id, opts)
       stats.draws = stats.draws + 1
