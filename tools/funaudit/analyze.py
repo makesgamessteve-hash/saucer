@@ -287,10 +287,11 @@ def fairness():
     va = lathe_area(villa_hull) + 2 * 2.8 * 0.15
     dome_r, dome_h = 10.6, 5.6  # saucer/interior.lua: half-ellipse on the deck
     va += math.pi * dome_r * dome_h / 2
-    villa_collider = 26.0 * 12.0
+    hs = float(os.environ.get("FUN_HURT_SCALE", "0"))  # proposal D: ellipsoid of hs x the hull
+    villa_collider = 26.0 * 12.0 if not hs else math.pi / 4 * 26.0 * hs * 12.0 * hs
     seat = [(0.25, -0.7), (0.72, -0.56), (0.9, -0.28), (0.86, -0.12), (0.62, -0.02)]
     sa = lathe_area(seat) + 0.44 * 0.06 + 0.56 * 0.57 + 0.8 * 0.14
-    seat_collider = 1.8 * 1.4
+    seat_collider = 1.8 * 1.4 if not hs else math.pi / 4 * 1.8 * hs * 1.4 * hs
     foot_collider, foot_visual = 0.7 * 1.8, 0.5 * 1.8 + 0.25  # body + fishbowl helmet
     a_villa, a_seat, a_foot = villa_collider / va, seat_collider / sa, foot_collider / foot_visual
     tele = {"watcher_alert_to_first_bolt_ms": 750, "snatcher_latch_to_siphon_ms": 3000, "snatcher_alert_ms": 750,
