@@ -24,7 +24,7 @@ local twin = require("sim.twin")
 
 local LIMIT = CFG.limit or 108000
 local NET = saucer.net and saucer.net.status and saucer.net.status() or nil
-local DELAY = NET and NET.delay or 0
+local DELAY = (NET and (NET.delay or 0) > 0) and NET.delay or (CFG.delay or 0)
 
 local function S() return T.state() end
 local function P(i) return function() return S().players[i] end end
