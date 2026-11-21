@@ -18,7 +18,13 @@ DELAY=0; [ "$PERSONA" = "human" ] && DELAY=14
 } > "$SCRIPT"
 UD="$OUT/user-$NAME"; rm -rf "$UD"
 T0=$(date +%s.%N)
-"$BUILD/saucer_headless" --root "$ROOT" --user-dir "$UD" --seed "$SEED" --script "$SCRIPT" --ticks $((LIMIT + 36000)) > "$OUT/$NAME.log" 2>&1 || RC=$?
+if [ -n "$WINDOW" ]; then
+  # real renderer under Xvfb: TPF ticks per drawn frame, extra options in $EXTRA (e.g. --frame-stats)
+  (cd "$OUT" && xvfb-run -a -s "-screen 0 1600x900x24" "$BUILD/saucer" --root "$ROOT" --user-dir "$UD" --seed "$SEED" \
+    --windowed --width 1280 --height 720 --ticks-per-frame ${TPF:-1} --script "$SCRIPT" --ticks $((LIMIT + 120)) $EXTRA) > "$OUT/$NAME.log" 2>&1 || RC=$?
+else
+"$BUILD/saucer_headless" --root "$ROOT" --user-dir "$UD" --seed "$SEED" --script "$SCRIPT" --ticks $((LIMIT + 120)) > "$OUT/$NAME.log" 2>&1 || RC=$?
+fi
 T1=$(date +%s.%N)
 echo "PTTIME $(awk "BEGIN{print $T1 - $T0}") s exit ${RC:-0}" >> "$OUT/$NAME.log"
 rm -rf "$UD"
