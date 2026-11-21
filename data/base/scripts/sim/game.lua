@@ -876,7 +876,30 @@ local function scan(state, p)
     w == 1 and "" or "s", sn, sn == 1 and "" or "s",
     (cl + ld > 0) and string.format(", %d Clamp%s, %d Lockdown", cl, cl == 1 and "" or "s", ld) or "",
     wd > 0 and ", A WARDEN" or ""))
+  local n, best = M.scan_finds(state, p, site)
+  if n > 0 then
+    msg(state, p, string.format("Scan: %d find%s left; the best, %s (~%d c), lies in room %d", n, n == 1 and "" or "s",
+      items.label(best.item), best.item.value or 0, best.room or 0))
+  elseif n == 0 then
+    msg(state, p, "Scan: nothing left to find here")
+  end
   fx(state, p, "scan")
+end
+
+-- add-fun-fixes: the Scanner's job: how many finds are left at a site and where the best one lies
+-- (nil for a city, whose slots are rolled only near the saucer)
+function M.scan_finds(state, p, site)
+  local ruin = rt.ruins[site]
+  if not ruin or ruin.city then return nil end
+  local n, best = 0, nil
+  for _, s in ipairs(ruin.slots or {}) do
+    if not p.looted[site .. ":" .. s.id] then
+      n = n + 1
+      local item = loot.roll(loot.instance_seed(s.seed, p.record_index), s.max_size, s.tier)
+      if not best or item.value > best.item.value then best = { item = item, room = s.room } end
+    end
+  end
+  return n, best
 end
 
 local function jam(state, p)
@@ -936,7 +959,7 @@ function M.entry_text(state, p, site)
   end
   local w = sentry.summary(rt.sentries[site] or {})
   if w > 0 and p.ship.size == 1 then
-    return string.format("Entering derelict site %d: %d Watcher%s here lock on to a Villa - the Seat slips past", site, w,
+    return string.format("Entering derelict site %d: %d Watcher%s here lock on to a Villa - the Seat slips past beyond 40 m", site, w,
       w == 1 and "" or "s")
   end
   return "Entering derelict site " .. site

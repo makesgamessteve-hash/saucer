@@ -285,7 +285,9 @@ local function step_watcher(state, def, dyn, dt, ctx, t)
       dyn.st, dyn.t, dyn.fire, dyn.lock_tick = "locked", 0, 0, state.tick
       ctx.fx(state, seen, "locked")
       ctx.msg(state, seen, "Watcher LOCKED: stun bolts incoming")
-      M.seat_hint(state, seen, ctx)
+      if not M.seat_hint(state, seen, ctx) then
+        M.tip(state, seen, ctx, "decoy", "TIP: a Decoy (B) pulls a Watcher's lock off you; the Shroud (X) hides a saucer that holds still.")
+      end
     end
   elseif dyn.st == "locked" and seen then
     dyn.fire = dyn.fire - dt
@@ -437,6 +439,7 @@ local function step_snatcher(state, def, dyn, dt, ctx, t)
       dyn.st, dyn.t = "locked", 0
       ctx.fx(state, seen, "locked")
       ctx.msg(state, seen, "Snatcher LOCKED: jam it or outrun it")
+      M.tip(state, seen, ctx, "jam", "TIP: the Jammer (T) knocks every sentry in its cone out for a while, a latched Snatcher too.")
     end
   elseif seen then
     local arrived
@@ -480,7 +483,17 @@ function M.seat_hint(state, p, ctx)
   p.hints = p.hints or {}
   if p.hints.seat then return false end
   p.hints.seat = state.tick
-  ctx.msg(state, p, "TIP: Watchers ignore anything as small as the Seat. Fold down (2 or Q) to dive guarded sites.")
+  ctx.msg(state, p, "TIP: Watchers only see a Seat up close (40 m). Fold down (2 or Q) to dive guarded sites.")
+  return true
+end
+
+-- add-fun-fixes: a one-time tip per player (key) that teaches the tool for this moment
+function M.tip(state, p, ctx, key, text)
+  if not p or p.mode == "wake" then return false end
+  p.hints = p.hints or {}
+  if p.hints[key] then return false end
+  p.hints[key] = state.tick
+  ctx.msg(state, p, text)
   return true
 end
 

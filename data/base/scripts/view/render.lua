@@ -1108,7 +1108,8 @@ function M.render(v, state, alpha)
     if v.index == v.player then M.audio(state, p) end
     return
   end
-  local cam = xrv.adjust(v, M.camera(p, v.xr))
+  -- add-fun-fixes: hitstop and camera trauma on a hit (view only, none in XR)
+  local cam = xrv.adjust(v, require("view.juice").camera(M.camera(p, v.xr), p, state.tick, v.xr))
   v:camera(cam)
   local cenv = M.city_env(state, p)
   v:fog(cenv or { color = { 0.02, 0.02, 0.06 }, density = M.FOG, clear = { 0.0, 0.0, 0.025 }, light = { 0.35, 0.8, 0.45 },

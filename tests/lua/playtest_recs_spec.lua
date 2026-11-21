@@ -253,7 +253,7 @@ describe("the Seat hint (recommendation 4)", function()
     local st = new_state()
     local p = st.players[1]
     expect(sentry.seat_hint(st, p, ctx)).to_be(true)
-    expect(heard("TIP: Watchers ignore")).to_be(true)
+    expect(heard("TIP: Watchers only see a Seat up close")).to_be(true)
     expect(sentry.seat_hint(st, p, ctx)).to_be(false)
     local q = new_state().players[1]
     q.ship.size = 2

@@ -549,7 +549,57 @@ function M.grid_banner(v, state, p)
   end
 end
 
+-- add-fun-fixes: every HUD line sits on a dark plate (contrast >= 3.5:1 over a bright
+-- scene); the plate is drawn by a thin proxy around the view, so no call site changes
+M.PLATE = { 0, 0, 0, 0.6 }
+M.PLATES = true
+local proxies = setmetatable({}, { __mode = "k" })
+function M.plated(v)
+  if not M.PLATES then return v end
+  local px = proxies[v]
+  if px then return px end
+  px = setmetatable({}, { __index = function(t, k)
+    local x = v[k]
+    if type(x) == "function" then
+      local f = function(_, ...) return x(v, ...) end
+      rawset(t, k, f)
+      return f
+    end
+    return x
+  end })
+  px.text = function(_, x, y, str, col, scale, ...)
+    local sc = scale or 1
+    local s = tostring(str)
+    if #s > 0 and not (col and col[4] and col[4] < 0.3) then
+      v:rect(x - 1, y - 1, #s * 8 * sc + 2, 8 * sc + 2, M.PLATE)
+    end
+    return v:text(x, y, str, col, scale, ...)
+  end
+  proxies[v] = px
+  return px
+end
+
+-- add-fun-fixes: the red hit frame (fades over juice.FLASH ticks)
+function M.hit_flash(v, state, p)
+  local a = require("view.juice").flash(p, state.tick)
+  if a <= 0 then return false end
+  local W, H, t = v.width, v.height, math.max(2, v.height // 45)
+  local col = { 1, 0.15, 0.1, 0.55 * a }
+  v:rect(0, 0, W, t, col)
+  v:rect(0, H - t, W, t, col)
+  v:rect(0, t, t, H - 2 * t, col)
+  v:rect(W - t, t, t, H - 2 * t, col)
+  return true
+end
+
+local draw_inner
 function M.draw(v, state, p, target)
+  local r = draw_inner(M.plated(v), state, p, target)
+  if p.mode ~= "wake" then M.hit_flash(v, state, p) end
+  return r
+end
+
+draw_inner = function(v, state, p, target)
   local W, H = v.width, v.height
   -- add-wider-dark: a split-screen view keeps only the essentials (a quarter
   -- of a four-way split, and since add-home-among-stars the narrow halves of

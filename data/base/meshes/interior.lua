@@ -672,24 +672,27 @@ end
 -- the glass dome's frame: meridian struts (none straight ahead of the helm),
 -- a ring brace and a lit hub at the crown; plus floor inlay rings
 local DOME_PHI = 1.42
+local STRUT_W, STRUT_D = 0.05, 0.04
 local function dome_frame(out, L)
   local d1 = L.decks[1]
   local R, H = L.dome.radius - 0.1, L.dome.height - 0.08
   local col = { 0.55, 0.58, 0.66 }
-  for k = 0, 11 do
+  -- add-fun-fixes: slimmer struts (0.05 x 0.04 m, were 0.12 x 0.08), and the two that flanked
+  -- the view ahead (k = 0 and 11, at +-15 degrees) are gone, so the helm looks out through clear glass
+  for k = 1, 10 do
     local a = (k + 0.5) * sm.tau / 12
     local sa, ca = sm.sin(a), sm.cos(a)
     local prev
     for s = 0, 7 do
       local phi = s / 7 * DOME_PHI
       local p = { sa * R * sm.cos(phi), d1.floor + H * sm.sin(phi), ca * R * sm.cos(phi) }
-      if prev then out[#out + 1] = props.bar(prev, p, 0.12, 0.08, col) end
+      if prev then out[#out + 1] = props.bar(prev, p, STRUT_W, STRUT_D, col) end
       prev = p
     end
   end
   local phi = 0.75
   local rr = R * sm.cos(phi)
-  out[#out + 1] = P("ring", { c = { 0, d1.floor + H * sm.sin(phi) - 0.04, 0 }, rin = rr - 0.12, r = rr, h = 0.08, seg = 32,
+  out[#out + 1] = P("ring", { c = { 0, d1.floor + H * sm.sin(phi) - 0.04, 0 }, rin = rr - 0.06, r = rr, h = 0.05, seg = 32,
                               color = col })
   local top, hub = d1.floor + H * sm.sin(DOME_PHI), R * sm.cos(DOME_PHI) + 0.15
   out[#out + 1] = P("cylinder", { c = { 0, top - 0.1, 0 }, r = hub, h = 0.16, seg = 12, color = col })
