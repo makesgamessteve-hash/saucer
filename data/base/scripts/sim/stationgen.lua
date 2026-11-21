@@ -218,6 +218,144 @@ local function furnish_bar(L, a, rng, folk, door_x)
   a.aisle = { cx, cz }
 end
 
+-- ---------------------------------------------------------------------------------------------------
+-- add-huge-stations: the dressing of the walk-in path. A child rng (the layout's own stream is untouched):
+-- the arrival and far hangars get ceiling cranes on rails, fuel lines and hose reels, floor lanes, wall
+-- cradles with parked craft, a catwalk with a control booth and a lit bay sign; the concourse gets
+-- vending machines, kiosks, ad panels, benches, banners, drones and skylights; the market and the bar a
+-- few banners. Mostly props (no collision); machines and kiosks are solid, clear of every doorway.
+-- ---------------------------------------------------------------------------------------------------
+local function near_door(L, axis, side_at, z, pad)
+  for _, d in ipairs(L.doors) do
+    if d.axis == axis and math.abs(d.at - side_at) < 0.5 and z > d.lo - pad and z < d.hi + pad then return true end
+  end
+  return false
+end
+
+local AD_COLORS = { { 1.0, 0.45, 0.2 }, { 0.3, 0.85, 1.0 }, { 0.95, 0.85, 0.25 }, { 0.85, 0.35, 0.9 }, { 0.4, 1.0, 0.55 } }
+
+local function dress_spine(L, a, rng)
+  local b = a.box
+  local sw = (b[3] - b[1]) / 2
+  local len = b[4]
+  for _, side in ipairs({ -1, 1 }) do
+    local wall = side * sw
+    local z = 3.0
+    while z < len - 2.5 do
+      if not near_door(L, 1, wall, z, 2.6) and not near_door(L, 1, wall, z + 1.6, 2.6) then
+        local k = rng:int(1, 6)
+        if k == 1 then
+          solid_box(L, math.min(wall, wall - side * 0.9), z - 0.45, math.max(wall, wall - side * 0.9), z + 0.45, 1.9,
+                    { look = "vending", color = AD_COLORS[rng:int(1, #AD_COLORS)], face = -side })
+          z = z + 2.2
+        elseif k == 2 then
+          prop(L, "ad_panel", { at = { wall - side * 0.12, z }, face = -side, w = 3.0, color = AD_COLORS[rng:int(1, #AD_COLORS)],
+                                seed = rng:int(1, 999) })
+          z = z + 4.2
+        elseif k == 3 then
+          solid_circle(L, wall - side * 1.1, z, 0.42, 1.5, { look = "kiosk", color = AD_COLORS[rng:int(1, #AD_COLORS)], face = -side })
+          z = z + 2.6
+        elseif k == 4 then
+          prop(L, "bench", { at = { wall - side * 0.55, z }, len = 2.2, side = side })
+          z = z + 3.0
+        elseif k == 5 then
+          prop(L, "planter", { at = { wall - side * 0.9, z }, r = 0.6 })
+          z = z + 2.0
+        else
+          z = z + 2.4
+        end
+      else
+        z = z + 1.2
+      end
+    end
+  end
+  -- banners hanging from the ceiling along the middle, skylights between them
+  local z = 5.0
+  while z < len - 3 do
+    local c = AD_COLORS[rng:int(1, #AD_COLORS)]
+    prop(L, "banner", { at = { (rng:int(0, 1) * 2 - 1) * (sw * 0.45), z }, y = a.h, color = c, axis = 3 })
+    prop(L, "skylight", { at = { 0, z + 3.5 }, y = a.h, w = sw * 1.0 })
+    z = z + 7.0
+  end
+  -- two maintenance drones hover mid-concourse
+  for _ = 1, 2 do
+    prop(L, "drone", { at = { rng:int(-2, 2), 3 + rng:int(0, math.max(1, math.floor(len - 6))) }, y = 4.2 + rng:int(0, 8) * 0.1,
+                       phase = rng:int(0, 999) / 1000 })
+  end
+end
+
+local function dress_hangar(L, a, rng, num)
+  local b = a.box
+  local m = a.mouth
+  local along, across = m.axis, m.axis == 1 and 3 or 1
+  local lo_a, hi_a = b[along == 1 and 1 or 2], b[along == 1 and 3 or 4]
+  local lo_c, hi_c = b[across == 1 and 1 or 2], b[across == 1 and 3 or 4]
+  local function xz(u, v) if along == 1 then return { u, v } else return { v, u } end end
+  -- two ceiling cranes on rails; the hooks hang at their own height
+  for k = 1, 2 do
+    local u = lo_a + (hi_a - lo_a) * (k == 1 and 0.3 or 0.7) + rng:int(-2, 2)
+    prop(L, "rail_crane", { at = xz(u, (lo_c + hi_c) / 2), axis = along, y = a.h, span = hi_c - lo_c, hook = rng:int(4, 12) / 10,
+                            along = { lo_a, hi_a } })
+  end
+  -- fuel lines on the floor along both walls, a hose reel on each
+  for _, side in ipairs({ -1, 1 }) do
+    local v = (side < 0 and lo_c or hi_c) - side * 3.6
+    prop(L, "fuelline", { at = xz((lo_a + hi_a) / 2, v), axis = along, len = hi_a - lo_a - 6, side = side })
+    prop(L, "hose_reel", { at = xz(lo_a + 4 + rng:int(0, 3), (side < 0 and lo_c or hi_c) - side * 0.9), axis = along, side = side })
+  end
+  -- floor lanes: lit guide lines from the door toward the pad
+  prop(L, "lane", { at = xz(a.pad and (along == 1 and a.pad[1] or a.pad[2]) or (lo_a + hi_a) / 2, (lo_c + hi_c) / 2), axis = along,
+                    from = lo_a + 1, to = hi_a - 1, mouth = m.sign })
+  -- two wall cradles with parked craft, high above the crates
+  for k, side in ipairs({ -1, 1 }) do
+    local u = lo_a + (hi_a - lo_a) * (0.35 + 0.3 * rng:int(0, 1))
+    local v = (side < 0 and lo_c or hi_c) - side * 1.3
+    prop(L, "wall_ship", { at = xz(u, v), axis = along, side = side, y = a.h * 0.46, yaw = rng:int(0, 1) == 0 and 0 or sm.pi,
+                           color = rng:int(0, 1) == 0 and { 0.62, 0.64, 0.7 } or { 0.7, 0.5, 0.32 }, empty = (k == 2 and rng:int(0, 2) == 0) })
+  end
+  -- a catwalk along one wall, with a control booth at its end
+  local side = rng:int(0, 1) * 2 - 1
+  local v = (side < 0 and lo_c or hi_c) - side * 0.9
+  prop(L, "catwalk", { at = xz((lo_a + hi_a) / 2, v), axis = along, side = side, len = (hi_a - lo_a) - 8, y = a.h * 0.38 })
+  prop(L, "booth", { at = xz(hi_a - 5 - (hi_a - lo_a) * 0.0, (side < 0 and lo_c or hi_c) - side * 2.2), axis = along, side = side, y = a.h * 0.38 })
+  -- the bay's number, lit, high on the wall facing the pad
+  prop(L, "bay_sign", { at = xz(m.sign > 0 and lo_a or hi_a, (lo_c + hi_c) / 2), axis = along, face = m.sign, y = a.h * 0.62, text = string.format("%02d", num), });
+  -- tool carts by the door side
+  for _ = 1, 2 do
+    local u = (m.sign > 0 and lo_a or hi_a) - m.sign * 0
+    u = u + (m.sign > 0 and 1 or -1) * rng:int(2, 4)
+    local v2 = (rng:int(0, 1) == 0 and lo_c or hi_c) + (rng:int(0, 1) == 0 and 1 or -1) * 5
+    v2 = math.max(lo_c + 4.5, math.min(hi_c - 4.5, (lo_c + hi_c) / 2 + rng:int(-12, 12)))
+    prop(L, "cart", { at = xz(u, v2), yaw = rng:float() * sm.tau })
+  end
+end
+
+local function dress_room(L, a, rng)
+  local b = a.box
+  local n = a.kind == "market" and 3 or 2
+  for _ = 1, n do
+    prop(L, "banner", { at = { rng:int(math.floor(b[1] + 2), math.floor(b[3] - 2)), rng:int(math.floor(b[2] + 2), math.floor(b[4] - 2)) },
+                        y = a.h, color = AD_COLORS[rng:int(1, #AD_COLORS)], axis = rng:int(0, 1) * 2 + 1 })
+  end
+end
+
+-- the lit number of a trader station's hangar bay (1 = the arrival hangar, whose number is also over the
+-- mouth outside, sim/stationhull.lua)
+function M.bay_number(seed, bay)
+  if (bay or 1) == 1 then return seed % 17 + 1 end
+  return (seed // 17) % 23 + 1
+end
+
+-- the dressing of a finished layout; its own stream, so the layout above is the same with or without it
+function M.dress(L, seed)
+  local rng = saucer.rng.new(saucer.seed_child(seed, "dress", 1))
+  for _, a in ipairs(L.areas) do
+    if a.kind == "hangar" and a.mouth then dress_hangar(L, a, rng, M.bay_number(seed, a.bay))
+    elseif a.name == "Concourse" then dress_spine(L, a, rng)
+    elseif a.kind == "market" or a.kind == "bar" then dress_room(L, a, rng) end
+  end
+end
+
 -- generate(seed) -> layout
 function M.generate(seed)
   local K = M.kit().walk
@@ -323,6 +461,7 @@ function M.generate(seed)
   for _, s in ipairs(folk.species) do if s.thief then L.thief.species = species_of(folk, s.id) end end
   L.spawn = { pos = { 0, 0, -6 }, yaw = sm.pi }
   L.spine_len = len * c
+  M.dress(L, seed)
   M.build_nav(L)
   L.hash = M.hash(L)
   return L

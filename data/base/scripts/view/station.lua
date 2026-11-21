@@ -34,6 +34,15 @@ local HAZARD = { 1.0, 0.72, 0.1 }
 -- add-presentation-packaging: the floor tints were picked for the old plain
 -- texture; the tread-plate art is darker, so floors are lifted by this much
 local ART_FLOOR = 2.0
+local AD_PALETTE = { { 1.0, 0.45, 0.2 }, { 0.3, 0.85, 1.0 }, { 0.95, 0.85, 0.25 }, { 0.85, 0.35, 0.9 }, { 0.4, 1.0, 0.55 } }
+
+local DIGITS = {
+  ["0"] = { "111", "101", "101", "101", "111" }, ["1"] = { "010", "110", "010", "010", "111" },
+  ["2"] = { "111", "001", "111", "100", "111" }, ["3"] = { "111", "001", "111", "001", "111" },
+  ["4"] = { "101", "101", "111", "001", "001" }, ["5"] = { "111", "100", "111", "001", "111" },
+  ["6"] = { "111", "100", "111", "101", "111" }, ["7"] = { "111", "001", "010", "010", "010" },
+  ["8"] = { "111", "101", "111", "101", "111" }, ["9"] = { "111", "101", "111", "001", "111" },
+}
 
 local function box(x0, y0, z0, x1, y1, z1, color, extra)
   local p = { kind = "box", min = { math.min(x0, x1), math.min(y0, y1), math.min(z0, z1) },
@@ -237,6 +246,33 @@ local function solid_detail(out, s)
     out[#out + 1] = box(b[1], 0, b[2], b[3], s.h - 0.07, b[4], { 0.32, 0.18, 0.22 })
     out[#out + 1] = box(b[1] - 0.08, s.h - 0.07, b[2] - 0.08, b[3] + 0.08, s.h, b[4] + 0.08, { 0.85, 0.82, 0.78 })
     out[#out + 1] = box(b[1] - 0.01, 0.25, b[2], b[3] + 0.01, 0.3, b[4], { 1, 0.35, 0.8 }, { emissive = 1 })
+  elseif s.look == "vending" then
+    local b = s.box
+    local c = s.color or { 1, 0.5, 0.2 }
+    out[#out + 1] = box(b[1], 0, b[2], b[3], s.h, b[4], { 0.28, 0.28, 0.33 })
+    -- the lit front faces the concourse: a screen, rows of goods, a coin slot
+    local f = s.face
+    local fx = f > 0 and b[3] or b[1]
+    local d = f * 0.03
+    local mid = (b[2] + b[4]) / 2
+    out[#out + 1] = box(fx, 0.35, b[2] + 0.1, fx + d, 1.75, b[4] - 0.1, shade(c, 0.5), { emissive = 0.6 })
+    for row = 0, 3 do
+      for col = 0, 2 do
+        local pc = AD_PALETTE[(row * 3 + col) % #AD_PALETTE + 1]
+        out[#out + 1] = box(fx + d, 0.5 + row * 0.33, b[2] + 0.14 + col * 0.22, fx + d * 2, 0.7 + row * 0.33, b[2] + 0.3 + col * 0.22, pc, { emissive = 0.9 })
+      end
+    end
+    out[#out + 1] = box(fx, 1.78, b[2] + 0.05, fx + d * 3, 1.9, b[4] - 0.05, c, { emissive = 1 })
+    out[#out + 1] = box(fx, 0.1, mid - 0.12, fx + d * 2, 0.3, mid + 0.12, { 0.1, 0.1, 0.1 })
+  elseif s.look == "kiosk" then
+    local x, z, r = s.c[1], s.c[2], s.r
+    local c = s.color or { 0.3, 0.85, 1 }
+    out[#out + 1] = cyl(x, 0, z, r, 1.5, { 0.3, 0.3, 0.36 }, 8)
+    out[#out + 1] = cyl(x, 0, z, r * 1.3, 0.15, DARK, 8)
+    local fx = x + s.face * r * 0.98
+    out[#out + 1] = box(fx, 0.9, z - 0.3, fx + s.face * 0.05, 1.45, z + 0.3, c, { emissive = 1 })
+    out[#out + 1] = box(fx, 0.88, z - 0.32, fx + s.face * 0.04, 0.92, z + 0.32, { 1, 1, 1 }, { emissive = 0.8 })
+    out[#out + 1] = cyl(x, 1.5, z, r * 0.9, 0.1, c, 8, { emissive = 1 })
   elseif s.look == "table" then
     local x, z = s.c[1], s.c[2]
     out[#out + 1] = cyl(x, 0, z, 0.08, s.h, DARK, 6)
@@ -327,6 +363,176 @@ local function prop_detail(out, q, L, rng)
     local x, z = q.at[1], q.at[2]
     out[#out + 1] = cyl(x, 0, z, 0.05, 0.72, DARK, 6)
     out[#out + 1] = cyl(x, 0.72, z, 0.22, 0.08, { 0.75, 0.25, 0.3 }, 10)
+  elseif q.kind == "ad_panel" then
+    -- a lit advert on the wall: a frame, a coloured field and a few glyph bars
+    local x, z, w = q.at[1], q.at[2], q.w
+    local f = q.face
+    out[#out + 1] = box(x, 1.4, z - w / 2 - 0.08, x + f * 0.05, 3.5, z + w / 2 + 0.08, DARK)
+    out[#out + 1] = box(x + f * 0.05, 1.5, z - w / 2, x + f * 0.08, 3.4, z + w / 2, shade(q.color, 0.55), { emissive = 0.8 })
+    for k = 0, 4 do
+      local g = ((q.seed + k * 7) % 5) + 1
+      local zz = z - w / 2 + 0.2 + k * (w - 0.4) / 5
+      out[#out + 1] = box(x + f * 0.08, 1.7 + (g % 3) * 0.2, zz, x + f * 0.11, 3.1 - (g % 2) * 0.35, zz + (w - 0.4) / 5 * 0.7, q.color, { emissive = 1 })
+    end
+  elseif q.kind == "bench" then
+    local x, z, len, side = q.at[1], q.at[2], q.len, q.side
+    out[#out + 1] = box(x - 0.22, 0.42, z - len / 2, x + 0.22, 0.5, z + len / 2, { 0.45, 0.32, 0.25 })
+    out[#out + 1] = box(x - side * 0.2, 0.5, z - len / 2, x - side * 0.26, 1.0, z + len / 2, { 0.38, 0.27, 0.22 })
+    for _, zz in ipairs({ z - len / 2 + 0.2, z + len / 2 - 0.2 }) do out[#out + 1] = box(x - 0.2, 0, zz - 0.05, x + 0.2, 0.42, zz + 0.05, DARK) end
+  elseif q.kind == "banner" then
+    -- a cloth banner hanging from the ceiling with a lit trim
+    local x, z, y = q.at[1], q.at[2], q.y
+    local w, h = 1.4, 2.6
+    if q.axis == 1 then
+      out[#out + 1] = box(x - 0.04, y - h - 0.2, z - w / 2, x + 0.04, y - 0.2, z + w / 2, shade(q.color, 0.7))
+      out[#out + 1] = box(x - 0.05, y - h - 0.2, z - w / 2, x + 0.05, y - h - 0.12, z + w / 2, q.color, { emissive = 1 })
+      out[#out + 1] = box(x - 0.05, y - h * 0.65, z - w * 0.2, x + 0.05, y - h * 0.4, z + w * 0.2, { 1, 1, 0.95 }, { emissive = 0.5 })
+    else
+      out[#out + 1] = box(x - w / 2, y - h - 0.2, z - 0.04, x + w / 2, y - 0.2, z + 0.04, shade(q.color, 0.7))
+      out[#out + 1] = box(x - w / 2, y - h - 0.2, z - 0.05, x + w / 2, y - h - 0.12, z + 0.05, q.color, { emissive = 1 })
+      out[#out + 1] = box(x - w * 0.2, y - h * 0.65, z - 0.05, x + w * 0.2, y - h * 0.4, z + 0.05, { 1, 1, 0.95 }, { emissive = 0.5 })
+    end
+    out[#out + 1] = box(x - 0.03, y - 0.25, z - 0.03, x + 0.03, y, z + 0.03, DARK)
+  elseif q.kind == "skylight" then
+    -- a ring skylight: a dark pane with a lit rim, so the ceiling reads as a structure
+    local x, z, y, w = q.at[1], q.at[2], q.y, q.w
+    out[#out + 1] = { kind = "ring", c = { x, y - 0.06, z }, rin = w * 0.36, r = w * 0.5, h = 0.1, seg = 20, color = { 1, 0.95, 0.85 }, emissive = 1 }
+    out[#out + 1] = { kind = "ring", c = { x, y - 0.08, z }, rin = w * 0.1, r = w * 0.34, h = 0.04, seg = 20, color = { 0.55, 0.7, 1.0 }, emissive = 0.5 }
+  elseif q.kind == "drone" then
+    local x, z, y = q.at[1], q.at[2], q.y
+    out[#out + 1] = { kind = "sphere", c = { x, y, z }, r = 0.28, h = 0.28, seg = 8, rings = 3, color = { 0.6, 0.62, 0.7 } }
+    out[#out + 1] = { kind = "ring", c = { x, y + 0.2, z }, rin = 0.3, r = 0.42, h = 0.04, seg = 10, color = DARK }
+    out[#out + 1] = { kind = "sphere", c = { x + 0.2, y, z }, r = 0.07, h = 0.07, seg = 6, rings = 2, color = { 0.4, 1, 0.8 }, emissive = 1 }
+  elseif q.kind == "rail_crane" then
+    local x, z, y = q.at[1], q.at[2], q.y
+    local half = q.span / 2 - 0.4
+    local lo, hi = q.along[1] + 0.4, q.along[2] - 0.4
+    if q.axis == 3 then
+      -- rails run along z on both sides; the bridge spans x
+      for _, ox in ipairs({ -half, half }) do out[#out + 1] = box(x + ox - 0.3, y - 1.1, lo, x + ox + 0.3, y - 0.5, hi, { 0.18, 0.18, 0.2 }) end
+      out[#out + 1] = box(x - half, y - 2.6, z - 0.6, x + half, y - 1.1, z + 0.6, { 0.85, 0.65, 0.15 })
+      out[#out + 1] = box(x - 1.2, y - 3.4, z - 1.1, x + 1.2, y - 2.6, z + 1.1, { 0.22, 0.22, 0.25 })
+      out[#out + 1] = box(x - 0.08, y - 3.4 - q.hook * 8, z - 0.08, x + 0.08, y - 3.4, z + 0.08, { 0.1, 0.1, 0.1 })
+      out[#out + 1] = box(x - 0.4, y - 4.5 - q.hook * 8, z - 0.4, x + 0.4, y - 3.4 - q.hook * 8, z + 0.4, HAZARD, { emissive = 0.4 })
+      out[#out + 1] = box(x + half - 0.1, y - 2.5, z - 0.2, x + half + 0.1, y - 2.2, z + 0.2, { 1, 0.3, 0.2 }, { emissive = 1 })
+    else
+      for _, oz in ipairs({ -half, half }) do out[#out + 1] = box(lo, y - 1.1, z + oz - 0.3, hi, y - 0.5, z + oz + 0.3, { 0.18, 0.18, 0.2 }) end
+      out[#out + 1] = box(x - 0.6, y - 2.6, z - half, x + 0.6, y - 1.1, z + half, { 0.85, 0.65, 0.15 })
+      out[#out + 1] = box(x - 1.1, y - 3.4, z - 1.2, x + 1.1, y - 2.6, z + 1.2, { 0.22, 0.22, 0.25 })
+      out[#out + 1] = box(x - 0.08, y - 3.4 - q.hook * 8, z - 0.08, x + 0.08, y - 3.4, z + 0.08, { 0.1, 0.1, 0.1 })
+      out[#out + 1] = box(x - 0.4, y - 4.5 - q.hook * 8, z - 0.4, x + 0.4, y - 3.4 - q.hook * 8, z + 0.4, HAZARD, { emissive = 0.4 })
+      out[#out + 1] = box(x - 0.2, y - 2.5, z + half - 0.1, x + 0.2, y - 2.2, z + half + 0.1, { 1, 0.3, 0.2 }, { emissive = 1 })
+    end
+  elseif q.kind == "fuelline" then
+    local x, z, len = q.at[1], q.at[2], q.len
+    local ax = q.axis
+    local p0 = ax == 1 and { x - len / 2, z } or { x, z - len / 2 }
+    local p1 = ax == 1 and { x + len / 2, z } or { x, z + len / 2 }
+    out[#out + 1] = pipe(p0, p1, 0.32, 0.14, { 0.8, 0.55, 0.15 })
+    for k = 1, 5 do
+      local f = k / 6
+      local px, pz = p0[1] + (p1[1] - p0[1]) * f, p0[2] + (p1[2] - p0[2]) * f
+      out[#out + 1] = box(px - 0.3, 0, pz - 0.3, px + 0.3, 0.62, pz + 0.3, { 0.25, 0.25, 0.28 })
+      out[#out + 1] = box(px - 0.06, 0.62, pz - 0.06, px + 0.06, 0.95, pz + 0.06, { 1, 0.3, 0.2 }, { emissive = 0.5 })
+    end
+    -- the floor-level warning stripe beside the line
+    local off = q.side * 0.5
+    if ax == 1 then out[#out + 1] = box(p0[1], 0, z + off - 0.06, p1[1], 0.03, z + off + 0.06, HAZARD, { emissive = 0.3 })
+    else out[#out + 1] = box(x + off - 0.06, 0, p0[2], x + off + 0.06, 0.03, p1[2], HAZARD, { emissive = 0.3 }) end
+  elseif q.kind == "hose_reel" then
+    local x, z = q.at[1], q.at[2]
+    out[#out + 1] = box(x - 0.5, 0, z - 0.5, x + 0.5, 0.15, z + 0.5, DARK)
+    out[#out + 1] = { kind = "ring", c = { 0, -0.35, 0 }, rin = 0.15, r = 0.75, h = 0.7, seg = 10, color = { 0.16, 0.16, 0.18 }, roll = 1.5708,
+                      pos = { x, 0.95, z }, yaw = q.axis == 1 and 1.5708 or 0 }
+    out[#out + 1] = box(x - 0.12, 0.15, z - 0.12, x + 0.12, 0.95, z + 0.12, METAL)
+    out[#out + 1] = { kind = "ring", c = { 0, -0.18, 0 }, rin = 0.3, r = 0.6, h = 0.36, seg = 10, color = { 0.8, 0.55, 0.15 }, roll = 1.5708,
+                      pos = { x, 0.95, z }, yaw = q.axis == 1 and 1.5708 or 0 }
+  elseif q.kind == "lane" then
+    -- two lit guide lines down the middle toward the pad, the mouth end striped
+    local ax = q.axis
+    for _, o in ipairs({ -1.4, 1.4 }) do
+      local v = (ax == 1 and q.at[2] or q.at[1]) + o
+      if ax == 1 then out[#out + 1] = box(q.from, 0.0, v - 0.08, q.to, 0.04, v + 0.08, { 0.35, 0.9, 1 }, { emissive = 1 })
+      else out[#out + 1] = box(v - 0.08, 0.0, q.from, v + 0.08, 0.04, q.to, { 0.35, 0.9, 1 }, { emissive = 1 }) end
+    end
+  elseif q.kind == "wall_ship" then
+    -- a cradle bolted to the wall, a small craft nose-in on it (or the cradle empty)
+    local x, z, y = q.at[1], q.at[2], q.y
+    local ax, sd = q.axis, q.side
+    local function bx(u0, v0, y0, u1, v1, y1, c, e)
+      if ax == 1 then out[#out + 1] = box(x + u0, y0, z + v0, x + u1, y1, z + v1, c, e and { emissive = e } or nil)
+      else out[#out + 1] = box(x + v0, y0, z + u0, x + v1, y1, z + u1, c, e and { emissive = e } or nil) end
+    end
+    -- the wall is at +side * 1.3 from `at`; inward is -side
+    bx(-3.2, sd * 1.3, y - 0.5, 3.2, -sd * 4.8, y, DARK)
+    bx(-3.2, -sd * 4.8, y - 0.5, 3.2, -sd * 4.7, y + 0.04, { 0.35, 0.9, 1 }, 1)
+    bx(-3.3, sd * 1.3, y - 2.4, -3.0, sd * 0.9, y + 3.6, DARK)
+    bx(3.0, sd * 1.3, y - 2.4, 3.3, sd * 0.9, y + 3.6, DARK)
+    bx(-0.4, sd * 1.3, y + 3.6, 0.4, sd * 0.9, y + 4.4, { 1, 0.3, 0.2 }, 1)
+    if not q.empty then
+      local yaw = ax == 1 and (-sd * 1.5708) or (sd > 0 and 0 or sm.pi)
+      local cu, cv = 0, -sd * 1.7
+      local sx, sz = x + (ax == 1 and cu or cv), z + (ax == 1 and cv or cu)
+      for _, part in ipairs(require("lib.meshkit").ship(sx, y + 0.05, sz, yaw, 0.6, q.color, { 1, 0.5, 0.2 })) do out[#out + 1] = part end
+    end
+  elseif q.kind == "catwalk" then
+    local x, z, len, y = q.at[1], q.at[2], q.len, q.y
+    local ax, sd = q.axis, q.side
+    local function bx(u0, v0, y0, u1, v1, y1, c, e)
+      if ax == 1 then out[#out + 1] = box(x + u0, y0, z + v0, x + u1, y1, z + v1, c, e and { emissive = e } or nil)
+      else out[#out + 1] = box(x + v0, y0, z + u0, x + v1, y1, z + u1, c, e and { emissive = e } or nil) end
+    end
+    bx(-len / 2, -0.8, y - 0.12, len / 2, 0.8, y, { 0.3, 0.3, 0.34 })
+    bx(-len / 2, -sd * 0.8 - 0.04, y, len / 2, -sd * 0.8 + 0.04, y + 1.05, { 0.9, 0.7, 0.15 })
+    bx(-len / 2, -sd * 0.8 - 0.05, y + 1.0, len / 2, -sd * 0.8 + 0.05, y + 1.08, { 1, 0.85, 0.3 }, 0.5)
+    for k = 0, math.floor(len / 5) do
+      local u = -len / 2 + k * 5
+      bx(u - 0.08, -sd * 0.8 - 0.08, y, u + 0.08, -sd * 0.8 + 0.08, y + 1.05, { 0.9, 0.7, 0.15 })
+      bx(u - 0.1, sd * 0.7, y - 1.4, u + 0.1, sd * 0.9, y - 0.12, DARK)
+    end
+    bx(-len / 2, sd * 0.8, y - 0.1, len / 2, sd * 0.86, y - 0.04, { 0.35, 0.9, 1 }, 1)
+  elseif q.kind == "booth" then
+    local x, z, y = q.at[1], q.at[2], q.y
+    local ax, sd = q.axis, q.side
+    local function bx(u0, v0, y0, u1, v1, y1, c, e)
+      if ax == 1 then out[#out + 1] = box(x + u0, y0, z + v0, x + u1, y1, z + v1, c, e and { emissive = e } or nil)
+      else out[#out + 1] = box(x + v0, y0, z + u0, x + v1, y1, z + u1, c, e and { emissive = e } or nil) end
+    end
+    bx(-2.4, -1.4, y, 2.4, 1.4, y + 2.8, { 0.3, 0.32, 0.38 })
+    bx(-2.4, -sd * 1.4 - 0.04, y + 1.2, 2.4, -sd * 1.4 + 0.04, y + 2.4, { 0.5, 0.85, 1 }, 0.9)
+    bx(-2.5, -1.5, y + 2.8, 2.5, 1.5, y + 3.0, DARK)
+    bx(-0.6, -0.6, y + 3.0, 0.6, 0.6, y + 3.7, { 1, 0.7, 0.25 }, 0.8)
+  elseif q.kind == "bay_sign" then
+    -- the bay's number in big lit pixels on the wall opposite the mouth
+    local x, z, y = q.at[1], q.at[2], q.y
+    local s = 0.55
+    local n = #q.text
+    local width = n * 4 * s - s
+    local f = q.face
+    for i = 1, n do
+      local g = DIGITS[q.text:sub(i, i)]
+      if g then
+        for row = 1, 5 do
+          for col = 1, 3 do
+            if g[row]:sub(col, col) == "1" then
+              local u = -width / 2 + ((i - 1) * 4 + (col - 1)) * s
+              local yy = y + (5 - row) * s
+              if q.axis == 3 then
+                out[#out + 1] = box(x + u, yy, z + f * 0.02, x + u + s, yy + s, z + f * 0.14, { 0.35, 0.9, 1 }, { emissive = 1 })
+              else
+                out[#out + 1] = box(x + f * 0.02, yy, z + u, x + f * 0.14, yy + s, z + u + s, { 0.35, 0.9, 1 }, { emissive = 1 })
+              end
+            end
+          end
+        end
+      end
+    end
+  elseif q.kind == "cart" then
+    local x, z = q.at[1], q.at[2]
+    out[#out + 1] = { kind = "box", min = { -0.45, 0.2, -0.3 }, max = { 0.45, 0.28, 0.3 }, color = { 0.3, 0.3, 0.34 }, pos = { x, 0, z }, yaw = q.yaw }
+    out[#out + 1] = { kind = "box", min = { -0.4, 0.28, -0.25 }, max = { 0.4, 0.8, 0.25 }, color = { 0.75, 0.2, 0.18 }, pos = { x, 0, z }, yaw = q.yaw }
+    out[#out + 1] = { kind = "box", min = { -0.42, 0.78, -0.27 }, max = { 0.42, 0.84, 0.27 }, color = HAZARD, pos = { x, 0, z }, yaw = q.yaw, emissive = 0.3 }
+    out[#out + 1] = { kind = "box", min = { 0.35, 0.84, -0.05 }, max = { 0.55, 1.1, 0.05 }, color = DARK, pos = { x, 0, z }, yaw = q.yaw }
   elseif q.kind == "lamp" then
     local x, z, y = q.at[1], q.at[2], q.y
     out[#out + 1] = cyl(x, y, z, 0.01, 0.6, DARK, 4)
@@ -354,6 +560,23 @@ function M.detail_parts(L)
         else
           local z = (b[2] + b[4]) / 2 + o * (b[4] - b[2]) * 0.25
           out[#out + 1] = box(b[1] + 0.4, a.h - 0.08, z - 0.15, b[3] - 0.4, a.h, z + 0.15, { 1, 0.95, 0.85 }, { emissive = 1 })
+        end
+      end
+      -- ducts and a cable tray along the ceiling, lit floor lines to every side door
+      if long then
+        for _, o in ipairs({ -1, 1 }) do
+          local x = (b[1] + b[3]) / 2 + o * ((b[3] - b[1]) / 2 - 0.9)
+          out[#out + 1] = box(x - 0.35, a.h - 1.3, b[2] + 0.2, x + 0.35, a.h - 0.55, b[4] - 0.2, { 0.5, 0.52, 0.58 })
+          out[#out + 1] = box(x - 0.37, a.h - 1.0, b[2] + 0.2, x + 0.37, a.h - 0.94, b[4] - 0.2, { 1, 0.75, 0.3 }, { emissive = 0.8 })
+          out[#out + 1] = box(x - 0.6, a.h - 0.5, b[2] + 0.2, x - 0.2, a.h - 0.4, b[4] - 0.2, DARK)
+        end
+        for _, d in ipairs(L.doors) do
+          if d.axis == 1 and d.a == a.id then
+            local zc = (d.lo + d.hi) / 2
+            local col2 = KIND_COLOR[L.areas[d.b].kind] or TRIM
+            local x0, x1 = math.min(0, d.at), math.max(0, d.at)
+            out[#out + 1] = box(x0, 0.0, zc - 0.07, x1, 0.035, zc + 0.07, col2, { emissive = 1 })
+          end
         end
       end
       -- ribs across the concourse ceiling

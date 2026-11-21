@@ -53,7 +53,6 @@ describe("meshkit", function()
       { "saucer", { diameter = 24, height = 8, config = "villa" } },
       { "saucer", { part = "dome" } },
       { "saucer", {} },
-      { "station", {} },
       { "loot_cache", {} },
       { "derelict_greeble", {} },
     }

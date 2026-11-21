@@ -23,7 +23,7 @@ T.assert(ap.wake(T, 1, get), "got up")
 T.assert(ap.take_helm(T, 1, get), "took the helm")
 
 -- approach: fast and far, nothing happens; slow and close, the beam takes over
-get().ship.pos = { bay().mouth[1] + 160, bay().mouth[2], bay().mouth[3] }
+get().ship.pos = { bay().mouth[1] + 200, bay().mouth[2], bay().mouth[3] }
 T.wait(1)
 T.assert(get().berth == false, "out of the beam's reach")
 get().ship.pos = { bay().mouth[1] + 40, bay().mouth[2] + 5, bay().mouth[3] + 30 }

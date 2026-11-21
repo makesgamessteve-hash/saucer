@@ -59,15 +59,15 @@ end
 -- you docked, the far hangar on the opposite side of the station
 function M.bays(state, ship, idx)
   local tp = trader_pos(state, idx)
-  local K = sg.kit().walk
   local d = vec.sub(ship.pos, tp)
   local hz = sm.sqrt(d[1] * d[1] + d[3] * d[3])
   local dir = hz > 1e-6 and { d[1] / hz, 0, d[3] / hz } or { 0, 0, 1 }
   local out = function(v) return sm.atan2(v[1], v[3]) end
-  local b2 = { tp[1] - dir[1] * K.bay_dist, ship.pos[2], tp[3] - dir[3] * K.bay_dist }
+  -- add-huge-stations: the far hangar is a docking arm's pod on the megastructure, its mouth facing +x
+  local b2 = require("sim.stationhull").far_bay_pos(state, idx)
   return {
     { pos = vec.copy(ship.pos), yaw = out(dir) },
-    { pos = b2, yaw = out({ -dir[1], 0, -dir[3] }) },
+    { pos = b2, yaw = sm.pi / 2 },
   }
 end
 

@@ -1,7 +1,8 @@
 -- SPDX-License-Identifier: MIT
--- Drawing the station's hangar bay, its tractor beam and the pad's clamps
+-- Drawing the hangar cell's live parts, its tractor beam and the pad's clamps
 -- (OpenSpec add-dock-land-eva). Render-only: reads the sector, o.berth and
--- o.ship, writes nothing. Flat emissive boxes like view/gear.lua.
+-- o.ship, writes nothing. Flat emissive boxes like view/gear.lua. The cell's static shell and its
+-- dressing are baked into the station's mesh (add-huge-stations).
 local vec = require("lib.vec")
 local dock = require("sim.dock")
 local landing = require("sim.landing")
@@ -9,10 +10,8 @@ local assets = require("view.assets")
 local sm = saucer.math
 local M = {}
 
-M.NEAR = 700   -- bays this close to the camera are drawn
+M.NEAR = 900   -- bays this close to the camera are drawn
 
-local WALL = { 0.34, 0.37, 0.45, 1 }
-local FLOOR = { 0.26, 0.29, 0.34, 1 }
 local STRIP = { 0.35, 0.9, 1.0, 1 }
 local WARN = { 1.0, 0.75, 0.15, 1 }
 local BEAM = { 0.35, 0.85, 1.0 }
@@ -55,37 +54,13 @@ function M.emitters(bay)
            { x, bay.hi[2] - 0.4, bay.lo[3] + 0.5 }, { x, bay.hi[2] - 0.4, bay.hi[3] - 0.5 } }
 end
 
+-- the live parts of a hangar cell: the frame round the mouth (amber while the beam works), the force field
+-- across it, the emitters and their glow. Everything that stands still (the cell's shell, the pad, the
+-- strips, the cranes and the crates) is part of the station's mesh (view/stationhull.lua).
 function M.bay(v, A, state, idx, bay, tick)
   local n = 0
   local lo, hi = bay.lo, bay.hi
-  local boxes = dock.solids(state)
-  local per = #boxes // dock.count(state)
-  for k = (idx - 1) * per + 1, idx * per do
-    local b = boxes[k]
-    n = n + box(v, b[1], b[2], (k - (idx - 1) * per) == 1 and FLOOR or WALL)
-  end
-  -- the dock pad: a square plate with warning edges and a circle of lights
-  local pd = bay.pad
-  n = n + box(v, { pd[1] - 15, lo[2], pd[3] - 15 }, { pd[1] + 15, lo[2] + 0.12, pd[3] + 15 }, { 0.2, 0.22, 0.27, 1 })
-  for _, s in ipairs({ -1, 1 }) do
-    n = n + box(v, { pd[1] + s * 15 - 0.25, lo[2] + 0.12, pd[3] - 15 }, { pd[1] + s * 15 + 0.25, lo[2] + 0.2, pd[3] + 15 }, WARN)
-    n = n + box(v, { pd[1] - 15, lo[2] + 0.12, pd[3] + s * 15 - 0.25 }, { pd[1] + 15, lo[2] + 0.2, pd[3] + s * 15 + 0.25 }, WARN)
-  end
-  -- lit strips along the ceiling and the floor's edges
-  for i = 0, 5 do
-    local x = lo[1] + 5 + i * 8
-    n = n + box(v, { x, hi[2] - 0.1, lo[3] + 4 }, { x + 0.5, hi[2], hi[3] - 4 }, STRIP)
-  end
-  for _, z in ipairs({ lo[3] + 0.05, hi[3] - 0.25 }) do
-    n = n + box(v, { lo[1], lo[2] + 0.1, z }, { hi[1], lo[2] + 0.3, z + 0.2 }, STRIP)
-  end
-  -- the station door in the back wall: a lit frame and a warm glow beyond
-  local d = bay.door
-  n = n + box(v, { lo[1] - 0.2, lo[2], d.z - d.half - 0.3 }, { lo[1] + 0.1, lo[2] + d.height + 0.3, d.z - d.half }, WARN)
-  n = n + box(v, { lo[1] - 0.2, lo[2], d.z + d.half }, { lo[1] + 0.1, lo[2] + d.height + 0.3, d.z + d.half + 0.3 }, WARN)
-  n = n + box(v, { lo[1] - 0.2, lo[2] + d.height, d.z - d.half }, { lo[1] + 0.1, lo[2] + d.height + 0.3, d.z + d.half }, WARN)
-  n = n + box(v, { lo[1] - 3.4, lo[2] + 0.05, d.z - d.half }, { lo[1] - 3.3, lo[2] + d.height, d.z + d.half }, { 1.0, 0.85, 0.6, 1 })
-  -- a bright frame round the mouth, amber while the beam is working
+  -- a bright frame round the mouth
   local fcol = towed(state, idx) and WARN or STRIP
   n = n + box(v, { hi[1] - 0.3, lo[2] - 0.6, lo[3] - 1.2 }, { hi[1] + 0.8, lo[2] + 0.5, hi[3] + 1.2 }, fcol)
   n = n + box(v, { hi[1] - 0.3, hi[2] - 0.5, lo[3] - 1.2 }, { hi[1] + 0.8, hi[2] + 0.6, hi[3] + 1.2 }, fcol)
@@ -94,11 +69,8 @@ function M.bay(v, A, state, idx, bay, tick)
   -- the force field across the front
   local pulse = 0.10 + 0.04 * sm.sin(tick * 0.05)
   n = n + box(v, { hi[1] - 0.05, lo[2], lo[3] }, { hi[1] + 0.05, hi[2], hi[3] }, { 0.35, 0.8, 1, pulse }, true)
-  -- the gantry back to the station's spire, and the beacons on the front corners
-  local tp = state.sector.traders and state.sector.traders[idx].pos or state.sector.trader.pos
-  n = n + box(v, { tp[1] + 6, lo[2] + 2, tp[3] - 2.5 }, { lo[1] - 3.5, lo[2] + 7, tp[3] + 2.5 }, WALL)
   local on = towed(state, idx)
-  for i, e in ipairs(M.emitters(bay)) do
+  for _, e in ipairs(M.emitters(bay)) do
     n = n + box(v, { e[1] - 0.6, e[2] - 0.6, e[3] - 0.6 }, { e[1] + 0.6, e[2] + 0.6, e[3] + 0.6 }, on and WARN or STRIP)
     v:billboard(A.tex.glow, e, on and 9 or 4, { palette = A.pal.base, tint = on and { 1, 0.8, 0.3, 0.55 } or { 0.4, 0.9, 1, 0.35 } })
   end
