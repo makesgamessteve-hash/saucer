@@ -51,41 +51,64 @@ local function dark_of(ruin, r) return require("sim.cities").dark(ruin, r) end
 
 -- layout(site, ruin, civ) -> list of sentry definitions (derived data).
 -- The tutorial derelict (site 1) is unguarded.
+-- a ceiling turret at the far end of room r, looking back at the door you come in by;
+-- in a vertical shaft it hangs at the top and looks down the shaft
+local function watcher_in(out, site, ruin, kit, r, band, civ, light)
+  local mn, mx = ruinm.room_box(r, kit, site.pos)
+  local door
+  for _, d in ipairs(ruin.doors) do if d.b == r.id then door = d end end
+  local ax, sg = door and door.axis or 3, door and door.sign or 1
+  if ax == 2 then ax = 3 end -- entered through the floor or ceiling: sit at the +z end
+  local c = { (mn[1] + mx[1]) / 2, mx[2] - kit.wall - 3.0, (mn[3] + mx[3]) / 2 }
+  local tgt = { c[1], mn[2], c[3] }
+  local pos = { c[1], c[2], c[3] }
+  local near = sg > 0 and mn[ax] or mx[ax]
+  local far = sg > 0 and mx[ax] or mn[ax]
+  tgt[ax] = near
+  local pitch = -0.32
+  if r.kind == "shaft" then
+    pos[ax] = far - sg * (kit.wall + 4.0)
+    pitch = -1.15
+  else
+    pos[ax] = far - sg * (kit.wall + 6.0)
+  end
+  local yaw = sm.atan2(tgt[1] - pos[1], tgt[3] - pos[3])
+  out[#out + 1] = { id = #out + 1, kind = "watcher", site = site.id, room = r.id, pos = pos, yaw = yaw,
+                    pitch = pitch, band = band, glyph = civ and civ.glyph or nil, district = r.district,
+                    dark = dark_of(ruin, r), light = light or nil }
+end
+
+-- add-fun-fixes: the tutorial derelict keeps one light Watcher in its biggest room
+-- (not the entrance, not the vault when there is a choice), so the first threat comes early
+function M.light_room(ruin)
+  local best
+  for _, r in ipairs(ruin.rooms) do
+    if r.kind ~= "entrance" and not r.calm then
+      local score = r.class * 10 + (r.kind == "vault" and 0 or 5)
+      if not best or score > best.score then best = { r = r, score = score } end
+    end
+  end
+  return best and best.r or nil
+end
+
 function M.layout(site, ruin, civ)
   local out = {}
-  if site.tutorial or (site.tutorial == nil and site.id == 1) or not ruin then return out end
+  if not ruin then return out end
   local kit = ruinm.kit_of(ruin.kit)
   local t = M.tune()
   local big = kit.big or 4
   local band = t.watcher.band[civ and civ.body or "human"] or { 2, 4 }
+  if site.tutorial or (site.tutorial == nil and site.id == 1) then
+    local r = t.watcher.light and not ruin.city and M.light_room(ruin)
+    if r then watcher_in(out, site, ruin, kit, r, band, civ, true) end
+    return out
+  end
   for _, r in ipairs(ruin.rooms) do
     local mn, mx = ruinm.room_box(r, kit, site.pos)
     if r.calm then
       -- add-cities: a quiet hall of a city keeps no sentry
     elseif r.class >= big and r.kind ~= "entrance" then
-      -- a ceiling turret at the far end of the hall, looking back at the door you
-      -- come in by; in a vertical shaft it hangs at the top and looks down the shaft
-      local door
-      for _, d in ipairs(ruin.doors) do if d.b == r.id then door = d end end
-      local ax, sg = door and door.axis or 3, door and door.sign or 1
-      if ax == 2 then ax = 3 end -- entered through the floor or ceiling: sit at the +z end
-      local c = { (mn[1] + mx[1]) / 2, mx[2] - kit.wall - 3.0, (mn[3] + mx[3]) / 2 }
-      local tgt = { c[1], mn[2], c[3] }
-      local pos = { c[1], c[2], c[3] }
-      local near = sg > 0 and mn[ax] or mx[ax]
-      local far = sg > 0 and mx[ax] or mn[ax]
-      tgt[ax] = near
-      local pitch = -0.32
-      if r.kind == "shaft" then
-        pos[ax] = far - sg * (kit.wall + 4.0)
-        pitch = -1.15
-      else
-        pos[ax] = far - sg * (kit.wall + 6.0)
-      end
-      local yaw = sm.atan2(tgt[1] - pos[1], tgt[3] - pos[3])
-      out[#out + 1] = { id = #out + 1, kind = "watcher", site = site.id, room = r.id, pos = pos, yaw = yaw,
-                        pitch = pitch, band = band, glyph = civ and civ.glyph or nil, district = r.district,
-                        dark = dark_of(ruin, r) }
+      watcher_in(out, site, ruin, kit, r, band, civ)
     elseif r.class < big and r.kind == "duct" or (r.class < big and r.kind == "side" and ruin.rooms[r.parent]
         and ruin.rooms[r.parent].class >= big) then
       -- a Snatcher in the duct; its nest at the deepest small room of the branch
@@ -182,20 +205,23 @@ function M.watcher_sees(def, dyn, p, tick, t)
   if on_foot(p) then
     -- whatever its size band, a turret sees a person on foot (closer in)
     local dir = dir_of(dyn.yaw, dyn.pitch or def.pitch)
-    return saucer.physics.cone_visible(wpos, dir, sm.cos(t.watcher.half_angle), t.watcher.foot_range or 45, ship.pos, 1)
+    local fr = (t.watcher.foot_range or 45) * (def.light and 0.6 or 1)
+    return saucer.physics.cone_visible(wpos, dir, sm.cos(t.watcher.half_angle), fr, ship.pos, 1)
   end
+  local lt = def.light and t.watcher.light or nil
   local cls = configs.get(ship.size).class
   if cls < def.band[1] or cls > def.band[2] then
-    -- fun-audit proposal A (off unless watcher.small_range is set): a hull below the band
-    -- (the Seat) is still seen up close, so Seat dives keep some stealth tension
-    local sr = t.watcher.small_range
+    -- add-fun-fixes: a hull below the band (the Seat) is still seen up close, so a Seat
+    -- dive is stealth, not a free pass (small_range nil: never, as before)
+    local sr = lt and lt.small_range or t.watcher.small_range
     if not (sr and cls >= 1 and cls < def.band[1]) then return false end
     return saucer.physics.cone_visible(wpos, dir_of(dyn.yaw, dyn.pitch or def.pitch), sm.cos(t.watcher.half_angle), sr, ship.pos, 1)
   end
   local yaw = dyn.yaw
   local dir = dir_of(yaw, dyn.pitch or def.pitch)
   local r = configs.get(ship.size).diameter / 2
-  return saucer.physics.cone_visible(wpos, dir, sm.cos(t.watcher.half_angle), t.watcher.range + r + (ship.loud or 0) * M.LOUD_WATCHER, ship.pos, 1)
+  local range = lt and lt.range or t.watcher.range
+  return saucer.physics.cone_visible(wpos, dir, sm.cos(t.watcher.half_angle), range + r + (ship.loud or 0) * M.LOUD_WATCHER, ship.pos, 1)
 end
 
 local function sweep_yaw(def, tick, t, dyn)
@@ -255,7 +281,7 @@ local function step_watcher(state, def, dyn, dt, ctx, t)
   end
   dyn.t = dyn.t + dt
   if dyn.st == "alert" then
-    if seen and dyn.t >= t.alert_time then
+    if seen and dyn.t >= (def.light and t.watcher.light.alert_time or t.alert_time) then
       dyn.st, dyn.t, dyn.fire, dyn.lock_tick = "locked", 0, 0, state.tick
       ctx.fx(state, seen, "locked")
       ctx.msg(state, seen, "Watcher LOCKED: stun bolts incoming")
@@ -268,7 +294,8 @@ local function step_watcher(state, def, dyn, dt, ctx, t)
       local d = vec.sub(seen.ship.pos, wpos)
       local l = vec.len(d)
       state.bolts[#state.bolts + 1] = { site = def.site, pos = vec.copy(wpos),
-        vel = vec.scale(d, t.watcher.bolt_speed / math.max(l, 1e-6)), life = t.watcher.bolt_life }
+        vel = vec.scale(d, t.watcher.bolt_speed / math.max(l, 1e-6)), life = t.watcher.bolt_life,
+        dmg = def.light and t.watcher.light.bolt_damage or nil }
     end
   end
 end
@@ -546,7 +573,7 @@ function M.step_bolts(state, dt)
           p.fx[#p.fx + 1] = { tick = state.tick, sound = "hit" }
           alive = false
         elseif alive and not foot and M.bolt_hits_hull(c, dx, b.pos[2] - s.pos[2], dz, t.watcher) then
-          hull.damage(s, t.watcher.bolt_damage)
+          hull.damage(s, b.dmg or t.watcher.bolt_damage)
           p.hits = (p.hits or 0) + 1
           p.fx[#p.fx + 1] = { tick = state.tick, sound = "hit" }
           alive = false
@@ -566,7 +593,7 @@ function M.jam(state, site_idx, defs, eye, dir, p)
   local n = 0
   if not dyns then return 0 end
   for i, def in ipairs(defs) do
-    local dyn = dyns[i]
+    local dyn = dyns[i] or { st = "off" } -- a slot not yet woken cannot be jammed
     local pos = dyn.pos or def.pos
     local d = vec.sub(pos, eye)
     local l = vec.len(d)

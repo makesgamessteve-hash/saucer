@@ -106,6 +106,19 @@ local function wardens_off()
   end
 end
 
+-- add-fun-fixes: Watchers now see the Seat up close; this script follows the mystery
+-- chain (game_sentries covers the stealth), so a site's Watchers are spiked off first
+local function watchers_off(site)
+  local adv = require("sim.advsentry")
+  T.state().overrides = T.state().overrides or {}
+  for k, d in ipairs(game.sentries(site)) do
+    if d.kind == "watcher" then
+      T.state().overrides[adv.key(d)] = T.state().tick
+      if T.state().sentries[site] and T.state().sentries[site][k] then T.state().sentries[site][k].st = "off" end
+    end
+  end
+end
+
 -- fetch the Echo at a site of this sector with player pi (the Seat)
 local function fetch(pi, site, size)
   local get = P(pi)
@@ -116,6 +129,7 @@ local function fetch(pi, site, size)
   T.assert(mystery.echo_at(m(), site, T.state().sector_id) ~= nil, "the Echo at site " .. site .. " is unlocked")
   T.assert(ap.take_helm(T, pi, get), "at the helm")
   T.assert(ap.resize(T, pi, get, 1), "the Villa for the trip")
+  watchers_off(site)
   T.assert(ap.travel(T, pi, get, ap.route(ruin, origin, room, size)[1].pos, 4, 60 * 150), "flew to site " .. site)
   -- the Shroud hides the saucer from Watchers and Clamps on the way in
   T.press(pi, "shroud")
@@ -183,6 +197,7 @@ T.assert(T.state().sector.sites[heart.site(T.state())].heart, "the Heart site is
 local hi = heart.site(T.state())
 local core, _, croom = heart.core(T.state())
 local ruin, origin = game.ruin(hi), T.state().sector.sites[hi].pos
+watchers_off(hi)
 local routes = {}
 for _, pi in ipairs({ 2, 1 }) do
   local get = P(pi)
