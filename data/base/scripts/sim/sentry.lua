@@ -185,7 +185,13 @@ function M.watcher_sees(def, dyn, p, tick, t)
     return saucer.physics.cone_visible(wpos, dir, sm.cos(t.watcher.half_angle), t.watcher.foot_range or 45, ship.pos, 1)
   end
   local cls = configs.get(ship.size).class
-  if cls < def.band[1] or cls > def.band[2] then return false end
+  if cls < def.band[1] or cls > def.band[2] then
+    -- fun-audit proposal A (off unless watcher.small_range is set): a hull below the band
+    -- (the Seat) is still seen up close, so Seat dives keep some stealth tension
+    local sr = t.watcher.small_range
+    if not (sr and cls >= 1 and cls < def.band[1]) then return false end
+    return saucer.physics.cone_visible(wpos, dir_of(dyn.yaw, dyn.pitch or def.pitch), sm.cos(t.watcher.half_angle), sr, ship.pos, 1)
+  end
   local yaw = dyn.yaw
   local dir = dir_of(yaw, dyn.pitch or def.pitch)
   local r = configs.get(ship.size).diameter / 2
@@ -501,6 +507,20 @@ function M.step(state, site_idx, defs, dt, ctx)
 end
 
 -- stun bolts: fly straight, stop at walls, drain shields then hull of the first hull they touch
+-- does a bolt at offset (dx, dy, dz) from the hull's centre touch it? The collider is the
+-- hull's bounding cylinder grown by the bolt radius; fun-audit proposal D (off unless
+-- watcher.hurt_scale is set): an ellipsoid of hurt_scale x the hull, closer to the lens shape
+function M.bolt_hits_hull(c, dx, dy, dz, w)
+  local br = w.bolt_radius
+  local hs = w.hurt_scale
+  if hs then
+    local R, Hh = c.diameter / 2 * hs + br, c.height / 2 * hs + br
+    return (dx * dx + dz * dz) / (R * R) + (dy * dy) / (Hh * Hh) <= 1
+  end
+  local rr = c.diameter / 2 + br
+  return dx * dx + dz * dz <= rr * rr and math.abs(dy) <= c.height / 2 + br
+end
+
 function M.step_bolts(state, dt)
   local t = M.tune()
   local keep = {}
@@ -525,7 +545,7 @@ function M.step_bolts(state, dt)
           p.hits = (p.hits or 0) + 1
           p.fx[#p.fx + 1] = { tick = state.tick, sound = "hit" }
           alive = false
-        elseif alive and not foot and dx * dx + dz * dz <= rr * rr and math.abs(b.pos[2] - s.pos[2]) <= c.height / 2 + t.watcher.bolt_radius then
+        elseif alive and not foot and M.bolt_hits_hull(c, dx, b.pos[2] - s.pos[2], dz, t.watcher) then
           hull.damage(s, t.watcher.bolt_damage)
           p.hits = (p.hits or 0) + 1
           p.fx[#p.fx + 1] = { tick = state.tick, sound = "hit" }

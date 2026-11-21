@@ -11,7 +11,7 @@ NAME="${PERSONA}_s${SEED}"
 SCRIPT="$OUT/$NAME.lua"
 DELAY=0; [ "$PERSONA" = "human" ] && DELAY=14
 {
-  echo "CFG = { run = \"$NAME\", persona = \"$PERSONA\", seed = $SEED, limit = $LIMIT, delay = $DELAY, shots = \"${SHOTS_DIR:-$OUT/}\", jam = true, shot_ticks = { ${SHOT_TICKS:-} } }"
+  echo "CFG = { run = \"$NAME\", persona = \"$PERSONA\", seed = $SEED, limit = $LIMIT, delay = $DELAY, proto = \"${PROTO:-}\", shots = \"${SHOTS_DIR:-$OUT/}\", jam = true, shot_ticks = { ${SHOT_TICKS:-} } }"
   echo "BOT = (function()"; cat "$ROOT/tools/playtest/bot.lua"; echo "end)()"
   echo "CAREER = (function()"; cat "$ROOT/tools/playtest/career.lua"; echo "end)()"
   cat "$HERE/fun.lua"

@@ -261,6 +261,14 @@ local function career_bot(pol)
   end
 end
 
+-- prototype interventions (fun_audit_report.md), switched on per batch with PROTO=ACD
+local PROTO = CFG.proto or ""
+if PROTO:find("A", 1, true) then require("sim.sentry").tune().watcher.small_range = 22 end
+if PROTO:find("D", 1, true) then require("sim.sentry").tune().watcher.hurt_scale = 0.8 end
+if PROTO:find("C", 1, true) then
+  for _, p in ipairs(S().players) do p.upgrades = p.upgrades or {} p.upgrades.beam_relay = 1 end
+end
+out("FUNP %s", PROTO)
 BOT.spawn(0, "telemetry", telemetry)
 if PERSONA == "rand" then BOT.spawn(1, "rand", rand_bot)
 elseif PERSONA == "spam" then BOT.spawn(1, "spam", spam_bot)
