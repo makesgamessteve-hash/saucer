@@ -13,7 +13,8 @@ JOBS=${SAUCER_JOBS:-$(nproc 2>/dev/null || echo 2)}
 LIMIT=${SAUCER_COV_TIMEOUT:-2400}
 # The mystery is the longest run (about 45k ticks, ~1600 s on a CI runner and
 # 30% more on a busy one); it gets a longer leash than the rest, which all end
-# within 1700 s. The runs go in parallel, so this does not lengthen the step.
+# within 1700 s (the specs, ~2400 s, get the same leash). The runs go in parallel, so this does not
+# lengthen the step.
 LIMIT_MYSTERY=${SAUCER_COV_TIMEOUT_MYSTERY:-3600}
 cmake -S . -B "$B" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DSAUCER_COVERAGE=ON -DSAUCER_BUILD_GAME=OFF
 cmake --build "$B"
@@ -29,7 +30,9 @@ lua_run() { # name, then saucer_headless arguments
   local part=build/luacov-parts/$name
   sed "s#build/luacov.stats.out#$part.stats.out#" .luacov > "$part.luacov"
   local t0=$SECONDS limit=$LIMIT
-  [ "$name" = mystery ] && limit=$LIMIT_MYSTERY
+  # the specs ran in 2365 s of the 2400 s budget on main (94b23f3); with add-fun-fixes' specs they
+  # need the same longer leash as the mystery (they run in parallel, so the step is not longer)
+  case "$name" in mystery|specs) limit=$LIMIT_MYSTERY ;; esac
   if LUACOV_CONFIG="$part.luacov" timeout "$limit" "$B"/saucer_headless --root . --user-dir "$B/test-user-$name" \
       --quiet --coverage "$@" > "$part.log" 2>&1; then
     echo "luacov $name: ok in $((SECONDS - t0)) s"
