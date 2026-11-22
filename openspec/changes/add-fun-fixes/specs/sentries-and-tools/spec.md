@@ -1,10 +1,10 @@
 ## MODIFIED Requirements
 
 ### Requirement: Watcher
-A Watcher SHALL detect targets only within its sensor cone and its civ's size band, except that a hull below its band (the Seat) SHALL be seen within a short range (40 m by default), and when Locked it SHALL fire stun bolts that reduce shields, then hull, or Suit Charge on foot. A bolt SHALL hit a saucer only inside an ellipsoid of the hull's diameter and height scaled by a hurt scale (0.8 by default).
+A Watcher SHALL detect targets only within its sensor cone and its civ's size band, except that a hull below its band (the Seat) SHALL be seen within a short range (25 m by default), and when Locked it SHALL fire stun bolts that reduce shields, then hull, or Suit Charge on foot. A bolt SHALL hit a saucer only inside an ellipsoid of the hull's diameter and height scaled by a hurt scale (0.8 by default).
 
 #### Scenario: Shrink below the band
-- **WHEN** the saucer shrinks to Seat inside the cone of a Watcher whose band is M–XL, farther than 40 m from it
+- **WHEN** the saucer shrinks to Seat inside the cone of a Watcher whose band is M–XL, farther than 25 m from it
 - **THEN** the Watcher returns to Dormant within 2 s
 
 #### Scenario: A Seat up close
@@ -16,7 +16,7 @@ A Watcher SHALL detect targets only within its sensor cone and its civ's size ba
 - **THEN** it does not hit
 
 ### Requirement: Seat hint
-The first time a Watcher locks on to a player's Villa, the player SHALL get a tip that Watchers only see the Seat up close and how to fold down. Entering a site with Watchers in the Villa SHALL say how many Watchers lock on to a Villa there and that the Seat slips past them beyond 40 m.
+The first time a Watcher locks on to a player's Villa, the player SHALL get a tip that Watchers only see the Seat up close and how to fold down. Entering a site with Watchers in the Villa SHALL say how many Watchers lock on to a Villa there and that the Seat slips past them beyond 25 m.
 
 #### Scenario: First lock
 - **WHEN** a Watcher locks on to a Villa for the first time
@@ -25,7 +25,7 @@ The first time a Watcher locks on to a player's Villa, the player SHALL get a ti
 ## ADDED Requirements
 
 ### Requirement: Light sentry at the tutorial site
-The tutorial derelict (site 1 of the home sector) SHALL keep exactly one light Watcher in its biggest room that is not the entrance, preferring a room that is not the vault. A light Watcher SHALL see less far (55 m, a Seat within 25 m), lock after 1.5 s, and fire bolts of 4 damage.
+The tutorial derelict (site 1 of the home sector) SHALL keep exactly one light Watcher in a big room on the way to the vault, preferring a hall to a shaft and never the entrance. A light Watcher SHALL see less far (55 m, a Seat within 15 m), lock after 1.5 s, and fire bolts of 4 damage.
 
 #### Scenario: First threat early
 - **WHEN** a new game starts

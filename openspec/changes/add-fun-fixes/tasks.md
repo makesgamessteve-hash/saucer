@@ -1,7 +1,7 @@
 ## 1. Sim
 
 - [x] 1.1 `sim/hull.lua` retreat: tear away `ceil(#hot * retreat_lose)` items for good, cache the rest; `retreat_bill = { 40, 80, 140 }`, credits only at danger 1; retreat message in `sim/game.lua`
-- [x] 1.2 `sim/sentry.lua`: `watcher.small_range` (40 m) for hulls below the band; light Watcher at the tutorial site (`light_room`, `watcher.light`); light range, lock time and bolt damage
+- [x] 1.2 `sim/sentry.lua`: `watcher.small_range` (25 m) for hulls below the band; light Watcher at the tutorial site (`light_room`, `watcher.light`); light range, lock time and bolt damage
 - [x] 1.3 `sim/game.lua` new player: `upgrades = { beam_relay = 1 }`
 - [x] 1.4 `sentry.bolt_hits_hull`: ellipsoid scaled by `watcher.hurt_scale` (0.8)
 - [x] 1.5 Scanner finds (`game.scan_finds`), tool tips (`sentry.tip`), denied fallback (`game.TOOL_BUTTONS`, `DENY_WHY`)

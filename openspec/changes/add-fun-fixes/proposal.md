@@ -12,10 +12,10 @@ Steve asked for all six fixes, on by default, keeping the game non-lethal.
 ## What Changes
 
 - MODIFIED `hazards-and-failure`: a Fold Retreat tears half the hot cargo (rounded up, newest first)
-  away for good and caches the rest; the tow bill is 40 / 80 / 140 c by danger, and at danger 1 it
+  away for good and caches the rest; the tow bill is 40 / 80 / 140 c by danger (2x-4x for tows within 10 minutes of the last), and at danger 1 it
   comes out of credits only (never the Charge).
-- MODIFIED `sentries-and-tools`: a Watcher sees a hull below its band (the Seat) within 40 m; the
-  tutorial derelict (site 1) keeps one light Watcher (55 m / 25 m range, 1.5 s lock, 4-damage
+- MODIFIED `sentries-and-tools`: a Watcher sees a hull below its band (the Seat) within 25 m; the
+  tutorial derelict (site 1) keeps one light Watcher (55 m / 15 m range, 1.5 s lock, 4-damage
   bolts) in its biggest non-entrance room; bolts hit a saucer-shaped ellipsoid (0.8 of the hull)
   instead of a cylinder; the Seat hint says the Seat is seen up close.
 - ADDED `sentries-and-tools`: tool jobs and feedback: the Scanner also reports the finds left in a
