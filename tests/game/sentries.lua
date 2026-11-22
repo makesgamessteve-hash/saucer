@@ -28,6 +28,14 @@ local r1, o1 = game.ruin(1), T.state().sector.sites[1].pos
 local hall1
 for _, s in ipairs(r1.slots) do if r1.rooms[s.room].kind == "hall" then hall1 = s.room end end
 T.assert(hall1 ~= nil, "tutorial hall has loot")
+-- add-fun-fixes: the tutorial hall keeps a light Watcher (tests/lua/funfixes_spec.lua covers it);
+-- this script banks one item first, so its grid is shut beforehand to keep the shields full for derelict 2
+do
+  local adv = require("sim.advsentry")
+  T.state().overrides = T.state().overrides or {}
+  for _, d in ipairs(game.sentries(1)) do T.state().overrides[adv.key(d)] = T.state().tick end
+  for _, dy in ipairs(T.state().sentries[1] or {}) do dy.st = "off" end
+end
 local ok, route = ap.enter(T, 1, get, r1, o1, hall1)
 T.assert(ok, "into the tutorial hall")
 T.assert(ap.grab(T, 1, get, 1, r1, hall1, door_of(r1, o1, hall1)) >= 1, "grabbed hall loot")
@@ -146,6 +154,11 @@ local hall_c = ap.room_center(ruin.rooms[wdef.room], ruinm.kit_of(ruin.kit), ori
 local spot = ap.spot_for(hall_c, get().ship.yaw, 2, 1)
 T.assert(ap.fly(T, 1, get, spot, 0.3, 1500), "found room for the Villa")
 T.assert(ap.resize(T, 1, get, 1), "unfolded the Villa in the hall")
+-- add-fun-fixes: carry a second hot find so half survives the fold as a cache
+do
+  local h = get().hold
+  h[#h + 1] = items.stamp(get(), { type = "coil", name = "Spare coil", value = 10, size = 1, hot = true }, 1)
+end
 local hot_n = #items.losable(get())
 T.assert(hot_n >= 1, "hot items aboard")
 T.assert(ap.wait_until(T, 1, function() return (get().retreats or 0) == 1 end, 60 * 120), "Fold Retreat at hull 0")
@@ -156,7 +169,12 @@ T.assert(require("lib.vec").dist(get().ship.pos, tp) < 150, "at the trader")
 T.assert(#items.losable(get()) == 0, "no hot items left aboard")
 T.assert(items.find(get(), banked.uid) ~= nil, "the banked item is safe")
 local cache = T.state().caches[1]
-T.assert(cache and cache.site == site and #cache.items == hot_n, "a cache with the hot items sits in the derelict")
+-- add-fun-fixes: the fold tears away half the hot cargo (rounded up); the rest is the cache
+local torn = math.ceil(hot_n * require("sim.sentry").tune().retreat_lose - 1e-9)
+T.assert(get().retreat_lost == torn, "the fold tore away " .. torn .. " of " .. hot_n .. " hot items")
+T.assert(said("for good"), "the loss is reported")
+T.assert(cache and cache.site == site and #cache.items == hot_n - torn,
+  "a cache with the rest of the hot items sits in the derelict (" .. hot_n .. " hot)")
 
 -- recover it with the Seat (the Watchers ignore it)
 T.assert(ap.resize(T, 1, get, 2), "folded to the Seat")
@@ -172,7 +190,7 @@ end
 T.assert(cache_c ~= nil and require("lib.vec").dist(cache_c.pos, cp) < 1e-6, "the cache is a beam target")
 T.assert(ap.fly(T, 1, get, { cp[1], cp[2] + 4, cp[3] - 3 }, 0.6, 3000), "flew up near the cache")
 T.assert(ap.beam_up(T, 1, get, cache_c), "hovered over the cache and beamed it up with the Seat's mini beam")
-T.assert(#T.state().caches == 0 and #items.losable(get()) == hot_n, "recovered the cache")
+T.assert(#T.state().caches == 0 and #items.losable(get()) == hot_n - torn, "recovered the cache")
 T.assert(dyn(watcher).st == "dormant", "the Watcher never minded the Seat")
 print(string.format("sentries: hits %d, retreats %d, guard jams %d, tick %d", get().hits or 0, get().retreats or 0, jams,
   T.state().tick))

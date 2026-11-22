@@ -41,10 +41,19 @@ function M.reset()
   end
 end
 
-local function play(name, volume)
+-- add-fun-fixes: one-shot fx vary their pitch by up to +-8% so repeats do not drone;
+-- a view-side LCG (the sim's RNG is untouched)
+M.PITCH_SPREAD = 0.08
+local lcg = 12345
+function M.pitch()
+  lcg = (lcg * 1103515245 + 12345) % 2147483648
+  return 1 + M.PITCH_SPREAD * (2 * lcg / 2147483647 - 1)
+end
+
+local function play(name, volume, pitch)
   local path = M.SOUNDS[name]
   if not path then return nil end
-  return saucer.audio.play(path, { volume = (volume or 0.8) * M.MASTER })
+  return saucer.audio.play(path, { volume = (volume or 0.8) * M.MASTER, pitch = pitch })
 end
 M.play = play
 
@@ -55,7 +64,7 @@ function M.fx(state, p)
   local n = 0
   for _, f in ipairs(p.fx or {}) do
     if f.tick > last and M.SOUNDS[f.sound] then
-      play(f.sound, 0.8)
+      play(f.sound, 0.8, M.pitch())
       n = n + 1
     end
   end

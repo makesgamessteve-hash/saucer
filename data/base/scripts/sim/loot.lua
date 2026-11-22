@@ -45,9 +45,14 @@ function M.roll(seed, max_size, tier, category)
   end
   if rng:int(1, 100) <= 20 then item.quirk = rng:pick(aff.quirks).id end
   item.name = name
-  item.value = math.floor(value)
+  -- add-fun-fixes: condition spreads the value (worn 0.6x .. pristine 1.8x, skewed low, mean ~1.08x)
+  -- so two sites, and two runs, are worth different amounts; drawn last so the rest of the roll is unchanged
+  item.value = math.floor(value * M.condition(rng:int(0, 100)))
   return item
 end
+
+-- add-fun-fixes: value factor for a condition roll u in 0..100
+function M.condition(u) return 0.6 + 1.2 * (u / 100) ^ 1.5 end
 
 M.SIZE_NAMES = { "S", "M", "L", "XL" }
 function M.size_name(c) return M.SIZE_NAMES[c] or "?" end

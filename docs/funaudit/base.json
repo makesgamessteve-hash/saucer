@@ -1,0 +1,212 @@
+{
+ "n": {
+  "beamonly": 10,
+  "human": 20,
+  "opt": 20,
+  "rand": 20,
+  "spam": 10
+ },
+ "W": {
+  "beamonly": 0.8875883838383838,
+  "human": 0.8625,
+  "opt": 0.9,
+  "rand": 0.0,
+  "spam": 0.0
+ },
+ "W_sd": {
+  "beamonly": 0.05205984471884047,
+  "human": 0.054486236794258416,
+  "opt": 0.05,
+  "rand": 0.0,
+  "spam": 0.0
+ },
+ "banked_mean": {
+  "beamonly": 1037.7,
+  "human": 995.85,
+  "opt": 1082.1,
+  "rand": 0,
+  "spam": 0
+ },
+ "loot_per_min": {
+  "beamonly": 51.92827356130108,
+  "human": 49.83402835696413,
+  "opt": 54.15012510425354,
+  "rand": 0.0,
+  "spam": 0.0
+ },
+ "story_mean": {
+  "beamonly": 1.2,
+  "human": 1,
+  "opt": 1.2,
+  "rand": 0,
+  "spam": 0
+ },
+ "echo_mean": {
+  "beamonly": 1,
+  "human": 1.05,
+  "opt": 1.9,
+  "rand": 0,
+  "spam": 0
+ },
+ "lost_mean": {
+  "beamonly": 0.5,
+  "human": 0,
+  "opt": 0,
+  "rand": 0,
+  "spam": 0
+ },
+ "pickups_mean": {
+  "beamonly": 9.3,
+  "human": 9.1,
+  "opt": 9.95,
+  "rand": 0,
+  "spam": 0
+ },
+ "retreats_mean": {
+  "beamonly": 4.2,
+  "human": 0,
+  "opt": 0,
+  "rand": 0,
+  "spam": 0
+ },
+ "zero_bank_eps": {
+  "beamonly": 0,
+  "human": 1,
+  "opt": 0,
+  "rand": 20,
+  "spam": 10
+ },
+ "latency_ms_p50": 24.656666666666666,
+ "latency_ms_p95": 24.656666666666666,
+ "drop_all": 0.00012584810680674107,
+ "drop_buttons": 0.02506265664160401,
+ "drop_axes": 4.391707358580161e-05,
+ "drop_by_button": {
+  "use": "30/916",
+  "tractor": "0/229",
+  "shrink": "0/32",
+  "grow": "0/20"
+ },
+ "drop_rand_buttons": 0.50832951245606,
+ "fx_counts": {
+  "scan": 52,
+  "tractor": 491,
+  "echo": 218,
+  "pickup": 381,
+  "shrink": 84,
+  "bank": 300,
+  "grow": 80,
+  "denied": 4
+ },
+ "F_core": 2.7838616714697406,
+ "F_impact": 2.0,
+ "feel_sub": {
+  "lat": 1.0,
+  "drop": 1.0,
+  "motion": 0.75,
+  "F": 0.7857142857142857
+ },
+ "flow_sub": {
+  "gap": 1.0,
+  "rand": 1.0,
+  "opt": 1.0,
+  "human": 0.5499999999999998,
+  "sd": 0.5448623679425841
+ },
+ "H_human": 0.19275182204202748,
+ "H_opt": 0.22967985541933872,
+ "maxp_human": 0.8149466192170819,
+ "maxp_opt": 0.7422096317280453,
+ "use_human": {
+  "tractor": 229,
+  "fold": 52
+ },
+ "use_opt": {
+  "tractor": 262,
+  "fold": 91
+ },
+ "H_activity": 0.7937965412316469,
+ "activity_share": {
+  "site-walk": 0.301,
+  "site-helm": 0.286,
+  "site-helm-seat": 0.207,
+  "walk": 0.113,
+  "helm": 0.085,
+  "helm-seat": 0.008,
+  "wake": 0.001
+ },
+ "spam_ratio": 0.0,
+ "beamonly_ratio": 1.0290879812618943,
+ "choice_sub": {
+  "H": 0.3017369124724045,
+  "maxp": 0.5287239450940517,
+  "spam": 0.42728004684526444
+ },
+ "T_cv": 0.6148291808577422,
+ "T_mu": 0.20847604166666667,
+ "near_per_min": 0.0,
+ "near_kinds": {},
+ "site_minutes": 317.3666666666667,
+ "T_longest_hot": 0,
+ "pace_sub": {
+  "cv": 1.0,
+  "near": 0.0,
+  "exhaust": 1.0
+ },
+ "fair": {
+  "alpha_villa": 1.3882185718886029,
+  "alpha_seat": 1.7066233238520927,
+  "alpha_foot": 1.0956521739130436,
+  "villa_visual_m2": 224.74846995854506,
+  "seat_visual_m2": 1.4766,
+  "telegraph": {
+   "watcher_alert_to_first_bolt_ms": 750,
+   "snatcher_latch_to_siphon_ms": 3000,
+   "snatcher_alert_ms": 750,
+   "clamp_ms": 750,
+   "o2_low_warn_to_teleport_s": "warn 40%/20% then assist",
+   "bolt_travel_ms_at_30m": 1666.6666666666667
+  },
+  "contrast": {
+   "min_ratio": 2.14
+  },
+  "sub": {
+   "hurt": 0.0,
+   "telegraph": 1.0,
+   "contrast": 0.45600000000000007,
+   "shake": 1.0
+  },
+  "M": 0.614
+ },
+ "ttfa_s": 1.2266666666666666,
+ "retry_s": 0.33,
+ "micro_gap_med": 9.933333333333334,
+ "micro_gap_p90": 107.76666666666667,
+ "meso_gap_med": 44.175,
+ "meso_gap_p90": 119.31666666666666,
+ "first_pickup_s_med": 392.125,
+ "first_bank_s_med": 940.4833333333333,
+ "first_bank_reached": "19/20",
+ "reengage_s_med": NaN,
+ "loop_sub": {
+  "ttfa": 1.0,
+  "retry": 1.0,
+  "micro": 0.8026666666666666,
+  "meso": 1.0
+ },
+ "M": {
+  "feel": 0.8839285714285714,
+  "flow": 0.8189724735885168,
+  "choice": 0.4192469681372402,
+  "pace": 0.6666666666666666,
+  "fair": 0.614,
+  "loop": 0.9506666666666667
+ },
+ "S_fun": 65.3227631372007,
+ "frame": [
+  8.96,
+  13.95,
+  35.7,
+  7.99
+ ]
+}

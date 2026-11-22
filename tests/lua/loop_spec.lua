@@ -179,8 +179,14 @@ describe("hull and Fold Retreat", function()
     hull.damage(s, 200)
     s.size, s.morph = 2, { from = 1 }
     item(p)
+    item(p)
+    item(p)
     p.site = 2
+    local lost0 = p.lost_for_good or 0
     local cache = hull.retreat(st, p, st.sector.trader.pos)
+    -- add-fun-fixes: half the hot cargo (rounded up) is torn away for good, the rest is cached
+    expect(p.retreat_lost).to_be(2)
+    expect(p.lost_for_good).to_be(lost0 + 2)
     expect(#cache.items).to_be(1)
     expect(s.size).to_be(1)
     expect(s.morph).to_be(false)

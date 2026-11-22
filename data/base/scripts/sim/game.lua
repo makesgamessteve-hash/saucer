@@ -242,6 +242,8 @@ function M.new_player(index, pos, yaw)
     holo_run = false, tv = false, reading = false, cooking = false,
     buffs = {}, trails = {}, leads = {},
     msgs = {}, fx = {},
+    -- add-fun-fixes: the helm beam relay comes fitted (small finds pull from the helm)
+    upgrades = { beam_relay = 1 },
     -- add-on-foot-excursions: the suit (the only meter on foot) and 4 hand slots
     excursion = false, suit = 100, hands = {},
     -- add-wider-dark: Fold Core tier, tools, reputation, Xenoarchive, per
@@ -258,7 +260,7 @@ function M.new_player(index, pos, yaw)
   return p
 end
 
-M.VERSION = 15 -- state version; saves made by a newer game are refused
+M.VERSION = 16 -- state version; saves made by a newer game are refused
 
 function M.init(state, ctx)
   M.state_ref = state
@@ -874,7 +876,30 @@ local function scan(state, p)
     w == 1 and "" or "s", sn, sn == 1 and "" or "s",
     (cl + ld > 0) and string.format(", %d Clamp%s, %d Lockdown", cl, cl == 1 and "" or "s", ld) or "",
     wd > 0 and ", A WARDEN" or ""))
+  local n, best = M.scan_finds(state, p, site)
+  if n > 0 then
+    msg(state, p, string.format("Scan: %d find%s left; the best, %s (~%d c), lies in room %d", n, n == 1 and "" or "s",
+      items.label(best.item), best.item.value or 0, best.room or 0))
+  elseif n == 0 then
+    msg(state, p, "Scan: nothing left to find here")
+  end
   fx(state, p, "scan")
+end
+
+-- add-fun-fixes: the Scanner's job: how many finds are left at a site and where the best one lies
+-- (nil for a city, whose slots are rolled only near the saucer)
+function M.scan_finds(state, p, site)
+  local ruin = rt.ruins[site]
+  if not ruin or ruin.city then return nil end
+  local n, best = 0, nil
+  for _, s in ipairs(ruin.slots or {}) do
+    if not p.looted[site .. ":" .. s.id] then
+      n = n + 1
+      local item = loot.roll(loot.instance_seed(s.seed, p.record_index), s.max_size, s.tier)
+      if not best or item.value > best.item.value then best = { item = item, room = s.room } end
+    end
+  end
+  return n, best
 end
 
 local function jam(state, p)
@@ -934,8 +959,8 @@ function M.entry_text(state, p, site)
   end
   local w = sentry.summary(rt.sentries[site] or {})
   if w > 0 and p.ship.size == 1 then
-    return string.format("Entering derelict site %d: %d Watcher%s here lock on to a Villa - the Seat slips past", site, w,
-      w == 1 and "" or "s")
+    return string.format("Entering derelict site %d: %d Watcher%s here lock on to a Villa - the Seat slips past beyond %d m", site, w,
+      w == 1 and "" or "s", sentry.tune().watcher.small_range or 0)
   end
   return "Entering derelict site " .. site
 end
@@ -1006,6 +1031,9 @@ local function world_step(state, p, dt)
     local cache = hull.retreat(state, p, trader_pos(state, p))
     p.site = M.site_at(ship.pos)
     msg(state, p, "FOLD RETREAT: the hull gave out and you folded back to the trader.")
+    if (p.retreat_lost or 0) > 0 then
+      msg(state, p, string.format("The fold tore away %d hot item%s for good.", p.retreat_lost, p.retreat_lost == 1 and "" or "s"))
+    end
     if cache then
       msg(state, p, string.format("%d hot item%s stayed behind as a cache at site %d.", #cache.items,
         #cache.items == 1 and "" or "s", from))
@@ -1116,7 +1144,51 @@ function M.spike_step(state, p, cmd, dt)
   fx(state, p, "bank")
 end
 
+-- add-fun-fixes: a tool press that changes nothing still answers (the "denied" sound, and
+-- once in a while a line saying why), so no button is ever silently dead
+M.TOOL_BUTTONS = { "jam", "decoy", "shroud", "spike", "scan", "grapple", "land", "home", "assist", "shrink", "grow",
+                   "size1", "size2", "size3" }
+M.DENY_WHY = {
+  jam = "Jammer: only at the helm or on foot", decoy = "Decoy: only at the helm, inside a derelict",
+  shroud = "Shroud: only at the helm", spike = "Spike: hold it on a Disabled sentry",
+  scan = "Scanner: only at the helm or on foot", grapple = "Grapple: on foot only",
+  land = "Land: at the helm, over flat ground", home = "Emergency teleport: on foot only",
+  assist = "Return assist: on foot only", shrink = "Fold: at the helm", grow = "Fold: at the helm",
+  size1 = "Fold: at the helm", size2 = "Fold: at the helm", size3 = "The Pocket: docked at a station only",
+}
+local function react_sig(p)
+  local s, e = p.ship, p.eva
+  return table.concat({ tostring(p.mode), p.panel and (p.panel.kind .. ":" .. tostring(p.panel.sel)) or "-",
+    tostring(s.size), tostring(s.morph and true or false), tostring(p.tractor and true or false), tostring(#p.hold),
+    tostring(p.decoys), tostring(p.shroud), tostring(p.spike and true or false), tostring(p.scan_ready),
+    tostring(p.jam_ready), tostring(p.beam_console), tostring(p.berth and true or false), tostring(p.excursion and true or false),
+    tostring(e and e.tele), tostring(e and e.assist), tostring(e and e.jet), tostring(p.landing and true or false),
+    tostring(p.grapple and true or false), tostring(p.hatch), tostring(p.door and true or false),
+    tostring(p.station and true or false), tostring(p.holo_run and true or false) }, "|")
+end
+M.react_sig = react_sig
+local step_player_inner
 function M.step_player(state, p, cmd, dt)
+  local pressed
+  if p.mode ~= "wake" then
+    for _, a in ipairs(M.TOOL_BUTTONS) do
+      if cmd:pressed(a) then pressed = a break end
+    end
+  end
+  if not pressed then return step_player_inner(state, p, cmd, dt) end
+  local sig, lfx, lmsg = react_sig(p), p.fx[#p.fx], p.msgs[#p.msgs]
+  step_player_inner(state, p, cmd, dt)
+  if p.fx[#p.fx] ~= lfx or p.msgs[#p.msgs] ~= lmsg then return end
+  if react_sig(p) ~= sig then return end
+  fx(state, p, "denied")
+  p.denied = p.denied or {}
+  if (p.denied[pressed] or -9999) + 600 <= state.tick then
+    p.denied[pressed] = state.tick
+    msg(state, p, M.DENY_WHY[pressed])
+  end
+end
+
+step_player_inner = function(state, p, cmd, dt)
   local ship = p.ship
   -- add-wider-dark: the sector map, shaking off a Clamp
   if cmd:held("boost") and p.clamped_by then p.shake = (p.shake or 0) + dt end

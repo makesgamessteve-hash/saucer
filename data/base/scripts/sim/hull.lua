@@ -61,15 +61,26 @@ function M.retreat(state, p, trader_pos)
   local hc = require("sim.hardcore")
   local lost = hc.retreat_losses(state, p)
   local cache
+  p.retreat_lost = 0
   if #lost > 0 and hc.on(state) then
     -- add-home-among-stars: Hardcore keeps no cache; the cargo is gone
     for _, it in ipairs(lost) do items.remove(p, it.uid) end
     p.lost_for_good = (p.lost_for_good or 0) + #lost
   elseif #lost > 0 then
-    cache = { site = p.site, pos = { ship.pos[1], ship.pos[2], ship.pos[3] }, owner = p.record_index, items = {} }
-    for _, it in ipairs(lost) do
-      items.remove(p, it.uid)
-      cache.items[#cache.items + 1] = it
+    -- add-fun-fixes: the fold tears away half the hot cargo (rounded up, the newest
+    -- finds first) for good; the rest stays behind as the cache
+    local gone = math.ceil(#lost * (tune().retreat_lose or 0) - 1e-9)
+    p.retreat_lost = gone
+    for k = #lost, #lost - gone + 1, -1 do
+      items.remove(p, lost[k].uid)
+      p.lost_for_good = (p.lost_for_good or 0) + 1
+    end
+    if gone < #lost then
+      cache = { site = p.site, pos = { ship.pos[1], ship.pos[2], ship.pos[3] }, owner = p.record_index, items = {} }
+      for k = 1, #lost - gone do
+        items.remove(p, lost[k].uid)
+        cache.items[#cache.items + 1] = lost[k]
+      end
     end
     state.caches = state.caches or {}
     state.caches[#state.caches + 1] = cache
@@ -98,11 +109,19 @@ end
 function M.bill(state, p)
   local g = require("sim.galaxy").sector(state.seed, state.sector_id or 1)
   local bill = (tune().retreat_bill or {})[g and g.danger or 1] or 0
+  -- add-fun-fixes: tows close together cost more: each Fold Retreat within tow_window
+  -- seconds of the last one raises the bill by one more base fare (up to tow_streak_max x)
+  local tk = state.tick or 0
+  local win = (tune().tow_window or 0) * 60
+  if p.tow_last and tk - p.tow_last < win then p.tow_streak = (p.tow_streak or 1) + 1 else p.tow_streak = 1 end
+  p.tow_last = tk
+  bill = bill * math.min(p.tow_streak, tune().tow_streak_max or 1)
   p.last_bill = nil
   if bill <= 0 then return 0, 0 end
   local paid = math.min(p.credits or 0, bill)
   p.credits = (p.credits or 0) - paid
-  local chg = math.min(p.ship.charge, bill - paid)
+  -- add-fun-fixes: in a home (danger 1) sector the tow is credits only; a broke pilot keeps the Charge to fly
+  local chg = (g and g.danger or 1) <= 1 and 0 or math.min(p.ship.charge, bill - paid)
   p.ship.charge = p.ship.charge - chg
   p.bills = (p.bills or 0) + paid
   p.last_bill = { bill = bill, paid = paid, charge = chg }

@@ -95,6 +95,9 @@ describe("upgrades (recommendation 1)", function()
     p.mode = "walk"
     panel.open(p, "trade")
     p.credits = 5000
+    -- add-fun-fixes: a new pilot starts with the relay fitted; an old record without it can still buy it
+    expect(upgrades.level(p, "beam_relay")).to_be(1)
+    p.upgrades.beam_relay = nil
     local rows = panel.rows(st, p)
     local relay = row(rows, "Upgrade Helm beam relay")
     expect(relay ~= nil and relay.enabled).to_be(true)
@@ -147,6 +150,7 @@ describe("upgrades (recommendation 1)", function()
     for _, s in ipairs(L.stalls) do if s.vendor == "chandler" then ch = s end end
     panel.open(p, "vendor", ch.id)
     p.credits = 500
+    p.upgrades.beam_relay = nil
     local r = row(panel.rows(st, p), "Upgrade Helm beam relay")
     expect(r ~= nil and r.enabled).to_be(true)
     r.act(st, p)
@@ -249,7 +253,7 @@ describe("the Seat hint (recommendation 4)", function()
     local st = new_state()
     local p = st.players[1]
     expect(sentry.seat_hint(st, p, ctx)).to_be(true)
-    expect(heard("TIP: Watchers ignore")).to_be(true)
+    expect(heard("TIP: Watchers only see a Seat up close")).to_be(true)
     expect(sentry.seat_hint(st, p, ctx)).to_be(false)
     local q = new_state().players[1]
     q.ship.size = 2
@@ -277,6 +281,8 @@ describe("the helm beam relay (recommendation 5)", function()
   it("pulls a small find from the helm once fitted", function()
     local st = new_state()
     local p = st.players[1]
+    expect(upgrades.relay(p, { size = 2 })).to_be(true) -- add-fun-fixes: fitted from the start
+    p.upgrades = {}
     expect(upgrades.relay(p, { size = 1 })).to_be(false)
     p.upgrades = { beam_relay = 1 }
     expect(upgrades.relay(p, { size = 2 })).to_be(true)
@@ -378,33 +384,44 @@ describe("the pickpocket (recommendation 6)", function()
 end)
 
 describe("the tow bill (recommendation 7)", function()
-  it("costs nothing at home, credits then Charge at danger 2+", function()
+  it("costs a little at home (add-fun-fixes), credits then Charge at danger 2+", function()
     local st = new_state()
     local p = st.players[1]
     p.credits = 500
-    expect(hull.bill(st, p)).to_be(0)
-    expect(p.last_bill).to_be(nil)
+    p.tow_last = nil -- a fresh tow (add-fun-fixes: tows close together cost more)
+    expect(hull.bill(st, p)).to_be(40)
+    expect(p.credits).to_be(460)
+    expect(p.last_bill.bill).to_be(40)
+    p.credits, p.ship.charge = 10, 50
+    p.tow_last = nil -- a fresh tow (add-fun-fixes: tows close together cost more)
+    expect(select(2, hull.bill(st, p))).to_be(0) -- credits only at home: the Charge stays
+    expect(p.ship.charge).to_be(50)
     local g = galaxy.generate(42)
     game.enter_sector(st, g.spine[2])
     p.credits = 500
-    expect(hull.bill(st, p)).to_be(60)
-    expect(p.credits).to_be(440)
+    p.tow_last = nil -- a fresh tow (add-fun-fixes: tows close together cost more)
+    expect(hull.bill(st, p)).to_be(80)
+    expect(p.credits).to_be(420)
     p.credits, p.ship.charge = 20, 100
+    p.tow_last = nil -- a fresh tow (add-fun-fixes: tows close together cost more)
     local paid, chg = hull.bill(st, p)
     expect(paid).to_be(20)
-    expect(chg).to_be(40)
-    expect(p.ship.charge).to_be(60)
+    expect(chg).to_be(60)
+    expect(p.ship.charge).to_be(40)
     p.credits, p.ship.charge = 0, 10
+    p.tow_last = nil -- a fresh tow (add-fun-fixes: tows close together cost more)
     paid, chg = hull.bill(st, p)
     expect(chg).to_be(10)
     expect(p.ship.charge).to_be(0)
     -- a real Fold Retreat reports it
     p.credits, p.ship.charge = 100, 80
     p.ship.hull = 0
+    p.tow_last = nil -- a fresh tow (add-fun-fixes: tows close together cost more)
     run(st, nil, 1)
     expect(pheard(p, "Tow bill")).to_be(true)
-    expect(p.credits).to_be(40)
+    expect(p.credits).to_be(20)
     p.credits, p.ship.charge, p.ship.hull = 0, 80, 0
+    p.tow_last = nil -- a fresh tow (add-fun-fixes: tows close together cost more)
     run(st, nil, 1)
     expect(pheard(p, "Charge.")).to_be(true)
   end)

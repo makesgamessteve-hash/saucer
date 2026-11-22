@@ -1,0 +1,219 @@
+{
+ "n": {
+  "beamonly": 20,
+  "human": 20,
+  "opt": 20,
+  "rand": 20,
+  "spam": 10
+ },
+ "W": {
+  "beamonly": 0.8925213675213676,
+  "human": 0.8798611111111111,
+  "opt": 0.9082142857142858,
+  "rand": 0.0,
+  "spam": 0.0
+ },
+ "W_sd": {
+  "beamonly": 0.06097230291349591,
+  "human": 0.028217013408208397,
+  "opt": 0.056107813490581485,
+  "rand": 0.0,
+  "spam": 0.0
+ },
+ "banked_mean": {
+  "beamonly": 1082.1,
+  "human": 1082.1,
+  "opt": 1082.1,
+  "rand": 0,
+  "spam": 0
+ },
+ "loot_per_min": {
+  "beamonly": 54.15012510425354,
+  "human": 54.15012510425354,
+  "opt": 54.15012510425354,
+  "rand": 0.0,
+  "spam": 0.0
+ },
+ "story_mean": {
+  "beamonly": 1.35,
+  "human": 1.05,
+  "opt": 1.3,
+  "rand": 0,
+  "spam": 0
+ },
+ "echo_mean": {
+  "beamonly": 1,
+  "human": 1.7,
+  "opt": 2,
+  "rand": 0,
+  "spam": 0
+ },
+ "lost_mean": {
+  "beamonly": 1.15,
+  "human": 0.05,
+  "opt": 0.25,
+  "rand": 0,
+  "spam": 0
+ },
+ "pickups_mean": {
+  "beamonly": 10.25,
+  "human": 9.25,
+  "opt": 13.2,
+  "rand": 0,
+  "spam": 0
+ },
+ "retreats_mean": {
+  "beamonly": 5.4,
+  "human": 0.05,
+  "opt": 0,
+  "rand": 0,
+  "spam": 0
+ },
+ "zero_bank_eps": {
+  "beamonly": 0,
+  "human": 0,
+  "opt": 0,
+  "rand": 20,
+  "spam": 10
+ },
+ "latency_ms_p50": 24.656666666666666,
+ "latency_ms_p95": 24.656666666666666,
+ "drop_all": 0.00024653778766850856,
+ "drop_buttons": 0.03768115942028986,
+ "drop_axes": 0.00011874212508823199,
+ "drop_by_button": {
+  "use": "39/716",
+  "tractor": "0/242",
+  "shrink": "0/42",
+  "grow": "0/35"
+ },
+ "drop_rand_buttons": 0.50832951245606,
+ "fx_counts": {
+  "scan": 54,
+  "tractor": 573,
+  "echo": 251,
+  "pickup": 449,
+  "shrink": 101,
+  "bank": 344,
+  "grow": 92,
+  "alert": 95,
+  "locked": 57,
+  "hit": 37,
+  "denied": 14,
+  "jam": 20
+ },
+ "F_core": 2.7893447642375997,
+ "F_impact": 2.3348017621145374,
+ "feel_sub": {
+  "lat": 1.0,
+  "drop": 1.0,
+  "motion": 0.75,
+  "F": 0.8335431088735054
+ },
+ "flow_sub": {
+  "gap": 1.0,
+  "rand": 1.0,
+  "opt": 1.0,
+  "human": 0.4805555555555556,
+  "sd": 0.28217013408208397
+ },
+ "H_human": 0.22240860538626303,
+ "H_opt": 0.2908508070716987,
+ "maxp_human": 0.7586206896551724,
+ "maxp_opt": 0.7274725274725274,
+ "use_human": {
+  "tractor": 242,
+  "fold": 77
+ },
+ "use_opt": {
+  "tractor": 331,
+  "fold": 99,
+  "jam": 25
+ },
+ "H_activity": 0.7806998917591973,
+ "activity_share": {
+  "site-helm": 0.319,
+  "site-helm-seat": 0.293,
+  "walk": 0.196,
+  "helm": 0.127,
+  "site-walk": 0.05,
+  "helm-seat": 0.013,
+  "wake": 0.001
+ },
+ "spam_ratio": 0.0,
+ "beamonly_ratio": 1.014388925991136,
+ "choice_sub": {
+  "H": 0.3666138660414012,
+  "maxp": 0.6896551724137933,
+  "spam": 0.46402768502215996
+ },
+ "T_cv": 0.7809953776489118,
+ "T_mu": 0.176323875,
+ "near_per_min": 0.030184882404728962,
+ "near_kinds": {
+  "slip_alert": 8
+ },
+ "site_minutes": 265.03333333333336,
+ "T_longest_hot": 1,
+ "pace_sub": {
+  "cv": 1.0,
+  "near": 0.015092441202364481,
+  "exhaust": 1.0
+ },
+ "fair": {
+  "alpha_villa": 0.6977947627235439,
+  "alpha_seat": 0.8578424474653966,
+  "alpha_foot": 1.0956521739130436,
+  "villa_visual_m2": 224.74846995854506,
+  "seat_visual_m2": 1.4766,
+  "telegraph": {
+   "watcher_alert_to_first_bolt_ms": 750,
+   "snatcher_latch_to_siphon_ms": 3000,
+   "snatcher_alert_ms": 750,
+   "clamp_ms": 750,
+   "o2_low_warn_to_teleport_s": "warn 40%/20% then assist",
+   "bolt_travel_ms_at_30m": 1666.6666666666667
+  },
+  "contrast": {
+   "min_ratio": 2.14
+  },
+  "sub": {
+   "hurt": 0.649239005632452,
+   "telegraph": 1.0,
+   "contrast": 0.45600000000000007,
+   "shake": 1.0
+  },
+  "M": 0.776309751408113
+ },
+ "ttfa_s": 1.2266666666666666,
+ "retry_s": 0.33,
+ "micro_gap_med": 8.416666666666666,
+ "micro_gap_p90": 90.83333333333333,
+ "meso_gap_med": 39.391666666666666,
+ "meso_gap_p90": 99.28333333333333,
+ "first_pickup_s_med": 304.675,
+ "first_bank_s_med": 696.7583333333333,
+ "first_bank_reached": "20/20",
+ "reengage_s_med": NaN,
+ "loop_sub": {
+  "ttfa": 1.0,
+  "retry": 1.0,
+  "micro": 0.8633333333333334,
+  "meso": 1.0
+ },
+ "M": {
+  "feel": 0.8958857772183764,
+  "flow": 0.7525451379275279,
+  "choice": 0.5067655744924515,
+  "pace": 0.6716974804007881,
+  "fair": 0.776309751408113,
+  "loop": 0.9658333333333333
+ },
+ "S_fun": 69.42048396154313,
+ "frame": [
+  8.96,
+  13.95,
+  35.7,
+  7.99
+ ]
+}
