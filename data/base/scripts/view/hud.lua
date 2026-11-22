@@ -551,7 +551,7 @@ end
 
 -- add-fun-fixes: every HUD line sits on a dark plate (contrast >= 3.5:1 over a bright
 -- scene); the plate is drawn by a thin proxy around the view, so no call site changes
-M.PLATE = { 0, 0, 0, 0.6 }
+M.PLATE = { 0, 0, 0, 0.8 }
 M.PLATES = true
 local proxies = setmetatable({}, { __mode = "k" })
 function M.plated(v)

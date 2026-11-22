@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Text plates
-Every HUD text line SHALL be drawn on a dark plate (black, 60 % opacity) so that text keeps a contrast of at least 3.5:1 over a bright scene. Faint text (under 30 % opacity) SHALL have no plate.
+Every HUD text line SHALL be drawn on a dark plate (black, 80 % opacity) so that text keeps a contrast of at least 3.5:1 over a bright scene. Faint text (under 30 % opacity) SHALL have no plate.
 
 #### Scenario: Bright scene
 - **WHEN** the HUD draws a message over a lit derelict wall
