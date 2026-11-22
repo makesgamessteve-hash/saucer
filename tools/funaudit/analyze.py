@@ -30,6 +30,12 @@ CHANNELS = {
     "click": (["audio", "ui:sel"], "core"),
 }
 
+# add-fun-fixes (FUN_AFTER=1): the code after the fixes adds a red hit frame, camera trauma + a
+# 50 ms hitstop (view/juice.lua) and pitch variance to every one-shot sound
+if os.environ.get("FUN_AFTER"):
+    CHANNELS["hit"] = (["audio:pitch-var", "ui:bar", "ui:flash", "camera:shake+hitstop"], "impact")
+    CHANNELS["locked"] = (["anim:sentry-light", "audio:pitch-var", "ui:alert-banner", "ui:tip"], "impact")
+
 def clamp(x, a=0.0, b=1.0): return max(a, min(b, x))
 def band(x, lo, hi, lo0, hi0):
     """1 inside [lo,hi], linear to 0 at lo0 (below) / hi0 (above)."""
@@ -56,7 +62,7 @@ def parse(path):
         elif line.startswith("FUNV "):
             f = line.split(); ep["V"] = (int(f[2]), int(f[3]))
         elif line.startswith("FUNEND "):
-            f = line.split(); ep["end"] = dict(t=int(f[1]), banked=int(f[3]), credits=int(f[5]))
+            f = line.split(); ep["end"] = dict(t=int(f[1]), banked=int(f[3]), credits=int(f[5]), bills=int(f[7]) if len(f) > 7 else 0)
     return ep
 
 def episode_metrics(ep):
@@ -118,7 +124,8 @@ def episode_metrics(ep):
     fx = {}
     for e in E:
         if e[1].startswith("fx:"): fx[e[1][3:]] = fx.get(e[1][3:], 0) + 1
-    return dict(W=W, banked=banked, story=story, echoes=echoes, pickups=pickups, lost=lost, integ=integ, minutes=minutes,
+    bills = (ep["end"] or {}).get("bills", 0)
+    return dict(W=W, banked=banked, bills=bills, net=banked - bills, story=story, echoes=echoes, pickups=pickups, lost=lost, integ=integ, minutes=minutes,
                 in_site_min=in_site, near=len(nm), near_kinds={k: sum(1 for e in nm if e[1] == k) for k in set(e[1] for e in nm)},
                 T_mu=mu, T_cv=(sd / mu if mu > 0 else 0), T_long=longest_hot, micro_gaps=gaps(micro), meso_gaps=gaps(meso),
                 first_pick=first_pick, first_bank=first_bank, retreats=len(retreat_ticks), reengage=reeng,
@@ -156,6 +163,11 @@ def main():
     Ws = {k: st.pstdev([x["W"] for x in v]) for k, v in per.items()}
     R["W"] = Wm; R["W_sd"] = Ws
     R["banked_mean"] = {k: st.mean(x["banked"] for x in v) for k, v in per.items()}
+    # add-fun-fixes: net earnings = banked value minus tow bills paid
+    R["bills_mean"] = {k: st.mean(x["bills"] for x in v) for k, v in per.items()}
+    R["net_mean"] = {k: st.mean(x["net"] for x in v) for k, v in per.items()}
+    nh = R["net_mean"].get("human", 0)
+    R["beamonly_net_ratio"] = R["net_mean"].get("beamonly", 0) / nh if nh else 0
     R["loot_per_min"] = {k: st.mean(x["loot_per_min"] for x in v) for k, v in per.items()}
     R["story_mean"] = {k: st.mean(x["story"] for x in v) for k, v in per.items()}
     R["echo_mean"] = {k: st.mean(x["echoes"] for x in v) for k, v in per.items()}
@@ -300,7 +312,7 @@ def fairness():
     s_tel = 1.0  # every telegraph >= 750 ms (>= 300 ms target)
     contrast = CONTRAST
     s_con = band(contrast["min_ratio"], 3.5, 100, 1.0, 100)
-    s_shake = 1.0  # no screen shake exists (view/xr.lua: 'the camera never shakes')
+    s_shake = 1.0  # before: no shake; after: 0.02 rad x trauma^2 (~1.6% of the view height at 70 deg fov), <= 4%
     M = (s_hurt + s_tel + s_con + s_shake) / 4
     return dict(alpha_villa=a_villa, alpha_seat=a_seat, alpha_foot=a_foot, villa_visual_m2=va, seat_visual_m2=sa,
                 telegraph=tele, contrast=contrast, sub=dict(hurt=s_hurt, telegraph=s_tel, contrast=s_con, shake=s_shake), M=M)

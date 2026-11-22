@@ -109,6 +109,13 @@ end
 function M.bill(state, p)
   local g = require("sim.galaxy").sector(state.seed, state.sector_id or 1)
   local bill = (tune().retreat_bill or {})[g and g.danger or 1] or 0
+  -- add-fun-fixes: tows close together cost more: each Fold Retreat within tow_window
+  -- seconds of the last one raises the bill by one more base fare (up to tow_streak_max x)
+  local tk = state.tick or 0
+  local win = (tune().tow_window or 0) * 60
+  if p.tow_last and tk - p.tow_last < win then p.tow_streak = (p.tow_streak or 1) + 1 else p.tow_streak = 1 end
+  p.tow_last = tk
+  bill = bill * math.min(p.tow_streak, tune().tow_streak_max or 1)
   p.last_bill = nil
   if bill <= 0 then return 0, 0 end
   local paid = math.min(p.credits or 0, bill)

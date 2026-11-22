@@ -83,6 +83,19 @@ describe("fun fix 1: a Fold Retreat costs", function()
     expect(hull.retreat(st, p, st.sector.trader.pos)).to_be(nil)
     expect(p.retreat_lost).to_be(0)
   end)
+  it("charges more for tows close together", function()
+    local st = new_state()
+    local p = st.players[1]
+    local T = sentry.tune()
+    p.credits = 10000
+    expect(hull.bill(st, p)).to_be(T.retreat_bill[1])
+    st.tick = st.tick + 60
+    expect(hull.bill(st, p)).to_be(T.retreat_bill[1] * 2)
+    for _ = 1, 4 do hull.bill(st, p) end
+    expect(p.last_bill.bill).to_be(T.retreat_bill[1] * T.tow_streak_max)
+    st.tick = st.tick + T.tow_window * 60
+    expect(hull.bill(st, p)).to_be(T.retreat_bill[1])
+  end)
   it("says what the fold took", function()
     local st = new_state()
     local p = st.players[1]

@@ -388,33 +388,40 @@ describe("the tow bill (recommendation 7)", function()
     local st = new_state()
     local p = st.players[1]
     p.credits = 500
+    p.tow_last = nil -- a fresh tow (add-fun-fixes: tows close together cost more)
     expect(hull.bill(st, p)).to_be(40)
     expect(p.credits).to_be(460)
     expect(p.last_bill.bill).to_be(40)
     p.credits, p.ship.charge = 10, 50
+    p.tow_last = nil -- a fresh tow (add-fun-fixes: tows close together cost more)
     expect(select(2, hull.bill(st, p))).to_be(0) -- credits only at home: the Charge stays
     expect(p.ship.charge).to_be(50)
     local g = galaxy.generate(42)
     game.enter_sector(st, g.spine[2])
     p.credits = 500
+    p.tow_last = nil -- a fresh tow (add-fun-fixes: tows close together cost more)
     expect(hull.bill(st, p)).to_be(80)
     expect(p.credits).to_be(420)
     p.credits, p.ship.charge = 20, 100
+    p.tow_last = nil -- a fresh tow (add-fun-fixes: tows close together cost more)
     local paid, chg = hull.bill(st, p)
     expect(paid).to_be(20)
     expect(chg).to_be(60)
     expect(p.ship.charge).to_be(40)
     p.credits, p.ship.charge = 0, 10
+    p.tow_last = nil -- a fresh tow (add-fun-fixes: tows close together cost more)
     paid, chg = hull.bill(st, p)
     expect(chg).to_be(10)
     expect(p.ship.charge).to_be(0)
     -- a real Fold Retreat reports it
     p.credits, p.ship.charge = 100, 80
     p.ship.hull = 0
+    p.tow_last = nil -- a fresh tow (add-fun-fixes: tows close together cost more)
     run(st, nil, 1)
     expect(pheard(p, "Tow bill")).to_be(true)
     expect(p.credits).to_be(20)
     p.credits, p.ship.charge, p.ship.hull = 0, 80, 0
+    p.tow_last = nil -- a fresh tow (add-fun-fixes: tows close together cost more)
     run(st, nil, 1)
     expect(pheard(p, "Charge.")).to_be(true)
   end)

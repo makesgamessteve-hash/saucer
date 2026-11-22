@@ -495,7 +495,8 @@ function M.seat_hint(state, p, ctx)
   p.hints = p.hints or {}
   if p.hints.seat then return false end
   p.hints.seat = state.tick
-  ctx.msg(state, p, "TIP: Watchers only see a Seat up close (40 m). Fold down (2 or Q) to dive guarded sites.")
+  ctx.msg(state, p, string.format("TIP: Watchers only see a Seat up close (%d m). Fold down (2 or Q) to dive guarded sites.",
+    M.tune().watcher.small_range or 0))
   return true
 end
 

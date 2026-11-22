@@ -226,7 +226,7 @@ local function telemetry()
     end
     coroutine.yield()
   end
-  out("FUNEND %d banked %d credits %d", S().tick, P1().banked_value or 0, P1().credits or 0)
+  out("FUNEND %d banked %d credits %d bills %d", S().tick, P1().banked_value or 0, P1().credits or 0, P1().bills or 0)
 end
 
 -- ---------------- personas ----------------

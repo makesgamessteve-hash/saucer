@@ -14,10 +14,10 @@ return {
     foot_range = 45,      -- add-on-foot-excursions: a person on foot is seen this far (any size band)
     -- add-fun-fixes: a hull below the band (the Seat) is still seen this close, so a Seat dive is
     -- stealth, not a free pass; and bolts hit an ellipsoid this fraction of the hull (its lens shape)
-    small_range = 40, hurt_scale = 0.8,
+    small_range = 25, hurt_scale = 0.8,
     -- add-fun-fixes: the light Watcher in a sector's tutorial derelict (site 1): shorter sight,
     -- a slower lock and soft bolts, so the first threat comes early and teaches the tools
-    light = { range = 55, small_range = 25, alert_time = 1.5, bolt_damage = 4 },
+    light = { range = 55, small_range = 15, alert_time = 1.5, bolt_damage = 4 },
   },
   snatcher = {
     sense = 22, chase_speed = 7.5, patrol_speed = 2.0, flee_speed = 9.0, latch_time = 3.0, latch_dist = 1.6,
@@ -45,5 +45,6 @@ return {
   -- good; the rest stays behind as the cache
   retreat_bill = { 40, 80, 140 },
   retreat_lose = 0.5,
+  tow_window = 600, tow_streak_max = 4, -- add-fun-fixes: repeat tows within 10 min cost 2x, 3x, 4x
   hull_regen = 0.1,       -- hull points per second in open space, after shield_delay (Steady doubles it)
 }

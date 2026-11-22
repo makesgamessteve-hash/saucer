@@ -959,8 +959,8 @@ function M.entry_text(state, p, site)
   end
   local w = sentry.summary(rt.sentries[site] or {})
   if w > 0 and p.ship.size == 1 then
-    return string.format("Entering derelict site %d: %d Watcher%s here lock on to a Villa - the Seat slips past beyond 40 m", site, w,
-      w == 1 and "" or "s")
+    return string.format("Entering derelict site %d: %d Watcher%s here lock on to a Villa - the Seat slips past beyond %d m", site, w,
+      w == 1 and "" or "s", sentry.tune().watcher.small_range or 0)
   end
   return "Entering derelict site " .. site
 end
