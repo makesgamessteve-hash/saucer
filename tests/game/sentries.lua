@@ -28,6 +28,14 @@ local r1, o1 = game.ruin(1), T.state().sector.sites[1].pos
 local hall1
 for _, s in ipairs(r1.slots) do if r1.rooms[s.room].kind == "hall" then hall1 = s.room end end
 T.assert(hall1 ~= nil, "tutorial hall has loot")
+-- add-fun-fixes: the tutorial hall keeps a light Watcher (tests/lua/funfixes_spec.lua covers it);
+-- this script banks one item first, so its grid is shut beforehand to keep the shields full for derelict 2
+do
+  local adv = require("sim.advsentry")
+  T.state().overrides = T.state().overrides or {}
+  for _, d in ipairs(game.sentries(1)) do T.state().overrides[adv.key(d)] = T.state().tick end
+  for _, dy in ipairs(T.state().sentries[1] or {}) do dy.st = "off" end
+end
 local ok, route = ap.enter(T, 1, get, r1, o1, hall1)
 T.assert(ok, "into the tutorial hall")
 T.assert(ap.grab(T, 1, get, 1, r1, hall1, door_of(r1, o1, hall1)) >= 1, "grabbed hall loot")

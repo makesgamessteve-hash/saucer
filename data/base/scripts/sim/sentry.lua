@@ -78,13 +78,25 @@ local function watcher_in(out, site, ruin, kit, r, band, civ, light)
                     dark = dark_of(ruin, r), light = light or nil }
 end
 
--- add-fun-fixes: the tutorial derelict keeps one light Watcher in its biggest room
--- (not the entrance, not the vault when there is a choice), so the first threat comes early
+-- add-fun-fixes: the tutorial derelict keeps one light Watcher, in a big room on the way
+-- to the vault (a hall rather than a shaft, whose turret looks down from too high to
+-- reach a saucer coming in at the bottom), so the first threat comes early
 function M.light_room(ruin)
+  local onpath = {}
+  for _, r in ipairs(ruin.rooms) do
+    if r.kind == "vault" then
+      local q, guard = r, 0
+      while q and guard < #ruin.rooms do
+        onpath[q.id] = true
+        q, guard = ruin.rooms[q.parent], guard + 1
+      end
+    end
+  end
   local best
   for _, r in ipairs(ruin.rooms) do
     if r.kind ~= "entrance" and not r.calm then
-      local score = r.class * 10 + (r.kind == "vault" and 0 or 5)
+      local score = r.class * 10 + (onpath[r.id] and 20 or 0) + (r.kind == "hall" and 10 or 0)
+        + (r.kind == "shaft" and -50 or 0) + (r.kind == "vault" and -5 or 0)
       if not best or score > best.score then best = { r = r, score = score } end
     end
   end

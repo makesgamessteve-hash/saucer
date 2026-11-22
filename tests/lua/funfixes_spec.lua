@@ -113,8 +113,14 @@ describe("fun fix 2: Watchers see the Seat up close, and site 1 keeps a light se
     local room = game.ruin(1).rooms[defs[1].room]
     expect(room.kind ~= "entrance").to_be(true)
     expect(sentry.light_room({ rooms = { { kind = "entrance", class = 9 } } })).to_be(nil)
-    local r = sentry.light_room({ rooms = { { kind = "vault", class = 5 }, { kind = "hall", class = 5 } } })
-    expect(r.kind).to_be("hall")
+    local r = sentry.light_room({ rooms = { { id = 1, kind = "shaft", class = 5 }, { id = 2, kind = "wing", class = 4 } } })
+    expect(r.kind).to_be("wing")
+    -- a hall on the way to the vault beats a shaft and a hall off the path
+    r = sentry.light_room({ rooms = { { id = 1, kind = "entrance", class = 4, parent = 0 },
+      { id = 2, kind = "shaft", class = 4, parent = 1 }, { id = 3, kind = "hall", class = 4, parent = 2 },
+      { id = 4, kind = "vault", class = 4, parent = 3 }, { id = 5, kind = "hall", class = 4, parent = 1 } } })
+    expect(r.id).to_be(3)
+    expect(room.kind).to_be("hall")
     -- no light tuning: the tutorial derelict is bare as before
     local T = sentry.tune()
     local lt = T.watcher.light
