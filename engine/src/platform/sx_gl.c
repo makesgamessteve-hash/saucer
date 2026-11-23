@@ -84,6 +84,7 @@
   X(void, glReadBuffer, (GLenum b))                                                                                    \
   X(void, glPolygonOffset, (GLfloat f, GLfloat u))                                                                     \
   X(void, glUniform1fv, (GLint l, GLsizei n, const GLfloat *v))                                                        \
+  X(void, glUniform1iv, (GLint l, GLsizei n, const GLint *v))                                                          \
   X(void, glUniform4fv, (GLint l, GLsizei n, const GLfloat *v))
 
 #define SX_GL_DECL(ret, name, args)                                                                                    \
@@ -154,6 +155,7 @@ SX_GL_FUNCS(SX_GL_DECL)
 #define glReadBuffer p_glReadBuffer
 #define glPolygonOffset p_glPolygonOffset
 #define glUniform1fv p_glUniform1fv
+#define glUniform1iv p_glUniform1iv
 #define glUniform4fv p_glUniform4fv
 #endif
 
@@ -207,7 +209,7 @@ static const char *mesh_fs =
     "uniform int u_mode; uniform int u_nl; uniform vec3 u_amb; uniform float u_expo;\n"
     "uniform vec4 u_lpos[16]; uniform vec4 u_lcol[16]; uniform vec4 u_ldir[16]; uniform vec4 u_lpar[16];\n"
     "uniform highp sampler2DShadow u_shadow; uniform mat4 u_shmat[4]; uniform vec4 u_shrect[7]; uniform float u_shbias[7];\n"
-    "uniform int u_ncasc; uniform float u_shtexel;\n"
+    "uniform int u_ncasc; uniform float u_shtexel; uniform int u_lidx[16];\n"
     "out vec4 o_col;\n"
     "const float bayer[16] = float[16](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0,\n"
     "                                  3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);\n"
@@ -265,8 +267,9 @@ static const char *mesh_fs =
     "  } else if (u_lit == 1) {\n"
     "    vec3 n = normalize(v_nrm);\n"
     "    vec3 acc = u_amb;\n"
-    "    for (int i = 0; i < 16; i++) {\n"
-    "      if (i >= u_nl) break;\n"
+    "    for (int j = 0; j < 16; j++) {\n"
+    "      if (j >= u_nl) break;\n"
+    "      int i = u_lidx[j];\n"
     "      vec4 lp = u_lpos[i]; vec4 lc = u_lcol[i];\n"
     "      vec3 L; float att = 1.0;\n"
     "      if (lp.w < 0.5) { L = lp.xyz; }\n"
@@ -336,7 +339,7 @@ static const char *ui_fs =
 typedef struct prog {
   GLuint id;
   GLint mvp, mv, model, snap, affine, idx, pal, palrow, tex, tint, light, ambient, lit, fogcol, fog, dither, size, color;
-  GLint mode, nl, amb, expo, lpos, lcol, ldir, lpar, shadow, shmat, shrect, shbias, ncasc, shtexel;
+  GLint mode, nl, amb, expo, lpos, lcol, ldir, lpar, shadow, shmat, shrect, shbias, ncasc, shtexel, lidx;
 } prog;
 
 static struct {
@@ -345,6 +348,10 @@ static struct {
   GLuint shadow_tex, shadow_fbo; /* add-realistic-lighting: the depth atlas */
   int shadow_size;
   float *spheres;                /* per mesh of the view being drawn: world bounding sphere (x, y, z, r) */
+  float omni_key[SX_SHADOW_OMNI][4]; /* the point light whose faces each omni block holds */
+  unsigned omni_turn, omni_drawn;
+  float lsph[SX_MAX_ACTIVE_LIGHTS][4]; /* the view's active lights: pos + range (-1: a sun, reaches all) */
+  int nview_lights, last_lmask;
   int cap_spheres;
   GLuint pal_tex;
   GLuint white_tex;
@@ -402,7 +409,7 @@ static int link_prog(prog *p, const char *vs, const char *fs, int ui) {
   U(mvp); U(mv); U(model); U(snap); U(affine); U(idx); U(pal); U(palrow); U(tex); U(tint); U(light); U(ambient); U(lit);
   U(fogcol); U(fog); U(dither); U(size); U(color);
   U(mode); U(nl); U(amb); U(expo); U(lpos); U(lcol); U(ldir); U(lpar); U(shadow); U(shmat); U(shrect); U(shbias);
-  U(ncasc); U(shtexel);
+  U(ncasc); U(shtexel); U(lidx);
 #undef U
   glUseProgram(p->id);
   glUniform1i(p->idx, 0);
@@ -629,13 +636,22 @@ static void view_spheres(const sx_render *r, const sx_viewport *v) {
   }
 }
 
-static void draw_casters(const sx_viewport *v, const float vp[16], const float *ball, const float *face, int owner) {
+/* ortho: a sun cascade of half-size ortho (m) - casters outside its box (or beyond its far end) are skipped */
+static void draw_casters(const sx_viewport *v, const float vp[16], const float *ball, const float *face, int owner,
+                         float ortho) {
   int i;
   for (i = 0; i < v->nmeshes; i++) {
     const sx_draw_mesh *d = &v->meshes[i];
     const float *s = &G.spheres[i * 4];
     float mvp[16];
     if (s[3] < 0.0f || (owner && d->owner == owner) || !G.mesh_vao[d->mesh]) continue;
+    if (ortho > 0.0f) {
+      float x = vp[0] * s[0] + vp[4] * s[1] + vp[8] * s[2] + vp[12];
+      float y = vp[1] * s[0] + vp[5] * s[1] + vp[9] * s[2] + vp[13];
+      float z = vp[2] * s[0] + vp[6] * s[1] + vp[10] * s[2] + vp[14];
+      float m = 1.0f + s[3] / ortho;
+      if (x > m || x < -m || y > m || y < -m || z > 1.0f + s[3] / 1500.0f) continue;
+    }
     if (ball) {
       float dx = s[0] - ball[0], dy = s[1] - ball[1], dz = s[2] - ball[2], rr = s[3] + ball[3];
       if (dx * dx + dy * dy + dz * dz > rr * rr) continue;
@@ -664,9 +680,13 @@ static void shadow_tile(const float rect[4], int size) {
 /* renders every shadow map the view's selection asked for into the atlas */
 static void draw_shadows(const sx_render *r, const sx_viewport *v) {
   const sx_lighting *lt = &v->lighting;
-  int k, f, size = lt->atlas;
+  int k, f, size = lt->atlas, cache = r->nviews == 1, refresh;
   if (!lt->on || size <= 0 || (!lt->cascades && !lt->spots && !lt->omni)) return;
+  if (G.shadow_size != size || !cache) {
+    for (k = 0; k < SX_SHADOW_OMNI; k++) G.omni_key[k][3] = -1.0f;
+  }
   ensure_shadow(size);
+  refresh = lt->omni > 0 ? (int)(G.omni_turn++ % (unsigned)lt->omni) : -1;
   view_spheres(r, v);
   glBindFramebuffer(GL_FRAMEBUFFER, G.shadow_fbo);
   glUseProgram(G.depth.id);
@@ -685,18 +705,33 @@ static void draw_shadows(const sx_render *r, const sx_viewport *v) {
       int c;
       for (c = 0; c < lt->cascades; c++) {
         shadow_tile(lt->shadow_rect[c], size);
-        draw_casters(v, lt->shadow_mat[c], NULL, NULL, l->owner);
+        draw_casters(v, lt->shadow_mat[c], NULL, NULL, l->owner, lt->casc_radius[c]);
       }
     } else if (l->kind == SX_LIGHT_SPOT) {
       float ball[4];
+      int j, twin = 0;
+      for (j = 0; j < k; j++)
+        if (lt->lights[lt->active[j]].slot == l->slot) twin = 1;
+      if (twin) continue; /* a headlight pair: the first drew the map */
       ball[0] = l->pos[0];
       ball[1] = l->pos[1];
       ball[2] = l->pos[2];
       ball[3] = l->range;
       shadow_tile(lt->shadow_rect[l->slot], size);
-      draw_casters(v, lt->shadow_mat[l->slot], ball, NULL, l->owner);
+      draw_casters(v, lt->shadow_mat[l->slot], ball, NULL, l->owner, 0.0f);
     } else {
       float ball[4], proj[16], view[16], vp[16], rect[4];
+      int j = l->slot - SX_SHADOW_CASCADES - SX_SHADOW_SPOTS;
+      int same = cache && G.omni_key[j][0] == l->pos[0] && G.omni_key[j][1] == l->pos[1] &&
+                 G.omni_key[j][2] == l->pos[2] && G.omni_key[j][3] == l->range;
+      /* a single view keeps a point light's map while the light holds its block; one block a frame is
+         redrawn anyway (round robin) so moving casters catch up */
+      if (same && j != refresh) continue;
+      G.omni_key[j][0] = l->pos[0];
+      G.omni_key[j][1] = l->pos[1];
+      G.omni_key[j][2] = l->pos[2];
+      G.omni_key[j][3] = l->range;
+      G.omni_drawn++;
       ball[0] = l->pos[0];
       ball[1] = l->pos[1];
       ball[2] = l->pos[2];
@@ -717,7 +752,7 @@ static void draw_shadows(const sx_render *r, const sx_viewport *v) {
         sx_mat4_mul(vp, proj, view);
         sx_shadow_face_rect(lt->shadow_rect[l->slot], f, rect);
         shadow_tile(rect, size);
-        draw_casters(v, vp, ball, planes, l->owner);
+        draw_casters(v, vp, ball, planes, l->owner, 0.0f);
       }
     }
   }
@@ -732,7 +767,9 @@ static void set_lights(const sx_viewport *v) {
   float mats[4][16];
   int k, n = lt->on ? lt->nactive : 0, size = lt->atlas > 0 ? lt->atlas : 1;
   glUniform1i(G.mesh.mode, lt->on ? 1 : 0);
-  glUniform1i(G.mesh.nl, n);
+  glUniform1i(G.mesh.nl, 0);
+  G.nview_lights = n;
+  G.last_lmask = -1;
   if (!lt->on) return;
   memset(lpos, 0, sizeof lpos);
   memset(ldir, 0, sizeof ldir);
@@ -751,6 +788,10 @@ static void set_lights(const sx_viewport *v) {
     ldir[k][3] = l->cos_outer;
     lpar[k][0] = l->cos_inner;
     lpar[k][1] = (float)l->slot;
+    G.lsph[k][0] = l->pos[0];
+    G.lsph[k][1] = l->pos[1];
+    G.lsph[k][2] = l->pos[2];
+    G.lsph[k][3] = l->kind == SX_LIGHT_SUN ? -1.0f : l->range;
   }
   glUniform4fv(G.mesh.lpos, 16, &lpos[0][0]);
   glUniform4fv(G.mesh.lcol, 16, &lcol[0][0]);
@@ -801,6 +842,39 @@ static void set_common(const sx_viewport *v, const sx_render *r, int xr) {
   else glUniform2f(G.mesh.snap, 0, 0);
 }
 
+
+/* add-realistic-lighting: only the lights whose range reaches a mesh's bounding sphere shade it */
+static void mesh_lights(const sx_render *r, const sx_draw_mesh *d) {
+  GLint idx[SX_MAX_ACTIVE_LIGHTS];
+  float c[3], h[3], sc = 0, rad;
+  const sx_mesh *m = &r->meshes[d->mesh].mesh;
+  int k, n = 0, mask = 0;
+  for (k = 0; k < 3; k++) {
+    float l2 = d->model[k * 4] * d->model[k * 4] + d->model[k * 4 + 1] * d->model[k * 4 + 1] +
+               d->model[k * 4 + 2] * d->model[k * 4 + 2];
+    h[k] = (m->bmax[k] - m->bmin[k]) * 0.5f;
+    if (l2 > sc) sc = l2;
+  }
+  for (k = 0; k < 3; k++)
+    c[k] = d->model[k] * (m->bmin[0] + m->bmax[0]) * 0.5f + d->model[4 + k] * (m->bmin[1] + m->bmax[1]) * 0.5f +
+           d->model[8 + k] * (m->bmin[2] + m->bmax[2]) * 0.5f + d->model[12 + k];
+  rad = (float)sx_sqrt((double)((h[0] * h[0] + h[1] * h[1] + h[2] * h[2]) * sc));
+  for (k = 0; k < G.nview_lights; k++) {
+    const float *l = G.lsph[k];
+    if (l[3] >= 0.0f) {
+      float dx = c[0] - l[0], dy = c[1] - l[1], dz = c[2] - l[2], rr = rad + l[3];
+      if (dx * dx + dy * dy + dz * dz > rr * rr) continue;
+    }
+    idx[n++] = k;
+    mask |= 1 << k;
+  }
+  if (mask != G.last_lmask) {
+    glUniform1iv(G.mesh.lidx, n > 0 ? n : 1, idx);
+    G.last_lmask = mask;
+  }
+  glUniform1i(G.mesh.nl, n);
+}
+
 static void draw_mesh(const sx_render *r, const sx_viewport *v, const frame_mats *fm, const sx_draw_mesh *d) {
   float mv[16], mvp[16], model[16];
   if (d->mesh <= 0 || d->mesh >= SX_MAX_MESHES || !G.mesh_vao[d->mesh]) return;
@@ -822,6 +896,7 @@ static void draw_mesh(const sx_render *r, const sx_viewport *v, const frame_mats
   glUniform1i(G.mesh.tex, d->tex > 0 ? 1 : 0);
   glUniform1i(G.mesh.palrow, pal_row(r, d->palette));
   glUniform1i(G.mesh.lit, (d->flags & SX_DRAW_UNLIT) ? 0 : 1);
+  if (G.nview_lights > 0 && !(d->flags & (SX_DRAW_UNLIT | SX_DRAW_SKY))) mesh_lights(r, d);
   glUniform1f(G.mesh.fog, (d->flags & SX_DRAW_NOFOG) ? 0.0f : v->fog_density);
   if (d->flags & SX_DRAW_GHOST) glUniform4f(G.mesh.tint, d->tint[0] * 0.6f, d->tint[1] * 0.85f, d->tint[2], d->tint[3] * 0.35f);
   else glUniform4f(G.mesh.tint, d->tint[0], d->tint[1], d->tint[2], d->tint[3]);

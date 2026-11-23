@@ -32,6 +32,7 @@ void sx_lighting_reset(sx_lighting *lt) {
   lt->nactive = 0;
   lt->cascades = lt->spots = lt->omni = 0;
   lt->atlas = 0;
+  /* omni_key survives the reset: the omni blocks stay with their lights from frame to frame */
 }
 
 void sx_light_defaults(sx_light *l, int kind) {
@@ -79,27 +80,29 @@ sx_shadow_budget sx_shadow_budget_for(int quality, int nviews) {
   sx_shadow_budget b;
   memset(&b, 0, sizeof b);
   b.quality = quality;
+  b.max_lights = quality == SX_SHADOWS_HIGH ? SX_MAX_ACTIVE_LIGHTS : 8;
   if (quality == SX_SHADOWS_HIGH) {
-    b.atlas = 2048;
+    b.atlas = 1024; /* the screen is 480 x 270: chunky shadows suit it, and fill is the cost */
     b.cascades = 2;
     b.spots = 2;
     b.omni = 3;
-    b.radius[0] = 28.0f;
-    b.radius[1] = 180.0f;
+    b.radius[0] = 24.0f;
+    b.radius[1] = 150.0f;
   } else if (quality == SX_SHADOWS_LOW) {
-    b.atlas = 1024;
+    b.atlas = 512;
     b.cascades = 1;
     b.spots = 1;
     b.omni = 1;
-    b.radius[0] = 70.0f;
-    b.radius[1] = 70.0f;
+    b.radius[0] = 60.0f;
+    b.radius[1] = 60.0f;
   }
   /* a split screen shades every view: two views share the budget, three or four get the minimum */
   if (nviews >= 3) {
+    b.max_lights = 8;
     if (b.cascades > 1) b.cascades = 1;
     if (b.spots > 1) b.spots = 1;
     if (b.omni > 1) b.omni = 1;
-    if (b.cascades) b.radius[0] = 70.0f;
+    if (b.cascades) b.radius[0] = 60.0f;
   } else if (nviews == 2 && b.omni > 2) {
     b.omni = 2;
   }
@@ -234,6 +237,22 @@ void sx_shadow_spot_mat(const sx_light *l, float out[16]) {
   sx_mat4_mul(out, proj, view);
 }
 
+/* an earlier active spot of the same owner, pointing the same way from within SX_SPOT_TWIN m, with a map */
+#define SX_SPOT_TWIN 12.0f
+static int shared_spot(const sx_lighting *lt, int upto, const sx_light *l) {
+  int k;
+  for (k = 0; k < upto; k++) {
+    const sx_light *o = &lt->lights[lt->active[k]];
+    float d[3];
+    if (o->kind != SX_LIGHT_SPOT || o->slot < 0 || o->owner != l->owner || dot3(o->dir, l->dir) < 0.99f) continue;
+    d[0] = o->pos[0] - l->pos[0];
+    d[1] = o->pos[1] - l->pos[1];
+    d[2] = o->pos[2] - l->pos[2];
+    if (dot3(d, d) <= SX_SPOT_TWIN * SX_SPOT_TWIN) return o->slot;
+  }
+  return -1;
+}
+
 void sx_lighting_select(sx_lighting *lt, const sx_shadow_budget *b, const float cam[3], const float fwd[3]) {
   int i, k, nsun = 0, nspot = 0, nomni = 0;
   unsigned char taken[SX_MAX_LIGHTS];
@@ -250,7 +269,7 @@ void sx_lighting_select(sx_lighting *lt, const sx_shadow_budget *b, const float 
     lt->lights[i].slot = -1;
   }
   /* the strongest first (ties: the first submitted), at most SX_MAX_ACTIVE_LIGHTS */
-  while (lt->nactive < SX_MAX_ACTIVE_LIGHTS) {
+  while (lt->nactive < (b->max_lights > 0 && b->max_lights < SX_MAX_ACTIVE_LIGHTS ? b->max_lights : SX_MAX_ACTIVE_LIGHTS)) {
     int best = -1;
     for (i = 0; i < lt->nlights; i++)
       if (!taken[i] && lt->lights[i].score > 0.0f && (best < 0 || lt->lights[i].score > lt->lights[best].score)) best = i;
@@ -296,15 +315,55 @@ void sx_lighting_select(sx_lighting *lt, const sx_shadow_budget *b, const float 
         lt->casc_radius[c] = r;
         sx_shadow_sun_mat(l->dir, ctr, r, 1500.0f, b->atlas / 2, lt->shadow_mat[c]);
       }
+    } else if (l->kind == SX_LIGHT_SPOT && l->owner && (l->slot = shared_spot(lt, k, l)) >= 0) {
+      /* the twin of a pair (a saucer's two headlights) shares its sibling's map */
     } else if (l->kind == SX_LIGHT_SPOT && nspot < b->spots) {
       l->slot = SX_SHADOW_CASCADES + nspot;
       sx_shadow_spot_mat(l, lt->shadow_mat[SX_SHADOW_CASCADES + nspot]);
       nspot++;
     } else if (l->kind == SX_LIGHT_POINT && nomni < b->omni) {
-      l->slot = SX_SHADOW_CASCADES + SX_SHADOW_SPOTS + nomni;
+      l->slot = -2; /* gets a block below */
       nomni++;
     }
   }
   lt->spots = nspot;
   lt->omni = nomni;
+  /* omni blocks are sticky: a light that had a block last frame keeps it (so a backend may keep the map
+     while nothing moved), the rest take the free ones in order */
+  {
+    int used[SX_SHADOW_OMNI] = {0}, j;
+    float keys[SX_SHADOW_OMNI][4];
+    for (k = 0; k < lt->nactive; k++) {
+      sx_light *l = &lt->lights[lt->active[k]];
+      if (l->slot != -2) continue;
+      for (j = 0; j < b->omni; j++)
+        if (!used[j] && lt->omni_key[j][3] == l->range && lt->omni_key[j][0] == l->pos[0] &&
+            lt->omni_key[j][1] == l->pos[1] && lt->omni_key[j][2] == l->pos[2]) {
+          used[j] = 1;
+          l->slot = SX_SHADOW_CASCADES + SX_SHADOW_SPOTS + j;
+          break;
+        }
+    }
+    for (k = 0; k < lt->nactive; k++) {
+      sx_light *l = &lt->lights[lt->active[k]];
+      if (l->slot != -2) continue;
+      for (j = 0; j < b->omni; j++)
+        if (!used[j]) {
+          used[j] = 1;
+          l->slot = SX_SHADOW_CASCADES + SX_SHADOW_SPOTS + j;
+          break;
+        }
+    }
+    for (j = 0; j < SX_SHADOW_OMNI; j++) keys[j][0] = keys[j][1] = keys[j][2] = keys[j][3] = -1.0f;
+    for (k = 0; k < lt->nactive; k++) {
+      const sx_light *l = &lt->lights[lt->active[k]];
+      if (l->kind != SX_LIGHT_POINT || l->slot < 0) continue;
+      j = l->slot - SX_SHADOW_CASCADES - SX_SHADOW_SPOTS;
+      keys[j][0] = l->pos[0];
+      keys[j][1] = l->pos[1];
+      keys[j][2] = l->pos[2];
+      keys[j][3] = l->range;
+    }
+    memcpy(lt->omni_key, keys, sizeof keys);
+  }
 }

@@ -39,6 +39,7 @@ typedef struct sx_shadow_budget {
   int atlas;    /* depth atlas size (px, square); 0 = no shadows */
   int cascades; /* sun cascades */
   int spots, omni;
+  int max_lights; /* shaded per pixel (<= SX_MAX_ACTIVE_LIGHTS) */
   float radius[SX_SHADOW_CASCADES]; /* sun cascade half-sizes (m) */
 } sx_shadow_budget;
 
@@ -58,6 +59,7 @@ typedef struct sx_lighting {
   float shadow_mat[SX_SHADOW_CASCADES + SX_SHADOW_SPOTS][16]; /* world -> clip */
   float shadow_rect[SX_SHADOW_RECTS][4];                      /* atlas uv x, y, w, h (omni: the 3x2 block) */
   int atlas;
+  float omni_key[SX_SHADOW_OMNI][4]; /* the light (pos, range) each omni block holds; kept across frames */
 } sx_lighting;
 
 void sx_lighting_reset(sx_lighting *lt);
