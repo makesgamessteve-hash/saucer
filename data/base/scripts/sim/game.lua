@@ -52,6 +52,7 @@ local claims = require("sim.claims")
 -- add-dock-land-eva
 local landing = require("sim.landing")
 local hulldoor = require("sim.hulldoor")
+local stealth = require("sim.stealth")
 local M = {}
 
 M.SITE_PAD = 30
@@ -86,6 +87,8 @@ function M.rebuild(state)
     local r = ruinm.generate(site.seed, site.kit, civ_of(site), site.pos, nil, site.first)
     rt.ruins[i] = r
     rt.sentries[i] = sentry.layout(site, r, civ_of(site))
+    -- add-strategic-sentries: cover pillars and a guarded find in every Watcher hall (once per ruin)
+    stealth.decorate(site, r, rt.sentries[i])
     local lo, hi = ruinm.bounds(r, site.pos, M.SITE_PAD)
     rt.bounds[i] = { lo, hi }
     for _, b in ipairs(r.walls) do saucer.physics.add_box(b[1], b[2], 1) end
@@ -260,12 +263,12 @@ function M.new_player(index, pos, yaw)
   return p
 end
 
-M.VERSION = 16 -- state version; saves made by a newer game are refused
+M.VERSION = 17 -- state version; saves made by a newer game are refused
 
 function M.init(state, ctx)
   M.state_ref = state
   local seed = ctx.seed
-  state.version = M.VERSION  -- v15: megastructure stations move the trader and the far hangar (add-huge-stations); v14: landing gear, the hull hatch and the suit (add-dock-land-eva); v13: the run story (add-run-story); v12: sliding doors keep a goal and a hold timer (fix-bedroom-door); v11: seed-plus-diff saves (save format 3); v10: playtest recommendations (add-playtest-recs); v9: the wider dark (add-wider-dark); v8: on-foot excursions; v7: station visits
+  state.version = M.VERSION  -- v17: suspicion meters, site alarms, guarded finds, cover, power cells, Spotters (add-strategic-sentries); v16: the fun fixes (add-fun-fixes); v15: megastructure stations move the trader and the far hangar (add-huge-stations); v14: landing gear, the hull hatch and the suit (add-dock-land-eva); v13: the run story (add-run-story); v12: sliding doors keep a goal and a hold timer (fix-bedroom-door); v11: seed-plus-diff saves (save format 3); v10: playtest recommendations (add-playtest-recs); v9: the wider dark (add-wider-dark); v8: on-foot excursions; v7: station visits
   state.seed = seed
   state.tick = 0
   civs.use(seed)
@@ -294,6 +297,7 @@ function M.init(state, ctx)
   state.vault = { pos = vec.copy(state.sector.vault.pos), taken = false }
   state.clock = clock.new()
   state.bolts = {}
+  state.alarm = {} -- add-strategic-sentries: site alarms (live, like the sentries)
   state.locks, state.grids = {}, {} -- add-on-foot-excursions: turned hand-locks, grids shut down
   M.rebuild(state)
   state.sentries = {}
@@ -318,6 +322,7 @@ function M.load_sector(state, sid)
   state.sector = sector.generate(state.seed, sid, g.sectors[sid])
   state.bolts = {}
   state.sentries = {}
+  state.alarm = {}
   M.rebuild(state)
   for i = 1, #state.sector.sites do state.sentries[i] = sentry.new_state(rt.sentries[i], state) end
   requests.ensure(state)
@@ -637,6 +642,7 @@ local function tractor_step(state, p, cmd, dt)
     if not cand then why = "Tractor lock lost"
     elseif t.size ~= ship.size or ship.morph then why = "The beam collapsed in the fold"
     elseif t.console and not p.beam_console then why = "You left the console: the beam let go"
+    elseif t.kind == "cell" and sentry.locked_on(state, p) then why = "Caught at the power cell: the beam let go"
     else
       -- the saucer drifted so far that the item fell out of the beam
       local b, m = tractor.beam_of(ship), tractor.measure(ship, t.from)
@@ -684,7 +690,7 @@ local function tractor_step(state, p, cmd, dt)
           beamqueue.remove(p, qc.key)
           local relay = b.console and not p.beam_console and p.mode == "helm" and upgrades.relay(p, qc.item) or nil
           p.tractor = { key = qc.key, site = p.site, t = 0,
-                        total = tractor.pull_time(ship, qi.depth) * upgrades.pull_factor(p),
+                        total = tractor.pull_time(ship, qi.depth, qc.kind) * upgrades.pull_factor(p),
                         from = vec.copy(qc.pos), size = ship.size, console = b.console and not relay, item_size = qc.item.size,
                         kind = qc.kind, relay = relay }
           msg(state, p, "Queued find in lock: pulling up " .. items.label(qc.item))
@@ -742,7 +748,7 @@ local function tractor_step(state, p, cmd, dt)
     local cand = sc.cand
     beamqueue.remove(p, cand.key)
     p.tractor = { key = cand.key, site = p.site, t = 0,
-                  total = tractor.pull_time(ship, sc.info.depth) * upgrades.pull_factor(p),
+                  total = tractor.pull_time(ship, sc.info.depth, sc.cand.kind) * upgrades.pull_factor(p),
                   from = vec.copy(cand.pos), size = ship.size, console = b.console and not relay, item_size = cand.item.size,
                   kind = cand.kind, relay = relay or nil }
     msg(state, p, (relay and "Helm relay lock: pulling up " or "Beam lock: pulling up ") .. items.label(cand.item))
@@ -800,6 +806,19 @@ function M.pick_up(state, p, cand, site_idx)
   elseif cand.kind == "story" then
     -- add-run-story: a wreck log, a mural or an archive record is read in place
     story.read(state, cand.story, p, ctx_fns)
+  elseif cand.kind == "cell" then
+    -- add-strategic-sentries: the turret's power cell is out: dark for good, and the cell sells
+    local def = cand.def
+    local dyn = state.sentries[site_idx] and state.sentries[site_idx][def.id]
+    if dyn then dyn.st, dyn.t, dyn.target, dyn.meter = "off", 0, 0, 0 end
+    state.overrides = state.overrides or {}
+    state.overrides[adv.key(def)] = state.tick
+    local it = items.stamp(p, cand.item, 2, nil)
+    it.hot = true
+    p.hold[#p.hold + 1] = it
+    p.sabotaged = (p.sabotaged or 0) + 1
+    msg(state, p, "Power cell out: the Watcher goes dark for good. Got " .. items.label(it))
+    fx(state, p, "pickup")
   elseif cand.kind == "nest" then
     local n = table.remove(state.nests, cand.index)
     n.item.hot = true
@@ -870,12 +889,20 @@ local function scan(state, p)
     end
     site = best
   end
-  local w, sn, cl, ld, wd = sentry.summary(rt.sentries[site] or {})
+  local w, sn, cl, ld, wd, sp = sentry.summary(rt.sentries[site] or {})
   local danger = (state.sector_id or 1) == 1 and (site == 1 and 1 or 2) or (state.sector.sites[site].danger or 2) + 1
-  msg(state, p, string.format("Scan: site %d, danger %d, %d Watcher%s, %d Snatcher%s%s%s", site, danger, w,
+  msg(state, p, string.format("Scan: site %d, danger %d, %d Watcher%s, %d Snatcher%s%s%s%s", site, danger, w,
     w == 1 and "" or "s", sn, sn == 1 and "" or "s",
     (cl + ld > 0) and string.format(", %d Clamp%s, %d Lockdown", cl, cl == 1 and "" or "s", ld) or "",
-    wd > 0 and ", A WARDEN" or ""))
+    wd > 0 and ", A WARDEN" or "", (sp or 0) > 0 and string.format(", %d Spotter%s", sp, sp == 1 and "" or "s") or ""))
+  -- add-strategic-sentries: the guarded finds (under a Watcher's sweep) and the alarm
+  local g = #stealth.guarded(rt.ruins[site], p, site)
+  if g > 0 then
+    msg(state, p, string.format("Scan: %d GUARDED find%s in Watcher sweeps (worth %.1fx); cones and cells marked",
+      g, g == 1 and "" or "s", stealth.tune().guard.premium))
+  end
+  local lv = stealth.level(state, site)
+  if lv > 0 then msg(state, p, string.format("Scan: site alarm %d/%d", lv, stealth.tune().alarm_max)) end
   local n, best = M.scan_finds(state, p, site)
   if n > 0 then
     msg(state, p, string.format("Scan: %d find%s left; the best, %s (~%d c), lies in room %d", n, n == 1 and "" or "s",
@@ -896,6 +923,7 @@ function M.scan_finds(state, p, site)
     if not p.looted[site .. ":" .. s.id] then
       n = n + 1
       local item = loot.roll(loot.instance_seed(s.seed, p.record_index), s.max_size, s.tier)
+      if s.premium then item.value = math.floor(item.value * s.premium) end
       if not best or item.value > best.item.value then best = { item = item, room = s.room } end
     end
   end
@@ -1407,6 +1435,7 @@ function M.step(state, cmds, dt)
   -- sentries act once per tick for everyone, then their stun bolts fly
   for i = 1, #state.sector.sites do sentry.step(state, i, rt.sentries[i], dt, ctx_fns) end
   sentry.step_bolts(state, dt)
+  stealth.step_alarm(state, dt, ctx_fns)
   M.city_step(state)
   -- add-wider-dark: decoys burn out; docks, the Heart and the party's fold jump
   local keep = {}
