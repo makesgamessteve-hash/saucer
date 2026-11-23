@@ -149,6 +149,8 @@ if(SAUCER_BUILD_TESTS)
   add_test(NAME game_trade COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-trade --quiet
            --seed 42 --script tests/game/trade.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_sentries COMMAND ${HL} --seed 42 --ticks 72000 --script tests/game/sentries.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  # add-strategic-sentries: suspicion meter, guarded finds, power-cell sabotage, the Spotter tag, the site alarm
+  add_test(NAME game_strategic COMMAND ${HL} --seed 42 --ticks 72000 --script tests/game/strategic.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_mystery COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-mystery --quiet
            --seed 42 --ticks 60000 --script tests/game/mystery.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   # add-run-story: the first clue of the run's story, beamed up, filed, saved and loaded (own user dir: it saves)

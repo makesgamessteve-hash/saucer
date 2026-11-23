@@ -46,5 +46,41 @@ return {
   retreat_bill = { 40, 80, 140 },
   retreat_lose = 0.5,
   tow_window = 600, tow_streak_max = 4, -- add-fun-fixes: repeat tows within 10 min cost 2x, 3x, 4x
+  -- add-strategic-sentries (sim/stealth.lua): sentries build suspicion instead of seeing at once
+  stealth = {
+    -- the suspicion meter (0..1) of a Watcher or Spotter: it fills while it can see you, at
+    -- fill x your signature x closeness (1 at the edge of its range, 1 + near at point blank), and
+    -- drains at decay while it can't. Alert at `alert`, Locked at 1 (and alert_time in Alert)
+    fill = 2.0, decay = 0.3, alert = 0.5, near = 1.5, light_fill = 0.6, after_lock = 0.45,
+    -- your signature: hull base x (still + (1 - still) x min(speed / speed_ref, speed_cap)), plus
+    -- beam while the tractor pulls and loud per Loud module (boosting shows up as speed)
+    hull = { villa = 1.0, seat = 0.4, pocket = 0.2, foot = 0.5 }, still = 0.55, speed_ref = 10, speed_cap = 2.0,
+    beam = 0.5, loud = 0.3, snatcher_beam = 1.3,
+    -- the site alarm: every lock (or Spotter tag, or a cell theft caught) raises it by 1 (to max).
+    -- Each level: meters fill by alarm_fill more, sweeps turn by alarm_sweep faster, turrets fire
+    -- by alarm_fire faster. At wake_at the Snatchers wake, at lockdown_at the Lockdown seals.
+    -- It cools by one level every cool_out s with nobody inside, cool_in s with you inside and unseen.
+    alarm_max = 3, alarm_fill = 0.35, alarm_sweep = 0.25, alarm_fire = 0.3, wake_at = 2, lockdown_at = 2,
+    cool_out = 30, cool_in = 90,
+    light_alarm_max = 1,   -- the tutorial derelict's alarm stops at 1, and its light Watcher never fires faster
+    -- sweep patterns (picked per turret from the site and room): a smooth sine, four stops, or a
+    -- sine that holds at both edges; each turret's period is the base x one of these
+    patterns = { "sine", "step", "hold" }, periods = { 0.8, 0.9, 1.0, 1.15, 1.3 },
+    offset = 10,           -- lateral offset of an off-centre turret (m)
+    -- cover: two pillars (w x h fraction of the hall height) and a low crate stack per Watcher hall
+    pillar = { w = 4.0, h = 0.6, side = 10 }, crate = { s = 5.0 },
+    -- guarded loot: one find per Watcher hall lies on the floor in its sweep (where the cone, `at` of
+    -- its half angle below the axis, meets the floor), worth premium x
+    guard = { premium = 1.6, at = 0.6, tier = 2 },
+    -- a Watcher bolt hitting the hull shakes a beam pull in progress loose (not a light one's)
+    hit_drops = true,
+    -- sabotage: a power cell on the floor behind a Watcher; beam it out (at least `time` s) and
+    -- the turret is dark for good; seen while pulling, the turret that saw you locks at once
+    cell = { time = 3.0, back = 2.0, value = 45 },
+    -- the Spotter drone: patrols the great halls, never fires; when its meter fills it tags you:
+    -- every Watcher of the site jumps to tag_meter and the alarm rises
+    spotter = { range = 45, small_range = 20, foot_range = 20, half_angle = 0.9, speed = 4.0, fill = 1.2,
+                tag_meter = 0.9, rest = 8.0, lift = 4.0, min_watchers = 2 },
+  },
   hull_regen = 0.1,       -- hull points per second in open space, after shield_delay (Steady doubles it)
 }

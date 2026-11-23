@@ -229,7 +229,9 @@ function M.step_lockdown(state, def, dyn, dt, ctx, t, seal)
     if dyn.t <= 0 then dyn.st, dyn.t = "dormant", 0 end
     return
   end
-  if alarm(state, def.site) then
+  -- add-strategic-sentries: the site alarm reaching lockdown_at trips it too
+  if alarm(state, def.site) or dyn.trip then
+    dyn.trip = nil
     dyn.st, dyn.t = "sealing", t.lockdown.seal_time
     seal(def, dyn, true)
     for _, p in ipairs(state.players) do
@@ -273,6 +275,11 @@ function M.spike_target(state, p, t)
     local dyn = state.sentries[p.site] and state.sentries[p.site][i]
     if dyn and dyn.st ~= "off" and (dyn.st == "disabled" or def.kind == "lockdown") then
       local d = M.reach(def, dyn, eye)
+      if d <= t.spike.reach and (not bd or d < bd) then best, bd = i, d end
+    end
+    -- add-strategic-sentries: a Watcher's power cell on the floor behind it takes the spike too
+    if dyn and dyn.st ~= "off" and def.cell then
+      local d = vec.dist(def.cell, eye)
       if d <= t.spike.reach and (not bd or d < bd) then best, bd = i, d end
     end
   end

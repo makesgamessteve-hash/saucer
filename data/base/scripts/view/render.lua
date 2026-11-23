@@ -35,6 +35,31 @@ M.STATE_TINT = {
   patrol = { 0.9, 0.85, 0.3, 0.9 }, hunt = { 1, 0.15, 0.1, 1 },
 }
 
+-- add-strategic-sentries: a turret's pool of light on its hall's floor: where the lower half of
+-- its cone meets the floor (5 x 2 glow points), so its sweep reads from anywhere in the hall
+M.CONE_YAWS = { -0.8, -0.4, 0, 0.4, 0.8 }
+M.CONE_PITCHES = { 1.0, 0.5 }
+function M.floor_cone(v, A, def, dyn, wpos, pitch, t, tint)
+  local sentry = require("sim.sentry")
+  local half = t.watcher.half_angle
+  local reach = def.light and t.watcher.light.range or t.watcher.range
+  local n = 0
+  local col = { tint[1], tint[2], tint[3], 0.35 }
+  for _, ky in ipairs(M.CONE_YAWS) do
+    for _, kp in ipairs(M.CONE_PITCHES) do
+      local d = sentry.dir_of(dyn.yaw + ky * half, pitch - kp * half)
+      if d[2] < -0.05 then
+        local k = (def.floor + 0.3 - wpos[2]) / d[2]
+        if k > 0 and k <= reach then
+          v:billboard(A.tex.glow or A.tex.beam, vec.add(wpos, vec.scale(d, k)), 3.0, { palette = A.pal.base, tint = col })
+          n = n + 1
+        end
+      end
+    end
+  end
+  return n
+end
+
 M.SENTRY_DIST = 700 -- add-cities-2 slice 5: a sentry farther than this from the eye is not drawn (a city holds hundreds)
 function M.draw_sentries(v, A, state, p)
   local sentry = require("sim.sentry")
@@ -58,12 +83,36 @@ function M.draw_sentries(v, A, state, p)
                    { head = { yaw = dyn.yaw - byaw }, eye = { pitch = pitch } })
           local f = sentry.dir_of(dyn.yaw, pitch)
           v:billboard(A.tex.beam, vec.add(wpos, vec.scale(f, 1.9)), 1.0, { palette = A.pal.base, tint = tint })
+          -- add-strategic-sentries: the light it throws on the floor (where it is looking now)
+          if p.site == site and def.floor and dyn.st ~= "off" and dyn.st ~= "disabled" then
+            M.floor_cone(v, A, def, dyn, wpos, pitch, t, tint)
+          end
+          if show and def.cell and dyn.st ~= "off" then
+            v:billboard(A.tex.glow or A.tex.beam, def.cell, 1.6, { palette = A.pal.base, tint = { 0.3, 1, 0.9, 0.9 } })
+          end
           if show then
             for _, da in ipairs({ -t.watcher.half_angle, 0, t.watcher.half_angle }) do
               local d = sentry.dir_of(dyn.yaw + da, pitch)
               for k = 1, 12 do
                 v:billboard(A.tex.beam, vec.add(wpos, vec.scale(d, k * t.watcher.range / 12)), 0.7,
                   { palette = A.pal.base, tint = { tint[1], tint[2], tint[3], 0.45 } })
+              end
+            end
+          end
+        elseif def.kind == "spotter" then
+          -- add-strategic-sentries: the Spotter drone, its eye light the colour of its state
+          local pos = dyn.pos or def.pos
+          v:mesh(A.decoy, { pos = pos, yaw = dyn.yaw or 0, scale = 3 })
+          local f = sentry.dir_of(dyn.yaw or 0, dyn.pitch or -0.35)
+          v:billboard(A.tex.glow or A.tex.beam, vec.add(pos, vec.scale(f, 0.8)), show and 2.0 or 1.2,
+            { palette = A.pal.base, tint = dyn.st == "dormant" and { 0.35, 0.6, 1, 0.9 } or tint })
+          if show and t.stealth then
+            local S = t.stealth.spotter
+            for _, da in ipairs({ -S.half_angle, 0, S.half_angle }) do
+              local d = sentry.dir_of((dyn.yaw or 0) + da, dyn.pitch or -0.35)
+              for k = 1, 8 do
+                v:billboard(A.tex.beam, vec.add(pos, vec.scale(d, k * S.range / 8)), 0.6,
+                  { palette = A.pal.base, tint = { 0.35, 0.6, 1, 0.4 } })
               end
             end
           end
@@ -105,6 +154,14 @@ function M.draw_sentries(v, A, state, p)
   end
   for _, b in ipairs(state.bolts or {}) do
     v:billboard(A.tex.beam, b.pos, 0.9, { palette = A.pal.base, tint = { 0.5, 0.8, 1, 1 } })
+  end
+  -- add-strategic-sentries: a Scanner pulse marks the guarded finds (amber, pulsing)
+  if (p.scan_until or 0) > state.tick and (p.site or 0) ~= 0 then
+    for _, s in ipairs(require("sim.stealth").guarded(game.ruin(p.site), p, p.site)) do
+      local k = 1 + 0.3 * math.sin(state.tick * 0.2)
+      v:billboard(A.tex.glow or A.tex.beam, { s.pos[1], s.pos[2] + 2, s.pos[3] }, 2.4 * k,
+        { palette = A.pal.base, tint = { 1, 0.7, 0.2, 0.9 } })
+    end
   end
   -- add-wider-dark: thrown decoys blink, gifts tumble, the Heart's core beats
   for _, d in ipairs(state.decoys or {}) do

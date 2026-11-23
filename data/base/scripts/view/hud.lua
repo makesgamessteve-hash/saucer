@@ -82,7 +82,7 @@ function M.wrap(text, cols, max)
 end
 
 -- how urgent a message is: 3 = act now, 2 = advice, 1 = news
-local URGENT = { "LOCKED", "CLAMPED", "THE WARDEN", "FOLD RETREAT", "LOCKDOWN", "latched on", "pocket is light",
+local URGENT = { "LOCKED", "CLAMPED", "THE WARDEN", "FOLD RETREAT", "LOCKDOWN", "TAGGED", "SITE ALARM", "latched on", "pocket is light",
                  "CRITICAL", "HARDCORE" }
 local ADVICE = { "TIP:", "Wait:", "Tow bill", "stirs", "Snatcher", "Clamp", "Fold jump waiting" }
 function M.urgency(text)
@@ -414,10 +414,47 @@ function M.alerts(state, p, W)
     out[#out + 1] = { narrow and "! LOCKED - JAM OR RUN !" or "! SENTRY LOCKED - JAM (T) OR RUN !", RED }
   elseif alarm == "WARDEN" then
     out[#out + 1] = { narrow and "! WARDEN - JAM OR HIDE !" or "! THE WARDEN HUNTS YOU - JAM (T) OR HIDE !", RED }
+  elseif alarm == "TAGGED" then
+    out[#out + 1] = { narrow and "! TAGGED - DECOY OR JAM !" or "! TAGGED BY A SPOTTER - EVERY WATCHER KNOWS YOU !", RED }
   elseif alarm == "ALERT" then
     out[#out + 1] = { "! SENTRY ALERT !", AMBER }
   end
+  -- add-strategic-sentries: the site alarm while you are inside
+  local stealth = require("sim.stealth")
+  local lv = (p.site or 0) ~= 0 and stealth.level(state, p.site) or 0
+  if lv > 0 then
+    local mx = stealth.max_level(p.site)
+    out[#out + 1] = { string.format("SITE ALARM %s%s", string.rep("#", lv), string.rep("-", math.max(0, mx - lv))),
+      lv >= mx and RED or AMBER }
+  end
   return out
+end
+
+-- add-strategic-sentries: the suspicion arc over the crosshair: how full the meter of the
+-- sentry that suspects you most is (amber, red from the Alert mark up), and whose meter it is
+M.ARC_SEGS = 15
+function M.suspicion(v, state, p, compact)
+  local stealth = require("sim.stealth")
+  local m, kind = stealth.meter_on(state, p)
+  if m <= 0 then return 0 end
+  local W, H = v.width, v.height
+  local S = stealth.tune()
+  local cx, cy, r = W // 2, H // 2, compact and 14 or 22
+  local n = M.ARC_SEGS
+  local lit = math.floor(m * n + 0.999)
+  for i = 1, n do
+    local a = math.pi * (i - 0.5) / n
+    local x = cx - math.floor(r * math.cos(a) + 0.5)
+    local y = cy - math.floor(r * math.sin(a) + 0.5)
+    local col = { 0.2, 0.2, 0.25, 0.8 }
+    if i <= lit then col = (i / n >= S.alert) and RED or AMBER end
+    v:rect(x - 1, y - 1, 3, 3, col)
+  end
+  if not compact then
+    local label = string.format("%s %d%%", kind == "spotter" and "SPOTTER" or "SEEN", math.floor(m * 100 + 0.5))
+    v:text(cx - #label * 4, cy - r - 12, label, m >= S.alert and RED or AMBER)
+  end
+  return lit
 end
 
 function M.alarm(state, p)
@@ -427,6 +464,7 @@ function M.alarm(state, p)
       for _, dyn in pairs(list) do
         if dyn.target == p.index and (dyn.st == "locked" or dyn.st == "latched") then worst = "LOCKED"
         elseif dyn.target == p.index and dyn.st == "hunt" then worst = "WARDEN" -- add-home-among-stars
+        elseif dyn.target == p.index and dyn.st == "tagged" and worst ~= "LOCKED" then worst = "TAGGED" -- add-strategic-sentries
         elseif dyn.target == p.index and dyn.st == "alert" and not worst then worst = "ALERT" end
       end
     end
@@ -663,6 +701,7 @@ draw_inner = function(v, state, p, target)
     end
     ay = ay + 11
   end
+  if p.mode == "helm" or p.mode == "foot" then M.suspicion(v, state, p, compact) end
   if p.shroud then
     local moving = vec.len(ship.vel or { 0, 0, 0 }) > require("sim.sentry").tune().shroud.still
     v:text(128, 26, moving and "SHROUD (MOVING)" or "SHROUD", moving and AMBER or CYAN)

@@ -155,12 +155,16 @@ function M.candidates(state, p, site_idx, ruin)
         local iseed = loot.instance_seed(s.seed, p.record_index)
         local item = loot.roll(iseed, s.max_size, s.tier)
         item.tier, item.civ = s.tier, civ
-        local c = { key = key, kind = "slot", pos = s.pos, room = s.room, item = item }
+        -- add-strategic-sentries: a guarded find (in a Watcher's sweep) is worth more
+        if s.premium then item.value = math.floor(item.value * s.premium) end
+        local c = { key = key, kind = "slot", pos = s.pos, room = s.room, item = item, guarded = s.guarded }
         -- long scrap lies at its own angle on the floor
         if item.size >= M.LONG then c.axis = (math.floor(math.abs(iseed)) % 180) * sm.pi / 180 end
         out[#out + 1] = c
       end
     end
+    -- add-strategic-sentries: the power cell behind every live hall Watcher
+    for _, c in ipairs(M.cells(state, site_idx)) do out[#out + 1] = c end
     -- add-holodeck-home-life: data cores, modules, books and ingredients in vaults
     for _, c in ipairs(require("sim.finds").candidates(state, p, site_idx, ruin)) do out[#out + 1] = c end
     for _, c in ipairs(require("sim.cities").candidates(state, p, site_idx, ruin)) do out[#out + 1] = c end
@@ -198,6 +202,25 @@ function M.candidates(state, p, site_idx, ruin)
   if site_idx == 0 and v and state.mystery.vault_open and not v.taken then
     out[#out + 1] = { key = "vault:curio", kind = "curio", pos = { v.pos[1], v.pos[2] + 2, v.pos[3] },
       item = mystery.curio(state.mystery) }
+  end
+  return out
+end
+
+-- add-strategic-sentries: power cells of the site's live Watchers -> candidates (kind "cell")
+function M.cells(state, site_idx)
+  local out = {}
+  local game = require("sim.game")
+  local list = state.sentries and state.sentries[site_idx]
+  local S = require("sim.sentry").tune().stealth
+  if not list or not S then return out end
+  for i, def in ipairs(game.sentries(site_idx)) do
+    local dyn = list[i]
+    if def.cell and dyn and dyn.st ~= "off" then
+      local it = require("sim.advsentry").core_item()
+      it.type, it.name, it.value = "sentry_core", "Watcher power cell", S.cell.value
+      out[#out + 1] = { key = "cell:" .. site_idx .. ":" .. def.id, kind = "cell", pos = def.cell, room = def.room,
+                        def = def, item = it }
+    end
   end
   return out
 end
@@ -241,8 +264,11 @@ function M.can_lift(ship, item)
 end
 
 -- seconds the beam takes to pull a target `depth` meters up into the hatch
-function M.pull_time(ship, depth)
-  return math.max(M.MIN_PULL, depth / M.beam_of(ship).pull_speed)
+function M.pull_time(ship, depth, kind)
+  local t = math.max(M.MIN_PULL, depth / M.beam_of(ship).pull_speed)
+  -- add-strategic-sentries: a power cell takes at least cell.time to work loose
+  if kind == "cell" then t = math.max(t, require("sim.sentry").tune().stealth.cell.time) end
+  return t
 end
 
 -- smoothstep 0..1

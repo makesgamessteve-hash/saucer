@@ -15,6 +15,7 @@ local configs = require("sim.config")
 local items = require("sim.items")
 local hull = require("sim.hull")
 local adv = require("sim.advsentry")
+local stealth = require("sim.stealth")
 local sm = saucer.math
 local M = {}
 
@@ -66,17 +67,34 @@ local function watcher_in(out, site, ruin, kit, r, band, civ, light)
   local far = sg > 0 and mx[ax] or mn[ax]
   tgt[ax] = near
   local pitch = -0.32
+  local S = M.tune().stealth
+  local cell
   if r.kind == "shaft" then
     pos[ax] = far - sg * (kit.wall + 4.0)
     pitch = -1.15
   else
     pos[ax] = far - sg * (kit.wall + 6.0)
+    -- add-strategic-sentries: two of three hall turrets hang off-centre (left or right of the axis)
+    local lat = ax == 1 and 3 or 1
+    local side = (site.id + r.id) % 3 - 1
+    if S and not light then pos[lat] = pos[lat] + side * math.min(S.offset, (mx[lat] - mn[lat]) / 4) end
+    -- and keep a power cell on the floor behind them, out of their cone (not in a city: its
+    -- districts are no room chain to dive through)
+    if S and S.cell and not ruin.city then
+      cell = { pos[1], mn[2] + kit.wall + 0.8, pos[3] }
+      cell[ax] = far - sg * (kit.wall + S.cell.back)
+    end
   end
   local yaw = sm.atan2(tgt[1] - pos[1], tgt[3] - pos[3])
+  local pattern, period = "sine", 1
+  if S then pattern, period = stealth.pattern_of(site.id, r.id, light) end
   out[#out + 1] = { id = #out + 1, kind = "watcher", site = site.id, room = r.id, pos = pos, yaw = yaw,
                     pitch = pitch, band = band, glyph = civ and civ.glyph or nil, district = r.district,
-                    dark = dark_of(ruin, r), light = light or nil }
+                    dark = dark_of(ruin, r), light = light or nil, pattern = pattern, period = period,
+                    floor = mn[2] + kit.wall, axis = ax, sign = sg, cell = cell, shaft = r.kind == "shaft" or nil }
 end
+-- (specs reach the turret placement through this)
+function M.watcher_for_test(out, ...) watcher_in(out, ...) return out end
 
 -- add-fun-fixes: the tutorial derelict keeps one light Watcher, in a big room on the way
 -- to the vault (a hall rather than a shaft, whose turret looks down from too high to
@@ -113,6 +131,8 @@ function M.layout(site, ruin, civ)
   if site.tutorial or (site.tutorial == nil and site.id == 1) then
     local r = t.watcher.light and not ruin.city and M.light_room(ruin)
     if r then watcher_in(out, site, ruin, kit, r, band, civ, true) end
+    -- add-strategic-sentries: and a light Spotter, so the first brush with a sentry comes early
+    if t.stealth and not ruin.city then require("sim.spotter").layout(out, site, ruin, kit, t, true) end
     return out
   end
   for _, r in ipairs(ruin.rooms) do
@@ -159,6 +179,8 @@ function M.layout(site, ruin, civ)
   if (site.danger or 1) >= 2 then adv.layout(out, site, ruin, kit, t) end
   -- add-home-among-stars: the deepest derelicts keep a Warden
   if (site.danger or 1) >= 3 and t.warden then require("sim.warden").layout(out, site, ruin, kit, t) end
+  -- add-strategic-sentries: a derelict with two or more Watchers keeps a Spotter drone
+  if t.stealth and not ruin.city then require("sim.spotter").layout(out, site, ruin, kit, t) end
   return out
 end
 
@@ -169,6 +191,8 @@ function M.new_state(defs, state)
       out[i] = adv.new_state(d)
     elseif d.kind == "warden" then
       out[i] = require("sim.warden").new_state(d)
+    elseif d.kind == "spotter" then
+      out[i] = require("sim.spotter").new_state(d)
     elseif d.kind == "watcher" then
       out[i] = { st = "dormant", t = 0, lost = 0, fire = 0, target = 0, yaw = d.yaw, pitch = d.pitch }
       -- add-cities-2: a patrolling Watcher carries its own position and heading (set from the clock each tick)
@@ -218,7 +242,7 @@ function M.watcher_sees(def, dyn, p, tick, t)
     -- whatever its size band, a turret sees a person on foot (closer in)
     local dir = dir_of(dyn.yaw, dyn.pitch or def.pitch)
     local fr = (t.watcher.foot_range or 45) * (def.light and 0.6 or 1)
-    return saucer.physics.cone_visible(wpos, dir, sm.cos(t.watcher.half_angle), fr, ship.pos, 1)
+    return saucer.physics.cone_visible(wpos, dir, sm.cos(t.watcher.half_angle), fr, ship.pos, 1), fr
   end
   local lt = def.light and t.watcher.light or nil
   local cls = configs.get(ship.size).class
@@ -227,26 +251,44 @@ function M.watcher_sees(def, dyn, p, tick, t)
     -- dive is stealth, not a free pass (small_range nil: never, as before)
     local sr = lt and lt.small_range or t.watcher.small_range
     if not (sr and cls >= 1 and cls < def.band[1]) then return false end
-    return saucer.physics.cone_visible(wpos, dir_of(dyn.yaw, dyn.pitch or def.pitch), sm.cos(t.watcher.half_angle), sr, ship.pos, 1)
+    return saucer.physics.cone_visible(wpos, dir_of(dyn.yaw, dyn.pitch or def.pitch), sm.cos(t.watcher.half_angle), sr, ship.pos, 1), sr
   end
   local yaw = dyn.yaw
   local dir = dir_of(yaw, dyn.pitch or def.pitch)
   local r = configs.get(ship.size).diameter / 2
   local range = lt and lt.range or t.watcher.range
-  return saucer.physics.cone_visible(wpos, dir, sm.cos(t.watcher.half_angle), range + r + (ship.loud or 0) * M.LOUD_WATCHER, ship.pos, 1)
+  local reach = range + r + (ship.loud or 0) * M.LOUD_WATCHER
+  return saucer.physics.cone_visible(wpos, dir, sm.cos(t.watcher.half_angle), reach, ship.pos, 1), reach
 end
 
 local function sweep_yaw(def, tick, t, dyn)
   local w = t.watcher
   return ((dyn and dyn.base) or def.yaw) + w.sweep * sm.sin(sm.tau * tick / (w.sweep_period * 60))
 end
+M.sweep_yaw = sweep_yaw
+
+-- add-strategic-sentries: a cell theft in progress (the beam pulling a turret's power cell)
+local function stealing(p) return p and p.tractor and p.tractor.kind == "cell" end
+
+local function lock_on(state, def, dyn, seen, ctx, t, caught)
+  dyn.st, dyn.t, dyn.fire, dyn.lock_tick, dyn.meter = "locked", 0, 0, state.tick, 1
+  dyn.target = seen.index
+  ctx.fx(state, seen, "locked")
+  ctx.msg(state, seen, caught and "Watcher LOCKED: caught at the power cell!" or "Watcher LOCKED: stun bolts incoming")
+  if t.stealth then stealth.raise(state, def.site, 1, ctx, caught and "caught at a cell" or "a Watcher locked on") end
+  if not M.seat_hint(state, seen, ctx) then
+    M.tip(state, seen, ctx, "decoy", "TIP: a Decoy (B) pulls a Watcher's lock off you; the Shroud (X) hides a saucer that holds still.")
+  end
+end
 
 local function step_watcher(state, def, dyn, dt, ctx, t)
   if dyn.st == "off" then return end
   if def.route then dyn.pos, dyn.base = M.route_at(def, state.tick) end
   local wpos = dyn.pos or def.pos
+  local S = t.stealth
   if dyn.st == "disabled" then
     dyn.t = dyn.t - dt
+    dyn.meter = 0
     if dyn.t <= 0 then dyn.st, dyn.t, dyn.lost = "dormant", 0, 0 end
     return
   end
@@ -257,6 +299,7 @@ local function step_watcher(state, def, dyn, dt, ctx, t)
     dyn.yaw = sm.atan2(d[1], d[3])
     dyn.pitch = sm.atan2(d[2], sm.sqrt(d[1] * d[1] + d[3] * d[3]))
     dyn.st, dyn.target, dyn.t, dyn.lost = "decoyed", 0, 0, 0
+    if S then dyn.meter = math.max(0, (dyn.meter or 0) - S.decay * dt) end
     return
   end
   if dyn.st == "decoyed" then dyn.st = "dormant" end
@@ -267,49 +310,60 @@ local function step_watcher(state, def, dyn, dt, ctx, t)
     dyn.yaw = sm.atan2(d[1], d[3])
     dyn.pitch = sm.atan2(d[2], sm.sqrt(d[1] * d[1] + d[3] * d[3]))
   else
-    dyn.yaw = sweep_yaw(def, state.tick, t, dyn)
+    -- add-strategic-sentries: its own sweep pattern and period, faster with the site alarm up
+    dyn.yaw = (S and not def.route) and stealth.sweep(def, dyn, state, dt, t) or sweep_yaw(def, state.tick, t, dyn)
     dyn.pitch = def.pitch
   end
-  local seen
-  if target and M.watcher_sees(def, dyn, target, state.tick, t) then
-    seen = target
+  local seen, reach
+  local ok, rr
+  if target then ok, rr = M.watcher_sees(def, dyn, target, state.tick, t) end
+  if ok then
+    seen, reach = target, rr
   elseif dyn.st == "dormant" then
     for _, p in ipairs(state.players) do
-      if M.watcher_sees(def, dyn, p, state.tick, t) then seen = p break end
+      ok, rr = M.watcher_sees(def, dyn, p, state.tick, t)
+      if ok then seen, reach = p, rr break end
     end
   end
+  -- add-strategic-sentries: the suspicion meter (without stealth tuning: full at first sight, as before)
+  if S then
+    local d = seen and vec.dist(seen.ship.pos, wpos) or 0
+    stealth.step_meter(state, def, dyn, seen, d, reach or 1, dt)
+  else
+    dyn.meter = seen and 1 or 0
+  end
   if dyn.st == "dormant" then
-    if seen then
+    if seen and (dyn.meter or 0) >= (S and S.alert or 0) then
       dyn.st, dyn.t, dyn.lost, dyn.target, dyn.alert_tick = "alert", 0, 0, seen.index, state.tick
       ctx.fx(state, seen, "alert")
       ctx.msg(state, seen, "A Watcher stirs: yellow light, rising tone")
+      -- caught pulling its neighbour's cell: no grace
+      if S and stealing(seen) then lock_on(state, def, dyn, seen, ctx, t, true) end
     end
     return
   end
   if seen then dyn.lost = 0 else dyn.lost = dyn.lost + dt end
   if dyn.lost >= t.lose_time then
+    if dyn.st == "locked" and S then dyn.meter = math.min(dyn.meter or 0, S.after_lock) end
     dyn.st, dyn.t, dyn.target, dyn.lost = "dormant", 0, 0, 0
     return
   end
   dyn.t = dyn.t + dt
   if dyn.st == "alert" then
-    if seen and dyn.t >= (def.light and t.watcher.light.alert_time or t.alert_time) then
-      dyn.st, dyn.t, dyn.fire, dyn.lock_tick = "locked", 0, 0, state.tick
-      ctx.fx(state, seen, "locked")
-      ctx.msg(state, seen, "Watcher LOCKED: stun bolts incoming")
-      if not M.seat_hint(state, seen, ctx) then
-        M.tip(state, seen, ctx, "decoy", "TIP: a Decoy (B) pulls a Watcher's lock off you; the Shroud (X) hides a saucer that holds still.")
-      end
+    if seen and dyn.t >= (def.light and t.watcher.light.alert_time or t.alert_time) and (dyn.meter or 0) >= 1 then
+      lock_on(state, def, dyn, seen, ctx, t, false)
+    elseif seen and S and stealing(seen) then
+      lock_on(state, def, dyn, seen, ctx, t, true)
     end
   elseif dyn.st == "locked" and seen then
     dyn.fire = dyn.fire - dt
     if dyn.fire <= 0 then
-      dyn.fire = t.watcher.fire_every
+      dyn.fire = S and stealth.fire_every(state, def, t.watcher.fire_every) or t.watcher.fire_every
       local d = vec.sub(seen.ship.pos, wpos)
       local l = vec.len(d)
       state.bolts[#state.bolts + 1] = { site = def.site, pos = vec.copy(wpos),
         vel = vec.scale(d, t.watcher.bolt_speed / math.max(l, 1e-6)), life = t.watcher.bolt_life,
-        dmg = def.light and t.watcher.light.bolt_damage or nil }
+        dmg = def.light and t.watcher.light.bolt_damage or nil, light = def.light or nil }
     end
   end
 end
@@ -356,7 +410,9 @@ function M.snatcher_wants(def, dyn, p, t)
   if def.leash and not in_box(def.leash, p.ship.pos) then return false end
   -- add-home-among-stars: a Warden's alarm wakes them (twice the sense)
   local woke = dyn.woke and require("sim.game").state_ref and dyn.woke > (require("sim.game").state_ref.tick or 0)
-  return vec.dist(dyn.pos, p.ship.pos) <= (on_foot(p) and t.snatcher.foot_sense or (t.snatcher.sense + (p.ship.loud or 0) * M.LOUD_SNATCHER)) * (woke and 2 or 1)
+  -- add-strategic-sentries: a tractor beam at work draws them from farther
+  local beam = t.stealth and p.tractor and p.tractor.site == p.site and t.stealth.snatcher_beam or 1
+  return vec.dist(dyn.pos, p.ship.pos) <= (on_foot(p) and t.snatcher.foot_sense or (t.snatcher.sense + (p.ship.loud or 0) * M.LOUD_SNATCHER)) * (woke and 2 or 1) * beam
 end
 
 local function step_snatcher(state, def, dyn, dt, ctx, t)
@@ -520,6 +576,20 @@ function M.locked_on(state, p)
   return false
 end
 
+-- add-strategic-sentries: is the Watcher guarding a find (by def id) at Alert or Lock on p?
+-- A guarded find cannot be beamed out under its guard's eye.
+function M.guard_on(state, site_idx, defs, p, guard)
+  local dyns = state.sentries and state.sentries[site_idx]
+  if not (dyns and defs and guard) then return false end
+  for i, def in ipairs(defs) do
+    local dyn = dyns[i]
+    if def.id == guard and dyn and dyn.target == p.index and (dyn.st == "alert" or dyn.st == "locked") then
+      return true
+    end
+  end
+  return false
+end
+
 -- one tick for every sentry of a site, then the bolts
 function M.step(state, site_idx, defs, dt, ctx)
   local t = M.tuned(state)
@@ -555,6 +625,7 @@ function M.step(state, site_idx, defs, dt, ctx)
     elseif def.kind == "clamp" then adv.step_clamp(state, def, dyn, dt, ctx, t)
     elseif def.kind == "lockdown" then adv.step_lockdown(state, def, dyn, dt, ctx, t, ctx.seal)
     elseif def.kind == "warden" then require("sim.warden").step(state, def, dyn, dt, ctx, t)
+    elseif def.kind == "spotter" then if t.stealth then require("sim.spotter").step(state, def, dyn, dt, ctx, t) end
     else step_snatcher(state, def, dyn, dt, ctx, t) end
   end
 end
@@ -601,6 +672,9 @@ function M.step_bolts(state, dt)
         elseif alive and not foot and M.bolt_hits_hull(c, dx, b.pos[2] - s.pos[2], dz, t.watcher) then
           hull.damage(s, b.dmg or t.watcher.bolt_damage)
           p.hits = (p.hits or 0) + 1
+          -- add-strategic-sentries: a hit shakes a pull in progress loose (game.lua lets go)
+          -- (a light Watcher's bolts at the tutorial derelict do not)
+          if p.tractor and t.stealth and t.stealth.hit_drops and not b.light then p.tractor.shaken = true end
           p.fx[#p.fx + 1] = { tick = state.tick, sound = "hit" }
           alive = false
         end
@@ -647,17 +721,18 @@ function M.jam(state, site_idx, defs, eye, dir, p)
   return n
 end
 
--- for the scanner readout
+-- for the scanner readout -> watchers, snatchers, clamps, lockdowns, wardens, spotters
 function M.summary(defs)
-  local w, s, c, l, wd = 0, 0, 0, 0, 0
+  local w, s, c, l, wd, sp = 0, 0, 0, 0, 0, 0
   for _, d in ipairs(defs) do
     if d.kind == "watcher" then w = w + 1
     elseif d.kind == "clamp" then c = c + 1
     elseif d.kind == "lockdown" then l = l + 1
     elseif d.kind == "warden" then wd = wd + 1
+    elseif d.kind == "spotter" then sp = sp + 1
     else s = s + 1 end
   end
-  return w, s, c, l, wd
+  return w, s, c, l, wd, sp
 end
 
 return M

@@ -120,8 +120,10 @@ end)
 describe("fun fix 2: Watchers see the Seat up close, and site 1 keeps a light sentry", function()
   it("lays out one light Watcher in the tutorial derelict", function()
     local defs = game.sentries(1)
-    expect(#defs).to_be(1)
+    -- add-strategic-sentries: plus a light Spotter
+    expect(#defs).to_be(2)
     expect(defs[1].kind).to_be("watcher")
+    expect(defs[2].kind).to_be("spotter")
     expect(defs[1].light).to_be(true)
     local room = game.ruin(1).rooms[defs[1].room]
     expect(room.kind ~= "entrance").to_be(true)
@@ -139,9 +141,13 @@ describe("fun fix 2: Watchers see the Seat up close, and site 1 keeps a light se
     local lt = T.watcher.light
     T.watcher.light = nil
     local site = { id = 1, tutorial = true, pos = { 0, 0, 0 } }
+    local stl = T.stealth
+    T.stealth = nil
     expect(#sentry.layout(site, game.ruin(1), nil)).to_be(0)
     T.watcher.light = lt
     expect(#sentry.layout(site, game.ruin(1), nil)).to_be(1)
+    T.stealth = stl
+    expect(#sentry.layout(site, game.ruin(1), nil)).to_be(2)
     expect(#sentry.layout(site, nil, nil)).to_be(0)
   end)
   it("sees a Seat inside the small range only, a light Watcher closer still", function()
@@ -183,7 +189,7 @@ describe("fun fix 2: Watchers see the Seat up close, and site 1 keeps a light se
     local dir = sentry.dir_of(def.yaw, def.pitch)
     p.site, p.ship.size = 1, 1
     p.ship.pos = vec.add(def.pos, vec.scale(dir, 10))
-    st.sentries[1] = { { st = "alert", t = T.watcher.light.alert_time, target = 1, yaw = def.yaw, pitch = def.pitch } }
+    st.sentries[1] = { { st = "alert", t = T.watcher.light.alert_time, target = 1, yaw = def.yaw, pitch = def.pitch, meter = 1 } }
     sentry.step(st, 1, { def }, 1 / 60, ctx)
     expect(st.sentries[1][1].st).to_be("locked")
     -- fire: the bolt carries the light damage
@@ -208,7 +214,7 @@ describe("fun fix 3: the helm beam relay comes fitted", function()
     local p = st.players[1]
     expect(upgrades.level(p, "beam_relay")).to_be(1)
     expect(select(2, upgrades.buy(p, "beam_relay"))).to_be("max")
-    expect(game.VERSION).to_be(16)
+    expect(game.VERSION).to_be(17)
   end)
 end)
 

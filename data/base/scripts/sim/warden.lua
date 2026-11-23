@@ -18,9 +18,10 @@ local M = {}
 local function ap() return require("sim.autopilot") end
 local function adv() return require("sim.advsentry") end
 
--- layout(out, site, ruin, kit, t): one Warden on a route through the great
--- halls joined by big doors (hall centre, door, hall centre, ...)
-function M.layout(out, site, ruin, kit, t)
+-- route(site, ruin, kit) -> a patrol through the great halls joined by big doors (hall centre,
+-- door, hall centre, ...), its bounding box and the first hall; nil without a hall
+-- (add-strategic-sentries: the Spotter flies the same kind of route)
+function M.route(site, ruin, kit)
   local big = kit.big or 4
   local halls, by_id = {}, {}
   for _, r in ipairs(ruin.rooms) do
@@ -29,7 +30,7 @@ function M.layout(out, site, ruin, kit, t)
       by_id[r.id] = r
     end
   end
-  if #halls == 0 then return end
+  if #halls == 0 then return nil end
   local function centre(r)
     local mn, mx = ruinm.room_box(r, kit, site.pos)
     return { (mn[1] + mx[1]) / 2, mn[2] + kit.wall + 3.0, (mn[3] + mx[3]) / 2 }, mn, mx
@@ -55,9 +56,17 @@ function M.layout(out, site, ruin, kit, t)
     end
   end
   visit(halls[1])
+  return route, lo, hi, halls[1]
+end
+
+-- layout(out, site, ruin, kit, t): one Warden on a route through the great
+-- halls joined by big doors (hall centre, door, hall centre, ...)
+function M.layout(out, site, ruin, kit, t)
+  local route, lo, hi, first = M.route(site, ruin, kit)
+  if not route then return end
   local pad = t.warden.leash
-  out[#out + 1] = { id = #out + 1, kind = "warden", site = site.id, room = halls[1].id, pos = vec.copy(route[1]),
-                    district = halls[1].district, dark = require("sim.cities").dark(ruin, halls[1]),
+  out[#out + 1] = { id = #out + 1, kind = "warden", site = site.id, room = first.id, pos = vec.copy(route[1]),
+                    district = first.district, dark = require("sim.cities").dark(ruin, first),
                     route = route, leash = { vec.sub(lo, { pad, pad, pad }), vec.add(hi, { pad, pad, pad }) } }
 end
 
