@@ -72,7 +72,7 @@ return {
     -- guarded loot: one find per Watcher hall lies on the floor in its sweep (where the cone, `at` of
     -- its half angle below the axis, meets the floor), worth premium x
     guard = { premium = 1.6, at = 0.6, tier = 2 },
-    -- a Watcher bolt hitting the hull shakes a beam pull in progress loose (it has to start over)
+    -- a Watcher bolt hitting the hull shakes a beam pull in progress loose (not a light one's)
     hit_drops = true,
     -- sabotage: a power cell on the floor behind a Watcher; beam it out (at least `time` s) and
     -- the turret is dark for good; seen while pulling, the turret that saw you locks at once

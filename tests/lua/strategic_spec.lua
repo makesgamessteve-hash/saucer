@@ -372,6 +372,9 @@ describe("a hit shakes the beam loose", function()
     local p = st.players[1]
     p.mode = "helm"
     p.tractor = { key = "nope", kind = "slot", site = 2, t = 0, total = 3, from = { 0, 0, 0 }, size = p.ship.size }
+    st.bolts = { { pos = vec.copy(p.ship.pos), vel = { 0, 0, 0 }, life = 1, site = p.site, dmg = 1, light = true } }
+    sentry.step_bolts(st, 1 / 60)
+    expect(p.tractor.shaken).to_be(nil)
     st.bolts = { { pos = vec.copy(p.ship.pos), vel = { 0, 0, 0 }, life = 1, site = p.site, dmg = 1 } }
     sentry.step_bolts(st, 1 / 60)
     expect(p.tractor.shaken).to_be(true)

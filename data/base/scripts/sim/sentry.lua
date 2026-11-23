@@ -360,7 +360,7 @@ local function step_watcher(state, def, dyn, dt, ctx, t)
       local l = vec.len(d)
       state.bolts[#state.bolts + 1] = { site = def.site, pos = vec.copy(wpos),
         vel = vec.scale(d, t.watcher.bolt_speed / math.max(l, 1e-6)), life = t.watcher.bolt_life,
-        dmg = def.light and t.watcher.light.bolt_damage or nil }
+        dmg = def.light and t.watcher.light.bolt_damage or nil, light = def.light or nil }
     end
   end
 end
@@ -670,7 +670,8 @@ function M.step_bolts(state, dt)
           hull.damage(s, b.dmg or t.watcher.bolt_damage)
           p.hits = (p.hits or 0) + 1
           -- add-strategic-sentries: a hit shakes a pull in progress loose (game.lua lets go)
-          if p.tractor and t.stealth and t.stealth.hit_drops then p.tractor.shaken = true end
+          -- (a light Watcher's bolts at the tutorial derelict do not)
+          if p.tractor and t.stealth and t.stealth.hit_drops and not b.light then p.tractor.shaken = true end
           p.fx[#p.fx + 1] = { tick = state.tick, sound = "hit" }
           alive = false
         end
