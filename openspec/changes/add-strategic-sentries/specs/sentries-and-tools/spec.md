@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Watcher
-A Watcher SHALL detect targets only within its sensor cone and its civ's size band (a hull below the band only up close), and SHALL keep a suspicion meter from 0 to 1 per Watcher. While it sees the player the meter SHALL fill at a rate scaled by the player's signature (hull size, speed, a working beam, Loud modules), by closeness and by the site alarm; out of sight it SHALL drain. The Watcher SHALL turn Alert at half and SHALL turn Locked only at a full meter after at least its Alert time. When Locked it SHALL fire stun bolts that reduce shields, then hull, or Suit Charge on foot. After a lost lock the meter SHALL drop to a remembered 0.45, below Alert.
+A Watcher SHALL detect targets only within its sensor cone and its civ's size band (a hull below the band only up close) and SHALL keep a suspicion meter (0 to 1) that fills while it sees the player, scaled by the player's signature (hull size, speed, a working beam, Loud modules), closeness and the site alarm, and drains out of sight. When Locked it SHALL fire stun bolts that reduce shields, then hull, or Suit Charge on foot.
 
 #### Scenario: Shrink below the band
 - **WHEN** the saucer shrinks to Seat inside the cone of a Watcher whose band is M–XL
@@ -16,6 +16,13 @@ A Watcher SHALL detect targets only within its sensor cone and its civ's size ba
 - **THEN** the meter fills within about a second and the Watcher Locks after its Alert time
 
 ## ADDED Requirements
+
+### Requirement: Suspicion thresholds
+A Watcher SHALL turn Alert at a half-full meter and SHALL turn Locked only at a full meter after at least its Alert time. After a lost lock the meter SHALL drop to a remembered 0.45, below Alert.
+
+#### Scenario: Lock lost
+- **WHEN** the Seat ducks out of a Watcher that had it Locked
+- **THEN** the Watcher returns to Dormant with its meter at 0.45 or less
 
 ### Requirement: A hit shakes the beam loose
 A bolt from a non-light Watcher hitting the hull SHALL shake a beam pull in progress loose.
