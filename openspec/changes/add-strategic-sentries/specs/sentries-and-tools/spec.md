@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Watcher
-A Watcher SHALL detect targets only within its sensor cone and its civ's size band (a hull below the band only up close), and SHALL keep a suspicion meter from 0 to 1 per Watcher. While it sees the player the meter SHALL fill at a rate scaled by the player's signature (hull size, speed, a working beam, Loud modules), by closeness and by the site alarm; out of sight it SHALL drain. The Watcher SHALL turn Alert at half and SHALL turn Locked only at a full meter after at least its Alert time. When Locked it SHALL fire stun bolts that reduce shields, then hull, or Suit Charge on foot. After a lost lock the meter SHALL drop to a remembered 0.45, below Alert.
+A Watcher SHALL detect targets only within its sensor cone and its civ's size band (a hull below the band only up close), and SHALL keep a suspicion meter from 0 to 1 per Watcher. While it sees the player the meter SHALL fill at a rate scaled by the player's signature (hull size, speed, a working beam, Loud modules), by closeness and by the site alarm; out of sight it SHALL drain. The Watcher SHALL turn Alert at half and SHALL turn Locked only at a full meter after at least its Alert time. When Locked it SHALL fire stun bolts that reduce shields, then hull, or Suit Charge on foot. After a lost lock the meter SHALL drop to a remembered 0.45, below Alert. A bolt hitting the hull SHALL shake a beam pull in progress loose.
 
 #### Scenario: Shrink below the band
 - **WHEN** the saucer shrinks to Seat inside the cone of a Watcher whose band is M–XL
@@ -10,6 +10,10 @@ A Watcher SHALL detect targets only within its sensor cone and its civ's size ba
 #### Scenario: A glimpse slips away
 - **WHEN** the Seat crosses a Watcher's sweep and leaves it while the meter is between half and full
 - **THEN** the Watcher goes Alert, never Locks, and the meter drains back to zero out of sight
+
+#### Scenario: Hit mid-pull
+- **WHEN** a stun bolt hits the Villa while its beam pulls a find
+- **THEN** the beam lets go and the find stays where it was
 
 #### Scenario: The Villa is read fast
 - **WHEN** the Villa hovers still in front of a Watcher 20 m away

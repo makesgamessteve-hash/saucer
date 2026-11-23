@@ -643,6 +643,7 @@ local function tractor_step(state, p, cmd, dt)
     elseif t.size ~= ship.size or ship.morph then why = "The beam collapsed in the fold"
     elseif t.console and not p.beam_console then why = "You left the console: the beam let go"
     elseif t.kind == "cell" and sentry.locked_on(state, p) then why = "Caught at the power cell: the beam let go"
+    elseif t.shaken then why = "A bolt hit shook the beam loose"
     elseif cand.guarded and sentry.guard_on(state, t.site, M.sentries(t.site), p, cand.guarded) then
       why = "The guard saw the beam: the find dropped back"
     else

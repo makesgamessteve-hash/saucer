@@ -13,7 +13,7 @@ sentry that informs rather than shoots, and measure all of it with a Stealth bot
 - MODIFIED `sentries-and-tools` Watcher: a suspicion meter (0-1) fills while a Watcher sees the
   player, scaled by a signature (hull size, speed, a working beam, Loud modules) and closeness; Alert
   at 0.5, Locked only at 1 after the Alert time; it drains out of sight; after a lost lock it keeps a
-  memory (0.45). With no `stealth` tuning the meter is all or nothing, as before.
+  memory (0.45); a bolt hit shakes a beam pull loose. With no `stealth` tuning the meter is all or nothing, as before.
 - ADDED `sentries-and-tools`: the site alarm (each lock or Spotter tag raises it, max 3, the tutorial
   derelict 1; at 2 the Snatchers wake and a Lockdown trips; locked Watchers fire sooner per level; it
   cools a level per 30 s away or 90 s inside with no sentry hunting); readable sweep patterns (smooth,
