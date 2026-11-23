@@ -1212,8 +1212,17 @@ static int l_r_settings(lua_State *L) {
     e->render.settings.vertex_snap = (int)field_num(L, 1, "snap", (float)e->render.settings.vertex_snap);
     e->render.settings.dither = (int)field_num(L, 1, "dither", (float)e->render.settings.dither);
     e->render.settings.affine = (int)field_num(L, 1, "affine", (float)e->render.settings.affine);
+    lua_getfield(L, 1, "shadows");
+    if (lua_isstring(L, -1)) {
+      int q = sx_shadow_quality_from_name(lua_tostring(L, -1));
+      if (q < 0) return luaL_error(L, "shadows: off, low or high");
+      e->render.settings.shadows = q;
+    }
+    lua_pop(L, 1);
   }
-  lua_createtable(L, 0, 5);
+  lua_createtable(L, 0, 6);
+  lua_pushstring(L, sx_shadow_quality_name(e->render.settings.shadows));
+  lua_setfield(L, -2, "shadows");
   lua_pushinteger(L, e->render.settings.width);
   lua_setfield(L, -2, "width");
   lua_pushinteger(L, e->render.settings.height);
@@ -1286,6 +1295,121 @@ static int l_v_fog(lua_State *L) {
   return 0;
 }
 
+/* add-realistic-lighting: view:light({kind = "sun" | "point" | "spot", pos=, dir=, color=, intensity=, range=,
+ * inner= / outer= (spot half-angles, degrees), shadow=, owner=, priority=}) -> index or nil (list full) */
+static int l_v_light(lua_State *L) {
+  sx_viewport *v = check_view(L);
+  sx_light l;
+  const char *kind;
+  int i;
+  luaL_checktype(L, 2, LUA_TTABLE);
+  lua_getfield(L, 2, "kind");
+  kind = lua_isstring(L, -1) ? lua_tostring(L, -1) : "point";
+  if (strcmp(kind, "sun") == 0) i = SX_LIGHT_SUN;
+  else if (strcmp(kind, "spot") == 0) i = SX_LIGHT_SPOT;
+  else if (strcmp(kind, "point") == 0) i = SX_LIGHT_POINT;
+  else return luaL_error(L, "unknown light kind '%s'", kind);
+  lua_pop(L, 1);
+  sx_light_defaults(&l, i);
+  field_vec(L, 2, "pos", l.pos, 3);
+  field_vec(L, 2, "dir", l.dir, 3);
+  field_vec(L, 2, "color", l.color, 3);
+  l.intensity = field_num(L, 2, "intensity", l.intensity);
+  l.range = field_num(L, 2, "range", l.range);
+  l.cos_inner = (float)sx_cos(field_num(L, 2, "inner", 20.0f) * (float)(SX_PI / 180.0));
+  l.cos_outer = (float)sx_cos(field_num(L, 2, "outer", 30.0f) * (float)(SX_PI / 180.0));
+  l.owner = (int)field_num(L, 2, "owner", 0);
+  l.priority = field_num(L, 2, "priority", 1.0f);
+  lua_getfield(L, 2, "shadow");
+  l.shadow = lua_toboolean(L, -1);
+  lua_pop(L, 1);
+  i = sx_lighting_add(&v->lighting, &l);
+  v->lighting.on = 1;
+  if (i < 0) return 0;
+  lua_pushinteger(L, i + 1);
+  return 1;
+}
+
+/* view:lighting({ambient = {r, g, b}, exposure =, focus = {x, y, z}}): this view uses the light list */
+static int l_v_lighting(lua_State *L) {
+  sx_viewport *v = check_view(L);
+  luaL_checktype(L, 2, LUA_TTABLE);
+  v->lighting.on = 1;
+  field_vec(L, 2, "ambient", v->lighting.ambient, 3);
+  v->lighting.exposure = field_num(L, 2, "exposure", v->lighting.exposure);
+  lua_getfield(L, 2, "focus");
+  if (lua_istable(L, -1)) {
+    v->lighting.has_focus = 1;
+    lua_pop(L, 1);
+    field_vec(L, 2, "focus", v->lighting.focus, 3);
+  } else {
+    lua_pop(L, 1);
+  }
+  return 0;
+}
+
+static void push_fvec3(lua_State *L, const float *f) {
+  int k;
+  lua_createtable(L, 3, 0);
+  for (k = 0; k < 3; k++) {
+    lua_pushnumber(L, f[k]);
+    lua_rawseti(L, -2, k + 1);
+  }
+}
+
+/* saucer.render.lights(view) -> what the last frame picked for that view (1-based):
+ * {on=, n= submitted, dropped=, cascades=, spots=, omni=, atlas=, ambient=, active = {{kind=, color=, intensity=,
+ * range=, pos=, owner=, shadow= (got a map), score=}, ...}} (strongest first), or nil */
+static int l_r_lights(lua_State *L) {
+  sx_engine *e = get_engine(L);
+  int vi = (int)luaL_checkinteger(L, 1) - 1, k;
+  const sx_lighting *lt;
+  static const char *kinds[] = {"sun", "point", "spot"};
+  if (vi < 0 || vi >= e->render.nviews) return 0;
+  lt = &e->render.views[vi].lighting;
+  lua_createtable(L, 0, 9);
+  lua_pushboolean(L, lt->on);
+  lua_setfield(L, -2, "on");
+  lua_pushinteger(L, lt->nlights);
+  lua_setfield(L, -2, "n");
+  lua_pushinteger(L, lt->dropped);
+  lua_setfield(L, -2, "dropped");
+  lua_pushinteger(L, lt->cascades);
+  lua_setfield(L, -2, "cascades");
+  lua_pushinteger(L, lt->spots);
+  lua_setfield(L, -2, "spots");
+  lua_pushinteger(L, lt->omni);
+  lua_setfield(L, -2, "omni");
+  lua_pushinteger(L, lt->atlas);
+  lua_setfield(L, -2, "atlas");
+  push_fvec3(L, lt->ambient);
+  lua_setfield(L, -2, "ambient");
+  lua_createtable(L, lt->nactive, 0);
+  for (k = 0; k < lt->nactive; k++) {
+    const sx_light *l = &lt->lights[lt->active[k]];
+    lua_createtable(L, 0, 8);
+    lua_pushstring(L, kinds[l->kind]);
+    lua_setfield(L, -2, "kind");
+    push_fvec3(L, l->color);
+    lua_setfield(L, -2, "color");
+    push_fvec3(L, l->pos);
+    lua_setfield(L, -2, "pos");
+    lua_pushnumber(L, l->intensity);
+    lua_setfield(L, -2, "intensity");
+    lua_pushnumber(L, l->range);
+    lua_setfield(L, -2, "range");
+    lua_pushinteger(L, l->owner);
+    lua_setfield(L, -2, "owner");
+    lua_pushboolean(L, l->slot >= 0);
+    lua_setfield(L, -2, "shadow");
+    lua_pushnumber(L, l->score);
+    lua_setfield(L, -2, "score");
+    lua_rawseti(L, -2, k + 1);
+  }
+  lua_setfield(L, -2, "active");
+  return 1;
+}
+
 static void read_tint(lua_State *L, int idx, float t[4]) {
   t[0] = t[1] = t[2] = t[3] = 1.0f;
   if (idx && lua_istable(L, idx)) field_vec(L, idx, "tint", t, 4);
@@ -1314,7 +1438,10 @@ static int l_v_mesh(lua_State *L) {
     if (lua_toboolean(L, -1)) d.flags |= SX_DRAW_GHOST;
     lua_getfield(L, o, "unlit");
     if (lua_toboolean(L, -1)) d.flags |= SX_DRAW_UNLIT;
-    lua_pop(L, 3);
+    lua_getfield(L, o, "noshadow");
+    if (lua_toboolean(L, -1)) d.flags |= SX_DRAW_NOSHADOW;
+    lua_pop(L, 4);
+    d.owner = (int)field_num(L, o, "owner", 0);
   }
   if (o && (field_num(L, o, "pitch", 0) != 0.0f || field_num(L, o, "roll", 0) != 0.0f))
     sx_mat4_model_ypr(d.model, pos, field_num(L, o, "yaw", 0), field_num(L, o, "pitch", 0), field_num(L, o, "roll", 0), sc);
@@ -2175,7 +2302,7 @@ static void build_saucer_api(lua_State *L, sx_engine *e) {
   static const luaL_Reg procgen_f[] = {{"grid_new", l_grid_new}, {"reachable", l_reachable}, {NULL, NULL}};
   static const luaL_Reg mesh_f[] = {{"build", l_mesh_build}, {"info", l_mesh_info}, {"free", l_mesh_free}, {NULL, NULL}};
   static const luaL_Reg render_f[] = {
-      {"texture", l_r_texture}, {"palette", l_r_palette}, {"settings", l_r_settings}, {"stats", l_r_stats}, {NULL, NULL}};
+      {"texture", l_r_texture}, {"palette", l_r_palette}, {"settings", l_r_settings}, {"stats", l_r_stats}, {"lights", l_r_lights}, {NULL, NULL}};
   static const luaL_Reg xr_f[] = {
       {"available", l_xr_available}, {"session", l_xr_session}, {"comfort", l_xr_comfort}, {"haptic", l_xr_haptic},
       {"set_comfort", l_xr_set_comfort}, {"save_comfort", l_xr_save_comfort}, {"head", l_xr_head},
@@ -2388,7 +2515,7 @@ int sx_script_open(sx_engine *e) {
                                      {"pick", l_rng_pick},   {"weighted", l_rng_weighted}, {"child", l_rng_child},
                                      {"seed", l_rng_seed},   {NULL, NULL}};
     static const luaL_Reg grid_m[] = {{"place", l_grid_place}, {"free", l_grid_free}, {"get", l_grid_get}, {NULL, NULL}};
-    static const luaL_Reg view_m[] = {{"camera", l_v_camera}, {"fog", l_v_fog},     {"mesh", l_v_mesh},
+    static const luaL_Reg view_m[] = {{"camera", l_v_camera}, {"fog", l_v_fog}, {"light", l_v_light}, {"lighting", l_v_lighting},     {"mesh", l_v_mesh},
                                       {"billboard", l_v_billboard}, {"rect", l_v_rect}, {"text", l_v_text},
                                       {"image", l_v_image},   {"vignette", l_v_vignette}, {NULL, NULL}};
     static const luaL_Reg cmd_m[] = {{"held", l_cmd_held}, {"pressed", l_cmd_pressed}, {"axis", l_cmd_axis}, {NULL, NULL}};

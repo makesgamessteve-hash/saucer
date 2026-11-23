@@ -38,7 +38,7 @@ endif()
 
 # ---- Engine core (pure C, no SDL: everything that is unit tested) ----
 set(CORE_SOURCES
-  engine/src/core/sx_engine.c engine/src/core/sx_fs.c engine/src/core/sx_input.c
+  engine/src/core/sx_engine.c engine/src/core/sx_fs.c engine/src/core/sx_input.c engine/src/core/sx_light.c
   engine/src/core/sx_log.c engine/src/core/sx_math.c engine/src/core/sx_mesh.c
   engine/src/core/sx_net.c engine/src/core/sx_net_udp.c
   engine/src/core/sx_mod.c engine/src/core/sx_phys.c engine/src/core/sx_procgen.c
