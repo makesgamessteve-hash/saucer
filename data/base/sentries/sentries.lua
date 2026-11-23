@@ -56,6 +56,8 @@ return {
     -- beam while the tractor pulls and loud per Loud module (boosting shows up as speed)
     hull = { villa = 1.0, seat = 0.4, pocket = 0.2, foot = 0.5 }, still = 0.55, speed_ref = 10, speed_cap = 2.0,
     beam = 0.5, loud = 0.3, snatcher_beam = 1.3,
+    -- add-realistic-lighting: lit up you are easier to see (added to the signature at the helm)
+    lights = { head = 0.15, flood = 0.3 },
     -- the site alarm: every lock (or Spotter tag, or a cell theft caught) raises it by 1 (to max).
     -- Each level: meters fill by alarm_fill more, sweeps turn by alarm_sweep faster, turrets fire
     -- by alarm_fire faster. At wake_at the Snatchers wake, at lockdown_at the Lockdown seals.

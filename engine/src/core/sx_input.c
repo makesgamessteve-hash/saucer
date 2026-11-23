@@ -23,7 +23,9 @@ static const name_code key_names[] = {
 
 static const char *pad_buttons[] = {"a",          "b",           "x",            "y",           "back",
                                     "guide",      "start",       "leftstick",    "rightstick",  "leftshoulder",
-                                    "rightshoulder", "dpup",     "dpdown",       "dpleft",      "dpright", NULL};
+                                    "rightshoulder", "dpup",     "dpdown",       "dpleft",      "dpright",
+                                    /* add-realistic-lighting: SDL3's Share / Capture, the back paddles, the touchpad */
+                                    "misc1", "rpaddle1", "lpaddle1", "rpaddle2", "lpaddle2", "touchpad", NULL};
 static const char *pad_axes[] = {"leftx", "lefty", "rightx", "righty", "lefttrigger", "righttrigger", NULL};
 static const char *mouse_btns[] = {"", "left", "middle", "right", NULL};
 static const char *mouse_axes[] = {"dx", "dy", "wheel", NULL};

@@ -34,6 +34,8 @@ function M.signature(p, S)
   local sig = base * (S.still + (1 - S.still) * k)
   if p.tractor and p.tractor.site == p.site and p.site ~= 0 then sig = sig + S.beam end
   if not on_foot(p) and p.ship.loud then sig = sig + S.loud * p.ship.loud end
+  -- add-realistic-lighting: headlights and floods make you easier to see
+  sig = sig + require("sim.lights").signature(p, S)
   return sig
 end
 
