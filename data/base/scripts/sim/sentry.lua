@@ -78,8 +78,9 @@ local function watcher_in(out, site, ruin, kit, r, band, civ, light)
     local lat = ax == 1 and 3 or 1
     local side = (site.id + r.id) % 3 - 1
     if S and not light then pos[lat] = pos[lat] + side * math.min(S.offset, (mx[lat] - mn[lat]) / 4) end
-    -- and keep a power cell on the floor behind them, out of their cone
-    if S and S.cell then
+    -- and keep a power cell on the floor behind them, out of their cone (not in a city: its
+    -- districts are no room chain to dive through)
+    if S and S.cell and not ruin.city then
       cell = { pos[1], mn[2] + kit.wall + 0.8, pos[3] }
       cell[ax] = far - sg * (kit.wall + S.cell.back)
     end
@@ -92,6 +93,8 @@ local function watcher_in(out, site, ruin, kit, r, band, civ, light)
                     dark = dark_of(ruin, r), light = light or nil, pattern = pattern, period = period,
                     floor = mn[2] + kit.wall, axis = ax, sign = sg, cell = cell, shaft = r.kind == "shaft" or nil }
 end
+-- (specs reach the turret placement through this)
+function M.watcher_for_test(out, ...) watcher_in(out, ...) return out end
 
 -- add-fun-fixes: the tutorial derelict keeps one light Watcher, in a big room on the way
 -- to the vault (a hall rather than a shaft, whose turret looks down from too high to

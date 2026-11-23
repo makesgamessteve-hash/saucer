@@ -392,6 +392,23 @@ describe("a hit shakes the beam loose", function()
 end)
 
 describe("power-cell sabotage", function()
+  it("a city's Watchers carry no cell", function()
+    local ruinm = require("sim.ruin")
+    local saved = ruinm.room_box
+    ruinm.room_box = function() return { 0, 0, 0 }, { 40, 20, 40 } end
+    local r = { id = 3, kind = "hall", district = 1 }
+    local site = { id = 1, pos = { 0, 0, 0 } }
+    local ok, a, b = pcall(function()
+      local city = { city = { districts = { { powered = true } } }, doors = {} }
+      local plain = { doors = {} }
+      return sentry.watcher_for_test({}, site, city, { wall = 1 }, r, { 2, 4 }, nil, false),
+        sentry.watcher_for_test({}, site, plain, { wall = 1 }, r, { 2, 4 }, nil, false)
+    end)
+    ruinm.room_box = saved
+    expect(ok).to_be(true)
+    expect(a[1].cell).to_be(nil)
+    expect(b[1].cell ~= nil).to_be(true)
+  end)
   it("a cell lies behind each hall Watcher, out of its cone", function()
     local T = sentry.tune()
     for _, d in ipairs(game.sentries(2)) do
