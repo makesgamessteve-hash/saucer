@@ -27,7 +27,9 @@ for _, r in ipairs(ruin.rooms) do if r.kind == "vault" then vault = r end end
 -- loot the vault with the Villa (add-fun-fixes: the tutorial derelict keeps one light Watcher)
 local ok, route = ap.enter(T, 1, get, ruin, origin, vault.id)
 T.assert(ok, "flew the Villa into the vault")
-T.assert(#game.sentries(1) == 1 and game.sentries(1)[1].light, "the tutorial derelict has one light sentry")
+-- add-strategic-sentries: and a light Spotter
+T.assert(#game.sentries(1) == 2 and game.sentries(1)[1].light and game.sentries(1)[2].kind == "spotter",
+  "the tutorial derelict has one light Watcher and a light Spotter")
 local door = ap.door_center(ap.door_of(ruin, vault.id), ruin.rooms, require("sim.ruin").kit_of(ruin.kit), origin)
 local got = ap.grab(T, 1, get, 1, ruin, vault.id, door)
 T.assert(got >= 2, "picked up the vault's loot and the Echo (" .. got .. ")")

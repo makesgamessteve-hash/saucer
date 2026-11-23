@@ -238,7 +238,7 @@ function M.decorate(site, ruin, defs)
       local far = sg > 0 and mx[ax] or mn[ax]
       local near = sg > 0 and mn[ax] or mx[ax]
       local floor = mn[2] + kit.wall
-      local L = lat == 1 and "x" or "z"
+      local LF = lat == 1 and "x" or "z"
       -- floor hatches of this room (a pillar must not stand on one)
       local hatches = {}
       for _, d in ipairs(ruin.doors) do
@@ -247,7 +247,7 @@ function M.decorate(site, ruin, defs)
       local w = S.pillar.w
       local h = (mx[2] - mn[2]) * S.pillar.h
       for k, side in ipairs({ "-", "+" }) do
-        if not (r.faces and r.faces[side .. L]) then
+        if not (r.faces and r.faces[side .. LF]) then
           local a = far + (near - far) * (k == 1 and 0.35 or 0.65)
           local l0 = side == "-" and mn[lat] + kit.wall + S.pillar.side or mx[lat] - kit.wall - S.pillar.side - w
           local bmn, bmx = {}, {}
@@ -264,11 +264,14 @@ function M.decorate(site, ruin, defs)
           end
         end
       end
-      -- the guarded find: on the floor along its gaze, guard.at of the way from its end to the door
-      local pos = {}
-      pos[2] = floor + 1.0
-      pos[ax] = far + (near - far) * S.guard.at
-      pos[lat] = def.pos[lat]
+      -- the guarded find: on the floor under its gaze, where the lower half of its cone (guard.at of
+      -- the half angle below its axis) meets the floor, kept inside the room
+      local T = tune()
+      local drop = -def.pitch + T.watcher.half_angle * S.guard.at
+      local hd = (def.pos[2] - floor) / math.max(sm.sin(drop) / sm.cos(drop), 0.05)
+      local L = math.abs(near - far)
+      hd = vec.clamp(hd, 0.2 * L, 0.8 * L)
+      local pos = { def.pos[1] + sm.sin(def.yaw) * hd, floor + 1.0, def.pos[3] + sm.cos(def.yaw) * hd }
       ruin.slots[#ruin.slots + 1] = { id = #ruin.slots + 1, room = r.id, pos = pos, max_size = 1, tier = S.guard.tier,
         seed = saucer.seed_child(site.seed, "guard", def.id), guarded = def.id, premium = S.guard.premium }
     end

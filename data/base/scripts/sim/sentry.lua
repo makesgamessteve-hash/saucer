@@ -608,7 +608,7 @@ function M.step(state, site_idx, defs, dt, ctx)
     elseif def.kind == "clamp" then adv.step_clamp(state, def, dyn, dt, ctx, t)
     elseif def.kind == "lockdown" then adv.step_lockdown(state, def, dyn, dt, ctx, t, ctx.seal)
     elseif def.kind == "warden" then require("sim.warden").step(state, def, dyn, dt, ctx, t)
-    elseif def.kind == "spotter" then require("sim.spotter").step(state, def, dyn, dt, ctx, t)
+    elseif def.kind == "spotter" then if t.stealth then require("sim.spotter").step(state, def, dyn, dt, ctx, t) end
     else step_snatcher(state, def, dyn, dt, ctx, t) end
   end
 end

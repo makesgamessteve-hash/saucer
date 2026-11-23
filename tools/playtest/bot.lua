@@ -160,6 +160,63 @@ local function spawn(pl, name, fn)
   bots[#bots + 1] = { co = coroutine.create(fn), pl = pl, name = name }
 end
 
+-- add-strategic-sentries: the Stealth persona watches the sentries that are after it:
+-- it scans on entering a site, throws a Decoy when one goes Alert on it (or a Spotter's meter
+-- climbs), and jams when one locks on anyway. Works on builds without the meter too (it then
+-- reacts to Alert and Locked only).
+local SR = { site = {}, decoy = {}, jam = {}, scan = {} }
+local function threats(st, i, p)
+  local alert, locked, spot = false, false, false
+  local list = st.sentries and st.sentries[p.site] or {}
+  local defs = game.sentries(p.site)
+  for k, dyn in ipairs(list) do
+    local d = defs[k]
+    if dyn.target == i and dyn.st == "alert" then alert = true end
+    if dyn.target == i and dyn.st == "locked" then locked = true end
+    if d and d.kind == "spotter" and (dyn.sus == i or dyn.target == i) and (dyn.meter or 0) >= 0.35
+        and dyn.st ~= "tagged" and dyn.st ~= "disabled" and dyn.st ~= "off" then spot = true end
+  end
+  return alert, locked, spot
+end
+local function stealth_reflex(i, p, st)
+  if p.mode ~= "helm" or (p.site or 0) == 0 then SR.site[i] = 0 return end
+  local now = st.tick
+  if SR.site[i] ~= p.site then
+    SR.site[i] = p.site
+    if (p.scan_ready or 0) <= now and p.ship.charge >= sentry.tune().scanner.charge + 10 then
+      T.press(i, "scan", 1, true)
+      ev(i, "scan", "entering site " .. p.site)
+    end
+  end
+  local alert, locked, spot = threats(st, i, p)
+  if (alert or spot) and (p.decoys or 0) > 0 and now - (SR.decoy[i] or -1e9) > 6 * 60 then
+    SR.decoy[i] = now
+    T.press(i, "decoy", 1, true)
+    ev(i, "decoy", spot and "spotter meter" or "sentry alert")
+  elseif locked and now - (SR.jam[i] or -1e9) > 10 * 60 and p.ship.charge >= sentry.tune().jammer.charge + 10 then
+    SR.jam[i] = now
+    T.press(i, "jam", 1, true)
+    ev(i, "jam", "sentry locked")
+  end
+end
+
+-- the highest suspicion meter on player pl (0 on builds without it)
+local function suspicion(pl)
+  local ok, stl = pcall(require, "sim.stealth")
+  if not ok then return 0 end
+  return (stl.meter_on(S(), P(pl)()))
+end
+
+-- lie low: hold still (out of sight the meters drain) until nothing suspects us much
+local function lie_low(pl, hi, lo, max_ticks)
+  if suspicion(pl) < (hi or 0.25) then return false end
+  local get = P(pl)
+  local t0 = tick()
+  ev(pl, "lie_low", string.format("meter %.2f", suspicion(pl)))
+  while suspicion(pl) > (lo or 0.1) and tick() - t0 < (max_ticks or 300) do ap.hold(B, pl, {}) end
+  return true
+end
+
 local seen = {}
 local function sample()
   local st = S()
@@ -187,6 +244,8 @@ local function sample()
       T.press(i, "jam", 1, true)
       ev(i, "jam", "snatcher latched, charge " .. math.floor(p.ship.charge))
     end
+    -- add-strategic-sentries: the Stealth persona's reflexes (CFG.stealth)
+    if CFG.stealth then stealth_reflex(i, p, st) end
     -- a Clamp on the hull: hold Boost to shake it off (what the message says)
     for _, m in ipairs(p.msgs or {}) do
       if CFG.jam and m.tick == st.tick and m.text:find("CLAMPED", 1, true) and p.mode == "helm" then
@@ -413,6 +472,7 @@ local function dive(pl, site, opts)
   local function visit(list, size)
     for _, room in ipairs(list) do
       if B.time_up() or (hold_free(pl) <= 0 and not opts.twin) or fell() then return false end
+      if opts.stealth then lie_low(pl) end
       local wps = path_between(ruin, origin, cur, room, size)
       local tf = tick()
       local ok, leg = ap.follow(B, pl, get, wps, 1500)
@@ -431,6 +491,13 @@ local function dive(pl, site, opts)
         end
       end
       cur = room
+      -- add-strategic-sentries: the Stealth persona pulls the room's Watcher cells first
+      if opts.stealth and opts.sabotage ~= false then
+        if lie_low(pl) then ev(pl, "lay_low", "before the cells of room " .. room) end
+        local nc = ap.grab(B, pl, get, site, ruin, room, nil, function(c) return c.kind == "cell" end)
+        if nc > 0 then ev(pl, "sabotage", string.format("site %d room %d cells %d", site, room, nc)) end
+        lie_low(pl)
+      end
       do
         local before = #get().hold
         local tg = tick()
@@ -582,6 +649,8 @@ local function trade_run(pl, policy)
       ev(pl, "upgrade", string.format("%s %d c level %d", best.id, best.price, upgrades.level(get(), best.id)))
     end
   end
+  -- add-strategic-sentries: the Stealth persona keeps its Decoy flares stocked
+  if policy.decoys and (get().decoys or 0) < policy.decoys and pick_enabled(pl, "Decoy flares") then ev(pl, "bought", "decoy flares") end
   for _, b in ipairs(policy.buy or {}) do
     if get().credits >= (b.min or 0) and pick_enabled(pl, "Buy " .. b.name) then ev(pl, "bought", b.name) end
   end

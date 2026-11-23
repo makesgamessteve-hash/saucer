@@ -8,6 +8,8 @@
 --   opt   : the career autopilot, zero latency, exact state (skill ceiling)
 --   spam  : gets up, then spams the primary button (tractor) only
 --   beamonly : career autopilot in the Villa only (no Seat, no Jammer reflex, no mystery): dominant-strategy probe
+--   stealth  : add-strategic-sentries: Human-Proxy plus scan on entry, Decoy on Alert, Jam on Lock,
+--              lying low while suspected and pulling Watcher power cells (the careful player)
 -- Telemetry lines:
 --   FUNI tick action kind accepted latency_ticks  (one per input onset, resolved within 30 ticks)
 --   FUNS tick mode site hold hot banked credits hull shield suit o2 threat nearest_m inputs story echoes
@@ -76,7 +78,7 @@ local function resolve()
   watch = keep
 end
 
-local DELAYED = PERSONA == "human"
+local DELAYED = PERSONA == "human" or PERSONA == "stealth" -- add-strategic-sentries: Stealth plays with human reflexes too
 local function delay_ticks() return 12 + math.floor(rnd() * 5) - 2 end -- 200 ms +- 33 ms
 T.press = function(pl, a, ticks, nowait)
   local fire = function() track(pl, a, "button") ORIG_PRESS(pl, a, ticks or 1, true) end
@@ -149,6 +151,9 @@ local function telemetry()
         elseif tx:find("OUT OF OXYGEN", 1, true) or tx:find("SUIT FAILURE", 1, true) then kind = "teleport_forced"
         elseif tx:find("^Banked") then kind = "bank"
         elseif tx:find("LOCKED", 1, true) then kind = "locked"
+        elseif tx:find("TAGGED", 1, true) then kind = "tagged"
+        elseif tx:find("SITE ALARM", 1, true) then kind = "alarm"
+        elseif tx:find("Power cell out", 1, true) then kind = "sabotage"
         elseif tx:find("stirs", 1, true) or tx:find("wakes up", 1, true) then kind = "alerted"
         elseif tx:find("latched on", 1, true) then kind = "latched"
         elseif tx:find("CLAMPED", 1, true) then kind = "clamped" end
@@ -197,11 +202,11 @@ local function telemetry()
         local mine = dyn.target == p.index
         local cur = mine and dyn.st or "none"
         local prev = sstate[key] or "none"
-        if prev == "alert" and cur ~= "alert" and cur ~= "locked" then out("FUNE %d slip_alert %s", now, (defs[k] or {}).kind or "?") end
+        if prev == "alert" and cur ~= "alert" and cur ~= "locked" and cur ~= "tagged" then out("FUNE %d slip_alert %s", now, (defs[k] or {}).kind or "?") end
         if prev == "latched" and cur ~= "latched" and cur ~= "flee" and dyn.st ~= "flee" then out("FUNE %d escape_latch -", now) end
         if prev == "clamped" and cur ~= "clamped" then out("FUNE %d escape_clamp -", now) end
         sstate[key] = cur
-        if mine and (cur == "alert" or cur == "locked" or cur == "latched" or cur == "clamped" or cur == "chase") then
+        if mine and (cur == "alert" or cur == "locked" or cur == "latched" or cur == "clamped" or cur == "chase" or cur == "tagged") then
           threat = threat + (cur == "alert" and 0.5 or 1)
         end
         if site == p.site and dyn.st ~= "off" and dyn.st ~= "disabled" then
@@ -272,6 +277,13 @@ out("FUNP %s", PROTO)
 BOT.spawn(0, "telemetry", telemetry)
 if PERSONA == "rand" then BOT.spawn(1, "rand", rand_bot)
 elseif PERSONA == "spam" then BOT.spawn(1, "spam", spam_bot)
+elseif PERSONA == "stealth" then
+  -- add-strategic-sentries: the careful player the sentries are tuned for: the same career as
+  -- Human-Proxy (Seat for guarded sites, 200 ms delay line) plus scan on entry, Decoy on Alert,
+  -- Jam on Lock, lie low while suspected and pull Watcher cells
+  CFG.stealth = true
+  BOT.spawn(1, "stealth", career_bot({ name = "stealth", mystery = true, sell_at = 6, sleep_every = 4, max_danger = 3,
+    trade = { fold = true, decoys = 3 }, dive = function(s) return { seat = s.guarded, stealth = true } end }))
 elseif PERSONA == "beamonly" then
   CFG.jam = false
   BOT.spawn(1, "beamonly", career_bot({ name = "beam-only", sell_at = 6, max_danger = 3, trade = { fold = false },
