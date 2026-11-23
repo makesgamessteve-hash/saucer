@@ -334,6 +334,36 @@ describe("cover and guarded finds", function()
     p.looted["2:" .. sl.id] = nil
     expect(#stealth.guarded(nil, nil, 2)).to_be(0)
   end)
+  it("under its guard's eye (Alert or Lock) a guarded find drops back out of the beam", function()
+    local st = new_state()
+    local p = st.players[1]
+    local r = game.ruin(2)
+    local g
+    for _, c in ipairs(tractor.candidates(st, p, 2, r)) do if c.guarded then g = c end end
+    local defs = game.sentries(2)
+    local i
+    for k, d in ipairs(defs) do if d.id == g.guarded then i = k end end
+    local dyn = st.sentries[2][i]
+    expect(sentry.guard_on(st, 2, defs, p, g.guarded)).to_be(false)
+    dyn.st, dyn.target = "alert", p.index
+    expect(sentry.guard_on(st, 2, defs, p, g.guarded)).to_be(true)
+    dyn.st = "locked"
+    expect(sentry.guard_on(st, 2, defs, p, g.guarded)).to_be(true)
+    dyn.target = 2
+    expect(sentry.guard_on(st, 2, defs, p, g.guarded)).to_be(false)
+    expect(sentry.guard_on(st, 9, defs, p, g.guarded)).to_be(false)
+    expect(sentry.guard_on(st, 2, defs, p, nil)).to_be(false)
+    -- the game drops the pull
+    dyn.target, dyn.st = p.index, "alert"
+    p.site, p.ship.size = 2, 1
+    p.ship.pos = vec.add(g.pos, { 0, 6, 0 })
+    p.tractor = { key = g.key, kind = g.kind, site = 2, t = 0, total = 3, from = g.pos, size = 1 }
+    run(st, cmd(), 1)
+    expect(p.tractor).to_be(false)
+    local why = false
+    for _, m in ipairs(p.msgs) do if m.text:find("The guard saw the beam", 1, true) then why = true end end
+    expect(why).to_be(true)
+  end)
 end)
 
 describe("power-cell sabotage", function()

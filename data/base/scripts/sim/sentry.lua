@@ -573,6 +573,20 @@ function M.locked_on(state, p)
   return false
 end
 
+-- add-strategic-sentries: is the Watcher guarding a find (by def id) at Alert or Lock on p?
+-- A guarded find cannot be beamed out under its guard's eye.
+function M.guard_on(state, site_idx, defs, p, guard)
+  local dyns = state.sentries and state.sentries[site_idx]
+  if not (dyns and defs and guard) then return false end
+  for i, def in ipairs(defs) do
+    local dyn = dyns[i]
+    if def.id == guard and dyn and dyn.target == p.index and (dyn.st == "alert" or dyn.st == "locked") then
+      return true
+    end
+  end
+  return false
+end
+
 -- one tick for every sentry of a site, then the bolts
 function M.step(state, site_idx, defs, dt, ctx)
   local t = M.tuned(state)
