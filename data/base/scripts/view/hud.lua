@@ -122,6 +122,24 @@ function M.message_lines(state, p, cols, max_lines)
   return lines
 end
 
+-- add-realistic-lighting: which of the saucer's lights are on (headlights, floods, cabin lamps off)
+function M.lights_label(p, compact)
+  local l = p.lights
+  if not l then return nil end
+  local t = {}
+  if l.head then t[#t + 1] = compact and "HL" or "HEADLIGHTS" end
+  if l.flood then t[#t + 1] = compact and "FL" or "FLOODS" end
+  if l.cabin == false then t[#t + 1] = compact and "CAB OFF" or "CABIN OFF" end
+  if #t == 0 then return nil end
+  return table.concat(t, " ")
+end
+
+function M.lights(v, p, compact)
+  local s = M.lights_label(p, compact)
+  if s then v:text(8, compact and 54 or 78, s, CYAN) end
+  return s
+end
+
 local HELP = {
   "SAUCER - controls",
   "Walk or fly: W A S D, look: mouse (click to capture)",
@@ -143,8 +161,8 @@ local HELP = {
   "Decoy B, Shroud X; on foot Y grapples, hold N spikes or cuts",
   "Clamped? hold Boost to shake it off, or Jam it",
   "Co-op: gamepad A or F2 (right-hand keys) joins a player",
-  "Camera C, mystery mode M, help H/F1",
-  "Gamepad, touch and WebXR work too.",
+  "Lights: 4 headlights, 5 floods, 6 cabin (pad Share: tap/hold)",
+  "Camera C, mystery M, help H/F1 (gamepad, touch, WebXR too)",
 }
 M.HELP = HELP
 
@@ -707,6 +725,7 @@ draw_inner = function(v, state, p, target)
     v:text(128, 26, moving and "SHROUD (MOVING)" or "SHROUD", moving and AMBER or CYAN)
   end
   if (p.decoys or 0) > 0 and not compact and p.mode ~= "foot" then v:text(8, 66, string.format("DECOYS %d", p.decoys), DIM) end
+  M.lights(v, p, compact)
   if p.visiting then v:text(W // 2 - 64, 36, string.format("VISITING P%d'S DOME", p.visiting), GREEN) end
   M.jump(v, state, p, compact)
   -- (on touch the lift slider reads the altitude instead of the tape)

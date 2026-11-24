@@ -105,6 +105,19 @@ TEST(frame_stats) {
   CHECK(strstr(sx_usage(), "--frame-stats") != NULL);
 }
 
+TEST(shadows_option) {
+  sx_options o;
+  char *lo[] = {"x", "--shadows", "low"}, *bad[] = {"x", "--shadows", "ultra"}, *none[] = {"x", "--shadows"};
+  sx_options_default(&o);
+  CHECK(o.shadows == -1);
+  CHECK(parse(&o, 3, lo) && o.shadows == SX_SHADOWS_LOW);
+  sx_options_default(&o);
+  CHECK(!parse(&o, 3, bad));
+  sx_options_default(&o);
+  CHECK(!parse(&o, 2, none));
+  CHECK(strstr(sx_usage(), "--shadows") != NULL);
+}
+
 TEST(ticks_for_frame) {
   double acc = 0;
   CHECK(sx_ticks_for_frame(&acc, 1.0 / 60) == 1);
