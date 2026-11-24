@@ -1,0 +1,336 @@
+# cities Specification
+
+## Purpose
+Alien cities on planets, moons and asteroids: generated districts, skylines, transit, weather, archive clues and trader outposts the saucer can fly through and explore.
+
+## Requirements
+
+### Requirement: City generation
+A city SHALL be generated from the site seed as a ruin-shaped table through `sim/citygen.lua`, hierarchically (districts, blocks, buildings, tunnels, an undercity), identically on every visit, inside a generation budget, with every room and loot slot reachable, a spaceport hangar as the entrance, one landmark district of each kind and a distinct form per body.
+
+#### Scenario: a city is the same every visit and differs between seeds
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: every city validates: all rooms and every loot slot are reachable
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: a city stays inside its generation budget
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: a city is many kilometres of districts, blocks and buildings with towers to fly between
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the undercity lies in layers below the streets and tunnels join the buildings
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: every city has a spaceport hangar as its entrance and one landmark per district kind
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the reactor heart holds the vault and the rich landmarks pay better
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: a planet city is tall and heavy, a moon city sits in a crater, an asteroid city in carved rock
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: sky-bridges join towers on a planet and a moon but not inside an asteroid
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the generation fails loudly rather than handing back a broken city
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+### Requirement: City sites
+Sectors 2 to 4 SHALL each hold one city (one of each body) and later far sectors SHALL hold one by a seeded coin toss, as an extra site from its own seed stream so every other site, the home sector and every replay stay as they were. The sector map SHALL tag them and entering one SHALL say what it is.
+
+#### Scenario: the three nearest far sectors hold one city of each body and sector 1 holds none
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: a city site sits far out, clear of the other sites, in a sector's list
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the sector map tags the cities
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: entering a city says what it is and what the body does to the hull
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+### Requirement: District power grid
+Every district but the spaceport SHALL start dark: shut gates and sleeping sentries, with a power coupling the belly beam lifts. Beaming it SHALL restore the district, open its gates and wake its sentries, and the grid SHALL persist in saves and across fold jumps. Calm halls SHALL keep no sentry.
+
+#### Scenario: only the spaceport starts live; every other district has a coupling and shut gates
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: a shut gate is solid until its district is restored
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: beaming a coupling home restores its district, opens its gates and tells the party
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: a partner in the city is told who restored a district
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: restored power survives a save, a load, a fold away and a fold back
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: a sentry in a dark district sleeps until the grid comes back, a calm hall keeps none
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the clamps, the lockdown node and the warden stay out of calm halls
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+### Requirement: Body gravity
+Hovering under a pull above 1 g (a planet city) SHALL cost Charge each second, the spaceport hangar SHALL be free and refill the Charge, and with no Charge the hull SHALL settle at a walking pace while horizontal flight stays free, so no hull is ever trapped. A moon's light pull and an asteroid's none SHALL cost nothing.
+
+#### Scenario: hovering under a planet's pull costs Charge, the spaceport hangar refills it
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: with the Charge gone the hull settles at a walking pace and horizontal flight stays free
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: a moon's light pull and an asteroid's none cost nothing
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+### Requirement: City navigation
+Inside a city the map key SHALL open a city map (districts with their landmark, grid state, distance and compass direction, a plan with couplings and saucers, and the way back to the sector map) and the HUD SHALL name the body, the district and the grid and point a beacon at the nearest dark coupling, then at the reactor vault.
+
+#### Scenario: the city map panel lists every district, its grid state and the way back to the sector map
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the beacon points at the nearest dark coupling, then at the reactor vault
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the HUD names the body, the district and the beacon; the city map draws districts, couplings and saucers
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+### Requirement: City loot
+Only loot slots within beam sense of the saucer SHALL be rolled each tick so a city with hundreds of slots stays cheap, and the power couplings SHALL be tractor candidates.
+
+#### Scenario: only the loot within beam sense is rolled, the couplings are beam targets
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+### Requirement: City rendering and environment
+A city SHALL be drawn in streamed chunks: districts farther than a set distance as one coarse mesh each, nearer ones as their culled room and solid chunks with detail only close by, and the gates of dark districts as shutters. The air SHALL belong to the body: a planet fog with a day and night cycle, a moon in earthlight without air, an asteroid in dark rock.
+
+#### Scenario: a far district is one coarse mesh, a near one its chunks, and every gate is drawn near it
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the air of a city belongs to its body: a planet has a day, a moon earthlight, an asteroid dark rock
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: a city kit's detail style and texture come from the kit
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+### Requirement: A city can be restored end to end
+A player SHALL be able to fly to a dark district's power coupling, beam it home from the Tractor Room console and see its gates open, and a planet city SHALL drain Charge under the full simulation.
+
+#### Scenario: a moon city's coupling is beamed home and a planet city's pull drains Charge
+- **WHEN** `tests/game/city.lua` (ctest `game_city`) folds into the moon and planet cities, flies to a coupling and beams it
+- **THEN** the grid reads 2/9, the district's gates are open, the beacon moves on, and hovering in the planet city spent Charge
+
+### Requirement: City silhouette and light colour
+A city's towers SHALL be stacked tiers in a silhouette chosen by the civilisation's shape, every tier inside the tower's footprint so that the collision equals the drawing, wearing the civilisation's light colours with window patterns, signs, ledges and roof greebles that are the same on every visit.
+
+#### Scenario: each civilisation builds its own silhouette and wears its own light colours
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: every silhouette stays inside its footprint, so what you see is what you hit
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: a styled kit wears the civ's colours and leaves the shared kit alone
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: window patterns are the same every time and tower tiers differ
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+### Requirement: Lights and grid
+The lights of a city SHALL be separate from its walls and burn only in a district whose grid is on: dark before its coupling is restored, a flicker then a ramp afterwards, as a pure function of the tick and the power locks; landmark districts SHALL carry a light pillar and every district a far glow.
+
+#### Scenario: a city's windows, signs and strips are lights, split from the walls and built when wanted
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: a dark district has no light, a restored one flickers and ramps up, the spaceport is always lit
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the drawn lights follow the grid: none in a dark district, many once it is restored
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: a light pillar marks each landmark district, and a lit district glows from afar
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+### Requirement: Helm hint
+The control hint at the helm SHALL be docked bottom-left above the console, out of the sightline, backed, shown for a few seconds after the context changes and then faded; H SHALL show the full help in the same corner; the message log SHALL have a backing.
+
+#### Scenario: the hint line is docked bottom-left above the console, clear of the sightline, and fades
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+### Requirement: Skyline ring
+A city SHALL be surrounded by a ring of skyline districts, generated from their own seed child so the core is unchanged: only towers and blocks (collision boxes, no rooms, doors or slots), tens of districts and hundreds of boxes, all inside the site's bounds, so a planet city runs on for several kilometres and the sector keeps its other sites clear of it.
+
+#### Scenario: a skyline ring of towers surrounds the core: tens of districts, hundreds of boxes, no rooms
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the ring does not change the core: the same rooms, doors and slots with or without it
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the ring is inside the site's bounds, so it is a place you can fly and crash into
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: a city site sits clear of its sector's other sites however wide the ring
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+### Requirement: Streamed skyline
+The renderer SHALL draw each skyline district as one coarse mesh with a far glow, build the windows and lights of the districts near the camera one per frame, keep at most a handful built and free the oldest, and give a planet a ring of horizon impostors.
+
+#### Scenario: skyline windows are built near the camera, a handful at a time, and the oldest are freed
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: near the ring its windows are drawn, far from it one coarse mesh per district, and a planet has a horizon
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+### Requirement: Transit
+A city SHALL have mag-rail lines on pylons across its whole width and one down its avenue, and a lift shaft at every plaza; the decks, pylons and shaft posts are solid, while the trains and lift cabins are drawn as a pure function of the tick, so nothing about them is stored.
+
+#### Scenario: mag-rails run on pylons across the whole city and a lift stands at every plaza
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: trains and lift cabins are drawn from the clock: end to end and back, up and down
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+### Requirement: Wet and wild undercity
+The deep rooms and tunnels of a planet city SHALL hold water and canal lamps; the upper undercity of a planet or moon SHALL be overgrown with moss and vines; an asteroid's SHALL be bare rock.
+
+#### Scenario: a flooded undercity holds water and canal lamps, an overgrown one moss and vines, a rock neither
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+### Requirement: Storms and wind
+A planet city SHALL be crossed by storm fronts on a fixed clock, with rain, thicker air, lightning and a wind that pushes a saucer in the open but not inside a room, and the HUD SHALL warn before a storm and during it.
+
+#### Scenario: a storm front sweeps a planet city on a fixed clock, a moon has none
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the wind pushes a saucer in the open and does not reach it inside a room
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: a storm darkens and thickens the air and lightning flashes it
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the HUD rains and warns of a storm before it and during it
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+### Requirement: Falling bridges
+Each sky-bridge of a planet city SHALL tear loose at the peak of one fixed storm, leave the physics, tell the players, and clip a hull at most once; the fall SHALL be drawn as a drop and replay the same after a rebuild.
+
+#### Scenario: each sky-bridge tears loose at the peak of its storm, leaves the physics and tells the players
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: a falling bridge clips a hull once: some hull lost, never more than once per bridge
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the falling bridge is drawn dropping and then gone, and is not in the far silhouette
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+### Requirement: Dark patrols
+Every dark district SHALL be patrolled by a roaming Watcher on a fixed route through its streets, drawn at a position that is a function of the tick; it SHALL go dormant when the district's grid is restored.
+
+#### Scenario: a Watcher patrols the streets of every dark district and goes home when its grid is back
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+### Requirement: Archive records
+Each archive district SHALL hold one record in its ground hall, readable by the beam once the district's grid is up, taking no hold slot; it SHALL say where the next unlocked Echo waits (sector too, when elsewhere), then the Heart's sector, then lore of the cause, or a plain line when the mystery is off.
+
+#### Scenario: every archive district holds one record in its ground hall, readable once its grid is up
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: reading a record names the next Echo, a later record the one after, and never fills the hold
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: a record is a beam target when the hold is full and is drawn like an Echo
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+### Requirement: City outposts
+A sector with a city SHALL hold a second trader, an outpost off the city's spaceport mouth, with its own demand ledger; docking there SHALL say so, and both stations SHALL be drawn and on the radar.
+
+#### Scenario: a city sector has a trader outpost off its spaceport mouth, a pure function of the seed
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: docking at an outpost sells there with its own ledger, and says so
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+### Requirement: Grid-restore payoff
+Restoring a district SHALL be a visible moment: its beacons and spire lights come on first, then a wave of light runs out from the coupling at a fixed speed so that windows and signs inside the front are lit and those beyond are dark, a sting plays for every player in the city, and the HUD shows a banner with the district and the grid count for a few seconds. All of it SHALL be a function of the tick.
+
+#### Scenario: a restored district lights up in a wave from its coupling, the beacons first, and the HUD and sound mark it
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+### Requirement: City frame budget
+A city SHALL be drawn inside a frame budget: a sentry farther from the eye than `SENTRY_DIST` is not drawn, the skyline, detail and chunk distances are tuned so that the per-frame game cost (simulation plus render) in a city stays under 16.6 ms at the 95th percentile on the reference box, and the engine SHALL report the frame times (average, median, 95th percentile and maximum, with the simulation and render share) at exit when run with `--frame-stats`, natively and in the web build.
+
+#### Scenario: sentries are drawn only near the eye and the LOD distances nest
+- **WHEN** `tests/lua/city2_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+#### Scenario: the frame summary computes average, median, 95th percentile and maximum
+- **WHEN** `tests/c/test_engine.c` runs its `frame_stats` test
+- **THEN** it passes
