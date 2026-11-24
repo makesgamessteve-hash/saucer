@@ -3,7 +3,8 @@
 -- drain shields then hull; Snatchers steal one hot item from a Seat.
 -- Mods may override this file.
 return {
-  alert_time = 0.75,      -- at least this long in Alert before Locked
+  -- tune-sentry-economy: a longer Alert window, so a careful pilot slips out of more Alerts (near-misses)
+  alert_time = 1.0,       -- at least this long in Alert before Locked
   lose_time = 1.0,        -- out of sight this long: back to Dormant
   disabled_time = 12.0,   -- Jammer reboot
   watcher = {
@@ -17,7 +18,8 @@ return {
     small_range = 25, hurt_scale = 0.8,
     -- add-fun-fixes: the light Watcher in a sector's tutorial derelict (site 1): shorter sight,
     -- a slower lock and soft bolts, so the first threat comes early and teaches the tools
-    light = { range = 55, small_range = 15, alert_time = 1.5, bolt_damage = 4 },
+    -- (tune-sentry-economy: it bites harder now; beam-only play made most of its money here)
+    light = { range = 70, small_range = 18, alert_time = 1.2, bolt_damage = 6 },
   },
   snatcher = {
     sense = 22, chase_speed = 7.5, patrol_speed = 2.0, flee_speed = 9.0, latch_time = 3.0, latch_dist = 1.6,
@@ -51,7 +53,7 @@ return {
     -- the suspicion meter (0..1) of a Watcher or Spotter: it fills while it can see you, at
     -- fill x your signature x closeness (1 at the edge of its range, 1 + near at point blank), and
     -- drains at decay while it can't. Alert at `alert`, Locked at 1 (and alert_time in Alert)
-    fill = 2.0, decay = 0.3, alert = 0.5, near = 1.5, light_fill = 0.6, after_lock = 0.45,
+    fill = 2.0, decay = 0.3, alert = 0.5, near = 1.5, light_fill = 0.8, after_lock = 0.45,
     -- your signature: hull base x (still + (1 - still) x min(speed / speed_ref, speed_cap)), plus
     -- beam while the tractor pulls and loud per Loud module (boosting shows up as speed)
     hull = { villa = 1.0, seat = 0.4, pocket = 0.2, foot = 0.5 }, still = 0.55, speed_ref = 10, speed_cap = 2.0,
@@ -64,7 +66,9 @@ return {
     -- It cools by one level every cool_out s with nobody inside, cool_in s with you inside and unseen.
     alarm_max = 3, alarm_fill = 0.35, alarm_sweep = 0.25, alarm_fire = 0.3, wake_at = 2, lockdown_at = 2,
     cool_out = 30, cool_in = 90,
-    light_alarm_max = 1,   -- the tutorial derelict's alarm stops at 1, and its light Watcher never fires faster
+    -- tune-sentry-economy: the tutorial derelict's alarm stops at 2 (it has no Snatchers or Lockdowns to wake),
+    -- and its light Watcher speeds up light_fire as much as a full one with the alarm
+    light_alarm_max = 2, light_fire = 0.5,
     -- sweep patterns (picked per turret from the site and room): a smooth sine, four stops, or a
     -- sine that holds at both edges; each turret's period is the base x one of these
     patterns = { "sine", "step", "hold" }, periods = { 0.8, 0.9, 1.0, 1.15, 1.3 },
@@ -74,8 +78,8 @@ return {
     -- guarded loot: one find per Watcher hall lies on the floor in its sweep (where the cone, `at` of
     -- its half angle below the axis, meets the floor), worth premium x
     guard = { premium = 1.6, at = 0.6, tier = 2 },
-    -- a Watcher bolt hitting the hull shakes a beam pull in progress loose (not a light one's)
-    hit_drops = true,
+    -- a Watcher bolt hitting the hull shakes a beam pull in progress loose (a light one's too when light_drops)
+    hit_drops = true, light_drops = true,
     -- sabotage: a power cell on the floor behind a Watcher; beam it out (at least `time` s) and
     -- the turret is dark for good; seen while pulling, the turret that saw you locks at once
     cell = { time = 3.0, back = 2.0, value = 45 },

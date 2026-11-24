@@ -213,10 +213,11 @@ function M.sweep(def, dyn, state, dt, t)
   return ((dyn.base) or def.yaw) + t.watcher.sweep * M.shape(def.pattern or "sine", dyn.ph)
 end
 
--- how much sooner a locked turret fires at this alarm level (a light one never speeds up)
+-- how much sooner a locked turret fires at this alarm level (a light one by light_fire as much)
 function M.fire_every(state, def, every)
-  if def.light then return every end
-  return every / (1 + M.tune().alarm_fire * M.level(state, def.site))
+  local S = M.tune()
+  local k = def.light and (S.light_fire or 0) or 1
+  return every / (1 + S.alarm_fire * k * M.level(state, def.site))
 end
 
 -- ---------- cover and guarded loot (derived from the ruin and its Watchers) ----------
