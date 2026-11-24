@@ -60,11 +60,27 @@ A new game SHALL start with every player in "wake" mode beside their bed on the 
 - **THEN** the player stands in the bedroom on foot and is told where the helm is
 
 ### Requirement: Sliding doors
-The bedroom and bathroom SHALL have doors that slide open while a player's body is on their deck within reach, and close otherwise. A door SHALL be solid while less than 75 % open.
+The bedroom and bathroom SHALL have doors that slide open while a player's body is on their deck within reach, and close otherwise. A door SHALL be solid while less than 75 % open and SHALL NOT turn solid under a body that overlaps it. A door SHALL decide with hysteresis and move toward its goal at a fixed speed, so a body near a door never makes it open and close repeatedly.
+
+#### Scenario: Hysteresis
+- **WHEN** a body stands or sways near a door
+- **THEN** the door opens when the body comes within reach, only starts to close once every body is farther than the reach plus a close margin and a minimum open time has passed, and rests exactly on its goal
 
 #### Scenario: Walking through the bedroom door
-- **WHEN** the player walks from the bed to the engine room
+- **WHEN** the player walks up to the bedroom door, through it, and away
 - **THEN** the bedroom door opens on approach, lets them through, and closes behind them
+
+#### Scenario: Standing still beside an open door
+- **WHEN** the player stands one meter from the open bedroom door for three seconds
+- **THEN** the door stays exactly fully open and makes no sound
+
+#### Scenario: Swaying on the trigger edge
+- **WHEN** the player's body creeps back and forth across the door's reach for ten seconds
+- **THEN** the door opens once and stays open, with no repeated direction reversals and no repeated collision changes
+
+#### Scenario: Not solid under a body
+- **WHEN** a closed door's box overlaps a body
+- **THEN** the door is not among the solids until the body is out
 
 ### Requirement: Furniture Use
 Use on foot within reach of a station SHALL run that station's action: the kitchen makes the player well fed (Charge regenerates 1.5× as fast for five sim minutes), the shower refreshes, the engine console reads out Charge, the lab bench and trade terminal respond as places, and the bed opens a panel to sleep or load. Sleeping SHALL refill Charge and save the game, and SHALL be refused inside a derelict site.
@@ -90,3 +106,21 @@ While folding from the Villa, the room groups SHALL pack away one after another,
 #### Scenario: Staggered packing
 - **WHEN** the player folds to the Seat while standing in the kitchen
 - **THEN** some rooms are already packed while others are still out, the farthest room finishes first, and the eye does not move
+
+### Requirement: Clear dome view
+The glass dome's meridian struts SHALL be slim (0.05 m by 0.04 m) and none SHALL stand within 30 degrees of straight ahead of the helm, so the view out of the helm is clear.
+
+#### Scenario: Looking out from the helm
+- **WHEN** the player sits at the helm and looks ahead
+- **THEN** no dome strut crosses the middle of the view
+
+### Requirement: The saucer's own lights
+The saucer SHALL carry three switchable lights: cabin lamps in each Villa room (on by default), two forward headlight spots in the rim that cast shadows, and a flood under the hull that lights all around. The saucer's own lights SHALL pass through its own hull. The HUD SHALL show which lights are on and the help SHALL list the keys.
+
+#### Scenario: Cabin lamps off
+- **WHEN** the player switches the cabin lamps off in the Villa
+- **THEN** fewer lights light the frame and the rooms are lit only by what comes through the dome
+
+#### Scenario: Headlights in a dark hall
+- **WHEN** the player switches the headlights on inside a derelict
+- **THEN** two spot lights of the saucer's own are active and one shadow map serves the pair
