@@ -7,7 +7,7 @@
 #define SX_MESH_H
 #include <stdint.h>
 
-#define SX_VTX_FLOATS 12 /* pos3 normal3 uv2 color3 emissive1 */
+#define SX_VTX_FLOATS 13 /* pos3 normal3 uv2 color3 emissive1 material1 (add-material-system: slot 0-7) */
 
 typedef struct sx_mesh {
   float *v;      /* SX_VTX_FLOATS per vertex */
@@ -20,6 +20,7 @@ typedef struct sx_part_style {
   float color[3];
   float emissive; /* 0..1, unlit glow */
   float uv_scale; /* texels per meter / tile size; default 0.25 (4 m tile) */
+  float material; /* add-material-system: the material slot 0-7 (0 = plain) */
 } sx_part_style;
 
 void sx_mesh_init(sx_mesh *m);
@@ -43,5 +44,9 @@ void sx_mesh_dome(sx_mesh *m, const float c[3], float r, float h, int seg, int r
 void sx_mesh_extrude(sx_mesh *m, const float *xz, int n, float y0, float y1, const sx_part_style *s);
 /* Shell of tiny quads around the origin (starfield). */
 void sx_mesh_stars(sx_mesh *m, int count, float radius, float size, uint64_t seed);
+/* add-relic-stations: a smooth pillow patch: corner c, edges u and v, bulging h along normalize(u x v) as
+ * h * sin(pi s) * sin(pi t) (negative h dents it); su x sv quads with analytic normals */
+void sx_mesh_patch(sx_mesh *m, const float c[3], const float u[3], const float v[3], float h, int su, int sv,
+                   const sx_part_style *s);
 uint64_t sx_mesh_hash(const sx_mesh *m);
 #endif

@@ -179,12 +179,26 @@ SX_GL_FUNCS(SX_GL_DECL)
 #endif
 
 /* ---------------------------------------------------------------- shaders */
+/* add-material-system: a_mat is the vertex's material slot. Organic slots wobble along the normal and breathe
+ * (render time u_mtime only: the sim never sees it); the view-space normal feeds the matcap lookup. */
 static const char *mesh_vs =
-    "in vec3 a_pos; in vec3 a_nrm; in vec2 a_uv; in vec3 a_col; in float a_emi;\n"
+    "in vec3 a_pos; in vec3 a_nrm; in vec2 a_uv; in vec3 a_col; in float a_emi; in float a_mat;\n"
     "uniform mat4 u_mvp; uniform mat4 u_mv; uniform mat4 u_model; uniform vec2 u_snap; uniform int u_affine;\n"
+    "uniform vec4 u_mat[40]; uniform float u_mtime; uniform int u_mmode;\n"
     "out vec3 v_uv; out vec3 v_col; out float v_emi; out float v_dist; out vec3 v_nrm; out vec3 v_wpos;\n"
+    "out vec3 v_vnrm; flat out int v_mat;\n"
     "void main() {\n"
-    "  vec4 c = u_mvp * vec4(a_pos, 1.0);\n"
+    "  vec3 pos = a_pos;\n"
+    "  int ms = u_mmode > 0 ? int(a_mat + 0.5) : 0;\n"
+    "  if (ms > 0 && ms < 8 && u_mat[ms * 5].x > 2.5) {\n"
+    "    vec4 p1 = u_mat[ms * 5 + 1]; float br = u_mat[ms * 5 + 2].w;\n"
+    "    vec3 w = (u_model * vec4(a_pos, 1.0)).xyz;\n"
+    "    float ph = (w.x + w.y * 0.7 + w.z * 1.3) / p1.w;\n"
+    "    pos += a_nrm * (p1.y * sin(6.2831853 * u_mtime / p1.z + ph) + br * sin(6.2831853 * u_mtime / (3.0 * p1.z)));\n"
+    "  }\n"
+    "  v_mat = ms;\n"
+    "  v_vnrm = mat3(u_mv) * a_nrm;\n"
+    "  vec4 c = u_mvp * vec4(pos, 1.0);\n"
     "  if (u_snap.x > 0.0 && c.w > 0.0) c.xy = floor(c.xy / c.w * u_snap + 0.5) / u_snap * c.w;\n"
     "  gl_Position = c;\n"
     "  // affine warp: (uv * w, w) interpolates perspective-correctly to (sum l_i uv_i / s, 1 / s), whose ratio\n"
@@ -192,8 +206,8 @@ static const char *mesh_vs =
     "  v_uv = u_affine == 1 ? vec3(a_uv * c.w, c.w) : vec3(a_uv, 1.0);\n"
     "  v_col = a_col; v_emi = a_emi;\n"
     "  v_nrm = mat3(u_model) * a_nrm;\n"
-    "  v_wpos = (u_model * vec4(a_pos, 1.0)).xyz;\n"
-    "  v_dist = length((u_mv * vec4(a_pos, 1.0)).xyz);\n"
+    "  v_wpos = (u_model * vec4(pos, 1.0)).xyz;\n"
+    "  v_dist = length((u_mv * vec4(pos, 1.0)).xyz);\n"
     "}\n";
 
 /* add-realistic-lighting: u_mode 0 is the old look (one directional light + ambient, view:fog); 1 is the
@@ -203,6 +217,8 @@ static const char *mesh_vs =
  * (the face basis matches sx_cube_face_basis). */
 static const char *mesh_fs =
     "in vec3 v_uv; in vec3 v_col; in float v_emi; in float v_dist; in vec3 v_nrm; in vec3 v_wpos;\n"
+    "in vec3 v_vnrm; flat in int v_mat;\n"
+    "uniform vec4 u_mat[40]; uniform float u_mtime; uniform int u_mmode; uniform sampler2D u_matcap;\n"
     "uniform sampler2D u_idx; uniform sampler2D u_pal; uniform int u_palrow; uniform int u_tex;\n"
     "uniform vec4 u_tint; uniform vec3 u_light; uniform float u_ambient; uniform int u_lit;\n"
     "uniform vec3 u_fogcol; uniform float u_fog; uniform int u_dither;\n"
@@ -302,6 +318,11 @@ static const char *mesh_fs =
     "  } else if (u_lit == 1) {\n"
     "    vec3 n = normalize(v_nrm);\n"
     "    vec3 acc = u_amb;\n"
+    "    // add-material-system: the slot's kind (0 plain = the old path, bit for bit)\n"
+    "    int mk = v_mat > 0 ? int(u_mat[v_mat * 5].x + 0.5) : 0;\n"
+    "    vec4 m0 = u_mat[v_mat * 5], m1 = u_mat[v_mat * 5 + 1], m2 = u_mat[v_mat * 5 + 2];\n"
+    "    vec4 m3 = u_mat[v_mat * 5 + 3], m4 = u_mat[v_mat * 5 + 4];\n"
+    "    vec3 V = normalize(u_eye - v_wpos); vec3 macc = vec3(0.0), sacc = vec3(0.0);\n"
     "    for (int j = 0; j < 16; j++) {\n"
     "      if (j >= u_nl) break;\n"
     "      int i = u_lidx[j];\n"
@@ -318,12 +339,43 @@ static const char *mesh_fs =
     "        if (lp.w > 1.5) att *= smoothstep(u_ldir[i].w, u_lpar[i].x, dot(-L, u_ldir[i].xyz));\n"
     "      }\n"
     "      float ndl = dot(n, L);\n"
-    "      if (ndl <= 0.0 || att <= 0.0) continue;\n"
+    "      float dif = mk == 3 ? (ndl + m4.w) / (1.0 + m4.w) : ndl;\n"
+    "      if (att <= 0.0 || (dif <= 0.0 && mk != 3)) continue;\n"
     "      int slot = int(u_lpar[i].y);\n"
     "      float sh = slot >= 0 ? shadow_of(slot, lp, lc, v_wpos, n) : 1.0;\n"
-    "      acc += lc.rgb * (ndl * att * sh);\n"
+    "      acc += lc.rgb * (max(dif, 0.0) * att * sh);\n"
+    "      if (mk > 0) {\n"
+    "        macc += lc.rgb * (att * sh * pow(max(dot(n, normalize(L + V)), 0.0), m0.z));\n"
+    "        if (mk == 3) sacc += lc.rgb * (att * sh * (max(0.0, 1.0 - abs(ndl) * 3.0) + max(0.0, -ndl) * 0.6));\n"
+    "      }\n"
     "    }\n"
     "    lit = vec3(1.0) - exp(-c * acc * u_expo);\n"
+    "    if (mk > 0) {\n"
+    "      // one matcap fetch: metals look along the view normal (reflection), crystals through it (refraction)\n"
+    "      vec3 vn = normalize(v_vnrm);\n"
+    "      vec2 mc = mk == 2 ? refract(vec3(0.0, 0.0, -1.0), vn, 0.66).xy : vn.xy;\n"
+    "      float env = texture(u_matcap, mc * 0.48 + 0.5).r;\n"
+    "      float fres = m0.w + (1.0 - m0.w) * pow(1.0 - max(dot(n, V), 0.0), 5.0);\n"
+    "      float lv = clamp(dot(acc, vec3(0.3, 0.5, 0.2)) * u_expo, 0.0, 1.5);\n"
+    "      vec3 spec = vec3(1.0) - exp(-macc * u_expo * (0.6 + fres));\n"
+    "      if (mk == 1) {\n"
+    "        // metal: the reflection's brightness indexes the ramp in 8 bands, plus specular\n"
+    "        float l = clamp(env * m0.y * (0.2 + 0.8 * lv) + (1.0 - m0.y) * lv * 0.5 + fres * 0.25 * lv, 0.0, 1.0);\n"
+    "        l = floor(l * 7.0 + 0.5) / 7.0;\n"
+    "        lit = mix(lit, mix(m2.rgb, m3.rgb, l), m0.y) + spec;\n"
+    "      } else if (mk == 2) {\n"
+    "        // crystal: faceted body through the ramp, the lamps seen through it, a rim and its own glow\n"
+    "        float l = clamp(env * m0.y + lv * 0.5, 0.0, 1.0);\n"
+    "        l = floor(l * 7.0 + 0.5) / 7.0;\n"
+    "        float glow = m1.x * (0.7 + 0.3 * sin(6.2831853 * u_mtime * max(m3.w, 0.05)));\n"
+    "        lit = mix(lit, mix(m2.rgb, m3.rgb, l), 0.6) + m4.rgb * (fres * 0.8) + m3.rgb * glow * (0.5 + 0.5 * env) + spec;\n"
+    "      } else {\n"
+    "        // organic: wrap light, the subsurface tint in the terminator and behind, wet sheen, vein pulse\n"
+    "        float vein = 1.0 - smoothstep(0.0, 0.09, abs(sin(dot(v_wpos, vec3(0.21, 0.37, 0.27)) + 2.0 * sin(v_wpos.y * 0.11 + v_wpos.x * 0.07))));\n"
+    "        float pulse = m3.w > 0.0 ? 0.5 + 0.5 * sin(6.2831853 * m3.w * u_mtime) : 0.0;\n"
+    "        lit += (vec3(1.0) - exp(-m4.rgb * sacc * u_expo)) + spec * 0.35 * m0.y + m4.rgb * (vein * m1.x * pulse);\n"
+    "      }\n"
+    "    }\n"
     "  }\n"
     "  c = mix(lit, c * 1.25, clamp(v_emi, 0.0, 1.0));\n"
     "  if (u_fog > 0.0) c = mix(u_fogcol, c, exp(-u_fog * v_dist));\n"
@@ -377,6 +429,7 @@ typedef struct prog {
   GLint mvp, mv, model, snap, affine, idx, pal, palrow, tex, tint, light, ambient, lit, fogcol, fog, dither, size, color;
   GLint mode, nl, amb, expo, lpos, lcol, ldir, lpar, shadow, shmat, shrect, shbias, ncasc, shtexel, lidx;
   GLint eye, nhz, hzsteps, sky, hzpos, hzcol, hzdir;
+  GLint mat, mtime, mmode, matcap; /* add-material-system */
 } prog;
 
 static struct {
@@ -432,6 +485,7 @@ static int link_prog(prog *p, const char *vs, const char *fs, int ui) {
     glBindAttribLocation(p->id, 2, "a_uv");
     glBindAttribLocation(p->id, 3, "a_col");
     glBindAttribLocation(p->id, 4, "a_emi");
+    glBindAttribLocation(p->id, 5, "a_mat");
   }
   glLinkProgram(p->id);
   glDeleteShader(v);
@@ -449,11 +503,13 @@ static int link_prog(prog *p, const char *vs, const char *fs, int ui) {
   U(mode); U(nl); U(amb); U(expo); U(lpos); U(lcol); U(ldir); U(lpar); U(shadow); U(shmat); U(shrect); U(shbias);
   U(ncasc); U(shtexel); U(lidx);
   U(eye); U(nhz); U(hzsteps); U(sky); U(hzpos); U(hzcol); U(hzdir);
+  U(mat); U(mtime); U(mmode); U(matcap);
 #undef U
   glUseProgram(p->id);
   glUniform1i(p->idx, 0);
   glUniform1i(p->pal, 1);
   if (p->shadow >= 0) glUniform1i(p->shadow, 2);
+  if (p->matcap >= 0) glUniform1i(p->matcap, 3);
   return 1;
 }
 
@@ -469,6 +525,8 @@ static void mesh_layout(void) {
   glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, st, (void *)(8 * sizeof(float)));
   glEnableVertexAttribArray(4);
   glVertexAttribPointer(4, 1, GL_FLOAT, GL_FALSE, st, (void *)(11 * sizeof(float)));
+  glEnableVertexAttribArray(5);
+  glVertexAttribPointer(5, 1, GL_FLOAT, GL_FALSE, st, (void *)(12 * sizeof(float)));
 }
 
 static void tex_params(GLint filter, GLint wrap) {
@@ -887,6 +945,21 @@ static void set_haze(const sx_viewport *v, const float view[16]) {
   glUniform4fv(G.mesh.hzdir, SX_MAX_HAZE, &hd[0][0]);
 }
 
+/* add-material-system: the view's material slots, render time and matcap (texture unit 3) */
+static void set_materials(const sx_render *r, const sx_viewport *v) {
+  float packed[SX_MAT_SLOTS * SX_MAT_VEC4 * 4];
+  const sx_materials *ms = &v->materials;
+  int mode = ms->on ? r->settings.materials : SX_MATERIALS_OFF;
+  int n = sx_materials_pack(ms, mode, packed);
+  glUniform4fv(G.mesh.mat, SX_MAT_SLOTS * SX_MAT_VEC4, packed);
+  glUniform1f(G.mesh.mtime, ms->time);
+  glUniform1i(G.mesh.mmode, n > 0 ? mode : 0);
+  glActiveTexture(GL_TEXTURE3);
+  glBindTexture(GL_TEXTURE_2D, (ms->matcap > 0 && ms->matcap < SX_MAX_TEXTURES && r->textures[ms->matcap].used &&
+                                G.tex[ms->matcap]) ? G.tex[ms->matcap] : G.white_tex);
+  glActiveTexture(GL_TEXTURE0);
+}
+
 /* --------------------------------------------------------------- drawing */
 static void bind_tex(const sx_render *r, int tex) {
   glActiveTexture(GL_TEXTURE0);
@@ -1018,6 +1091,7 @@ static void draw_billboards(const sx_render *r, const sx_viewport *v, const fram
       p[7] = 1.0f - (corner[k][1] + 1) * 0.5f;
       p[8] = p[9] = p[10] = 1;
       p[11] = 0;
+      p[12] = 0; /* plain material */
     }
     glUniform4f(G.mesh.tint, b->tint[0], b->tint[1], b->tint[2], b->tint[3]);
     glUniform1i(G.mesh.palrow, pal_row(r, b->palette));
@@ -1097,6 +1171,7 @@ static void draw_view(const sx_render *r, const sx_viewport *v, int fb_h, int xr
   set_common(v, r, xr);
   set_lights(v);
   set_haze(v, fm.view);
+  set_materials(r, v);
   glEnable(GL_DEPTH_TEST);
   glDepthFunc(GL_LEQUAL);
   glDisable(GL_CULL_FACE);

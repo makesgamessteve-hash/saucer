@@ -153,7 +153,9 @@ function M.candidates(state, p, site_idx, ruin)
       local far = near and (math.abs(s.pos[1] - sp[1]) > 160 or math.abs(s.pos[3] - sp[3]) > 160 or math.abs(s.pos[2] - sp[2]) > 160)
       if not far and not p.looted[key] then
         local iseed = loot.instance_seed(s.seed, p.record_index)
-        local item = loot.roll(iseed, s.max_size, s.tier)
+        -- add-relic-stations: a relic's XL idol is a fixed find; its reliquary finds pay more
+        local item = s.xl and require("sim.relic").idol_item(s, iseed) or loot.roll(iseed, s.max_size, s.tier)
+        if s.warren then item.value = require("sim.relic").warren_value(item.value) end
         item.tier, item.civ = s.tier, civ
         -- add-strategic-sentries: a guarded find (in a Watcher's sweep) is worth more
         if s.premium then item.value = math.floor(item.value * s.premium) end

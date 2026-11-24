@@ -124,6 +124,8 @@ end
 function M.layout(site, ruin, civ)
   local out = {}
   if not ruin then return out end
+  -- add-relic-stations: the first relic slice keeps no sentries
+  if ruin.relic then return out end
   local kit = ruinm.kit_of(ruin.kit)
   local t = M.tune()
   local big = kit.big or 4

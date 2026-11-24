@@ -32,8 +32,10 @@ void sx_render_init(sx_render *r) {
   r->settings.affine = 0; /* the PS1 texture warp is opt-in */
 #ifdef __EMSCRIPTEN__
   r->settings.shadows = SX_SHADOWS_LOW; /* web and mobile GPUs: the low preset */
+  r->settings.materials = SX_MATERIALS_LITE; /* add-material-system: no refraction, half breathing */
 #else
   r->settings.shadows = SX_SHADOWS_HIGH;
+  r->settings.materials = SX_MATERIALS_FULL;
 #endif
   /* palette 0: built-in neutral fallback (black, white, magenta, grey ramp) */
   copy_str(r->palette_names[0], sizeof r->palette_names[0], "fallback");
@@ -244,6 +246,7 @@ void sx_render_begin_frame(sx_render *r, int nviews) {
     v->h = rects[i][3];
     v->player = i + 1;
     v->nmeshes = v->nbills = v->nui = 0;
+    sx_materials_reset(&v->materials);
     memset(&v->cam, 0, sizeof v->cam);
     v->cam.fov = 1.2f;
     v->cam.znear = 0.1f;

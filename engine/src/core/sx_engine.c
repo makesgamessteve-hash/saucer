@@ -33,6 +33,7 @@ void sx_options_default(sx_options *o) {
   o->screenshot_tick = 120;
   o->net_port = 47800;
   o->shadows = -1;
+  o->materials = -1;
   o->net_players = 2;
   o->net_delay = 3;
 }
@@ -73,6 +74,9 @@ const char *sx_usage(void) {
          "  --net-delay N         lockstep input delay in ticks (1-12, default 3)\n"
          "  --net-web host|guest  network game over the web shell's WebRTC data channel\n"
          "  --hardcore            a new game starts in Hardcore\n"
+         "  --relic-slice         a new game adds the Vyrr relic station and starts at its maw\n"
+         "  --materials off|lite|full  material shading (default full; lite on the web)\n"
+         "  --script-arg S        a string the --script reads with saucer.test.arg()\n"
          "  --test                enable test/debug checks\n"
          "  --quiet               less logging\n";
 }
@@ -139,6 +143,16 @@ int sx_options_parse(sx_options *o, int argc, char **argv, char *err, int errlen
       o->net_web = 1;
       o->net_role = strcmp(v, "guest") == 0 ? SX_NET_GUEST : SX_NET_HOST;
     } else if (strcmp(a, "--hardcore") == 0) o->hardcore = 1;
+    else if (strcmp(a, "--relic-slice") == 0) o->relic_slice = 1;
+    else if (strcmp(a, "--script-arg") == 0) { NEEDV(); copy_str(o->script_arg, sizeof o->script_arg, v); }
+    else if (strcmp(a, "--materials") == 0) {
+      NEEDV();
+      o->materials = sx_materials_mode_from_name(v);
+      if (o->materials < 0) {
+        snprintf(err, (size_t)errlen, "--materials: off, lite or full");
+        return 0;
+      }
+    }
     else if (strcmp(a, "--test") == 0) o->test_mode = 1;
     else if (strcmp(a, "--quiet") == 0) o->quiet = 1;
     else if (strcmp(a, "--windowed") == 0) o->windowed = 1;
@@ -628,6 +642,8 @@ sx_engine *sx_engine_create(const sx_options *o) {
   lua_setfield(e->L, -2, "headless");
   lua_pushboolean(e->L, e->opt.hardcore);
   lua_setfield(e->L, -2, "hardcore");
+  lua_pushboolean(e->L, e->opt.relic_slice);
+  lua_setfield(e->L, -2, "relic_slice");
   if (e->net_on) {
     lua_pushinteger(e->L, e->net.local_slot);
     lua_setfield(e->L, -2, "net_slot");
@@ -638,6 +654,7 @@ sx_engine *sx_engine_create(const sx_options *o) {
   if (o->split_keyboard) sx_input_split_keyboard(&e->input, 2);
   e->render.settings.split_horizontal = o->split_horizontal;
   if (o->shadows >= 0) e->render.settings.shadows = o->shadows;
+  if (o->materials >= 0) e->render.settings.materials = o->materials;
   e->render.settings.fill = o->fill;
   if (o->script[0] && start_test_script(e)) resume_test(e);
   return e;

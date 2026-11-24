@@ -39,7 +39,7 @@ endif()
 # ---- Engine core (pure C, no SDL: everything that is unit tested) ----
 set(CORE_SOURCES
   engine/src/core/sx_engine.c engine/src/core/sx_fs.c engine/src/core/sx_input.c engine/src/core/sx_light.c
-  engine/src/core/sx_log.c engine/src/core/sx_math.c engine/src/core/sx_mesh.c
+  engine/src/core/sx_log.c engine/src/core/sx_math.c engine/src/core/sx_mesh.c engine/src/core/sx_material.c
   engine/src/core/sx_net.c engine/src/core/sx_net_udp.c
   engine/src/core/sx_mod.c engine/src/core/sx_phys.c engine/src/core/sx_procgen.c
   engine/src/core/sx_render.c engine/src/core/sx_replay.c engine/src/core/sx_rng.c
@@ -133,6 +133,9 @@ if(SAUCER_BUILD_TESTS)
   add_test(NAME game_tractor COMMAND ${HL} --seed 42 --script tests/game/tractor.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_city COMMAND ${HL} --seed 42 --script tests/game/city.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   # add-realistic-lighting: light switches, sun outside, lamps inside, shadow presets
+  # add-relic-stations: the first relic slice (the debug entry adds the Vyrr spine relic to the sector)
+  add_test(NAME game_relic COMMAND ${HL} --seed 42 --relic-slice --script tests/game/relic.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  add_test(NAME game_relic_seed7 COMMAND ${HL} --seed 7 --relic-slice --script tests/game/relic.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_lighting COMMAND ${HL} --seed 42 --script tests/game/lighting.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   # the home test saves and loads: give each run its own user dir so parallel ctest runs cannot race
   add_test(NAME game_home COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-home --quiet
@@ -256,7 +259,16 @@ if(SAUCER_BUILD_TESTS)
   foreach(r ${REPLAYS})
     get_filename_component(name ${r} NAME_WE)
     add_test(NAME replay_${name} COMMAND ${HL} --play ${r} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+    # add-material-system: the material shading is render-only; every replay plays to the same hashes with it off
+    add_test(NAME replay_${name}_materials_off COMMAND ${HL} --play ${r} --materials off WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   endforeach()
+  # add-material-system: the golden shots need the windowed game, Xvfb and python3 (off by default, run locally)
+  option(SAUCER_GOLDEN_SHOTS "add the material golden-shot test (needs the game build, xvfb-run, python3)" OFF)
+  if(SAUCER_GOLDEN_SHOTS)
+    set(SAUCER_GAME_BINARY "${CMAKE_BINARY_DIR}/saucer" CACHE FILEPATH "the windowed game binary for golden shots")
+    add_test(NAME golden_materials COMMAND ${CMAKE_SOURCE_DIR}/tools/shots/materials.sh ${SAUCER_GAME_BINARY}
+             ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR}/golden WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  endif()
   # no test may hang CI: a game test that never reaches its end fails after this many seconds
   # (generous: ASan, coverage and --restore-every-tick builds are many times slower)
   set(SAUCER_TEST_TIMEOUT 1800 CACHE STRING "per-test CTest timeout in seconds")

@@ -95,7 +95,9 @@ function M.room_lamps(ruin, origin, site)
   local kit = ruinm.kit_of(ruin.kit)
   local pal = M.palette(ruin)
   local list, buckets = {}, {}
-  for i, r in ipairs(ruin.rooms) do
+  -- add-relic-stations: a relic's lamps come from view/relic.lua
+  if ruin.relic then list = require("view.relic").lamps(ruin, origin, site) end
+  for i, r in ipairs(ruin.relic and {} or ruin.rooms) do
     local mn, mx = ruinm.room_box(r, kit, origin)
     local sx, sy, sz = mx[1] - mn[1], mx[2] - mn[2], mx[3] - mn[3]
     local long = sx > sz and 1 or 3
