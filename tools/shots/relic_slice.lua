@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: MIT
--- add-relic-stations: the first relic slice's screenshot tour (and, with --script-arg frames, a 9:16 Reel
+-- add-relic-stations, add-relic-dungeons: the relic slice's screenshot tour (and, with --script-arg frames, a 9:16
 -- fly-through as numbered frames). Run from the folder that should receive shots_relic/:
 --   saucer --root REPO --seed 42 --relic-slice --windowed --width 1280 --height 720 --script REPO/tools/shots/relic_slice.lua
 --   saucer --root REPO --seed 42 --relic-slice --windowed --width 540 --height 960 --script REPO/tools/shots/relic_slice.lua \
@@ -50,8 +50,10 @@ end
 local function floor_of(id) local _, mn = centre(id) return mn[2] + kit.wall end
 local door = ruinm.entrance(r, site.pos)
 local set = require("view.relic").meshes(r, site.pos)
-saucer.log.info(string.format("relic-tour: rooms=%d length=%.0f villa_share=%.2f bays=%d triangles=%d cushions=%d",
-  #r.rooms, r.relic.length, r.relic.villa_share, #r.relic.bays, set.triangles, set.cushions))
+local relicv = require("view.relic")
+relicv.BUILDS = 1000 -- every room the eye may see is built before the shot
+saucer.log.info(string.format("relic-tour: rooms=%d length=%.0f villa_share=%.2f bays=%d chambers=%d levels=%d phenomena=%d",
+  #r.rooms, r.relic.length, r.relic.villa_share, #r.relic.bays, #r.relic.chambers, r.relic.levels, #r.relic.phenomena))
 ap.wake(T, 1, get)
 ap.take_helm(T, 1, get)
 local function park(pos, yaw)
@@ -74,7 +76,7 @@ if mode == "frames" then
   local path = {
     { door[1] + 60, door[2] + 40, door[3] - 260 }, { door[1], door[2] + 4, door[3] - 60 }, { door[1], door[2], door[3] + 30 },
   }
-  for _, h in ipairs(r.relic.halls) do
+  for _, h in ipairs(r.relic.route) do
     local c = centre(h)
     path[#path + 1] = { c[1] + 18, floor_of(h) + 14, c[3] - 20 }
     path[#path + 1] = { c[1] - 10, floor_of(h) + 18, c[3] + 30 }
@@ -99,79 +101,171 @@ if mode == "frames" then
   return
 end
 
+-- the door between two rooms -> its world centre and the unit step from a into b
+local function door_between(a, b)
+  for _, d in ipairs(r.doors) do
+    if (d.a == a and d.b == b) or (d.a == b and d.b == a) then
+      local c = ap.door_center(d, r.rooms, kit, site.pos)
+      local dir = { 0, 0, 0 }
+      dir[d.axis] = (d.a == a) and d.sign or -d.sign
+      return c, dir, d
+    end
+  end
+end
+local function add(p, d, k) return { p[1] + d[1] * k, p[2] + d[2] * k, p[3] + d[3] * k } end
+
 -- 1. the maw from outside, the Villa in front of it for scale
 park({ door[1] + 14, door[2] - 2, door[3] - 70 }, sm.atan2(-0.2, 1))
 look_at({ door[1] + 46, door[2] + 9, door[3] - 84 }, { door[1] - 2, door[2] + 3, door[3] + 4 }, 66)
 shot("01_maw_exterior")
--- 2. the whole spine from above and aside
+-- 2. the whole warren from above and aside (every room in full for this one)
 do
+  local near = relicv.NEAR
+  relicv.NEAR = 5000
   local c = set.center
-  look_at({ c[1] + 560, c[2] + 260, c[3] - 380 }, c, 64)
-  shot("02_spine_whole")
+  park({ door[1], door[2], door[3] - 400 }, 0)
+  look_at({ c[1] + 640, c[2] + 380, c[3] - 520 }, c, 62)
+  T.wait(4)
+  shot("02_warren_whole")
+  relicv.NEAR = near
 end
--- 3. the breathing hall (the lung), its four bays and the Seat port
+-- 3. the first hall from its maw door: the scale of a big hall, its cushions and ribs
+do
+  local h = r.relic.halls[1]
+  local c, mn, mx = centre(h)
+  park({ c[1] + 20, floor_of(h) + 9, c[3] }, 0.3)
+  look_at({ c[1] - 30, floor_of(h) + 30, mn[3] + 6 }, { c[1] + 20, floor_of(h) + 12, mx[3] - 10 }, 82)
+  compare("03_first_hall")
+end
+-- 4. along a trunk into the next hall (the warren goes on and on)
+do
+  local route = r.relic.route
+  local t, nxt
+  for k = 3, #route - 1 do
+    if r.rooms[route[k]].kind == "trunk" and r.rooms[route[k + 1]].kind == "hall" then t, nxt = route[k], route[k + 1] break end
+  end
+  local prev = route[2]
+  for k = 2, #route do if route[k] == t then prev = route[k - 1] end end
+  local c0, dir = door_between(prev, t)
+  local c1 = door_between(t, nxt)
+  look_at(add(c0, dir, 4), add(c1, dir, 60), 74)
+  shot("04_trunk_to_hall")
+end
+-- 5. a shaft, looking up through it to the level above
+do
+  local sh = r.relic.shafts[1]
+  local c, mn, mx = centre(sh)
+  look_at({ c[1] + 6, mn[2] - 30, c[3] + 8 }, { c[1], mx[2] + 40, c[3] }, 84)
+  shot("05_shaft_up")
+end
+-- 6. the breathing hall (the lung), its bays and the locked branch's port
 do
   local c, mn, mx = centre(lung)
-  local b = r.relic.bays[5]
+  local b
+  for _, q in ipairs(r.relic.bays) do if q.room == lung then b = q end end
   park({ b.marker[1], b.cradle[2] + 7, b.marker[3] }, 0.4)
   look_at({ mn[1] + 8, floor_of(lung) + 22, mn[3] + 8 }, { mx[1] - 20, floor_of(lung) + 10, mx[3] - 26 }, 80)
-  compare("03_breathing_hall")
+  compare("06_breathing_hall")
 end
--- 4. a fold bay with its cradle, the Villa resting in it
+-- 7. a fold bay by a Seat port, the Villa resting in its cradle
 do
-  local b = r.relic.bays[3]
-  local c = centre(b.room)
-  local dx, dz = c[1] - b.marker[1], c[3] - b.marker[3]
-  local dl = sm.sqrt(dx * dx + dz * dz)
+  local br = r.relic.branches[2] or r.relic.branches[1]
+  local b = r.relic.bays[br.bay]
+  local pc = br.port.pos
   park({ b.marker[1], b.cradle[2] + 7, b.marker[3] }, 0.6)
-  look_at({ b.marker[1] + dx / dl * 40, b.cradle[2] + 20, b.marker[3] + dz / dl * 40 }, { b.marker[1], b.cradle[2] + 3, b.marker[3] }, 72)
-  compare("04_fold_bay_cradle")
+  local dx, dz = b.marker[1] - pc[1], b.marker[3] - pc[3]
+  local dl = sm.sqrt(dx * dx + dz * dz)
+  look_at({ b.marker[1] + dx / dl * 46, b.cradle[2] + 22, b.marker[3] + dz / dl * 46 }, { pc[1], pc[2] - 4, pc[3] }, 74)
+  compare("07_fold_bay_port")
 end
--- 5. the Seat port and passage (the saucer as the Seat at the port), then the reliquary behind its lock
+-- 8. the Seat at a port, then down its passage, then a chamber
 do
   local br = r.relic.branches[1]
+  local d = r.doors[br.port.door]
   local pc = br.port.pos
+  local dir = { 0, 0, 0 }
+  dir[d.axis] = d.sign
   local s = get().ship
   s.size = 2
-  local relicv = require("view.relic")
   relicv.SHOW_GHOST = false
-  park({ pc[1] - 5, pc[2] - 0.3, pc[3] + 0.5 }, math.pi / 2)
-  look_at({ pc[1] - 13, pc[2] + 1.6, pc[3] - 3.5 }, { pc[1], pc[2] - 0.2, pc[3] + 0.3 }, 58)
-  shot("05_seat_port")
-  -- the same with the HUD: the ghost Villa (green: it fits here) and the Seat's prompts
+  local yaw = sm.atan2(dir[1], dir[3])
+  park(add(pc, dir, -5), yaw)
+  local side = { dir[3], 0, -dir[1] }
+  look_at(add(add(pc, dir, -12), side, 4), pc, 58)
+  shot("08_seat_port")
   relicv.SHOW_GHOST = true
   clean = false
   free = nil
   get().cam = "chase"
-  park({ pc[1] - 16, pc[2] + 4, pc[3] - 6 }, math.pi / 2)
-  shot("05b_seat_ghost_villa_hud")
+  park(add(pc, dir, -16), yaw)
+  shot("08b_seat_ghost_villa_hud")
   get().cam = "first"
   clean = true
-  local B = r.rooms[br.rooms[2]]
-  local bmn, bmx = ruinm.room_box(B, kit, site.pos)
-  look_at({ (bmn[1] + bmx[1]) / 2, bmn[2] + 2.4, bmn[3] + 1.5 }, { (bmn[1] + bmx[1]) / 2, bmn[2] + 2, bmx[3] }, 70)
-  shot("06_seat_passage")
-  local qc, qmn, qmx = centre(Q)
+  look_at(add(pc, dir, 1.5), add(pc, dir, 30), 70)
+  shot("09_seat_passage")
+  local qc, qmn = centre(Q)
   game.open_relic_lock(i, 1)
   T.state().relic_locks = { [i .. ":1"] = true }
-  look_at({ qc[1] - 4.5, qmn[2] + 5.5, qmn[3] + 1 }, { qc[1] + 1, qmn[2] + 1, qc[3] + 2 }, 74)
-  compare("07_reliquary")
+  local ld = r.doors[r.relic.locks[1].door]
+  local ldir = { 0, 0, 0 }
+  ldir[ld.axis] = ld.sign
+  look_at(add({ qc[1], qmn[2] + 5.5, qc[3] }, ldir, -4.5), { qc[1], qmn[2] + 1, qc[3] }, 76)
+  compare("10_reliquary")
+  for _, id in ipairs(r.relic.chambers) do
+    if r.rooms[id].kind == "chamber" and id % 3 == 1 then
+      local cc, cmn, cmx = centre(id)
+      look_at({ cmn[1] + 1.2, cmn[2] + 4, cmn[3] + 1.2 }, { cmx[1] - 1, cmn[2] + 3, cmx[3] - 1 }, 80)
+      shot("11_seat_chamber")
+      break
+    end
+  end
   s.size = 1
 end
--- 6. the Core and its idol
+-- 9. the heart: from its door, the whole hall round the engine; then the idol before it
 do
   local c, mn, mx = centre(core)
-  park({ c[1] - 30, floor_of(core) + 10, c[3] - 20 }, 0.7)
+  local route = r.relic.route
+  local dc, dir = door_between(route[#route - 1], core)
+  park(add(dc, dir, 30), 0)
+  look_at(add({ dc[1], dc[2] + 30, dc[3] }, dir, 8), { c[1], mn[2] + 70, c[3] }, 84)
+  compare("12_heart_engine")
+  look_at({ c[1] - 150, mn[2] + 120, mn[3] + 40 }, { c[1], mn[2] + 60, c[3] }, 80)
+  T.wait(90)
+  shot("13_heart_engine_high")
   local idol
-  for _, s in ipairs(r.slots) do if s.idol then idol = s end end
+  for _, s2 in ipairs(r.slots) do if s2.idol then idol = s2 end end
   look_at({ idol.pos[1] + 16, idol.pos[2] + 5, idol.pos[3] - 18 }, { idol.pos[1] - 4, idol.pos[2] + 1, idol.pos[3] + 6 }, 74)
-  compare("08_core_idol")
+  compare("14_heart_idol")
 end
--- 7. a trunk, chrome ribs and spines
+-- 10. phenomena: one of each kind the relic holds, from a little way off
 do
-  local t = r.relic.trunks[1]
-  local c, mn = centre(t)
-  look_at({ c[1] + 8, floor_of(t) + 14, mn[3] + 4 }, { c[1] - 4, floor_of(t) + 8, c[3] + 40 }, 72)
-  compare("09_trunk")
+  local done = {}
+  local n = 15
+  for _, ph in ipairs(r.relic.phenomena) do
+    if not done[ph.kind] and r.rooms[ph.room].kind ~= "core" then
+      done[ph.kind] = true
+      local _, mn, mx = centre(ph.room)
+      local p = ph.pos
+      local from = { (mn[1] + mx[1]) / 2, p[2] + 6, (mn[3] + mx[3]) / 2 }
+      local dx, dz = p[1] - from[1], p[3] - from[3]
+      local dl = sm.sqrt(dx * dx + dz * dz)
+      if dl < 20 then from = { p[1] - 28, p[2] + 6, p[3] - 28 } end
+      if ph.kind == "breath" or ph.kind == "shadow" or ph.kind == "procession" then
+        from = { (mn[1] + mx[1]) / 2, mn[2] + 14, (mn[3] + mx[3]) / 2 }
+      end
+      -- the eye stays inside the room, a little off its walls
+      for q = 1, 3 do from[q] = math.max(mn[q] + 3, math.min(mx[q] - 3, from[q])) end
+      if ph.kind == "breath" then
+        -- from across the room, facing the wall the sac grows on
+        for q = 1, 3, 2 do
+          if math.abs(p[q] - mn[q]) < 2 then from[q] = mx[q] - 4 elseif math.abs(p[q] - mx[q]) < 2 then from[q] = mn[q] + 4 end
+        end
+      end
+      look_at(from, ph.kind == "chimes" and { p[1], mx[2] - 8, p[3] } or p, 70)
+      T.wait(20)
+      shot(string.format("%02d_phenomenon_%s", n, ph.kind))
+      n = n + 1
+    end
+  end
 end
 free = nil
