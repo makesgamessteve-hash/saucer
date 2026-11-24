@@ -44,5 +44,9 @@ void sx_mesh_dome(sx_mesh *m, const float c[3], float r, float h, int seg, int r
 void sx_mesh_extrude(sx_mesh *m, const float *xz, int n, float y0, float y1, const sx_part_style *s);
 /* Shell of tiny quads around the origin (starfield). */
 void sx_mesh_stars(sx_mesh *m, int count, float radius, float size, uint64_t seed);
+/* add-relic-stations: a smooth pillow patch: corner c, edges u and v, bulging h along normalize(u x v) as
+ * h * sin(pi s) * sin(pi t) (negative h dents it); su x sv quads with analytic normals */
+void sx_mesh_patch(sx_mesh *m, const float c[3], const float u[3], const float v[3], float h, int su, int sv,
+                   const sx_part_style *s);
 uint64_t sx_mesh_hash(const sx_mesh *m);
 #endif

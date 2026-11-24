@@ -1041,9 +1041,12 @@ function M.draw_ruins(v, A, state, cam, xr)
       st.detail = st.detail + 1
     end
   end
+  -- add-relic-stations: relics draw their own skins (view/relic.lua)
+  local rs = require("view.relic").draw(v, A, state, cam, xr, (state.tick + (M.alpha or 0)) / 60)
+  st.relic_rooms, st.relic_culled = rs.rooms, rs.culled
   for i, site in ipairs(state.sector.sites) do
     local r = game.ruin(i)
-    if r then
+    if r and not r.relic then
       local set = assets.ruin_chunks(r, site.pos)
       local tex = assets.kit_texture(A, set.kit)
       local ftex = assets.floor_texture(A, set.kit)
@@ -1152,6 +1155,7 @@ function M.draw_ruins(v, A, state, cam, xr)
 end
 
 function M.render(v, state, alpha)
+  M.alpha = alpha
   local p = state.players[v.player]
   if not p then
     -- add-wider-dark: the spare quarter of a three-player split shows the map
@@ -1225,6 +1229,9 @@ function M.render(v, state, alpha)
         local tint = cand.carrier == "mural" and { 0.85, 0.5, 1.0 } or (cand.carrier == "archive" and { 0.4, 1.0, 0.9 } or { 1.0, 0.8, 0.35 })
         v:billboard(A.tex.glow, pos, 6 * k, { palette = A.pal.base, tint = { tint[1], tint[2], tint[3], 0.55 * pulse } })
         v:billboard(A.tex.echo, pos, 2.0 * k, { palette = A.pal.base, tint = { tint[1], tint[2], tint[3], 1 } })
+      elseif cand.item and cand.item.xl then
+        -- add-relic-stations: the relic's XL idol
+        require("view.relic").idol(v, A, pos, spin, k, state.tick)
       elseif cand.echo or cand.kind == "curio" or cand.kind == "clue" then
         v:billboard(A.tex.echo, pos, (cand.kind == "curio" and 2.4 or 1.6) * k, { palette = A.pal.base })
       else

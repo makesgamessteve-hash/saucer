@@ -54,20 +54,25 @@ local landing = require("sim.landing")
 local hulldoor = require("sim.hulldoor")
 local stealth = require("sim.stealth")
 local lightsm = require("sim.lights")
+local relic = require("sim.relic")
 local M = {}
 
 M.SITE_PAD = 30
 M.MAX_MSGS = 8 -- add-playtest-recs: room for a tip next to a lock cycle
 M.MAX_FX = 8
 
-local rt = { ruins = {}, bounds = {}, sentries = {}, shutters = {}, seals = {}, gates = {}, fallen = {}, bridge_box = {} } -- derived, rebuilt on restore
+local rt = { ruins = {}, bounds = {}, sentries = {}, shutters = {}, seals = {}, gates = {}, fallen = {}, bridge_box = {},
+             relic_locks = {} } -- derived, rebuilt on restore
 
 function M.ruin(i) return rt.ruins[i] end
 function M.site_bounds(i) return rt.bounds[i] end
 function M.sentries(i) return rt.sentries[i] or {} end
 
 -- add-wider-dark: civs come from the universe's generated list (sim/civs.lua)
-local function civ_of(site) return civs.get(civs.current() or 0, site.civ) end
+local function civ_of(site)
+  if site.relic_civ then return civs.by_id(nil, site.relic_civ) end -- add-relic-stations: the slice's Vyrr
+  return civs.get(civs.current() or 0, site.civ)
+end
 M.civ_of = civ_of
 
 -- extra static boxes { min, max } that survive a rebuild (tests build landing platforms here)
@@ -83,7 +88,7 @@ function M.rebuild(state)
   for _, b in ipairs(require("sim.stationhull").world_solids(state)) do saucer.physics.add_box(b[1], b[2], 1) end
   civs.use(state.seed)
   rt.ruins, rt.bounds, rt.sentries, rt.shutters, rt.seals, rt.gates = {}, {}, {}, {}, {}, {}
-  rt.fallen, rt.bridge_box = {}, {}
+  rt.fallen, rt.bridge_box, rt.relic_locks = {}, {}, {}
   for i, site in ipairs(state.sector.sites) do
     local r = ruinm.generate(site.seed, site.kit, civ_of(site), site.pos, nil, site.first)
     rt.ruins[i] = r
@@ -113,6 +118,13 @@ function M.rebuild(state)
     rt.shutters[i] = {}
     for _, sh in ipairs(r.foot and r.foot.shutters or {}) do
       if not excursion.lock_open(state, i, sh.id) then rt.shutters[i][sh.id] = saucer.physics.add_box(sh.min, sh.max, 1) end
+    end
+    -- add-relic-stations: a Seat-lock's shutter stays solid until the Seat turns its socket
+    if r.relic then
+      rt.relic_locks[i] = {}
+      for _, l in ipairs(r.relic.locks) do
+        if not relic.lock_open(state, i, l.id) then rt.relic_locks[i][l.id] = saucer.physics.add_box(l.box[1], l.box[2], 1) end
+      end
     end
     -- add-cities: the gates of every dark district stay solid until its power coupling is restored
     rt.gates[i] = {}
@@ -177,6 +189,17 @@ function M.box_has_hull(state, b)
   end
   return false
 end
+
+-- add-relic-stations: a Seat-lock turned: its shutter stops being solid
+function M.open_relic_lock(site, id)
+  local list = rt.relic_locks[site]
+  local box = list and list[id]
+  if not box then return false end
+  saucer.physics.remove(box)
+  list[id] = nil
+  return true
+end
+function M.relic_lock_closed(site, id) return rt.relic_locks[site] ~= nil and rt.relic_locks[site][id] ~= nil end
 
 -- a hand-lock turned: its shutter stops being solid
 function M.open_shutter(site, id)
@@ -314,6 +337,8 @@ function M.init(state, ctx)
   for i = 1, n do msg(state, state.players[i], "You wake up in your saucer. Press Use to get up.") end
   if ctx.hardcore then state.hardcore = true end
   requests.ensure(state)
+  -- add-relic-stations: the debug entry adds the Vyrr relic and starts the party at its maw
+  if ctx.relic_slice then relic.spawn_slice(state) end
 end
 
 -- add-wider-dark: (re)generate sector `sid` into state.sector and its
@@ -530,7 +555,9 @@ local function size_request(state, p, to)
   local eye, yaw
   if p.mode == "walk" then eye, yaw = M.viewpoint(p) end
   local blocked = function(pos, r, hh, margin) return M.blocked(state, p, pos, r, hh, margin) end
-  local ok, why, where = shipm.request(ship, to, blocked, eye, yaw)
+  -- add-relic-stations: growing back in a relic's cradle bay is free
+  local free = relic.free_regrow(state, p, to)
+  local ok, why, where = shipm.request(ship, to, blocked, eye, yaw, free)
   if ok then
     if p.mode == "walk" then ship.pitch = p.body.pitch end
     p.mode = "helm"
@@ -589,6 +616,11 @@ local function use(state, p)
     return
   end
   if p.mode == "helm" then
+    -- add-relic-stations: at a Seat-lock's socket, Use turns it (held: sim/relic.lua)
+    if relic.socket_near(state, p) then
+      msg(state, p, "Seat-lock: hold Use to turn it")
+      return
+    end
     if not configs.get(ship.size).interior or ship.morph then
       msg(state, p, "No room to stand up in the " .. configs.get(ship.size).name)
       fx(state, p, "denied")
@@ -1027,7 +1059,9 @@ local function world_step(state, p, dt)
     local wx, wz, wk = cities.wind(cr, state.tick)
     if wk > 0 and not cities.sheltered(cr, ship.pos) then ship.pos = mover(state, p)(ship, { wx * dt, 0, wz * dt }) end
   end
-  if shipm.update(ship, dt, (site == 0 or hangar) and home.regen_factor(state, p)) == "done" then
+  -- add-relic-stations: a Villa resting in a relic's cradle bay refills at half the open-space rate
+  local regen = (site == 0 or hangar) and home.regen_factor(state, p) or (site ~= 0 and relic.cradle_regen(state, p))
+  if shipm.update(ship, dt, regen) == "done" then
     msg(state, p, "Configuration: " .. configs.get(ship.size).name)
   end
   if p.ghost > 0 then p.ghost = p.ghost - 1 end
@@ -1305,6 +1339,7 @@ step_player_inner = function(state, p, cmd, dt)
     return
   end
   if cmd:pressed("use") then use(state, p) end
+  if p.mode == "helm" then relic.lock_step(state, p, cmd, dt, ctx_fns) end
   if cmd:pressed("scan") then scan(state, p) end
   if cmd:pressed("jam") then jam(state, p) end
   if cmd:pressed("decoy") then M.decoy(state, p) end

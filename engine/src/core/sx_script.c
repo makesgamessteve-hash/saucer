@@ -1097,6 +1097,11 @@ static int build_part(lua_State *L, int idx, sx_mesh *m) {
           else fr(m, cc, buf[i], buf[i + 2], buf[i + 3] - buf[i + 1], seg, &s);
         }
       }
+    } else if (strcmp(k, "patch") == 0) {
+      float pu[3] = {1, 0, 0}, pv[3] = {0, 0, 1};
+      field_vec(L, idx, "u", pu, 3);
+      field_vec(L, idx, "v", pv, 3);
+      sx_mesh_patch(m, c, pu, pv, field_num(L, idx, "h", 0), seg, (int)field_num(L, idx, "rings", seg), &s);
     } else if (strcmp(k, "stars") == 0) {
       sx_mesh_stars(m, (int)field_num(L, idx, "count", 500), r, field_num(L, idx, "size", 1),
                     (uint64_t)field_num(L, idx, "seed", 1));

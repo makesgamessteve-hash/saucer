@@ -326,6 +326,50 @@ void sx_mesh_stars(sx_mesh *m, int count, float radius, float size, uint64_t see
   }
 }
 
+void sx_mesh_patch(sx_mesh *m, const float c[3], const float u[3], const float v[3], float h, int su, int sv,
+                   const sx_part_style *s) {
+  double n[3], l;
+  int i, j, base = m->nv;
+  if (su < 1) su = 1;
+  if (su > 64) su = 64;
+  if (sv < 1) sv = 1;
+  if (sv > 64) sv = 64;
+  n[0] = (double)u[1] * v[2] - (double)u[2] * v[1];
+  n[1] = (double)u[2] * v[0] - (double)u[0] * v[2];
+  n[2] = (double)u[0] * v[1] - (double)u[1] * v[0];
+  l = sx_sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
+  if (l < 1e-12) return;
+  n[0] /= l;
+  n[1] /= l;
+  n[2] /= l;
+  for (j = 0; j <= sv; j++)
+    for (i = 0; i <= su; i++) {
+      double a = (double)i / su, b = (double)j / sv;
+      double sa = sx_sin(SX_PI * a), sb = sx_sin(SX_PI * b);
+      double f = h * sa * sb, fa = h * SX_PI * sx_cos(SX_PI * a) * sb, fb = h * SX_PI * sa * sx_cos(SX_PI * b);
+      double du[3], dv[3], nn[3], ln;
+      float p[3], q[3];
+      int k;
+      for (k = 0; k < 3; k++) {
+        p[k] = (float)(c[k] + a * u[k] + b * v[k] + f * n[k]);
+        du[k] = u[k] + fa * n[k];
+        dv[k] = v[k] + fb * n[k];
+      }
+      nn[0] = du[1] * dv[2] - du[2] * dv[1];
+      nn[1] = du[2] * dv[0] - du[0] * dv[2];
+      nn[2] = du[0] * dv[1] - du[1] * dv[0];
+      ln = sx_sqrt(nn[0] * nn[0] + nn[1] * nn[1] + nn[2] * nn[2]);
+      for (k = 0; k < 3; k++) q[k] = (float)(ln > 1e-12 ? nn[k] / ln : n[k]);
+      add_vertex(m, p, q, (float)a, (float)b, s);
+    }
+  for (j = 0; j < sv; j++)
+    for (i = 0; i < su; i++) {
+      int a = base + j * (su + 1) + i, b = a + 1, d = a + su + 1, e = d + 1;
+      add_tri(m, a, b, e);
+      add_tri(m, a, e, d);
+    }
+}
+
 uint64_t sx_mesh_hash(const sx_mesh *m) {
   uint64_t h = sx_hash64(m->v, sizeof(float) * SX_VTX_FLOATS * (size_t)m->nv);
   return sx_hash64_combine(h, sx_hash64(m->idx, sizeof(uint32_t) * (size_t)m->ni));

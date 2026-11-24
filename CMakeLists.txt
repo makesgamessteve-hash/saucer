@@ -133,6 +133,9 @@ if(SAUCER_BUILD_TESTS)
   add_test(NAME game_tractor COMMAND ${HL} --seed 42 --script tests/game/tractor.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_city COMMAND ${HL} --seed 42 --script tests/game/city.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   # add-realistic-lighting: light switches, sun outside, lamps inside, shadow presets
+  # add-relic-stations: the first relic slice (the debug entry adds the Vyrr spine relic to the sector)
+  add_test(NAME game_relic COMMAND ${HL} --seed 42 --relic-slice --script tests/game/relic.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  add_test(NAME game_relic_seed7 COMMAND ${HL} --seed 7 --relic-slice --script tests/game/relic.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_lighting COMMAND ${HL} --seed 42 --script tests/game/lighting.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   # the home test saves and loads: give each run its own user dir so parallel ctest runs cannot race
   add_test(NAME game_home COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-home --quiet
@@ -256,6 +259,8 @@ if(SAUCER_BUILD_TESTS)
   foreach(r ${REPLAYS})
     get_filename_component(name ${r} NAME_WE)
     add_test(NAME replay_${name} COMMAND ${HL} --play ${r} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+    # add-material-system: the material shading is render-only; every replay plays to the same hashes with it off
+    add_test(NAME replay_${name}_materials_off COMMAND ${HL} --play ${r} --materials off WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   endforeach()
   # no test may hang CI: a game test that never reaches its end fails after this many seconds
   # (generous: ASan, coverage and --restore-every-tick builds are many times slower)

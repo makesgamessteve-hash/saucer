@@ -69,6 +69,8 @@ end
 function M.get(seed, i) return M.universe(seed)[i] end
 
 function M.by_id(seed, id)
+  -- add-relic-stations: the slice's hard-seeded Vyrr are not in the generated roster
+  if id == "vyrr" then return data.load("civs/relic_slice.lua") end
   for _, c in ipairs(M.universe(seed or current or 0)) do
     if c.id == id then return c end
   end
@@ -76,7 +78,10 @@ function M.by_id(seed, id)
 end
 
 -- the civ of a site (sites keep an index into the universe list)
-function M.of(state, site) return site and M.universe(state.seed)[site.civ] or nil end
+function M.of(state, site)
+  if site and site.relic_civ then return data.load("civs/relic_slice.lua") end
+  return site and M.universe(state.seed)[site.civ] or nil
+end
 
 -- a human-readable trait line (the Xenoarchive and the sector map show it)
 function M.describe(c)
