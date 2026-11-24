@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: MIT
 -- Milestone 11, phase 2 (OpenSpec add-cities-2): the look and lights of a city, the skyline ring that runs it
 -- to the horizon, transit (mag-rails, lifts), the wet or wild undercity, storms and wind, falling sky-bridges
--- and the patrols of the dark districts. Every `it` name is a scenario of openspec/changes/add-cities-2.
+-- and the patrols of the dark districts. Every `it` name is a scenario of openspec/specs/cities (archived change add-cities-2).
 local game = require("sim.game")
 local galaxy = require("sim.galaxy")
 local sector = require("sim.sector")

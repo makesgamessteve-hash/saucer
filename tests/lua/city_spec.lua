@@ -3,7 +3,7 @@
 -- budget, reachability, landmarks, the three forms), the sites in the sectors, the district power
 -- grid (couplings, gates, sleeping sentries), the body's pull on the saucer, the city map, the HUD
 -- beacon, the render streaming and the environment. Every `it` name is a scenario of
--- openspec/changes/add-cities.
+-- openspec/specs/cities (archived change add-cities).
 local game = require("sim.game")
 local galaxy = require("sim.galaxy")
 local sector = require("sim.sector")
