@@ -1296,7 +1296,8 @@ static int l_v_fog(lua_State *L) {
 }
 
 /* add-realistic-lighting: view:light({kind = "sun" | "point" | "spot", pos=, dir=, color=, intensity=, range=,
- * inner= / outer= (spot half-angles, degrees), shadow=, owner=, priority=}) -> index or nil (list full) */
+ * inner= / outer= (spot half-angles, degrees), shadow=, owner=, priority=, haze= (glow in the air, 0 none)})
+ * -> index or nil (list full) */
 static int l_v_light(lua_State *L) {
   sx_viewport *v = check_view(L);
   sx_light l;
@@ -1320,6 +1321,7 @@ static int l_v_light(lua_State *L) {
   l.cos_outer = (float)sx_cos(field_num(L, 2, "outer", 30.0f) * (float)(SX_PI / 180.0));
   l.owner = (int)field_num(L, 2, "owner", 0);
   l.priority = field_num(L, 2, "priority", 1.0f);
+  l.haze = field_num(L, 2, "haze", 0.0f);
   lua_getfield(L, 2, "shadow");
   l.shadow = lua_toboolean(L, -1);
   lua_pop(L, 1);
@@ -1330,13 +1332,15 @@ static int l_v_light(lua_State *L) {
   return 1;
 }
 
-/* view:lighting({ambient = {r, g, b}, exposure =, focus = {x, y, z}}): this view uses the light list */
+/* view:lighting({ambient = {r, g, b}, exposure =, focus = {x, y, z}, haze =}): this view uses the light list;
+ * haze scales the beams and halos (add-lighting-mood) */
 static int l_v_lighting(lua_State *L) {
   sx_viewport *v = check_view(L);
   luaL_checktype(L, 2, LUA_TTABLE);
   v->lighting.on = 1;
   field_vec(L, 2, "ambient", v->lighting.ambient, 3);
   v->lighting.exposure = field_num(L, 2, "exposure", v->lighting.exposure);
+  v->lighting.haze_density = field_num(L, 2, "haze", v->lighting.haze_density);
   lua_getfield(L, 2, "focus");
   if (lua_istable(L, -1)) {
     v->lighting.has_focus = 1;
@@ -1358,7 +1362,8 @@ static void push_fvec3(lua_State *L, const float *f) {
 }
 
 /* saucer.render.lights(view) -> what the last frame picked for that view (1-based):
- * {on=, n= submitted, dropped=, cascades=, spots=, omni=, atlas=, ambient=, active = {{kind=, color=, intensity=,
+ * {on=, n= submitted, dropped=, cascades=, spots=, omni=, atlas=, ambient=, haze= (glowing lights), haze_steps=,
+ * glow = {submission indices of the glowing lights}, active = {{kind=, color=, intensity=,
  * range=, pos=, owner=, shadow= (got a map), score=}, ...}} (strongest first), or nil */
 static int l_r_lights(lua_State *L) {
   sx_engine *e = get_engine(L);
@@ -1384,6 +1389,16 @@ static int l_r_lights(lua_State *L) {
   lua_setfield(L, -2, "atlas");
   push_fvec3(L, lt->ambient);
   lua_setfield(L, -2, "ambient");
+  lua_pushinteger(L, lt->nhz);
+  lua_setfield(L, -2, "haze");
+  lua_pushinteger(L, lt->haze_steps);
+  lua_setfield(L, -2, "haze_steps");
+  lua_createtable(L, lt->nhz, 0);
+  for (k = 0; k < lt->nhz; k++) {
+    lua_pushinteger(L, lt->hz[k] + 1);
+    lua_rawseti(L, -2, k + 1);
+  }
+  lua_setfield(L, -2, "glow");
   lua_createtable(L, lt->nactive, 0);
   for (k = 0; k < lt->nactive; k++) {
     const sx_light *l = &lt->lights[lt->active[k]];
@@ -1404,6 +1419,8 @@ static int l_r_lights(lua_State *L) {
     lua_setfield(L, -2, "shadow");
     lua_pushnumber(L, l->score);
     lua_setfield(L, -2, "score");
+    lua_pushnumber(L, l->haze);
+    lua_setfield(L, -2, "haze");
     lua_rawseti(L, -2, k + 1);
   }
   lua_setfield(L, -2, "active");

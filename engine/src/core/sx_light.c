@@ -32,6 +32,9 @@ void sx_lighting_reset(sx_lighting *lt) {
   lt->nactive = 0;
   lt->cascades = lt->spots = lt->omni = 0;
   lt->atlas = 0;
+  lt->nhz = 0;
+  lt->haze_steps = 0;
+  lt->haze_density = 1.0f;
   /* omni_key survives the reset: the omni blocks stay with their lights from frame to frame */
 }
 
@@ -81,6 +84,9 @@ sx_shadow_budget sx_shadow_budget_for(int quality, int nviews) {
   memset(&b, 0, sizeof b);
   b.quality = quality;
   b.max_lights = quality == SX_SHADOWS_HIGH ? SX_MAX_ACTIVE_LIGHTS : 8;
+  /* beams and halos: four with 8 cone samples on high, two with 4 on low, none when shadows are off */
+  b.haze = quality == SX_SHADOWS_HIGH ? SX_MAX_HAZE : quality == SX_SHADOWS_LOW ? 2 : 0;
+  b.haze_steps = quality == SX_SHADOWS_HIGH ? 8 : quality == SX_SHADOWS_LOW ? 4 : 0;
   if (quality == SX_SHADOWS_HIGH) {
     b.atlas = 1024; /* the screen is 480 x 270: chunky shadows suit it, and fill is the cost */
     b.cascades = 2;
@@ -98,6 +104,8 @@ sx_shadow_budget sx_shadow_budget_for(int quality, int nviews) {
   }
   /* a split screen shades every view: two views share the budget, three or four get the minimum */
   if (nviews >= 3) {
+    if (b.haze > 2) b.haze = 2;
+    if (b.haze_steps > 4) b.haze_steps = 4;
     /* every view draws its own maps: keep the sun and one spot (headlights), no cube maps, a small atlas */
     b.max_lights = 8;
     if (b.cascades > 1) b.cascades = 1;
@@ -278,6 +286,26 @@ void sx_lighting_select(sx_lighting *lt, const sx_shadow_budget *b, const float 
     if (best < 0) break;
     taken[best] = 1;
     lt->active[lt->nactive++] = best;
+  }
+  /* add-lighting-mood: the lights that glow in the air, by score x haze (any submitted light: a beam may
+     cross the view without lighting much near the eye) */
+  lt->nhz = 0;
+  lt->haze_steps = b->haze_steps;
+  while (lt->nhz < (b->haze < SX_MAX_HAZE ? b->haze : SX_MAX_HAZE)) {
+    int best = -1, j, dup;
+    float bs = 0.0f;
+    for (i = 0; i < lt->nlights; i++) {
+      const sx_light *l = &lt->lights[i];
+      float s = l->score * l->haze;
+      if (l->kind == SX_LIGHT_SUN || l->haze <= 0.0f || s <= bs) continue;
+      for (dup = 0, j = 0; j < lt->nhz; j++) dup |= lt->hz[j] == i;
+      if (!dup) {
+        best = i;
+        bs = s;
+      }
+    }
+    if (best < 0) break;
+    lt->hz[lt->nhz++] = best;
   }
   /* atlas: sun cascades along the top half, spots below the first cascade, omni blocks of 3x2 faces */
   lt->shadow_rect[0][0] = 0.0f;
