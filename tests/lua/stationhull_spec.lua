@@ -75,7 +75,7 @@ describe("the megastructure generator", function()
     end
     expect(sh.envelope(1)).to_be_truthy()
   end)
-  it("is multi-kilometre with the hangar cell a tiny part of it, everything inside its box", function()
+  it("is multi-kilometre with the hangar cell a tiny part of it, everything inside its box and its budgets", function()
     local T = dock.tune()
     local cell = (T.front_x - T.back_x) * T.half_w * 2 * T.height
     for _, fam in ipairs({ "coral", "crystal", "spiral", "shells" }) do
@@ -102,6 +102,14 @@ describe("the megastructure generator", function()
           expect(m.min[k] >= e.lo[k] - 2 and m.max[k] <= e.hi[k] + 2).to_be(true)
         end
       end
+      -- inside the triangle budgets (under luacov every build is slow: the budgets are checked on these same builds)
+      local kit = sh.kit()
+      local t = vhull.layer_tris(L)
+      expect(t.core + t.ring <= kit.budget.core).to_be(true)
+      expect(t.detail + t.ringd <= kit.budget.detail).to_be(true)
+      expect(t.far <= kit.budget.far).to_be(true)
+      expect(t.core).to_be_greater(4000)
+      expect(t.detail).to_be_greater(t.core)
       for _, layer in ipairs({ "ring", "ringd" }) do
         local id = vhull.mesh(L, layer)
         local m = saucer.mesh.info(id)
@@ -128,21 +136,6 @@ describe("the megastructure generator", function()
     local st = new_state(42)
     expect(sh.for_trader(st, 1).family).to_be(sh.family_of(sg.seed_for(st, 1)))
     expect(sg.get(sg.seed_for(st, 1)).family).to_be(sh.for_trader(st, 1).family)
-  end)
-  it("stays inside the triangle budgets for every family", function()
-    local kit = sh.kit()
-    for _, fam in ipairs({ "coral", "crystal", "spiral", "shells" }) do
-      for _, seed in ipairs({ 1, 99 }) do
-        local L = sh.generate(seed, "port", 3, true, fam)
-        local t = vhull.layer_tris(L)
-        expect(t.core + t.ring <= kit.budget.core).to_be(true)
-        expect(t.detail + t.ringd <= kit.budget.detail).to_be(true)
-        expect(t.far <= kit.budget.far).to_be(true)
-        expect(t.core).to_be_greater(4000)
-        expect(t.detail).to_be_greater(t.core)
-        vhull.free_all()
-      end
-    end
   end)
   it("makes an outpost about a quarter the size", function()
     local port = sh.generate(5, "port", 1)

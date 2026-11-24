@@ -80,6 +80,28 @@ function M.station_family(seed, sid)
   return require("sim.stationhull").family_of(sg.seed_of(seed, sid, 1))
 end
 
+local spots_cache
+function M.station_spots(T)
+  if spots_cache then return spots_cache end
+  local sin, cos, sqrt = saucer.math.sin, saucer.math.cos, saucer.math.sqrt
+  local out = {}
+  for k = 0, M.STATION_BEARINGS - 1 do
+    local a = saucer.math.tau * k / M.STATION_BEARINGS
+    local sa, ca = sin(a), cos(a)
+    for _, d in ipairs(M.STATION_DISTANCES) do
+      for _, hy in ipairs(M.STATION_HEIGHTS) do
+        local p = { sa * d, hy, ca * d }
+        local mouth = { p[1] + T.mouth_x, p[2] + T.floor_y + T.height / 2, p[3] }
+        out[#out + 1] = { p = p, mouth = mouth, i = #out + 1,
+                          near = sqrt(mouth[1] * mouth[1] + mouth[2] * mouth[2] + mouth[3] * mouth[3]) + math.abs(hy) * 0.5 }
+      end
+    end
+  end
+  table.sort(out, function(u, w) if u.near ~= w.near then return u.near < w.near end return u.i < w.i end)
+  spots_cache = out
+  return out
+end
+
 function M.place_station_uncached(seed, sid, obstacles, from)
   local sh = require("sim.stationhull")
   -- (the station's box alone: building the whole layout for every sector would be slow)
@@ -88,28 +110,26 @@ function M.place_station_uncached(seed, sid, obstacles, from)
   -- the hull's box without the cell and its approach (the way in ends at the mouth)
   local body_hi = { T.back_x - 10, hi[2], hi[3] }
   from = from or { 0, 0, -120 }
-  local best, best_score
-  local sin, cos, sqrt = saucer.math.sin, saucer.math.cos, saucer.math.sqrt
-  for k = 0, M.STATION_BEARINGS - 1 do
-    local a = saucer.math.tau * k / M.STATION_BEARINGS
-    local sa, ca = sin(a), cos(a)
-    for _, d in ipairs(M.STATION_DISTANCES) do
-      for _, hy in ipairs(M.STATION_HEIGHTS) do
-        local p = { sa * d, hy, ca * d }
-        local blo, bhi = { p[1] + lo[1], p[2] + lo[2], p[3] + lo[3] }, { p[1] + hi[1], p[2] + hi[2], p[3] + hi[3] }
-        local room = math.huge
-        for _, o in ipairs(obstacles) do
-          local r = box_gap(o, blo, bhi) - o[4]
-          if r < room then room = r end
-          if room < M.STATION_ROOM then break end
-        end
-        if room >= M.STATION_ROOM then
-          local mouth = { p[1] + T.mouth_x, p[2] + T.floor_y + T.height / 2, p[3] }
-          local blocked = seg_hits_box(from, mouth, blo, { p[1] + body_hi[1], p[2] + body_hi[2], p[3] + body_hi[3] })
-          local score = sqrt(mouth[1] * mouth[1] + mouth[2] * mouth[2] + mouth[3] * mouth[3]) + math.abs(hy) * 0.5
-                        + (blocked and 2000 or 0) - math.min(room, 400) * 0.2
-          if not best_score or score < best_score then best, best_score = p, score end
-        end
+  local best, best_score, best_i
+  -- every spot, nearest first (the order and the bearings, distances and heights are fixed, so made once);
+  -- a spot whose best possible score cannot beat the best so far ends the search (ties go to the earlier
+  -- spot in bearing, distance, height order, as a plain sweep would pick)
+  local spots = M.station_spots(T)
+  for _, sp in ipairs(spots) do
+    if best_score and sp.near - 80 > best_score then break end
+    local p = sp.p
+    local blo, bhi = { p[1] + lo[1], p[2] + lo[2], p[3] + lo[3] }, { p[1] + hi[1], p[2] + hi[2], p[3] + hi[3] }
+    local room = math.huge
+    for _, o in ipairs(obstacles) do
+      local r = box_gap(o, blo, bhi) - o[4]
+      if r < room then room = r end
+      if room < M.STATION_ROOM then break end
+    end
+    if room >= M.STATION_ROOM then
+      local blocked = seg_hits_box(from, sp.mouth, blo, { p[1] + body_hi[1], p[2] + body_hi[2], p[3] + body_hi[3] })
+      local score = sp.near + (blocked and 2000 or 0) - math.min(room, 400) * 0.2
+      if not best_score or score < best_score or (score == best_score and sp.i < best_i) then
+        best, best_score, best_i = p, score, sp.i
       end
     end
   end
