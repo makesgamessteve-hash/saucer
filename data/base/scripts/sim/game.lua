@@ -265,12 +265,12 @@ function M.new_player(index, pos, yaw)
   return p
 end
 
-M.VERSION = 18 -- state version; saves made by a newer game are refused
+M.VERSION = 19 -- state version; saves made by a newer game are refused
 
 function M.init(state, ctx)
   M.state_ref = state
   local seed = ctx.seed
-  state.version = M.VERSION  -- v17: suspicion meters, site alarms, guarded finds, cover, power cells, Spotters (add-strategic-sentries); v16: the fun fixes (add-fun-fixes); v15: megastructure stations move the trader and the far hangar (add-huge-stations); v14: landing gear, the hull hatch and the suit (add-dock-land-eva); v13: the run story (add-run-story); v12: sliding doors keep a goal and a hold timer (fix-bedroom-door); v11: seed-plus-diff saves (save format 3); v10: playtest recommendations (add-playtest-recs); v9: the wider dark (add-wider-dark); v8: on-foot excursions; v7: station visits
+  state.version = M.VERSION  -- v19: alien stations, bigger, move the trader, the far hangar and grow an alien wing inside (add-alien-stations); v18: realistic lighting (add-realistic-lighting); v17: suspicion meters, site alarms, guarded finds, cover, power cells, Spotters (add-strategic-sentries); v16: the fun fixes (add-fun-fixes); v15: megastructure stations move the trader and the far hangar (add-huge-stations); v14: landing gear, the hull hatch and the suit (add-dock-land-eva); v13: the run story (add-run-story); v12: sliding doors keep a goal and a hold timer (fix-bedroom-door); v11: seed-plus-diff saves (save format 3); v10: playtest recommendations (add-playtest-recs); v9: the wider dark (add-wider-dark); v8: on-foot excursions; v7: station visits
   state.seed = seed
   state.tick = 0
   civs.use(seed)

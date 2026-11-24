@@ -46,19 +46,19 @@ return {
   },
   -- hull palettes: plating, trim (darker growth), panel (seams), accent (markings), glow (irises, glyphs, lights)
   palettes = {
-    chitin = { plate = { 0.46, 0.33, 0.4 }, trim = { 0.3, 0.2, 0.27 }, panel = { 0.2, 0.13, 0.18 },
+    chitin = { plate = { 0.6, 0.44, 0.52 }, trim = { 0.42, 0.28, 0.36 }, panel = { 0.26, 0.17, 0.23 },
                accent = { 0.95, 0.35, 0.7 }, glow = { 0.55, 1.0, 0.75 } },
     coral = { plate = { 0.78, 0.47, 0.42 }, trim = { 0.55, 0.3, 0.32 }, panel = { 0.36, 0.2, 0.22 },
               accent = { 1.0, 0.85, 0.5 }, glow = { 0.35, 1.0, 0.95 } },
-    verdigris = { plate = { 0.32, 0.52, 0.46 }, trim = { 0.2, 0.34, 0.3 }, panel = { 0.13, 0.22, 0.2 },
+    verdigris = { plate = { 0.42, 0.66, 0.58 }, trim = { 0.27, 0.45, 0.4 }, panel = { 0.17, 0.29, 0.26 },
                   accent = { 1.0, 0.6, 0.22 }, glow = { 0.8, 1.0, 0.3 } },
-    obsidian = { plate = { 0.25, 0.23, 0.32 }, trim = { 0.15, 0.13, 0.2 }, panel = { 0.1, 0.09, 0.14 },
+    obsidian = { plate = { 0.42, 0.39, 0.54 }, trim = { 0.27, 0.24, 0.36 }, panel = { 0.17, 0.15, 0.24 },
                  accent = { 0.65, 0.35, 1.0 }, glow = { 1.0, 0.45, 0.95 } },
     nacre = { plate = { 0.76, 0.74, 0.84 }, trim = { 0.5, 0.48, 0.62 }, panel = { 0.34, 0.32, 0.44 },
               accent = { 0.4, 0.75, 1.0 }, glow = { 0.55, 0.95, 1.0 } },
     glacier = { plate = { 0.55, 0.7, 0.8 }, trim = { 0.34, 0.46, 0.56 }, panel = { 0.2, 0.28, 0.36 },
                 accent = { 0.95, 0.95, 1.0 }, glow = { 0.6, 0.85, 1.0 } },
-    amber = { plate = { 0.66, 0.46, 0.24 }, trim = { 0.42, 0.28, 0.14 }, panel = { 0.26, 0.17, 0.09 },
+    amber = { plate = { 0.76, 0.54, 0.3 }, trim = { 0.5, 0.34, 0.18 }, panel = { 0.3, 0.2, 0.11 },
               accent = { 0.35, 0.9, 1.0 }, glow = { 1.0, 0.82, 0.32 } },
   },
   lod = {

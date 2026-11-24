@@ -214,7 +214,7 @@ describe("fun fix 3: the helm beam relay comes fitted", function()
     local p = st.players[1]
     expect(upgrades.level(p, "beam_relay")).to_be(1)
     expect(select(2, upgrades.buy(p, "beam_relay"))).to_be("max")
-    expect(game.VERSION).to_be(18)
+    expect(game.VERSION).to_be(19)
   end)
 end)
 

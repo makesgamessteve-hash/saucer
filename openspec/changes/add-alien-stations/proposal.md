@@ -40,7 +40,10 @@ wings, cargo racks), and at about a kilometre the hangar cell was still a visibl
 - **Walk-in seed per sector.** Far sectors' walk-in seeds now include the sector, so their stations differ
   in family and wing. The home sector's seeds are the same as before.
 - The concourse nav graph takes stops only from the concourse's own doorways. A strut rod's pitch was
-  mirrored; that is fixed.
+  mirrored; that is fixed. Walk queries look solids up in a coarse grid and try nav nodes nearest first
+  (same answers, about nine times faster on the bigger layouts).
+- State version 19 (the trader, the far hangar and the walk-in layout move); the seed-42 slice and co-op
+  replays are re-recorded.
 
 ## Impact
 
@@ -50,6 +53,6 @@ wings, cargo racks), and at about a kilometre the hangar cell was still a visibl
   - `sim/stationgen.lua`, `kits/station.lua`, `view/station.lua`, `view/lights.lua` (station lamps only)
   - `sim/sector.lua`
 - Tests:
-  - `tests/lua/stationhull_spec.lua`, `tests/lua/station_spec.lua`, `tests/game/alien.lua`
+  - `tests/lua/stationhull_spec.lua`, `tests/lua/alienwing_spec.lua`, `tests/game/alien.lua`
   - tools: `tools/shots/alien.lua`, `tools/shots/alien_bench.lua`, `tools/shots/alien_perf.lua`
 - The spinning layer (spore halos, splinter halos, helices, shells) has no collision.

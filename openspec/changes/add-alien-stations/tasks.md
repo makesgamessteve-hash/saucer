@@ -14,3 +14,4 @@
 - [x] 3.1 Unit specs: families, extent, determinism, placement, wing reachability
 - [x] 3.2 Game test `tests/game/alien.lua`: dock at an alien station, walk the wing
 - [x] 3.3 Shots before/after, generation and frame-time numbers
+- [x] 3.4 State version 19; slice and co-op replays re-recorded

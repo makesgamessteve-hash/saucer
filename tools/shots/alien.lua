@@ -40,7 +40,14 @@ local c = i.centre
 saucer.log.info(string.format("alien-tour: family=%s palette=%s length=%d width=%d height=%d radius=%d pods=%d solids=%d lights=%d",
   tostring(i.family or "ring"), tostring(i.palette), len // 1, wid // 1, (e.hi[2] - e.lo[2]) // 1, i.radius // 1, i.pods, #L.solids, #L.lights))
 -- 1. the whole station from afar
-look_at(rel(c[1] + len * 0.55, c[2] + len * 0.35, -len * 1.05), rel(c[1], c[2], 0), 60)
+-- (from the star's side, near enough that the full hull and its lights are drawn)
+do
+  local sd = require("view.lights").star(T.state().seed or 0, T.state().sector_id or 1).dir
+  local dx, dz = sd[1] + 0.35, sd[3] - 0.5
+  local dl = sm.sqrt(dx * dx + dz * dz)
+  local dist = math.max(len, wid) * 0.66
+  look_at(rel(c[1] + dx / dl * dist, c[2] + dist * 0.32, (c[3] or 0) + dz / dl * dist), rel(c[1], c[2], c[3] or 0), 74)
+end
 shot("01_whole_station")
 -- 2. the saucer in front of it, for scale
 get().ship.pos = { b.mouth[1] + 260, b.mouth[2] + 60, b.mouth[3] - 140 }
@@ -91,12 +98,12 @@ if st then
   shot("06_on_foot_concourse")
   local n = 0
   for _, a in ipairs(I.areas) do
-    if n < 4 and a.kind ~= "hangar" and a.name ~= "Concourse" and (a.kind ~= "corridor" or a.alien) then
+    if n < 5 and (a.kind == "market" or a.kind == "chamber" or (a.alien and n == 1)) then
       local bx = a.box
       local cx, cz = (bx[1] + bx[3]) / 2, (bx[2] + bx[4]) / 2
       local sx = bx[1] + (bx[3] - bx[1]) * 0.12
       local sz = bx[2] + (bx[4] - bx[2]) * 0.12
-      stand(sx, sz, cx, cz, a.h > 14 and 0.35 or 0.08)
+      stand(sx, sz, cx, cz, a.alien == "shaft" and 0.75 or (a.h > 14 and 0.3 or 0.08))
       n = n + 1
       shot(string.format("%02d_inside_%s", 6 + n, (a.alien or a.kind):gsub("%s", "_")))
     end

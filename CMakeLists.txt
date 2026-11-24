@@ -173,6 +173,11 @@ if(SAUCER_BUILD_TESTS)
            --restore-every-tick WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_station_seed7 COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-station7
            --quiet --seed 7 --ticks 40000 --script tests/game/station.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  # add-alien-stations: dock at a big alien station, walk its alien wing, leave from the far hangar in a pod
+  add_test(NAME game_alien COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-alien --quiet
+           --seed 42 --ticks 40000 --script tests/game/alien.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  add_test(NAME game_alien_seed9 COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-alien9 --quiet
+           --seed 9 --ticks 40000 --script tests/game/alien.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   # add-dock-land-eva slice 1: land on gear, the hull door and stairs, fold and unfold the Villa from outside
   add_test(NAME game_hatch COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-hatch --quiet
            --seed 42 --ticks 40000 --script tests/game/hatch.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
