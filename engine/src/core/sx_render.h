@@ -5,6 +5,7 @@
 #ifndef SX_RENDER_H
 #define SX_RENDER_H
 #include <stdint.h>
+#include "sx_light.h"
 #include "sx_mesh.h"
 
 #define SX_MAX_VIEWPORTS 4
@@ -37,13 +38,14 @@ typedef struct sx_camera {
   float view[16], proj[16];
 } sx_camera;
 
-enum { SX_DRAW_SKY = 1, SX_DRAW_GHOST = 2, SX_DRAW_UNLIT = 4, SX_DRAW_NOFOG = 8 };
+enum { SX_DRAW_SKY = 1, SX_DRAW_GHOST = 2, SX_DRAW_UNLIT = 4, SX_DRAW_NOFOG = 8, SX_DRAW_NOSHADOW = 16 };
 
 typedef struct sx_draw_mesh {
   int mesh, tex, palette;
   float model[16];
   float tint[4];
   int flags;
+  int owner; /* add-realistic-lighting: a light of the same owner does not shadow it */
 } sx_draw_mesh;
 
 typedef struct sx_draw_billboard {
@@ -70,6 +72,7 @@ typedef struct sx_viewport {
   float fog_color[3], fog_density;
   float clear_color[3];
   float light_dir[3], ambient;
+  sx_lighting lighting; /* add-realistic-lighting: lights of this view (view:light / view:lighting) */
   sx_draw_mesh *meshes;
   int nmeshes, cap_meshes;
   sx_draw_billboard *bills;
@@ -83,6 +86,7 @@ typedef struct sx_render_settings {
   int vertex_snap, dither, affine;
   int split_horizontal; /* add-wider-dark: 2 players stacked (default side by side) */
   int fill;             /* add-mobile-touch-ux: the platform sizes the target to the window (no letterbox) */
+  int shadows;          /* add-realistic-lighting: SX_SHADOWS_OFF / LOW / HIGH */
 } sx_render_settings;
 
 /* add-retro-renderer-basic: the retro effects in force for one view. Vertex snapping and affine
@@ -130,6 +134,8 @@ void sx_render_begin_frame(sx_render *r, int nviews);
 void sx_view_mesh(sx_viewport *v, const sx_draw_mesh *d);
 void sx_view_billboard(sx_viewport *v, const sx_draw_billboard *b);
 void sx_view_ui(sx_viewport *v, const sx_draw_ui *u);
+/* add-realistic-lighting: pick every view's lights for its camera (after the views were filled) */
+void sx_render_select_lights(sx_render *r);
 
 /* Matrices (column-major, GL convention). */
 void sx_mat4_identity(float m[16]);

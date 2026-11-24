@@ -79,7 +79,13 @@
   X(void, glGenRenderbuffers, (GLsizei n, GLuint * r))                                                                 \
   X(void, glDeleteRenderbuffers, (GLsizei n, const GLuint *r))                                                         \
   X(void, glBindRenderbuffer, (GLenum t, GLuint r))                                                                    \
-  X(void, glRenderbufferStorage, (GLenum t, GLenum f, GLsizei w, GLsizei h))
+  X(void, glRenderbufferStorage, (GLenum t, GLenum f, GLsizei w, GLsizei h))                                       \
+  X(void, glDrawBuffers, (GLsizei n, const GLenum *b))                                                                 \
+  X(void, glReadBuffer, (GLenum b))                                                                                    \
+  X(void, glPolygonOffset, (GLfloat f, GLfloat u))                                                                     \
+  X(void, glUniform1fv, (GLint l, GLsizei n, const GLfloat *v))                                                        \
+  X(void, glUniform1iv, (GLint l, GLsizei n, const GLint *v))                                                          \
+  X(void, glUniform4fv, (GLint l, GLsizei n, const GLfloat *v))
 
 #define SX_GL_DECL(ret, name, args)                                                                                    \
   typedef ret(APIENTRY *PFN_sx_##name) args;                                                                           \
@@ -145,6 +151,12 @@ SX_GL_FUNCS(SX_GL_DECL)
 #define glDeleteRenderbuffers p_glDeleteRenderbuffers
 #define glBindRenderbuffer p_glBindRenderbuffer
 #define glRenderbufferStorage p_glRenderbufferStorage
+#define glDrawBuffers p_glDrawBuffers
+#define glReadBuffer p_glReadBuffer
+#define glPolygonOffset p_glPolygonOffset
+#define glUniform1fv p_glUniform1fv
+#define glUniform1iv p_glUniform1iv
+#define glUniform4fv p_glUniform4fv
 #endif
 
 #ifndef GL_R8
@@ -153,12 +165,24 @@ SX_GL_FUNCS(SX_GL_DECL)
 #ifndef GL_RED
 #define GL_RED 0x1903
 #endif
+#ifndef GL_DEPTH_COMPONENT24
+#define GL_DEPTH_COMPONENT24 0x81A6
+#endif
+#ifndef GL_TEXTURE_COMPARE_MODE
+#define GL_TEXTURE_COMPARE_MODE 0x884C
+#endif
+#ifndef GL_TEXTURE_COMPARE_FUNC
+#define GL_TEXTURE_COMPARE_FUNC 0x884D
+#endif
+#ifndef GL_COMPARE_REF_TO_TEXTURE
+#define GL_COMPARE_REF_TO_TEXTURE 0x884E
+#endif
 
 /* ---------------------------------------------------------------- shaders */
 static const char *mesh_vs =
     "in vec3 a_pos; in vec3 a_nrm; in vec2 a_uv; in vec3 a_col; in float a_emi;\n"
     "uniform mat4 u_mvp; uniform mat4 u_mv; uniform mat4 u_model; uniform vec2 u_snap; uniform int u_affine;\n"
-    "out vec3 v_uv; out vec3 v_col; out float v_emi; out float v_dist; out vec3 v_nrm;\n"
+    "out vec3 v_uv; out vec3 v_col; out float v_emi; out float v_dist; out vec3 v_nrm; out vec3 v_wpos;\n"
     "void main() {\n"
     "  vec4 c = u_mvp * vec4(a_pos, 1.0);\n"
     "  if (u_snap.x > 0.0 && c.w > 0.0) c.xy = floor(c.xy / c.w * u_snap + 0.5) / u_snap * c.w;\n"
@@ -168,17 +192,66 @@ static const char *mesh_vs =
     "  v_uv = u_affine == 1 ? vec3(a_uv * c.w, c.w) : vec3(a_uv, 1.0);\n"
     "  v_col = a_col; v_emi = a_emi;\n"
     "  v_nrm = mat3(u_model) * a_nrm;\n"
+    "  v_wpos = (u_model * vec4(a_pos, 1.0)).xyz;\n"
     "  v_dist = length((u_mv * vec4(a_pos, 1.0)).xyz);\n"
     "}\n";
 
+/* add-realistic-lighting: u_mode 0 is the old look (one directional light + ambient, view:fog); 1 is the
+ * light list: up to 16 suns / point lights / spots with inverse-square falloff and a smooth range window,
+ * a tiny ambient, exposure and an exponential tonemap. Shadows come from one depth atlas (sampler2DShadow,
+ * hardware 2x2 PCF): sun cascades and spots through a matrix, point lights as six cube faces in a 3x2 block
+ * (the face basis matches sx_cube_face_basis). */
 static const char *mesh_fs =
-    "in vec3 v_uv; in vec3 v_col; in float v_emi; in float v_dist; in vec3 v_nrm;\n"
+    "in vec3 v_uv; in vec3 v_col; in float v_emi; in float v_dist; in vec3 v_nrm; in vec3 v_wpos;\n"
     "uniform sampler2D u_idx; uniform sampler2D u_pal; uniform int u_palrow; uniform int u_tex;\n"
     "uniform vec4 u_tint; uniform vec3 u_light; uniform float u_ambient; uniform int u_lit;\n"
     "uniform vec3 u_fogcol; uniform float u_fog; uniform int u_dither;\n"
+    "uniform int u_mode; uniform int u_nl; uniform vec3 u_amb; uniform float u_expo;\n"
+    "uniform vec4 u_lpos[16]; uniform vec4 u_lcol[16]; uniform vec4 u_ldir[16]; uniform vec4 u_lpar[16];\n"
+    "uniform highp sampler2DShadow u_shadow; uniform mat4 u_shmat[4]; uniform vec4 u_shrect[7]; uniform float u_shbias[7];\n"
+    "uniform int u_ncasc; uniform float u_shtexel; uniform int u_lidx[16];\n"
     "out vec4 o_col;\n"
     "const float bayer[16] = float[16](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0,\n"
     "                                  3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);\n"
+    "const vec3 FR[6] = vec3[6](vec3(0.0, 0.0, 1.0), vec3(0.0, 0.0, -1.0), vec3(1.0, 0.0, 0.0), vec3(1.0, 0.0, 0.0),\n"
+    "                           vec3(-1.0, 0.0, 0.0), vec3(1.0, 0.0, 0.0));\n"
+    "const vec3 FU[6] = vec3[6](vec3(0.0, 1.0, 0.0), vec3(0.0, 1.0, 0.0), vec3(0.0, 0.0, 1.0), vec3(0.0, 0.0, -1.0),\n"
+    "                           vec3(0.0, 1.0, 0.0), vec3(0.0, 1.0, 0.0));\n"
+    "float tap(vec4 rect, vec2 uv, float z) {\n"
+    "  vec2 m = vec2(u_shtexel) / rect.zw;\n"
+    "  return texture(u_shadow, vec3(rect.xy + clamp(uv, m, 1.0 - m) * rect.zw, z));\n"
+    "}\n"
+    "float proj_tap(int m, int r, vec3 p) {\n"
+    "  vec4 c = u_shmat[m] * vec4(p, 1.0);\n"
+    "  vec3 q = c.xyz / c.w;\n"
+    "  if (abs(q.x) > 1.0 || abs(q.y) > 1.0 || q.z > 1.0) return 1.0;\n"
+    "  return tap(u_shrect[r], q.xy * 0.5 + 0.5, q.z * 0.5 + 0.5);\n"
+    "}\n"
+    "float shadow_of(int slot, vec4 lp, vec4 lc, vec3 p, vec3 n) {\n"
+    "  if (slot < 2) {\n"
+    "    for (int c = 0; c < 2; c++) {\n"
+    "      if (c >= u_ncasc) break;\n"
+    "      vec3 q = p + n * u_shbias[c];\n"
+    "      vec4 k = u_shmat[c] * vec4(q, 1.0);\n"
+    "      if (abs(k.x) < 0.97 && abs(k.y) < 0.97 && k.z < 1.0) return tap(u_shrect[c], k.xy * 0.5 + 0.5, k.z * 0.5 + 0.5);\n"
+    "    }\n"
+    "    return 1.0;\n"
+    "  }\n"
+    "  float dl = length(lp.xyz - p);\n"
+    "  vec3 q = p + n * (u_shbias[slot] * dl + 0.02);\n"
+    "  if (slot < 4) return proj_tap(slot, slot, q);\n"
+    "  vec3 d = q - lp.xyz; vec3 a = abs(d);\n"
+    "  int f; float ma;\n"
+    "  if (a.x >= a.y && a.x >= a.z) { f = d.x > 0.0 ? 0 : 1; ma = a.x; }\n"
+    "  else if (a.y >= a.z) { f = d.y > 0.0 ? 2 : 3; ma = a.y; }\n"
+    "  else { f = d.z > 0.0 ? 4 : 5; ma = a.z; }\n"
+    "  vec2 uv = vec2(dot(d, FR[f]), dot(d, FU[f])) / ma * 0.5 + 0.5;\n"
+    "  float zn = 0.1, zf = lc.w;\n"
+    "  float z = ((zf + zn) / (zf - zn) - 2.0 * zf * zn / ((zf - zn) * ma)) * 0.5 + 0.5;\n"
+    "  vec4 b = u_shrect[slot];\n"
+    "  vec4 r = vec4(b.x + float(f - (f / 3) * 3) * b.z / 3.0, b.y + float(f / 3) * b.w * 0.5, b.z / 3.0, b.w * 0.5);\n"
+    "  return tap(r, uv, z);\n"
+    "}\n"
     "void main() {\n"
     "  vec4 base = vec4(1.0);\n"
     "  if (u_tex == 1) {\n"
@@ -188,9 +261,34 @@ static const char *mesh_fs =
     "  }\n"
     "  vec3 c = base.rgb * v_col * u_tint.rgb;\n"
     "  vec3 lit = c;\n"
-    "  if (u_lit == 1) {\n"
+    "  if (u_lit == 1 && u_mode == 0) {\n"
     "    float d = max(dot(normalize(v_nrm), normalize(u_light)), 0.0);\n"
     "    lit = c * (u_ambient + (1.0 - u_ambient) * d);\n"
+    "  } else if (u_lit == 1) {\n"
+    "    vec3 n = normalize(v_nrm);\n"
+    "    vec3 acc = u_amb;\n"
+    "    for (int j = 0; j < 16; j++) {\n"
+    "      if (j >= u_nl) break;\n"
+    "      int i = u_lidx[j];\n"
+    "      vec4 lp = u_lpos[i]; vec4 lc = u_lcol[i];\n"
+    "      vec3 L; float att = 1.0;\n"
+    "      if (lp.w < 0.5) { L = lp.xyz; }\n"
+    "      else {\n"
+    "        vec3 dv = lp.xyz - v_wpos; float d2 = dot(dv, dv);\n"
+    "        float x = d2 / (lc.w * lc.w);\n"
+    "        if (x >= 1.0) continue;\n"
+    "        L = dv * inversesqrt(max(d2, 1e-6));\n"
+    "        float w = 1.0 - x * x;\n"
+    "        att = w * w / (d2 + 0.0625 * lc.w * lc.w);\n"
+    "        if (lp.w > 1.5) att *= smoothstep(u_ldir[i].w, u_lpar[i].x, dot(-L, u_ldir[i].xyz));\n"
+    "      }\n"
+    "      float ndl = dot(n, L);\n"
+    "      if (ndl <= 0.0 || att <= 0.0) continue;\n"
+    "      int slot = int(u_lpar[i].y);\n"
+    "      float sh = slot >= 0 ? shadow_of(slot, lp, lc, v_wpos, n) : 1.0;\n"
+    "      acc += lc.rgb * (ndl * att * sh);\n"
+    "    }\n"
+    "    lit = vec3(1.0) - exp(-c * acc * u_expo);\n"
     "  }\n"
     "  c = mix(lit, c * 1.25, clamp(v_emi, 0.0, 1.0));\n"
     "  if (u_fog > 0.0) c = mix(u_fogcol, c, exp(-u_fog * v_dist));\n"
@@ -203,6 +301,13 @@ static const char *mesh_fs =
     "  if (a < 0.01) discard;\n"
     "  o_col = vec4(c, a);\n"
     "}\n";
+
+/* add-realistic-lighting: the shadow pass writes depth only */
+static const char *depth_vs =
+    "in vec3 a_pos; in vec3 a_nrm; in vec2 a_uv; in vec3 a_col; in float a_emi;\n"
+    "uniform mat4 u_mvp;\n"
+    "void main() { gl_Position = u_mvp * vec4(a_pos, 1.0); }\n";
+static const char *depth_fs = "void main() {}\n";
 
 static const char *ui_vs =
     "in vec2 a_pos; in vec2 a_uv;\n"
@@ -234,11 +339,20 @@ static const char *ui_fs =
 typedef struct prog {
   GLuint id;
   GLint mvp, mv, model, snap, affine, idx, pal, palrow, tex, tint, light, ambient, lit, fogcol, fog, dither, size, color;
+  GLint mode, nl, amb, expo, lpos, lcol, ldir, lpar, shadow, shmat, shrect, shbias, ncasc, shtexel, lidx;
 } prog;
 
 static struct {
   int ok;
-  prog mesh, ui;
+  prog mesh, ui, depth;
+  GLuint shadow_tex, shadow_fbo; /* add-realistic-lighting: the depth atlas */
+  int shadow_size;
+  float *spheres;                /* per mesh of the view being drawn: world bounding sphere (x, y, z, r) */
+  float omni_key[SX_SHADOW_OMNI][4]; /* the point light whose faces each omni block holds */
+  unsigned omni_turn, omni_drawn;
+  float lsph[SX_MAX_ACTIVE_LIGHTS][4]; /* the view's active lights: pos + range (-1: a sun, reaches all) */
+  int nview_lights, last_lmask;
+  int cap_spheres;
   GLuint pal_tex;
   GLuint white_tex;
   GLuint fbo, fbo_color, fbo_depth;
@@ -294,10 +408,13 @@ static int link_prog(prog *p, const char *vs, const char *fs, int ui) {
 #define U(n) p->n = glGetUniformLocation(p->id, "u_" #n)
   U(mvp); U(mv); U(model); U(snap); U(affine); U(idx); U(pal); U(palrow); U(tex); U(tint); U(light); U(ambient); U(lit);
   U(fogcol); U(fog); U(dither); U(size); U(color);
+  U(mode); U(nl); U(amb); U(expo); U(lpos); U(lcol); U(ldir); U(lpar); U(shadow); U(shmat); U(shrect); U(shbias);
+  U(ncasc); U(shtexel); U(lidx);
 #undef U
   glUseProgram(p->id);
   glUniform1i(p->idx, 0);
   glUniform1i(p->pal, 1);
+  if (p->shadow >= 0) glUniform1i(p->shadow, 2);
   return 1;
 }
 
@@ -322,6 +439,8 @@ static void tex_params(GLint filter, GLint wrap) {
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap);
 }
 
+static void ensure_shadow(int size);
+
 int sx_gl_init(void *(*get_proc)(const char *name)) {
   unsigned char white = 1;
 #ifndef __EMSCRIPTEN__
@@ -339,7 +458,9 @@ int sx_gl_init(void *(*get_proc)(const char *name)) {
   (void)get_proc;
 #endif
   memset(&G, 0, sizeof G);
-  if (!link_prog(&G.mesh, mesh_vs, mesh_fs, 0) || !link_prog(&G.ui, ui_vs, ui_fs, 1)) return 0;
+  if (!link_prog(&G.mesh, mesh_vs, mesh_fs, 0) || !link_prog(&G.ui, ui_vs, ui_fs, 1) ||
+      !link_prog(&G.depth, depth_vs, depth_fs, 0))
+    return 0;
   glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
   glPixelStorei(GL_PACK_ALIGNMENT, 1);
   glGenTextures(1, &G.pal_tex);
@@ -361,6 +482,8 @@ int sx_gl_init(void *(*get_proc)(const char *name)) {
   glEnableVertexAttribArray(1);
   glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *)(2 * sizeof(float)));
   glBindVertexArray(0);
+  ensure_shadow(1);
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
   G.ok = 1;
   return 1;
 }
@@ -382,6 +505,11 @@ void sx_gl_shutdown(void) {
     glDeleteTextures(1, &G.fbo_color);
     glDeleteRenderbuffers(1, &G.fbo_depth);
   }
+  if (G.shadow_fbo) glDeleteFramebuffers(1, &G.shadow_fbo);
+  if (G.shadow_tex) glDeleteTextures(1, &G.shadow_tex);
+  free(G.spheres);
+  G.spheres = NULL;
+  G.cap_spheres = 0;
   G.ok = 0;
 }
 
@@ -456,6 +584,239 @@ static void ensure_fbo(int w, int h) {
   G.fbo_h = h;
 }
 
+
+/* ------------------------------------------------- add-realistic-lighting */
+static void ensure_shadow(int size) {
+  static const GLenum none = GL_NONE;
+  if (size < 1) size = 1; /* a 1x1 map keeps the shadow sampler valid (WebGL checks it on every draw) */
+  if (G.shadow_tex && G.shadow_size == size) return;
+  if (!G.shadow_tex) glGenTextures(1, &G.shadow_tex);
+  if (!G.shadow_fbo) glGenFramebuffers(1, &G.shadow_fbo);
+  glActiveTexture(GL_TEXTURE2);
+  glBindTexture(GL_TEXTURE_2D, G.shadow_tex);
+  tex_params(GL_LINEAR, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, size, size, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, NULL);
+  glBindFramebuffer(GL_FRAMEBUFFER, G.shadow_fbo);
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, G.shadow_tex, 0);
+  glDrawBuffers(1, &none);
+  glReadBuffer(GL_NONE);
+  if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) SX_ERROR("shadow atlas framebuffer incomplete");
+  glActiveTexture(GL_TEXTURE0);
+  G.shadow_size = size;
+}
+
+/* world bounding sphere of every mesh in the view (for culling shadow casters) */
+static void view_spheres(const sx_render *r, const sx_viewport *v) {
+  int i, k;
+  if (v->nmeshes > G.cap_spheres) {
+    G.cap_spheres = v->nmeshes * 2;
+    G.spheres = (float *)realloc(G.spheres, sizeof(float) * 4 * (size_t)G.cap_spheres);
+  }
+  for (i = 0; i < v->nmeshes; i++) {
+    const sx_draw_mesh *d = &v->meshes[i];
+    float *o = &G.spheres[i * 4], c[3], h[3], sc = 0;
+    const sx_mesh *m;
+    o[3] = -1.0f; /* not a caster */
+    if (d->mesh <= 0 || d->mesh >= SX_MAX_MESHES || !r->meshes[d->mesh].used) continue;
+    if (d->flags & (SX_DRAW_SKY | SX_DRAW_GHOST | SX_DRAW_UNLIT | SX_DRAW_NOSHADOW)) continue;
+    m = &r->meshes[d->mesh].mesh;
+    for (k = 0; k < 3; k++) {
+      c[k] = (m->bmin[k] + m->bmax[k]) * 0.5f;
+      h[k] = (m->bmax[k] - m->bmin[k]) * 0.5f;
+    }
+    for (k = 0; k < 3; k++) {
+      float l2 = d->model[k * 4] * d->model[k * 4] + d->model[k * 4 + 1] * d->model[k * 4 + 1] +
+                 d->model[k * 4 + 2] * d->model[k * 4 + 2];
+      if (l2 > sc) sc = l2;
+    }
+    for (k = 0; k < 3; k++) o[k] = d->model[k] * c[0] + d->model[4 + k] * c[1] + d->model[8 + k] * c[2] + d->model[12 + k];
+    o[3] = (float)sx_sqrt((double)((h[0] * h[0] + h[1] * h[1] + h[2] * h[2]) * sc));
+  }
+}
+
+/* ortho: a sun cascade of half-size ortho (m) - casters outside its box (or beyond its far end) are skipped */
+static void draw_casters(const sx_viewport *v, const float vp[16], const float *ball, const float *face, int owner,
+                         float ortho) {
+  int i;
+  for (i = 0; i < v->nmeshes; i++) {
+    const sx_draw_mesh *d = &v->meshes[i];
+    const float *s = &G.spheres[i * 4];
+    float mvp[16];
+    if (s[3] < 0.0f || (owner && d->owner == owner) || !G.mesh_vao[d->mesh]) continue;
+    if (ortho > 0.0f) {
+      float x = vp[0] * s[0] + vp[4] * s[1] + vp[8] * s[2] + vp[12];
+      float y = vp[1] * s[0] + vp[5] * s[1] + vp[9] * s[2] + vp[13];
+      float z = vp[2] * s[0] + vp[6] * s[1] + vp[10] * s[2] + vp[14];
+      float m = 1.0f + s[3] / ortho;
+      if (x > m || x < -m || y > m || y < -m || z > 1.0f + s[3] / 1500.0f) continue;
+    }
+    if (ball) {
+      float dx = s[0] - ball[0], dy = s[1] - ball[1], dz = s[2] - ball[2], rr = s[3] + ball[3];
+      if (dx * dx + dy * dy + dz * dz > rr * rr) continue;
+      if (face) { /* outside one of the face frustum's five planes (unit normals, through the light) */
+        int k;
+        for (k = 0; k < 5; k++)
+          if (dx * face[k * 3] + dy * face[k * 3 + 1] + dz * face[k * 3 + 2] < -s[3]) break;
+        if (k < 5) continue;
+      }
+    }
+    sx_mat4_mul(mvp, vp, d->model);
+    glUniformMatrix4fv(G.depth.mvp, 1, GL_FALSE, mvp);
+    glBindVertexArray(G.mesh_vao[d->mesh]);
+    glDrawElements(GL_TRIANGLES, G.mesh_count[d->mesh], GL_UNSIGNED_INT, (void *)0);
+  }
+}
+
+static void shadow_tile(const float rect[4], int size) {
+  int x = (int)(rect[0] * (float)size + 0.5f), y = (int)(rect[1] * (float)size + 0.5f);
+  int w = (int)(rect[2] * (float)size + 0.5f), h = (int)(rect[3] * (float)size + 0.5f);
+  glViewport(x, y, w, h);
+  glScissor(x, y, w, h);
+  glClear(GL_DEPTH_BUFFER_BIT);
+}
+
+/* renders every shadow map the view's selection asked for into the atlas */
+static void draw_shadows(const sx_render *r, const sx_viewport *v) {
+  const sx_lighting *lt = &v->lighting;
+  int k, f, size = lt->atlas, cache = r->nviews == 1, refresh;
+  if (!lt->on || size <= 0 || (!lt->cascades && !lt->spots && !lt->omni)) return;
+  if (G.shadow_size != size || !cache) {
+    for (k = 0; k < SX_SHADOW_OMNI; k++) G.omni_key[k][3] = -1.0f;
+  }
+  ensure_shadow(size);
+  refresh = lt->omni > 0 ? (int)(G.omni_turn++ % (unsigned)lt->omni) : -1;
+  view_spheres(r, v);
+  glBindFramebuffer(GL_FRAMEBUFFER, G.shadow_fbo);
+  glUseProgram(G.depth.id);
+  glEnable(GL_SCISSOR_TEST);
+  glEnable(GL_DEPTH_TEST);
+  glDepthFunc(GL_LEQUAL);
+  glDepthMask(GL_TRUE);
+  glDisable(GL_BLEND);
+  glDisable(GL_CULL_FACE);
+  glEnable(GL_POLYGON_OFFSET_FILL);
+  glPolygonOffset(1.5f, 3.0f);
+  for (k = 0; k < lt->nactive; k++) {
+    const sx_light *l = &lt->lights[lt->active[k]];
+    if (l->slot < 0) continue;
+    if (l->kind == SX_LIGHT_SUN) {
+      int c;
+      for (c = 0; c < lt->cascades; c++) {
+        shadow_tile(lt->shadow_rect[c], size);
+        draw_casters(v, lt->shadow_mat[c], NULL, NULL, l->owner, lt->casc_radius[c]);
+      }
+    } else if (l->kind == SX_LIGHT_SPOT) {
+      float ball[4];
+      int j, twin = 0;
+      for (j = 0; j < k; j++)
+        if (lt->lights[lt->active[j]].slot == l->slot) twin = 1;
+      if (twin) continue; /* a headlight pair: the first drew the map */
+      ball[0] = l->pos[0];
+      ball[1] = l->pos[1];
+      ball[2] = l->pos[2];
+      ball[3] = l->range;
+      shadow_tile(lt->shadow_rect[l->slot], size);
+      draw_casters(v, lt->shadow_mat[l->slot], ball, NULL, l->owner, 0.0f);
+    } else {
+      float ball[4], proj[16], view[16], vp[16], rect[4];
+      int j = l->slot - SX_SHADOW_CASCADES - SX_SHADOW_SPOTS;
+      int same = cache && G.omni_key[j][0] == l->pos[0] && G.omni_key[j][1] == l->pos[1] &&
+                 G.omni_key[j][2] == l->pos[2] && G.omni_key[j][3] == l->range;
+      /* a single view keeps a point light's map while the light holds its block; one block a frame is
+         redrawn anyway (round robin) so moving casters catch up */
+      if (same && j != refresh) continue;
+      G.omni_key[j][0] = l->pos[0];
+      G.omni_key[j][1] = l->pos[1];
+      G.omni_key[j][2] = l->pos[2];
+      G.omni_key[j][3] = l->range;
+      G.omni_drawn++;
+      ball[0] = l->pos[0];
+      ball[1] = l->pos[1];
+      ball[2] = l->pos[2];
+      ball[3] = l->range;
+      sx_mat4_perspective(proj, (float)(SX_PI * 0.5), 1.0f, 0.1f, l->range);
+      for (f = 0; f < 6; f++) {
+        float F[3], R[3], U[3], planes[15];
+        int j;
+        sx_cube_face_basis(f, F, R, U);
+        for (j = 0; j < 3; j++) {
+          planes[j] = F[j];
+          planes[3 + j] = (F[j] - R[j]) * 0.70710678f;
+          planes[6 + j] = (F[j] + R[j]) * 0.70710678f;
+          planes[9 + j] = (F[j] - U[j]) * 0.70710678f;
+          planes[12 + j] = (F[j] + U[j]) * 0.70710678f;
+        }
+        sx_cube_face_view(l->pos, f, view);
+        sx_mat4_mul(vp, proj, view);
+        sx_shadow_face_rect(lt->shadow_rect[l->slot], f, rect);
+        shadow_tile(rect, size);
+        draw_casters(v, vp, ball, planes, l->owner, 0.0f);
+      }
+    }
+  }
+  glDisable(GL_POLYGON_OFFSET_FILL);
+  glBindVertexArray(0);
+}
+
+/* the view's light list and shadow data into the mesh program */
+static void set_lights(const sx_viewport *v) {
+  const sx_lighting *lt = &v->lighting;
+  float lpos[16][4], lcol[16][4], ldir[16][4], lpar[16][4], rect[SX_SHADOW_RECTS][4], bias[SX_SHADOW_RECTS];
+  float mats[4][16];
+  int k, n = lt->on ? lt->nactive : 0, size = lt->atlas > 0 ? lt->atlas : 1;
+  glUniform1i(G.mesh.mode, lt->on ? 1 : 0);
+  glUniform1i(G.mesh.nl, 0);
+  G.nview_lights = n;
+  G.last_lmask = -1;
+  if (!lt->on) return;
+  memset(lpos, 0, sizeof lpos);
+  memset(ldir, 0, sizeof ldir);
+  memset(lpar, 0, sizeof lpar);
+  memset(lcol, 0, sizeof lcol);
+  for (k = 0; k < n; k++) {
+    const sx_light *l = &lt->lights[lt->active[k]];
+    int j;
+    for (j = 0; j < 3; j++) {
+      lpos[k][j] = l->kind == SX_LIGHT_SUN ? l->dir[j] : l->pos[j];
+      lcol[k][j] = l->color[j] * l->intensity;
+      ldir[k][j] = l->dir[j];
+    }
+    lpos[k][3] = (float)l->kind;
+    lcol[k][3] = l->range;
+    ldir[k][3] = l->cos_outer;
+    lpar[k][0] = l->cos_inner;
+    lpar[k][1] = (float)l->slot;
+    G.lsph[k][0] = l->pos[0];
+    G.lsph[k][1] = l->pos[1];
+    G.lsph[k][2] = l->pos[2];
+    G.lsph[k][3] = l->kind == SX_LIGHT_SUN ? -1.0f : l->range;
+  }
+  glUniform4fv(G.mesh.lpos, 16, &lpos[0][0]);
+  glUniform4fv(G.mesh.lcol, 16, &lcol[0][0]);
+  glUniform4fv(G.mesh.ldir, 16, &ldir[0][0]);
+  glUniform4fv(G.mesh.lpar, 16, &lpar[0][0]);
+  glUniform3f(G.mesh.amb, lt->ambient[0], lt->ambient[1], lt->ambient[2]);
+  glUniform1f(G.mesh.expo, lt->exposure);
+  memcpy(rect, lt->shadow_rect, sizeof rect);
+  memcpy(mats, lt->shadow_mat, sizeof mats);
+  for (k = 0; k < SX_SHADOW_RECTS; k++) {
+    /* normal offset: about 1.5 texels of the map (sun: metres; spots and faces: per metre of distance) */
+    if (k < SX_SHADOW_CASCADES) bias[k] = 3.0f * lt->casc_radius[k] / (float)(size / 2 > 0 ? size / 2 : 1);
+    else if (k < SX_SHADOW_CASCADES + SX_SHADOW_SPOTS) bias[k] = 3.0f / (float)(size / 4 > 0 ? size / 4 : 1);
+    else bias[k] = 3.0f / (float)(size / 8 > 0 ? size / 8 : 1);
+  }
+  glUniformMatrix4fv(G.mesh.shmat, 4, GL_FALSE, &mats[0][0]);
+  glUniform4fv(G.mesh.shrect, SX_SHADOW_RECTS, &rect[0][0]);
+  glUniform1fv(G.mesh.shbias, SX_SHADOW_RECTS, bias);
+  glUniform1i(G.mesh.ncasc, lt->cascades);
+  glUniform1f(G.mesh.shtexel, 1.0f / (float)size);
+  glActiveTexture(GL_TEXTURE2);
+  glBindTexture(GL_TEXTURE_2D, G.shadow_tex);
+  glActiveTexture(GL_TEXTURE0);
+}
+
 /* --------------------------------------------------------------- drawing */
 static void bind_tex(const sx_render *r, int tex) {
   glActiveTexture(GL_TEXTURE0);
@@ -481,6 +842,39 @@ static void set_common(const sx_viewport *v, const sx_render *r, int xr) {
   else glUniform2f(G.mesh.snap, 0, 0);
 }
 
+
+/* add-realistic-lighting: only the lights whose range reaches a mesh's bounding sphere shade it */
+static void mesh_lights(const sx_render *r, const sx_draw_mesh *d) {
+  GLint idx[SX_MAX_ACTIVE_LIGHTS];
+  float c[3], h[3], sc = 0, rad;
+  const sx_mesh *m = &r->meshes[d->mesh].mesh;
+  int k, n = 0, mask = 0;
+  for (k = 0; k < 3; k++) {
+    float l2 = d->model[k * 4] * d->model[k * 4] + d->model[k * 4 + 1] * d->model[k * 4 + 1] +
+               d->model[k * 4 + 2] * d->model[k * 4 + 2];
+    h[k] = (m->bmax[k] - m->bmin[k]) * 0.5f;
+    if (l2 > sc) sc = l2;
+  }
+  for (k = 0; k < 3; k++)
+    c[k] = d->model[k] * (m->bmin[0] + m->bmax[0]) * 0.5f + d->model[4 + k] * (m->bmin[1] + m->bmax[1]) * 0.5f +
+           d->model[8 + k] * (m->bmin[2] + m->bmax[2]) * 0.5f + d->model[12 + k];
+  rad = (float)sx_sqrt((double)((h[0] * h[0] + h[1] * h[1] + h[2] * h[2]) * sc));
+  for (k = 0; k < G.nview_lights; k++) {
+    const float *l = G.lsph[k];
+    if (l[3] >= 0.0f) {
+      float dx = c[0] - l[0], dy = c[1] - l[1], dz = c[2] - l[2], rr = rad + l[3];
+      if (dx * dx + dy * dy + dz * dz > rr * rr) continue;
+    }
+    idx[n++] = k;
+    mask |= 1 << k;
+  }
+  if (mask != G.last_lmask) {
+    glUniform1iv(G.mesh.lidx, n > 0 ? n : 1, idx);
+    G.last_lmask = mask;
+  }
+  glUniform1i(G.mesh.nl, n);
+}
+
 static void draw_mesh(const sx_render *r, const sx_viewport *v, const frame_mats *fm, const sx_draw_mesh *d) {
   float mv[16], mvp[16], model[16];
   if (d->mesh <= 0 || d->mesh >= SX_MAX_MESHES || !G.mesh_vao[d->mesh]) return;
@@ -502,6 +896,7 @@ static void draw_mesh(const sx_render *r, const sx_viewport *v, const frame_mats
   glUniform1i(G.mesh.tex, d->tex > 0 ? 1 : 0);
   glUniform1i(G.mesh.palrow, pal_row(r, d->palette));
   glUniform1i(G.mesh.lit, (d->flags & SX_DRAW_UNLIT) ? 0 : 1);
+  if (G.nview_lights > 0 && !(d->flags & (SX_DRAW_UNLIT | SX_DRAW_SKY))) mesh_lights(r, d);
   glUniform1f(G.mesh.fog, (d->flags & SX_DRAW_NOFOG) ? 0.0f : v->fog_density);
   if (d->flags & SX_DRAW_GHOST) glUniform4f(G.mesh.tint, d->tint[0] * 0.6f, d->tint[1] * 0.85f, d->tint[2], d->tint[3] * 0.35f);
   else glUniform4f(G.mesh.tint, d->tint[0], d->tint[1], d->tint[2], d->tint[3]);
@@ -605,10 +1000,14 @@ static void draw_ui(const sx_render *r, const sx_viewport *v) {
   }
 }
 
-static void draw_view(const sx_render *r, const sx_viewport *v, int fb_h, int xr) {
+static void draw_view(const sx_render *r, const sx_viewport *v, int fb_h, int xr, GLuint target) {
   frame_mats fm;
   int i, pass;
   int gy = xr ? v->y : fb_h - v->y - v->h; /* views are laid out top-down */
+  if (v->lighting.on && v->lighting.atlas > 0 && (v->lighting.cascades || v->lighting.spots || v->lighting.omni)) {
+    draw_shadows(r, v);
+    glBindFramebuffer(GL_FRAMEBUFFER, target);
+  }
   glViewport(v->x, gy, v->w, v->h);
   glScissor(v->x, gy, v->w, v->h);
   glEnable(GL_SCISSOR_TEST);
@@ -625,6 +1024,7 @@ static void draw_view(const sx_render *r, const sx_viewport *v, int fb_h, int xr
   glActiveTexture(GL_TEXTURE1);
   glBindTexture(GL_TEXTURE_2D, G.pal_tex);
   set_common(v, r, xr);
+  set_lights(v);
   glEnable(GL_DEPTH_TEST);
   glDepthFunc(GL_LEQUAL);
   glDisable(GL_CULL_FACE);
@@ -659,7 +1059,7 @@ void sx_gl_draw(sx_render *r, int win_w, int win_h) {
   sync(r);
   ensure_fbo(w, h);
   glBindFramebuffer(GL_FRAMEBUFFER, G.fbo);
-  for (i = 0; i < r->nviews; i++) draw_view(r, &r->views[i], h, 0);
+  for (i = 0; i < r->nviews; i++) draw_view(r, &r->views[i], h, 0, G.fbo);
   /* nearest-neighbour upscale into the window, letterboxed */
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
   glViewport(0, 0, win_w, win_h);
@@ -692,7 +1092,7 @@ void sx_gl_draw_xr(sx_render *r, unsigned int fb) {
   if (!G.ok) return;
   sync(r);
   glBindFramebuffer(GL_FRAMEBUFFER, fb);
-  for (i = 0; i < r->nviews; i++) draw_view(r, &r->views[i], 0, 1);
+  for (i = 0; i < r->nviews; i++) draw_view(r, &r->views[i], 0, 1, (GLuint)fb);
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 

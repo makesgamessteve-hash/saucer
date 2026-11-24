@@ -21,6 +21,7 @@ local M = {}
 -- add-presentation-packaging: sounds live in view/audio.lua (kept here for mods)
 local sound = require("view.audio")
 local xrv = require("view.xr")
+local lightsv = require("view.lights")
 M.SOUNDS = sound.SOUNDS
 
 -- milestone 3: sentry state lights (Dormant green, Alert yellow, Locked red,
@@ -60,6 +61,7 @@ function M.floor_cone(v, A, def, dyn, wpos, pitch, t, tint)
   return n
 end
 
+M.SENTRY_LIGHT_DIST = 140 -- add-realistic-lighting: a Watcher nearer than this lights the floor for real
 M.SENTRY_DIST = 700 -- add-cities-2 slice 5: a sentry farther than this from the eye is not drawn (a city holds hundreds)
 function M.draw_sentries(v, A, state, p)
   local sentry = require("sim.sentry")
@@ -86,6 +88,11 @@ function M.draw_sentries(v, A, state, p)
           -- add-strategic-sentries: the light it throws on the floor (where it is looking now)
           if p.site == site and def.floor and dyn.st ~= "off" and dyn.st ~= "disabled" then
             M.floor_cone(v, A, def, dyn, wpos, pitch, t, tint)
+            -- add-realistic-lighting: and the eye is a real spotlight (the near ones)
+            if vec.dist(wpos, eye) < M.SENTRY_LIGHT_DIST then
+              lightsv.sentry_spot(v, vec.add(wpos, vec.scale(f, 2.0)), f, tint,
+                                  def.light and t.watcher.light.range or t.watcher.range, t.watcher.half_angle)
+            end
           end
           if show and def.cell and dyn.st ~= "off" then
             v:billboard(A.tex.glow or A.tex.beam, def.cell, 1.6, { palette = A.pal.base, tint = { 0.3, 1, 0.9, 0.9 } })
@@ -846,7 +853,10 @@ local function draw_saucer(v, A, o, own_eyes, state, xr, cam)
   local d = M.pose(o.ship, xr)
   local c = configs.get(d.size)
   local m = A.saucer[d.size]
-  v:mesh(m.hull, { pos = d.pos, yaw = d.yaw, roll = d.roll, scale = d.scale, tex = A.tex.hull, palette = A.pal.base })
+  -- add-realistic-lighting: the hull is tagged with its owner, so the saucer's own lights shine through it
+  v:mesh(m.hull, { pos = d.pos, yaw = d.yaw, roll = d.roll, scale = d.scale, tex = A.tex.hull, palette = A.pal.base,
+                   owner = lightsv.owner_of(o) })
+  lightsv.saucer(v, o, d, at, cam and cam.pos or d.pos)
   M.thruster_glow(v, A, o, d, c)
   local far = not own_eyes and cam and vec.dist(cam.pos, d.pos) > M.SAUCER_LOD
   if c.interior and far then
@@ -1171,8 +1181,13 @@ function M.render(v, state, alpha)
   local cenv = M.city_env(state, p)
   v:fog(cenv or { color = { 0.02, 0.02, 0.06 }, density = M.FOG, clear = { 0.0, 0.0, 0.025 }, light = { 0.35, 0.8, 0.45 },
           ambient = 0.55 })
+  -- add-realistic-lighting: the star outside, the lamps of every place near the eye (view/lights.lua)
+  local lit = lightsv.begin(v, state, p, cam, cenv)
   if not (cenv and cenv.day > 0.55) then v:mesh(A.stars, { pos = cam.pos, sky = true }) end
   if not (cenv and cenv.day > 0.55) then M.sky(v, A, cam.pos) end
+  if not lit.inside then lightsv.sky(v, A, cam.pos, lit.star) end
+  lightsv.site_lamps(v, A, state, cam.pos)
+  lightsv.bays(v, state, cam.pos, state.tick)
   -- derelicts, in chunks: culled against the view, far sites as one silhouette
   M.draw_ruins(v, A, state, cam, v.xr)
   -- add-huge-stations: every trader's station, a kilometre-scale megastructure (view/stationhull.lua)

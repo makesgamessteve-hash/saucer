@@ -48,10 +48,17 @@ return {
     land   = { "key:L", "pad:b" },
     home   = { "key:Backspace", "pad:back" },
     assist = { "key:Insert", "pad:rightstick" },
+    -- add-realistic-lighting: the saucer's lights (sim/lights.lua). The pad's one light button
+    -- taps for the headlights (cabin lamps while walking) and holds for the floods.
+    headlights   = { "key:4" },
+    floods       = { "key:5" },
+    cabin_lights = { "key:6" },
+    lights       = { "pad:misc1", "pad:touchpad", "pad:rpaddle1", "pad:lpaddle1" },
   },
   -- stable order so action slots (and therefore replays) never depend on table order
   axis_order = { "move_x", "move_z", "lift", "turn", "look" },
   button_order = { "shrink", "grow", "size1", "size2", "tractor", "scan", "boost", "use",
                    "camera", "menu", "jam", "mystery_mode", "size3", "snap_left", "snap_right",
-                   "map", "decoy", "shroud", "spike", "grapple", "snap_a", "snap_b", "land", "home", "assist" },
+                   "map", "decoy", "shroud", "spike", "grapple", "snap_a", "snap_b", "land", "home", "assist",
+                   "headlights", "floods", "cabin_lights", "lights" },
 }

@@ -38,7 +38,7 @@ endif()
 
 # ---- Engine core (pure C, no SDL: everything that is unit tested) ----
 set(CORE_SOURCES
-  engine/src/core/sx_engine.c engine/src/core/sx_fs.c engine/src/core/sx_input.c
+  engine/src/core/sx_engine.c engine/src/core/sx_fs.c engine/src/core/sx_input.c engine/src/core/sx_light.c
   engine/src/core/sx_log.c engine/src/core/sx_math.c engine/src/core/sx_mesh.c
   engine/src/core/sx_net.c engine/src/core/sx_net_udp.c
   engine/src/core/sx_mod.c engine/src/core/sx_phys.c engine/src/core/sx_procgen.c
@@ -132,6 +132,8 @@ if(SAUCER_BUILD_TESTS)
   add_test(NAME game_fold COMMAND ${HL} --seed 42 --script tests/game/fold.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_tractor COMMAND ${HL} --seed 42 --script tests/game/tractor.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_city COMMAND ${HL} --seed 42 --script tests/game/city.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  # add-realistic-lighting: light switches, sun outside, lamps inside, shadow presets
+  add_test(NAME game_lighting COMMAND ${HL} --seed 42 --script tests/game/lighting.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   # the home test saves and loads: give each run its own user dir so parallel ctest runs cannot race
   add_test(NAME game_home COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-home --quiet
            --seed 42 --script tests/game/home.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})

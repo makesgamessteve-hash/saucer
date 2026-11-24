@@ -838,6 +838,10 @@ function M.render(v, state, p)
   v:camera(M.cam)
   v:fog({ color = { 0.05, 0.05, 0.09 }, density = 0.005, clear = { 0.0, 0.0, 0.03 }, light = { 0.3, 0.9, 0.35 },
           ambient = 0.85 })
+  -- add-realistic-lighting: indoors no sun reaches, only the station's own warm and white lamps
+  local lightsv = require("view.lights")
+  if v.lighting then v:lighting({ ambient = lightsv.AMBIENT_INSIDE, exposure = lightsv.EXPOSURE }) end
+  lightsv.station_lamps(v, L, eye)
   v:mesh(A.stars, { pos = eye, sky = true })
   -- space beyond the hangar mouths: the nebulae and a distant sun
   for _, h in pairs(sg.hangars(L)) do

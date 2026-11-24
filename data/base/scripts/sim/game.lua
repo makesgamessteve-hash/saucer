@@ -53,6 +53,7 @@ local claims = require("sim.claims")
 local landing = require("sim.landing")
 local hulldoor = require("sim.hulldoor")
 local stealth = require("sim.stealth")
+local lightsm = require("sim.lights")
 local M = {}
 
 M.SITE_PAD = 30
@@ -236,6 +237,7 @@ function M.new_player(index, pos, yaw)
     index = index, record_index = index - 1,
     ship = shipm.new(pos, yaw, 1),
     mode = "walk", body = avatar.new(L, L.spawn.pos, L.spawn.yaw), doors = home.new_doors(L),
+    lights = { head = lightsm.DEFAULT.head, flood = lightsm.DEFAULT.flood, cabin = lightsm.DEFAULT.cabin },
     hold = {}, credits = 0, banked_value = 0, looted = {}, lab = lab.new(), next_uid = 0, last_trader = 1,
     scan_ready = 0, jam_ready = 0, scan_until = 0, jam_flash = 0,
     site = 0, tractor = false, ghost = 0, cam = "first", help = false, panel = false,
@@ -263,7 +265,7 @@ function M.new_player(index, pos, yaw)
   return p
 end
 
-M.VERSION = 17 -- state version; saves made by a newer game are refused
+M.VERSION = 18 -- state version; saves made by a newer game are refused
 
 function M.init(state, ctx)
   M.state_ref = state
@@ -1233,6 +1235,8 @@ step_player_inner = function(state, p, cmd, dt)
   end
   if cmd:pressed("camera") then p.cam = p.cam == "first" and "chase" or "first" end
   if cmd:pressed("menu") then p.help = not p.help end
+  -- add-realistic-lighting: the saucer's headlights, floods and cabin lamps (sim/lights.lua)
+  lightsm.step(state, p, cmd, ctx_fns)
   if cmd:pressed("mystery_mode") then
     state.mystery.mode = mystery.next_mode(state.mystery.mode)
     msg(state, p, "Mystery: " .. state.mystery.mode)

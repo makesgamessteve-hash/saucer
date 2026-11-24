@@ -30,6 +30,11 @@ void sx_render_init(sx_render *r) {
   r->settings.vertex_snap = 1;
   r->settings.dither = 1;
   r->settings.affine = 0; /* the PS1 texture warp is opt-in */
+#ifdef __EMSCRIPTEN__
+  r->settings.shadows = SX_SHADOWS_LOW; /* web and mobile GPUs: the low preset */
+#else
+  r->settings.shadows = SX_SHADOWS_HIGH;
+#endif
   /* palette 0: built-in neutral fallback (black, white, magenta, grey ramp) */
   copy_str(r->palette_names[0], sizeof r->palette_names[0], "fallback");
   for (i = 0; i < SX_PALETTE_W; i++) {
@@ -250,6 +255,25 @@ void sx_render_begin_frame(sx_render *r, int nviews) {
     v->light_dir[1] = 0.8f;
     v->light_dir[2] = 0.45f;
     v->ambient = 0.35f;
+    sx_lighting_reset(&v->lighting);
+  }
+}
+
+void sx_render_select_lights(sx_render *r) {
+  int i;
+  sx_shadow_budget b = sx_shadow_budget_for(r->settings.shadows, r->nviews);
+  for (i = 0; i < r->nviews; i++) {
+    sx_viewport *v = &r->views[i];
+    float f[3];
+    if (!v->lighting.on) continue;
+    if (v->cam.has_matrices) { /* XR: the eye's forward is the view matrix's -z row */
+      f[0] = -v->cam.view[2];
+      f[1] = -v->cam.view[6];
+      f[2] = -v->cam.view[10];
+    } else {
+      sx_camera_forward(&v->cam, f);
+    }
+    sx_lighting_select(&v->lighting, &b, v->cam.pos, f);
   }
 }
 

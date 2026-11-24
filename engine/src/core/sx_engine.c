@@ -32,6 +32,7 @@ void sx_options_default(sx_options *o) {
   o->height = 720;
   o->screenshot_tick = 120;
   o->net_port = 47800;
+  o->shadows = -1;
   o->net_players = 2;
   o->net_delay = 3;
 }
@@ -65,6 +66,7 @@ const char *sx_usage(void) {
          "  --coop                allow extra devices to join as P2-P4 (gamepad A, F2)\n"
          "  --split-keyboard      P2 plays on the right half of the keyboard\n"
          "  --split horizontal|vertical  two-player split (default vertical)\n"
+         "  --shadows off|low|high  shadow quality (default high; low on the web)\n"
          "  --host [PORT]         host a network game (UDP, default port 47800)\n"
          "  --join HOST[:PORT]    join a network game\n"
          "  --net-players N       network players the host waits for (2-4, default 2)\n"
@@ -112,6 +114,14 @@ int sx_options_parse(sx_options *o, int argc, char **argv, char *err, int errlen
     else if (strcmp(a, "--split-keyboard") == 0) o->split_keyboard = 1;
     else if (strcmp(a, "--fill") == 0) o->fill = 1;
     else if (strcmp(a, "--split") == 0) { NEEDV(); o->split_horizontal = strcmp(v, "horizontal") == 0; }
+    else if (strcmp(a, "--shadows") == 0) {
+      NEEDV();
+      o->shadows = sx_shadow_quality_from_name(v);
+      if (o->shadows < 0) {
+        snprintf(err, (size_t)errlen, "--shadows: off, low or high");
+        return 0;
+      }
+    }
     else if (strcmp(a, "--host") == 0) {
       o->net_role = SX_NET_HOST;
       if (v && v[0] >= '0' && v[0] <= '9') { o->net_port = atoi(v); i++; }
@@ -627,6 +637,7 @@ sx_engine *sx_engine_create(const sx_options *o) {
   sx_engine_load_comfort(e);
   if (o->split_keyboard) sx_input_split_keyboard(&e->input, 2);
   e->render.settings.split_horizontal = o->split_horizontal;
+  if (o->shadows >= 0) e->render.settings.shadows = o->shadows;
   e->render.settings.fill = o->fill;
   if (o->script[0] && start_test_script(e)) resume_test(e);
   return e;
@@ -864,6 +875,7 @@ void sx_engine_render(sx_engine *e, double alpha) {
   }
   lua_pop(L, 1);
   e->in_render = 0;
+  sx_render_select_lights(&e->render);
   if (e->opt.test_mode && sx_engine_state_hash(e) != before) fail(e, "on_render mutated the sim state");
 }
 
