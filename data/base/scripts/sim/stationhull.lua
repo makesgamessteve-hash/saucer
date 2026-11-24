@@ -132,7 +132,7 @@ local function rod(c, layer, a, b, w, color, emi)
   local len = sm.sqrt(hz * hz + dy * dy)
   if len < 1e-3 then return nil end
   return add(c, layer, { kind = "box", min = { -w, -w, 0 }, max = { w, w, len }, color = color, emissive = emi,
-                         yaw = sm.atan2(dx, dz), pitch = sm.atan2(dy, hz), pos = { a[1], a[2] + AY, a[3] } })
+                         yaw = sm.atan2(dx, dz), pitch = -sm.atan2(dy, hz), pos = { a[1], a[2] + AY, a[3] } })
 end
 
 local function sphere(c, layer, x, y, z, r, color, emi, seg)

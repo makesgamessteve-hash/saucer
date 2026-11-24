@@ -856,6 +856,29 @@ local function hit_solid(s, x, z, r)
   return dx * dx + dz * dz < r * r
 end
 
+-- the layout's solids bucketed by SOLID_CELL squares (built on first use, kept on the cached layout; a
+-- solid sits in every square its footprint touches)
+local SOLID_CELL = 4
+local function solid_grid(L)
+  if L.solid_grid and L.solid_grid.n == #L.solids then return L.solid_grid.cells end
+  local cells = {}
+  for _, s in ipairs(L.solids) do
+    local x0, z0, x1, z1
+    if s.kind == "circle" then x0, z0, x1, z1 = s.c[1] - s.r, s.c[2] - s.r, s.c[1] + s.r, s.c[2] + s.r
+    else x0, z0, x1, z1 = s.box[1], s.box[2], s.box[3], s.box[4] end
+    for gx = math.floor(x0 / SOLID_CELL), math.floor(x1 / SOLID_CELL) do
+      for gz = math.floor(z0 / SOLID_CELL), math.floor(z1 / SOLID_CELL) do
+        local k = gx * 65536 + gz
+        local c = cells[k]
+        if not c then c = {} cells[k] = c end
+        c[#c + 1] = s
+      end
+    end
+  end
+  L.solid_grid = { n = #L.solids, cells = cells }
+  return cells
+end
+
 -- can a body of radius r stand at (x, z)?
 function M.free(L, x, z, r)
   r = r or M.BODY_R
@@ -869,8 +892,18 @@ function M.free(L, x, z, r)
     end
   end
   if not ok then return false end
-  for _, s in ipairs(L.solids) do
-    if hit_solid(s, x, z, r) then return false end
+  -- (the solids are looked up in a coarse grid: the bigger stations have a lot of furniture)
+  local g = solid_grid(L)
+  local G = SOLID_CELL
+  for gx = math.floor((x - r) / G), math.floor((x + r) / G) do
+    for gz = math.floor((z - r) / G), math.floor((z + r) / G) do
+      local cell = g[gx * 65536 + gz]
+      if cell then
+        for _, s in ipairs(cell) do
+          if hit_solid(s, x, z, r) then return false end
+        end
+      end
+    end
   end
   return true
 end
@@ -889,13 +922,17 @@ end
 
 -- the nav node nearest to p that p can walk to in a straight line
 function M.nearest(L, p, r)
-  local best, bd
+  -- nearest first (ties to the lower id), so the first clear one is the answer
+  local order = {}
   for i, q in ipairs(L.nav.nodes) do
     local dx, dz = q[1] - p[1], q[2] - p[2]
-    local dd = dx * dx + dz * dz
-    if (not bd or dd < bd) and M.clear(L, p, q, r) then best, bd = i, dd end
+    order[i] = { dx * dx + dz * dz, i }
   end
-  return best
+  table.sort(order, function(u, w) if u[1] ~= w[1] then return u[1] < w[1] end return u[2] < w[2] end)
+  for _, o in ipairs(order) do
+    if M.clear(L, p, L.nav.nodes[o[2]], r) then return o[2] end
+  end
+  return nil
 end
 
 -- fewest-links node path between nav nodes -> list of node ids

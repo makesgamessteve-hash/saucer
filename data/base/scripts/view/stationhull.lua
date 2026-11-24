@@ -97,6 +97,7 @@ local function blink_on(l, tick)
   if l.kind == "steady" then return true end
   local t = (tick + l.phase) % l.period
   if l.kind == "strobe" then return t < 3 or (t > 9 and t < 12) end
+  if l.kind == "pulse" then return t < l.period * 0.6 end
   return t < l.period * 0.22
 end
 

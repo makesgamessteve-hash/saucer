@@ -194,24 +194,52 @@ function M.bay_lamps(v, b, tick)
   return n + 2
 end
 
--- a station's walkable inside (view/station.lua): ceiling lamps every ~11 m in every area
+-- a station's walkable inside (view/station.lua): ceiling lamps every ~11 m in every area. add-alien-stations:
+-- the alien wing's lamps come in its family's colours (data/base/station/hull.lua), hung lower in the chambers,
+-- and tall shafts get a ring of lamps every ~12 m up their walls
 M.STATION_KIND = { bar = { { 1.0, 0.6, 0.35 }, { 1.0, 0.45, 0.7 } }, hangar = { { 0.92, 0.96, 1.0 } } }
+M.SHAFT_STEP = 12
+function M.station_family_lamps(L)
+  local ok, fam = pcall(require("sim.stationhull").family, L.family)
+  return ok and fam.lamps or M.PALETTES.alien
+end
 function M.station_lamps(v, L, eye)
   local n = 0
+  local fam = M.station_family_lamps(L)
   for ai, a in ipairs(L.areas) do
     local b = a.box
     local sx, sz = b[3] - b[1], b[4] - b[2]
     local nx, nz = math.max(1, math.floor(sx / 11 + 0.5)), math.max(1, math.floor(sz / 11 + 0.5))
     local h = a.h or 6
-    local pal = M.STATION_KIND[a.kind] or M.PALETTES.trader
+    local pal = (a.wing and fam) or M.STATION_KIND[a.kind] or M.PALETTES.trader
+    local tall = h > 20
+    local y = tall and 6 or (a.wing and math.min(h - 0.5, 7.5) or h - 0.5)
+    local lh = tall and 7 or h
     for ix = 0, nx - 1 do
       for iz = 0, nz - 1 do
         local x, z = b[1] + sx * (ix + 0.5) / nx, b[2] + sz * (iz + 0.5) / nz
         local dx, dz = x - eye[1], z - eye[3]
         if dx * dx + dz * dz < 70 * 70 then
-          local reach = math.max(h * 2.4, 14)
-          add(v, { kind = "point", pos = { x, h - 0.5, z }, color = pal[(ai + ix + iz) % #pal + 1],
+          local reach = math.max(lh * 2.4, 14)
+          add(v, { kind = "point", pos = { x, y, z }, color = pal[(ai + ix + iz) % #pal + 1],
                    intensity = 1.2 * (reach * 0.45) ^ 2, range = reach, shadow = true })
+          n = n + 1
+        end
+      end
+    end
+    -- up a shaft: lamps on the walls' middles every SHAFT_STEP meters
+    if tall then
+      local cx, cz = (b[1] + b[3]) / 2, (b[2] + b[4]) / 2
+      local dx, dz = cx - eye[1], cz - eye[3]
+      if dx * dx + dz * dz < 70 * 70 then
+        local k = 0
+        for yy = 6 + M.SHAFT_STEP, h - 2, M.SHAFT_STEP do
+          k = k + 1
+          local side = k % 4
+          local px = side == 0 and b[1] + 1 or (side == 1 and b[3] - 1 or cx)
+          local pz = side == 2 and b[2] + 1 or (side == 3 and b[4] - 1 or cz)
+          add(v, { kind = "point", pos = { px, yy, pz }, color = pal[(k + ai) % #pal + 1], intensity = 1.2 * (16 * 0.45) ^ 2 * 1.4,
+                   range = 16 * 1.2, shadow = false })
           n = n + 1
         end
       end
