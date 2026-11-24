@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# add-material-system: compare two PNG screenshots (8-bit RGB or RGBA, non-interlaced; stdlib only).
+# Usage: golden_compare.py GOLDEN SHOT [MEAN_TOL] [BAD_TOL]
+#   passes when the mean absolute channel difference is <= MEAN_TOL (default 2.0 of 255) and the share of pixels
+#   that differ by more than 24 in any channel is <= BAD_TOL (default 0.02); prints the numbers either way.
+import struct, sys, zlib
+
+def load(path):
+    with open(path, "rb") as f:
+        data = f.read()
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise SystemExit(path + ": not a PNG")
+    pos, idat, w = 8, b"", 0
+    while pos < len(data):
+        n, kind = struct.unpack(">I4s", data[pos:pos + 8])
+        body = data[pos + 8:pos + 8 + n]
+        if kind == b"IHDR":
+            w, h, depth, ctype, _, _, inter = struct.unpack(">IIBBBBB", body)
+            if depth != 8 or ctype not in (2, 6) or inter:
+                raise SystemExit(path + ": only 8-bit RGB/RGBA, non-interlaced")
+            bpp = 3 if ctype == 2 else 4
+        elif kind == b"IDAT":
+            idat += body
+        pos += 12 + n
+    raw = zlib.decompress(idat)
+    stride = w * bpp
+    out, prev = bytearray(), bytearray(stride)
+    for y in range(h):
+        f = raw[y * (stride + 1)]
+        line = bytearray(raw[y * (stride + 1) + 1:(y + 1) * (stride + 1)])
+        for x in range(stride):
+            a = line[x - bpp] if x >= bpp else 0
+            b = prev[x]
+            c = prev[x - bpp] if x >= bpp else 0
+            if f == 1: line[x] = (line[x] + a) & 255
+            elif f == 2: line[x] = (line[x] + b) & 255
+            elif f == 3: line[x] = (line[x] + (a + b) // 2) & 255
+            elif f == 4:
+                p = a + b - c
+                pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+                line[x] = (line[x] + (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 255
+        out += line
+        prev = line
+    return w, h, bpp, out
+
+def main():
+    if len(sys.argv) < 3:
+        raise SystemExit(__doc__ or "usage: golden_compare.py GOLDEN SHOT [MEAN_TOL] [BAD_TOL]")
+    mean_tol = float(sys.argv[3]) if len(sys.argv) > 3 else 2.0
+    bad_tol = float(sys.argv[4]) if len(sys.argv) > 4 else 0.02
+    w1, h1, b1, p1 = load(sys.argv[1])
+    w2, h2, b2, p2 = load(sys.argv[2])
+    if (w1, h1) != (w2, h2):
+        print("size differs: %dx%d vs %dx%d" % (w1, h1, w2, h2))
+        return 1
+    total, bad = 0, 0
+    for i in range(w1 * h1):
+        worst = 0
+        for k in range(3):
+            d = abs(p1[i * b1 + k] - p2[i * b2 + k])
+            total += d
+            worst = max(worst, d)
+        if worst > 24:
+            bad += 1
+    mean = total / (w1 * h1 * 3)
+    share = bad / (w1 * h1)
+    ok = mean <= mean_tol and share <= bad_tol
+    print("%s: mean %.3f (tol %.2f), differing pixels %.4f (tol %.3f) -> %s" % (sys.argv[2], mean, mean_tol, share, bad_tol,
+          "ok" if ok else "FAIL"))
+    return 0 if ok else 1
+
+if __name__ == "__main__":
+    sys.exit(main())

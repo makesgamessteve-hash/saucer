@@ -1,0 +1,18 @@
+## 1. Engine
+- [x] 1.1 13-float vertex with the material slot; part style `mat`; mesh hash unchanged without materials
+- [x] 1.2 `sx_material.c`: slots, kinds, modes, packing (off/lite/full), matcap baker, wobble bound
+- [x] 1.3 `view:materials`, `saucer.render.matcap`, the `materials` setting, `--materials`
+- [x] 1.4 GLSL: metal (matcap through the ramp, Blinn, fresnel), crystal (refraction, glow, rim), organic (wrap,
+      subsurface, wobble, breathing, vein pulse); slot 0 is the old path
+
+## 2. Data
+- [x] 2.1 `civs/materials.lua` library; `view/materials.lua` civ slots, materials-off colours, matcap
+
+## 3. Verification
+- [x] 3.1 C: `material_slot_round_trip`, `material_pack_modes`, `matcap_bake`, `material_wobble_bound`,
+      `mesh_hash_material`, `materials_relic_options`
+- [x] 3.2 Lua: `tests/lua/materials_spec.lua`
+- [x] 3.3 Render-only: `tests/game/relic.lua` (full, lite, off end in one state); `replay_*_materials_off`
+- [x] 3.4 Golden shots: `tools/shots/materials.sh` (relic scene full/off; legacy scene off is pixel-identical to
+      main 2d5d372)
+- [x] 3.5 Budget: `tools/shots/relic_perf.sh` (full/off p95 ratio)

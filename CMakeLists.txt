@@ -262,6 +262,13 @@ if(SAUCER_BUILD_TESTS)
     # add-material-system: the material shading is render-only; every replay plays to the same hashes with it off
     add_test(NAME replay_${name}_materials_off COMMAND ${HL} --play ${r} --materials off WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   endforeach()
+  # add-material-system: the golden shots need the windowed game, Xvfb and python3 (off by default, run locally)
+  option(SAUCER_GOLDEN_SHOTS "add the material golden-shot test (needs the game build, xvfb-run, python3)" OFF)
+  if(SAUCER_GOLDEN_SHOTS)
+    set(SAUCER_GAME_BINARY "${CMAKE_BINARY_DIR}/saucer" CACHE FILEPATH "the windowed game binary for golden shots")
+    add_test(NAME golden_materials COMMAND ${CMAKE_SOURCE_DIR}/tools/shots/materials.sh ${SAUCER_GAME_BINARY}
+             ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR}/golden WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  endif()
   # no test may hang CI: a game test that never reaches its end fails after this many seconds
   # (generous: ASan, coverage and --restore-every-tick builds are many times slower)
   set(SAUCER_TEST_TIMEOUT 1800 CACHE STRING "per-test CTest timeout in seconds")

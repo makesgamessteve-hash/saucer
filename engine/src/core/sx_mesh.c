@@ -370,7 +370,22 @@ void sx_mesh_patch(sx_mesh *m, const float c[3], const float u[3], const float v
     }
 }
 
+/* add-material-system: the hash covers the 12 pre-material floats of every vertex as one stream (so meshes
+ * without materials keep the hashes committed before the 13th float), plus the material slots when any is set */
 uint64_t sx_mesh_hash(const sx_mesh *m) {
-  uint64_t h = sx_hash64(m->v, sizeof(float) * SX_VTX_FLOATS * (size_t)m->nv);
+  uint64_t h;
+  int i, k, mats = 0;
+  float *buf = (float *)calloc((size_t)(m->nv ? m->nv : 1) * 12, sizeof(float));
+  for (i = 0; i < m->nv; i++) {
+    const float *v = m->v + SX_VTX_FLOATS * i;
+    for (k = 0; k < 12; k++) buf[12 * i + k] = v[k];
+    if (v[12] != 0.0f) mats = 1;
+  }
+  h = sx_hash64(buf, sizeof(float) * 12 * (size_t)m->nv);
+  if (mats) {
+    for (i = 0; i < m->nv; i++) buf[i] = m->v[SX_VTX_FLOATS * i + 12];
+    h = sx_hash64_combine(h, sx_hash64(buf, sizeof(float) * (size_t)m->nv));
+  }
+  free(buf);
   return sx_hash64_combine(h, sx_hash64(m->idx, sizeof(uint32_t) * (size_t)m->ni));
 }

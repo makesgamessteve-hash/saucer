@@ -39,13 +39,17 @@ end
 
 local function box(list, mn, mx, color, mat, emissive)
   list[#list + 1] = { kind = "box", min = mn, max = mx, color = color, mat = mat, emissive = emissive }
+  return list[#list]
 end
 
 -- a cushion: corner c, edges u and v (normal = u x v), bulge h along it
 local function patch(list, c, u, v, h, color, mat, seg)
   list[#list + 1] = { kind = "patch", c = c, u = u, v = v, h = h, seg = seg or M.SEG, rings = seg or M.SEG,
                       color = color, mat = mat }
+  return list[#list]
 end
+-- a skin part (cushion, rib, band, door frame): the spec checks none of them reaches into a flyable space
+local function skin(part) part.skin = true return part end
 
 -- orientation (roll, pitch) that turns a part's +y onto a world axis direction
 local ORIENT = {
@@ -112,9 +116,9 @@ local function big_room(parts, ext, ruin, r, kit, origin, walls, cc, skin_mat, s
           -- inside: normal into the room, dished outward
           local u, v = { 0, 0, z1 - z0 }, { 0, y1 - y0, 0 }
           if side < 0 then u, v = v, u end
-          patch(parts, { x_in, y0, z0 }, u, v, -M.DISH, skin_col, skin_mat)
+          skin(patch(parts, { x_in, y0, z0 }, u, v, -M.DISH, skin_col, skin_mat))
           -- outside: normal out, swollen
-          patch(ext, { x_out, y0, z0 }, v, u, M.HIDE, cc.membrane, S.dominant)
+          skin(patch(ext, { x_out, y0, z0 }, v, u, M.HIDE, cc.membrane, S.dominant))
           if (k + j) % 2 == 0 then
             local zc, yc = (z0 + z1) / 2, (y0 + y1) / 2
             pierce(ext, { x_out + side * M.HIDE * 0.5, yc, zc }, f, { x_in + side * M.DISH, yc, zc }, cc)
@@ -124,14 +128,15 @@ local function big_room(parts, ext, ruin, r, kit, origin, walls, cc, skin_mat, s
         for j = 1, rows - 1 do
           local y = imn[2] + h * j / rows
           local a, b = math.min(x_in, x_in + side * M.RIB_OUT), math.max(x_in, x_in + side * M.RIB_OUT)
-          box(ext, { a, y - 0.4, z0 }, { b, y + 0.4, z1 }, cc.chrome, S.accent)
+          skin(box(ext, { a, y - 0.4, z0 }, { b, y + 0.4, z1 }, cc.chrome, S.accent))
         end
       end
     end
-    -- ribs on this side, floor to ceiling
+    -- ribs on this side, floor to ceiling (on a face with a door they stay inside the wall: a passage may be behind)
+    local ro = r.faces[f] and t or M.RIB_OUT
     for _, z in ipairs(zs) do
-      local a, b = math.min(x_in, x_in + side * M.RIB_OUT), math.max(x_in, x_in + side * M.RIB_OUT)
-      box(ext, { a, imn[2], z - 0.6 }, { b, imx[2] + M.RIB_OUT, z + 0.6 }, cc.chrome, S.accent)
+      local a, b = math.min(x_in, x_in + side * ro), math.max(x_in, x_in + side * ro)
+      skin(box(ext, { a, imn[2], z - 0.6 }, { b, imx[2] + M.RIB_OUT, z + 0.6 }, cc.chrome, S.accent))
     end
   end
   -- the ceiling
@@ -139,8 +144,8 @@ local function big_room(parts, ext, ruin, r, kit, origin, walls, cc, skin_mat, s
     local z0, z1 = zs[k], zs[k + 1]
     for j = 1, cols do
       local x0, x1 = imn[1] + w * (j - 1) / cols, imn[1] + w * j / cols
-      patch(parts, { x0, imx[2], z0 }, { x1 - x0, 0, 0 }, { 0, 0, z1 - z0 }, -M.DISH, skin_col, skin_mat)
-      patch(ext, { x0, mx[2], z0 }, { 0, 0, z1 - z0 }, { x1 - x0, 0, 0 }, M.HIDE, cc.membrane, S.dominant)
+      skin(patch(parts, { x0, imx[2], z0 }, { x1 - x0, 0, 0 }, { 0, 0, z1 - z0 }, -M.DISH, skin_col, skin_mat))
+      skin(patch(ext, { x0, mx[2], z0 }, { 0, 0, z1 - z0 }, { x1 - x0, 0, 0 }, M.HIDE, cc.membrane, S.dominant))
       if (k + j) % 3 == 0 then
         local xc, zc = (x0 + x1) / 2, (z0 + z1) / 2
         pierce(ext, { xc, mx[2] + M.HIDE * 0.5, zc }, "+y", { xc, imx[2] + M.DISH, zc }, cc)
@@ -148,11 +153,12 @@ local function big_room(parts, ext, ruin, r, kit, origin, walls, cc, skin_mat, s
     end
     for j = 1, cols - 1 do
       local x = imn[1] + w * j / cols
-      box(ext, { x - 0.4, imx[2], z0 }, { x + 0.4, imx[2] + M.RIB_OUT, z1 }, cc.chrome, S.accent)
+      skin(box(ext, { x - 0.4, imx[2], z0 }, { x + 0.4, imx[2] + M.RIB_OUT, z1 }, cc.chrome, S.accent))
     end
   end
   for _, z in ipairs(zs) do
-    box(ext, { imn[1] - M.RIB_OUT, imx[2], z - 0.6 }, { imx[1] + M.RIB_OUT, imx[2] + M.RIB_OUT, z + 0.6 }, cc.chrome, S.accent)
+    skin(box(ext, { imn[1] - M.RIB_OUT, imx[2], z - 0.6 }, { imx[1] + M.RIB_OUT, imx[2] + M.RIB_OUT, z + 0.6 }, cc.chrome,
+      S.accent))
   end
   -- the walls the boxes keep: floors (chitin), faces with doors (membrane, flat), the hole-less ends
   for _, b in ipairs(walls) do
@@ -172,13 +178,14 @@ local function big_room(parts, ext, ruin, r, kit, origin, walls, cc, skin_mat, s
       local z = d.a == 0 and mn[3] or (d.at and origin[3] + d.at * kit.cell) or mn[3]
       if math.abs(z - mn[3]) < 0.01 or math.abs(z - mx[3]) < 0.01 then
         local fr = 1.6
-        local z0, z1 = z - 0.9, z + 0.9
-        box(ext, { cx - dw / 2 - fr, y0 - 0.01, z0 }, { cx - dw / 2, y0 + dh + fr, z1 }, cc.chrome, S.accent)
-        box(ext, { cx + dw / 2, y0 - 0.01, z0 }, { cx + dw / 2 + fr, y0 + dh + fr, z1 }, cc.chrome, S.accent)
-        box(ext, { cx - dw / 2, y0 + dh, z0 }, { cx + dw / 2, y0 + dh + fr, z1 }, cc.chrome, S.accent)
-        box(ext, { cx - dw / 2 - fr - 0.5, y0, z0 + 0.3 }, { cx - dw / 2 - fr, y0 + dh + fr + 0.5, z1 - 0.3 }, cc.wound, S.ring)
-        box(ext, { cx + dw / 2 + fr, y0, z0 + 0.3 }, { cx + dw / 2 + fr + 0.5, y0 + dh + fr + 0.5, z1 - 0.3 }, cc.wound, S.ring)
-        box(ext, { cx - dw / 2 - fr, y0 + dh + fr, z0 + 0.3 }, { cx + dw / 2 + fr, y0 + dh + fr + 0.5, z1 - 0.3 }, cc.wound, S.ring)
+        -- inside the wall slab only (a door's two walls together are 2 x wall thick), proud of the membrane
+        local z0, z1 = z - t, z + t
+        skin(box(ext, { cx - dw / 2 - fr, y0 - 0.01, z0 }, { cx - dw / 2, y0 + dh + fr, z1 }, cc.chrome, S.accent))
+        skin(box(ext, { cx + dw / 2, y0 - 0.01, z0 }, { cx + dw / 2 + fr, y0 + dh + fr, z1 }, cc.chrome, S.accent))
+        skin(box(ext, { cx - dw / 2, y0 + dh, z0 }, { cx + dw / 2, y0 + dh + fr, z1 }, cc.chrome, S.accent))
+        skin(box(ext, { cx - dw / 2 - fr - 0.5, y0, z0 }, { cx - dw / 2 - fr, y0 + dh + fr + 0.5, z1 }, cc.wound, S.ring))
+        skin(box(ext, { cx + dw / 2 + fr, y0, z0 }, { cx + dw / 2 + fr + 0.5, y0 + dh + fr + 0.5, z1 }, cc.wound, S.ring))
+        skin(box(ext, { cx - dw / 2 - fr, y0 + dh + fr, z0 }, { cx + dw / 2 + fr, y0 + dh + fr + 0.5, z1 }, cc.wound, S.ring))
       end
     end
   end
@@ -317,10 +324,8 @@ local function maw(ext, ruin, r, kit, origin, cc)
   end
 end
 
--- the meshes of one relic: per room { mesh, center, radius } plus the outside hide (one mesh) -> set
-function M.meshes(ruin, origin)
-  local hit = cache[ruin.hash]
-  if hit then return hit end
+-- the parts of one relic (before they become meshes): { rooms = { { room =, parts = }, ... }, ext = parts, cushions }
+function M.parts(ruin, origin)
   local kit = ruinm.kit_of(ruin.kit)
   local cc = colors()
   local by_room = {}
@@ -331,21 +336,35 @@ function M.meshes(ruin, origin)
   end
   local idol
   for _, s in ipairs(ruin.slots) do if s.idol then idol = s end end
-  local set = { rooms = {}, ext = nil, cushions = 0, triangles = 0 }
-  local ext = {}
+  local out = { rooms = {}, ext = {}, cushions = 0 }
+  local ext = out.ext
   local plague, lung = ruin.relic.plague, ruin.relic.lung
   for _, r in ipairs(ruin.rooms) do
     local parts = {}
     if r.class >= 4 then
       local mat, c = S.dominant, cc.membrane
       if r.id == lung then mat = S.lung elseif r.id == plague then mat, c = S.decay, cc.necrotic end
-      set.cushions = set.cushions + big_room(parts, ext, ruin, r, kit, origin, by_room[r.id] or {}, cc, mat, c)
+      out.cushions = out.cushions + big_room(parts, ext, ruin, r, kit, origin, by_room[r.id] or {}, cc, mat, c)
       if r.kind == "core" then core_room(parts, r, kit, origin, idol, cc) end
       if r.kind == "maw" then maw(ext, ruin, r, kit, origin, cc) end
     else
       small_room(parts, ruin, r, kit, origin, by_room[r.id] or {}, cc)
     end
     for _, b in ipairs(ruin.relic.bays) do if b.room == r.id then cradle(parts, b, cc) end end
+    out.rooms[#out.rooms + 1] = { room = r, parts = parts }
+  end
+  return out
+end
+
+-- the meshes of one relic: per room { mesh, center, radius } plus the outside hide (one mesh) -> set
+function M.meshes(ruin, origin)
+  local hit = cache[ruin.hash]
+  if hit then return hit end
+  local kit = ruinm.kit_of(ruin.kit)
+  local all = M.parts(ruin, origin)
+  local set = { rooms = {}, ext = nil, cushions = all.cushions, triangles = 0 }
+  for _, e in ipairs(all.rooms) do
+    local r, parts = e.room, e.parts
     local mn, mx = ruinm.room_box(r, kit, origin)
     local id = saucer.mesh.build({ parts = parts })
     local info = saucer.mesh.info(id)
@@ -353,7 +372,7 @@ function M.meshes(ruin, origin)
     set.rooms[#set.rooms + 1] = { id = r.id, mesh = id, center = vec.scale(vec.add(mn, mx), 0.5),
                                   radius = vec.dist(mn, mx) / 2 + 8, kind = r.kind }
   end
-  set.ext = saucer.mesh.build({ parts = ext })
+  set.ext = saucer.mesh.build({ parts = all.ext })
   local info = saucer.mesh.info(set.ext)
   set.triangles = set.triangles + (info and info.triangles or 0)
   local lo, hi = ruinm.bounds(ruin, origin, 0)

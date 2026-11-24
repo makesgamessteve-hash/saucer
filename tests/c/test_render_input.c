@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "sx_fs.h"
+#include "sx_rng.h"
 #include "sx_input.h"
 #include "sx_render.h"
 #include "sx_touch.h"
@@ -452,4 +453,73 @@ TEST(material_wobble_bound) {
     float w = sx_material_wobble(&m, p, t);
     CHECK(w <= 0.5f + 1e-5f && w >= -0.5f - 1e-5f);
   }
+}
+
+/* add-relic-stations: the pillow patch the relic skins are made of */
+TEST(mesh_patch) {
+  sx_mesh m;
+  sx_part_style s;
+  float c[3] = {0, 0, 0}, u[3] = {4, 0, 0}, v[3] = {0, 0, -4}, z[3] = {0, 0, 0};
+  int i, mid;
+  sx_mesh_init(&m);
+  sx_style_default(&s);
+  s.material = 2.0f;
+  /* u x v = (0, 16, 0): the normal is +y; h = 1 swells the middle up by 1 */
+  sx_mesh_patch(&m, c, u, v, 1.0f, 4, 2, &s);
+  CHECK(m.nv == 5 * 3 && m.ni == 4 * 2 * 6);
+  mid = 1 * 5 + 2; /* row 1 of 0..2, column 2 of 0..4: the centre */
+  CHECK(m.v[SX_VTX_FLOATS * mid + 1] > 0.999f && m.v[SX_VTX_FLOATS * mid + 4] > 0.999f);
+  for (i = 0; i < m.nv; i++) {
+    const float *p = m.v + SX_VTX_FLOATS * i;
+    CHECK(p[1] >= -1e-6f && p[1] <= 1.0001f); /* never below the base plane */
+    CHECK(p[12] == 2.0f);
+  }
+  /* the corners stay on the base plane; an edge vertex leans outward */
+  CHECK(m.v[1] == 0.0f && m.v[4] == 1.0f && m.v[SX_VTX_FLOATS * 5 + 3] < 0.0f);
+  sx_mesh_free(&m);
+  /* clamps, a dent, and nothing for a degenerate patch */
+  sx_mesh_init(&m);
+  sx_mesh_patch(&m, c, u, v, -0.5f, 0, 200, &s);
+  CHECK(m.nv == 2 * 65);
+  sx_mesh_free(&m);
+  sx_mesh_init(&m);
+  sx_mesh_patch(&m, c, u, v, -0.5f, 100, 2, &s);
+  CHECK(m.nv == 65 * 3 && m.v[SX_VTX_FLOATS * (65 + 32) + 1] < -0.49f);
+  sx_mesh_free(&m);
+  sx_mesh_init(&m);
+  sx_mesh_patch(&m, c, u, z, 1.0f, 4, 4, &s);
+  CHECK(m.nv == 0);
+  sx_mesh_free(&m);
+}
+
+/* add-material-system: a mesh without materials hashes as it did before the 13th vertex float */
+TEST(mesh_hash_material) {
+  sx_mesh a, b;
+  sx_part_style s;
+  float mn[3] = {0, 0, 0}, mx[3] = {1, 2, 3};
+  uint64_t h0, h1;
+  sx_mesh_init(&a);
+  sx_mesh_init(&b);
+  sx_style_default(&s);
+  sx_mesh_box(&a, mn, mx, &s);
+  s.material = 3.0f;
+  sx_mesh_box(&b, mn, mx, &s);
+  h0 = sx_mesh_hash(&a);
+  h1 = sx_mesh_hash(&b);
+  CHECK(h0 != h1);
+  {
+    /* the old hash: the 12 floats per vertex as one stream, then the indices */
+    float buf[12 * 64];
+    int i, k;
+    CHECK(a.nv <= 64);
+    for (i = 0; i < a.nv; i++)
+      for (k = 0; k < 12; k++) buf[12 * i + k] = a.v[SX_VTX_FLOATS * i + k];
+    CHECK(h0 == sx_hash64_combine(sx_hash64(buf, sizeof(float) * 12 * (size_t)a.nv),
+                                  sx_hash64(a.idx, sizeof(uint32_t) * (size_t)a.ni)));
+  }
+  sx_mesh_free(&a);
+  sx_mesh_free(&b);
+  sx_mesh_init(&a);
+  CHECK(sx_mesh_hash(&a) == sx_mesh_hash(&a));
+  sx_mesh_free(&a);
 }

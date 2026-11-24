@@ -193,8 +193,19 @@ end
 function M.validate(r, kit)
   local ok, reach = ruinm.validate(r.rooms, r.doors, r.slots)
   if not ok then return false, reach end
+  -- the Villa never has to fold on the route: every Villa-class room is reached through Villa-class doors only
+  -- (ruin.validate's reach lets a saucer shrink through a small door and regrow beyond it)
+  local seen, grew = { [0] = true }, true
+  while grew do
+    grew = false
+    for _, d in ipairs(r.doors) do
+      if d.class >= 4 and seen[d.a] ~= seen[d.b] then
+        seen[d.a], seen[d.b], grew = true, true, true
+      end
+    end
+  end
   for _, room in ipairs(r.rooms) do
-    if room.class >= 4 and reach[room.id + 1] < 4 then return false, "villa room " .. room.id .. " not villa-reachable" end
+    if room.class >= 4 and not seen[room.id] then return false, "villa room " .. room.id .. " not villa-reachable" end
   end
   for _, s in ipairs(r.relic.spaces) do
     local m = M.MIN[s.class]
@@ -267,7 +278,8 @@ function M.try(seed, kit, civ, origin)
   local _, reach = ruinm.validate(rooms, doors, sl)
   local r = { seed = seed, kit = kit.id, rooms = rooms, doors = doors, slots = sl, walls = walls, debris = {}, solids = {},
               origin = origin, reach = reach, relic = relic,
-              hash = ruinm.layout_hash(rooms, doors, {}) }
+              -- the layout is fixed; the seed moves bays and finds, so it is part of the hash (view caches key on it)
+              hash = saucer.seed_child(ruinm.layout_hash(rooms, doors, {}), "relic", seed % 1000003) }
   local ok, why = M.validate(r, kit)
   if not ok then return nil, why end
   return r
