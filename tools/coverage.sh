@@ -54,7 +54,7 @@ start specs --test-lua tests/lua
 # longest first so the slow ones overlap the rest. tests/game/widerdark.lua
 # (four views, ~47k ticks) runs in ctest only: under luacov it takes over
 # half an hour; tests/lua/widerdark_spec.lua and coop_replay cover its code.
-for s in sentries strategic mystery station excursion hatch dock land_anywhere eva holodeck story slice derelict3d home trade vertical coop interior fold tractor city lighting xr xr_hands boot coop_replay; do
+for s in sentries strategic mystery station excursion alien hatch dock land_anywhere eva holodeck story slice derelict3d home trade vertical coop interior fold tractor city lighting xr xr_hands boot coop_replay; do
   extra=""
   [ "$s" = coop ] && extra="--local-players 2 --viewports 2"
   [ "$s" = coop_replay ] && extra="--coop --viewports 4"
@@ -62,6 +62,7 @@ for s in sentries strategic mystery station excursion hatch dock land_anywhere e
   [ "$s" = sentries ] && extra="--ticks 72000"
   [ "$s" = strategic ] && extra="--ticks 72000"
   [ "$s" = station ] && extra="--ticks 40000"
+  [ "$s" = alien ] && extra="--ticks 40000"
   [ "$s" = excursion ] && extra="--ticks 40000"
   throttle
   # shellcheck disable=SC2086
