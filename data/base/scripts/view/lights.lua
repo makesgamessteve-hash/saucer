@@ -86,8 +86,8 @@ end
 local floor = math.floor
 local function bucket_key(x, y, z) return floor(x / M.CELL) .. "," .. floor(y / M.CELL) .. "," .. floor(z / M.CELL) end
 
--- a derelict's (or a city's) lamps: per room one to three near the ceiling along its long side,
--- the reach the room's diagonal, the colour from the place's palette. Cached per ruin, bucketed.
+-- a derelict's (or a city's) lamps: per room one to three (a city: four) low pools along its long side,
+-- the reach a share of the room's length, the colour from the place's palette. Cached per ruin, bucketed.
 local lamps_of = setmetatable({}, { __mode = "k" })
 function M.room_lamps(ruin, origin, site)
   local c = lamps_of[ruin]

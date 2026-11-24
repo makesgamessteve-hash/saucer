@@ -92,6 +92,9 @@ T.assert(nc >= 1, "coloured lamps")
 T.press(1, "headlights")
 T.wait(4)
 T.assert(count("spot", own) == 2, "headlights inside too")
+-- add-lighting-mood: the headlight beams show in the air of the dark hall
+T.assert(L().haze >= 1 and L().haze <= 4 and L().haze_steps == 8, "high: beams and halos glow")
+T.assert(#L().glow == L().haze, "the glowing lights are listed")
 
 -- the hangar bay: lit inside, no sun
 local b = dock.bay(T.state(), 1)
@@ -103,9 +106,11 @@ T.assert(count("sun") == 0 and count("point") >= 4, "the hangar is lit by its la
 T.assert(saucer.render.settings({ shadows = "low" }).shadows == "low", "low shadows")
 T.wait(4)
 T.assert(L().omni <= 1 and L().atlas == 512, "low: one omni map, a small atlas")
+T.assert(L().haze >= 1 and L().haze <= 2 and L().haze_steps == 4, "low: cheap beams, two at most")
 saucer.render.settings({ shadows = "off" })
 T.wait(4)
 T.assert(L().atlas == 0 and L().cascades == 0, "off: no shadow maps")
+T.assert(L().haze == 0 and L().haze_steps == 0, "off: no beams or halos")
 saucer.render.settings({ shadows = "high" })
 T.wait(4)
 T.assert(L().atlas == 1024, "high again")

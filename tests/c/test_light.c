@@ -280,3 +280,71 @@ TEST(light_cube_faces_and_matrices) {
     CHECK(o[3] > 0.0f);
   }
 }
+
+/* add-lighting-mood: the haze budget per preset and view count, and which lights glow in the air */
+TEST(light_haze_budget_and_selection) {
+  static sx_lighting lt;
+  sx_shadow_budget b;
+  float cam[3] = {0, 0, 0}, fwd[3] = {0, 0, 1};
+  sx_light sun, lamp = point_at(5, 0, 0, 50.0f, 20.0f), plain = point_at(2, 0, 0, 500.0f, 20.0f);
+  sx_light far = point_at(900, 0, 0, 50.0f, 20.0f), beam;
+  int i;
+  b = sx_shadow_budget_for(SX_SHADOWS_HIGH, 1);
+  CHECK_EQ_INT(b.haze, SX_MAX_HAZE);
+  CHECK_EQ_INT(b.haze_steps, 8);
+  b = sx_shadow_budget_for(SX_SHADOWS_HIGH, 4); /* a four-way split: two glows, four samples */
+  CHECK_EQ_INT(b.haze, 2);
+  CHECK_EQ_INT(b.haze_steps, 4);
+  b = sx_shadow_budget_for(SX_SHADOWS_LOW, 1);
+  CHECK_EQ_INT(b.haze, 2);
+  CHECK_EQ_INT(b.haze_steps, 4);
+  b = sx_shadow_budget_for(SX_SHADOWS_LOW, 3);
+  CHECK_EQ_INT(b.haze, 2);
+  b = sx_shadow_budget_for(SX_SHADOWS_OFF, 1);
+  CHECK_EQ_INT(b.haze, 0);
+  CHECK_EQ_INT(b.haze_steps, 0);
+
+  memset(&lt, 0, sizeof lt);
+  sx_lighting_reset(&lt);
+  CHECK_EQ_INT(lt.nhz, 0);
+  CHECK_NEAR(lt.haze_density, 1.0f, 1e-6f);
+  sx_light_defaults(&sun, SX_LIGHT_SUN);
+  CHECK_NEAR(sun.haze, 0.0f, 1e-9f); /* no glow unless asked */
+  sun.haze = 5.0f;                    /* the sun never glows (space is clear) */
+  sx_lighting_add(&lt, &sun);
+  lamp.haze = 0.01f;
+  sx_lighting_add(&lt, &lamp);  /* 1 */
+  sx_lighting_add(&lt, &plain); /* 2: bright but no haze */
+  far.haze = 1.0f;
+  sx_lighting_add(&lt, &far);   /* 3: out of reach, no score */
+  sx_light_defaults(&beam, SX_LIGHT_SPOT);
+  beam.pos[2] = 1.0f;
+  beam.intensity = 100.0f;
+  beam.range = 40.0f;
+  beam.haze = 1.0f;
+  sx_lighting_add(&lt, &beam);  /* 4 */
+  b = sx_shadow_budget_for(SX_SHADOWS_HIGH, 1);
+  sx_lighting_select(&lt, &b, cam, fwd);
+  CHECK_EQ_INT(lt.nhz, 2);
+  CHECK_EQ_INT(lt.hz[0], 4); /* the beam first (score x haze), then the lamp */
+  CHECK_EQ_INT(lt.hz[1], 1);
+  CHECK_EQ_INT(lt.haze_steps, 8);
+  /* a tight budget keeps the strongest glow; more hazy lights than slots fill every slot once */
+  b.haze = 1;
+  sx_lighting_select(&lt, &b, cam, fwd);
+  CHECK_EQ_INT(lt.nhz, 1);
+  CHECK_EQ_INT(lt.hz[0], 4);
+  for (i = 0; i < 6; i++) {
+    sx_light l = point_at((float)i, 1, 0, 30.0f + (float)i, 20.0f);
+    l.haze = 0.5f;
+    sx_lighting_add(&lt, &l);
+  }
+  b = sx_shadow_budget_for(SX_SHADOWS_HIGH, 1);
+  sx_lighting_select(&lt, &b, cam, fwd);
+  CHECK_EQ_INT(lt.nhz, SX_MAX_HAZE);
+  for (i = 1; i < lt.nhz; i++) CHECK(lt.hz[i] != lt.hz[0]);
+  b = sx_shadow_budget_for(SX_SHADOWS_OFF, 1); /* off: nothing glows */
+  sx_lighting_select(&lt, &b, cam, fwd);
+  CHECK_EQ_INT(lt.nhz, 0);
+  CHECK_EQ_INT(lt.haze_steps, 0);
+}
