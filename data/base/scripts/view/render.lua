@@ -1186,7 +1186,7 @@ function M.render(v, state, alpha)
   if not (cenv and cenv.day > 0.55) then v:mesh(A.stars, { pos = cam.pos, sky = true }) end
   if not (cenv and cenv.day > 0.55) then M.sky(v, A, cam.pos) end
   if not lit.inside then lightsv.sky(v, A, cam.pos, lit.star) end
-  lightsv.site_lamps(v, state, cam.pos)
+  lightsv.site_lamps(v, A, state, cam.pos)
   lightsv.bays(v, state, cam.pos, state.tick)
   -- derelicts, in chunks: culled against the view, far sites as one silhouette
   M.draw_ruins(v, A, state, cam, v.xr)

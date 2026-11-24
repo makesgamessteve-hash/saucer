@@ -21,6 +21,12 @@ local only = nil -- a name fragment: take only the shots whose name holds it (to
 local function shot(name)
   if only and not name:find(only, 1, true) then return end
   T.wait(3) T.screenshot(D .. name .. ".png") T.wait(1)
+  local L = saucer.render.lights and saucer.render.lights(1)
+  if L then
+    local k = {}
+    for _, a in ipairs(L.active or {}) do k[#k + 1] = string.format("%s%.0f", a.kind:sub(1, 2), a.intensity) end
+    print(string.format("  %s: %d lights (%d dropped) amb %.3f  %s", name, L.n, L.dropped, L.ambient and L.ambient[1] or -1, table.concat(k, " ")))
+  end
 end
 local free
 local orig = R.camera
@@ -73,15 +79,28 @@ local wd
 for _, d in ipairs(game.sentries(site)) do if d.kind == "watcher" and not wd then wd = d end end
 T.assert(wd, "site 2 has a Watcher")
 local f = sentry.dir_of(wd.yaw, 0)
+local hall = ruinm.room_at(game.ruin(site), T.state().sector.sites[site].pos, wd.pos)
+local hmn, hmx = ruinm.room_box(hall, ruinm.kit_of(game.ruin(site).kit), T.state().sector.sites[site].pos)
+local function inside(q)
+  local o = {}
+  for k = 1, 3 do o[k] = math.max(hmn[k] + 2.5, math.min(hmx[k] - 2.5, q[k])) end
+  return o
+end
+-- the hall's length along the Watcher's gaze: the saucer two thirds of the way down, the camera at the far end
+local ax = math.abs(f[1]) > math.abs(f[3]) and 1 or 3
+local len = (f[ax] > 0 and (hmx[ax] - wd.pos[ax]) or (wd.pos[ax] - hmn[ax]))
+print(string.format("lighting shots: hall %.0f x %.0f x %.0f, %.0f m down the gaze", hmx[1] - hmn[1], hmx[2] - hmn[2],
+                    hmx[3] - hmn[3], len))
 local function stage()
   s.vel = { 0, 0, 0 }
-  s.pos = vec.add(wd.pos, { f[1] * 26, -2.0, f[3] * 26 })
+  s.pos = inside(vec.add(wd.pos, { f[1] * len * 0.5, -8.0, f[3] * len * 0.5 }))
   s.yaw = sm.atan2(-f[1], -f[3])
   T.wait(2)
 end
 stage()
 lights(false, false, false)
-look_at(vec.add(s.pos, vec.add({ f[1] * 9, 7, f[3] * 9 }, { 0, 0, 0 })), vec.add(wd.pos, { 0, -3, 0 }), 72)
+-- behind the saucer, looking down the hall at the Watcher
+look_at(inside(vec.add(s.pos, { f[1] * 9, 15, f[3] * 9 })), vec.add(wd.pos, { 0, -6, 0 }), 72)
 shot("05_ruin_dark_no_saucer_lights")
 lights(true, false, false)
 stage()
@@ -89,7 +108,7 @@ shot("06_ruin_headlights")
 lights(true, true, false)
 stage()
 shot("07_ruin_headlights_and_floods")
-look_at(vec.add(s.pos, { f[1] * 14 + 6, 10, f[3] * 14 + 6 }), s.pos, 75)
+look_at(inside(vec.add(s.pos, { f[1] * 6 - f[3] * 16, 10, f[3] * 6 + f[1] * 16 })), s.pos, 75)
 shot("08_ruin_floods_around_the_saucer")
 lights(false, false, true)
 free = nil

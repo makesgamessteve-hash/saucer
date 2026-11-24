@@ -279,7 +279,7 @@ static const char *mesh_fs =
     "        if (x >= 1.0) continue;\n"
     "        L = dv * inversesqrt(max(d2, 1e-6));\n"
     "        float w = 1.0 - x * x;\n"
-    "        att = w * w / max(d2, 0.25);\n"
+    "        att = w * w / (d2 + 0.0625 * lc.w * lc.w);\n"
     "        if (lp.w > 1.5) att *= smoothstep(u_ldir[i].w, u_lpar[i].x, dot(-L, u_ldir[i].xyz));\n"
     "      }\n"
     "      float ndl = dot(n, L);\n"

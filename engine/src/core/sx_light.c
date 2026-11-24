@@ -119,7 +119,8 @@ float sx_light_reach(const sx_light *l, const float p[3]) {
   x = d2 / (l->range * l->range);
   if (x >= 1.0f) return 0.0f;
   w = 1.0f - x * x;
-  return l->intensity * w * w / (d2 > 0.25f ? d2 : 0.25f);
+  /* inverse square, softened near the lamp by a source a quarter of its range across */
+  return l->intensity * w * w / (d2 + SX_LIGHT_SOFT * l->range * l->range);
 }
 
 static float lum(const float c[3]) {
@@ -137,8 +138,7 @@ static float score_of(const sx_light *l, const float cam[3]) {
   if (dist - l->range > SX_LIGHT_REACH) return 0.0f;
   /* how bright the light is near the eye: inside its range by the inverse square, outside it the
      light still shows on what it lights, so it counts as if the eye stood at the edge, fading off */
-  if (dist < 1.0f) dist = 1.0f;
-  s = l->intensity * lum(l->color) * l->priority / (dist * dist);
+  s = l->intensity * lum(l->color) * l->priority / (dist * dist + SX_LIGHT_SOFT * l->range * l->range);
   if (dist > l->range) s *= 1.0f - (dist - l->range) / (SX_LIGHT_REACH + 1.0f);
   return s;
 }

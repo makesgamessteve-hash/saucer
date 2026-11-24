@@ -13,6 +13,7 @@
 #define SX_SHADOW_SPOTS 2       /* spot lights (headlights) */
 #define SX_SHADOW_OMNI 3        /* point lights: six faces each in the atlas */
 #define SX_SHADOW_RECTS (SX_SHADOW_CASCADES + SX_SHADOW_SPOTS + SX_SHADOW_OMNI)
+#define SX_LIGHT_SOFT 0.0625f   /* falloff I / (d^2 + (range / 4)^2): inverse-square with a soft source */
 #define SX_LIGHT_REACH 150.0f   /* a light this far beyond its range from the eye is dropped */
 
 enum { SX_LIGHT_SUN = 0, SX_LIGHT_POINT = 1, SX_LIGHT_SPOT = 2 };

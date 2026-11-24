@@ -20,7 +20,7 @@ M.AMBIENT_SPACE = { 0.035, 0.035, 0.05 } -- starlight and the nebulae: silhouett
 M.AMBIENT_INSIDE = { 0.018, 0.018, 0.024 }
 M.EXPOSURE = 1.0
 M.SUN = 2.8               -- the star's irradiance on a face turned to it
-M.ROOM_LUX = 0.9          -- a room lamp gives about this much at half its reach
+M.ROOM_LUX = 0.25         -- a room lamp gives about this much at half its reach (dim: space is dark)
 M.NEAR = 170              -- room lamps nearer the eye than this are offered to the engine
 M.CELL = 96               -- lamp bucket size (m)
 
@@ -100,11 +100,24 @@ function M.room_lamps(ruin, origin, site)
       local lamp = { pos = pos, color = pal[h % #pal + 1], range = reach, district = r.district,
                      intensity = M.ROOM_LUX * (reach * 0.5) ^ 2 }
       list[#list + 1] = lamp
-      local key = bucket_key(pos[1], pos[2], pos[3])
-      local b = buckets[key]
-      if not b then b = {} buckets[key] = b end
-      b[#b + 1] = lamp
     end
+    -- a big room also has a pair of small coloured fixtures low on its long walls (pools of light)
+    if math.min(sx, sz) >= 16 and sy >= 6 then
+      local side = long == 1 and 3 or 1
+      for k, sgn in ipairs({ -1, 1 }) do
+        local pos = { (mn[1] + mx[1]) / 2, mn[2] + math.min(3.0, sy * 0.3), (mn[3] + mx[3]) / 2 }
+        pos[side] = (sgn < 0 and mn[side] + 0.9) or (mx[side] - 0.9)
+        local h = hash(site, i, 10 + k)
+        list[#list + 1] = { pos = pos, color = pal[(h >> 3) % #pal + 1], range = 18, district = r.district,
+                            intensity = M.ROOM_LUX * 0.5 * 9 * 9, fixture = true }
+      end
+    end
+  end
+  for _, lamp in ipairs(list) do
+    local key = bucket_key(lamp.pos[1], lamp.pos[2], lamp.pos[3])
+    local b = buckets[key]
+    if not b then b = {} buckets[key] = b end
+    b[#b + 1] = lamp
   end
   c = { list = list, buckets = buckets }
   lamps_of[ruin] = c
@@ -168,7 +181,7 @@ function M.bay_lamps(v, b, tick)
       local x = b.lo[1] + (b.hi[1] - b.lo[1]) * (ix + 0.5) / 3
       local z = b.lo[3] + (b.hi[3] - b.lo[3]) * (iz + 0.5) / 2
       local c = M.PALETTES.trader[(ix + iz) % 3 + 1]
-      add(v, { kind = "point", pos = { x, b.hi[2] - 1.5, z }, color = c, intensity = 1.1 * h * h, range = h * 2.2,
+      add(v, { kind = "point", pos = { x, b.hi[2] - 1.5, z }, color = c, intensity = 0.6 * h * h, range = h * 2.2,
                shadow = true })
       n = n + 1
     end
@@ -209,7 +222,7 @@ end
 
 -- the light a Watcher's eye throws where it looks (its pool on the floor)
 function M.sentry_spot(v, pos, dir, tint, reach, half)
-  add(v, { kind = "spot", pos = pos, dir = dir, color = { tint[1], tint[2], tint[3] }, intensity = 0.5 * reach * reach,
+  add(v, { kind = "spot", pos = pos, dir = dir, color = { tint[1], tint[2], tint[3] }, intensity = 0.3 * reach * reach,
            range = reach * 1.15, inner = math.deg(half) * 0.6, outer = math.deg(half) * 1.05 })
 end
 
@@ -259,7 +272,7 @@ function M.saucer(v, o, d, at, eye)
         local reach = sm.sqrt(sx * sx + sz * sz) * 0.75 + 3
         local y = deck.floor + hgt - 0.35
         add(v, { kind = "point", pos = at(d, { (b[1] + b[3]) / 2, y, (b[2] + b[4]) / 2 }),
-                 color = M.CABIN_COLORS[r.name] or M.CABIN_WARM, intensity = 1.6 * (reach * 0.4) ^ 2, range = reach,
+                 color = M.CABIN_COLORS[r.name] or M.CABIN_WARM, intensity = 1.2 * (reach * 0.4) ^ 2, range = reach,
                  shadow = true })
         n = n + 1
       end
@@ -298,8 +311,10 @@ function M.sky(v, A, eye, star)
 end
 
 -- every site's lamps near the eye (a city's dark districts stay dark until their grid is back)
-function M.site_lamps(v, state, eye)
+M.GLOW_NEAR = 120 -- lamps nearer than this also show their glow (the light has a visible source)
+function M.site_lamps(v, A, state, eye)
   local cities = require("sim.cities")
+  local glow = A and A.tex.glow
   local n = 0
   for i, site in ipairs(state.sector.sites) do
     local r = game.ruin(i)
@@ -309,9 +324,14 @@ function M.site_lamps(v, state, eye)
         local k = 1
         if r.city and l.district then k = cities.light(state, i, r, l.district) end
         if k > 0 then
-          add(v, { kind = "point", pos = l.pos, color = l.color, intensity = l.intensity * (r.city and (0.15 + 0.85 * k) or 1),
-                   range = l.range, shadow = true })
+          local kk = r.city and (0.15 + 0.85 * k) or 1
+          add(v, { kind = "point", pos = l.pos, color = l.color, intensity = l.intensity * kk, range = l.range,
+                   shadow = not l.fixture })
           n = n + 1
+          if glow and vec.dist(l.pos, eye) < M.GLOW_NEAR then
+            v:billboard(glow, l.pos, l.fixture and 1.4 or 2.6, { palette = A.pal.base,
+                        tint = { l.color[1], l.color[2], l.color[3], 0.8 * kk } })
+          end
         end
       end
     end
