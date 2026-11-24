@@ -171,27 +171,39 @@ local function layout(rng, kit)
   end
   doors[#doors + 1] = door(maw, halls[1], 3, 1, 4)
   local trunks, shafts = {}, {}
+  -- corridors and shafts: each door runs from the side the warren grew from (the parent) to the new side, so a
+  -- room's parent chain is a way in through real doors (loops add a second way, after the tree's)
+  local parented = { [halls[1].id] = true }
   for _, e in ipairs(edges) do
-    local a, b = by_node[key(e[1][1], e[1][2], e[1][3])], by_node[key(e[2][1], e[2][2], e[2][3])]
+    local A, B = by_node[key(e[1][1], e[1][2], e[1][3])], by_node[key(e[2][1], e[2][2], e[2][3])]
     local axis = e[1][1] ~= e[2][1] and 1 or e[1][2] ~= e[2][2] and 3 or 2
+    local a, b = A, B
     if a.cell[axis] > b.cell[axis] then a, b = b, a end
+    local sign = a == A and 1 or -1
+    local t
     if axis == 2 then
       local c = { a.cell[1] + a.size[1] // 2 - D.shaft // 2, a.cell[2] + a.size[2], a.cell[3] + a.size[3] // 2 - D.shaft // 2 }
-      local s = add("shaft", c, { D.shaft, b.cell[2] - c[2], D.shaft }, 4, a.id)
-      shafts[#shafts + 1] = s
-      doors[#doors + 1] = door(a, s, 2, 1, 4)
-      doors[#doors + 1] = door(s, b, 2, 1, 4)
+      t = add("shaft", c, { D.shaft, b.cell[2] - c[2], D.shaft }, 4, A.id)
+      shafts[#shafts + 1] = t
     else
       local l = axis == 1 and 3 or 1
       local c, sz = {}, {}
       c[axis], sz[axis] = a.cell[axis] + a.size[axis], b.cell[axis] - (a.cell[axis] + a.size[axis])
       c[l], sz[l] = a.cell[l] + a.size[l] // 2 - D.trunk[1] // 2, D.trunk[1]
       c[2], sz[2] = a.cell[2], D.trunk[2]
-      local t = add("trunk", c, sz, 4, a.id)
+      t = add("trunk", c, sz, 4, A.id)
       t.axis = axis
       trunks[#trunks + 1] = t
-      doors[#doors + 1] = door(a, t, axis, 1, 4)
-      doors[#doors + 1] = door(t, b, axis, 1, 4)
+    end
+    doors[#doors + 1] = door(A, t, axis, sign, 4)
+    if not parented[B.id] then
+      doors[#doors + 1] = door(t, B, axis, sign, 4)
+      B.parent = t.id
+      parented[B.id] = true
+    else
+      -- a loop: the far hall already has its way in; this door opens from it into the corridor (a room is the
+      -- inner side of one door only, the one its parent chain uses)
+      doors[#doors + 1] = door(B, t, axis, -sign, 4)
     end
   end
   -- the heart, past the last row, on the lowest level's floor; every lowest-level last-row hall may open into it
@@ -212,10 +224,14 @@ local function layout(rng, kit)
       t.heart = true
       trunks[#trunks + 1] = t
       doors[#doors + 1] = door(hall, t, 3, 1, 4)
-      doors[#doors + 1] = door(t, heart, 3, 1, 4)
+      if heart.parent == heart.id - 1 then
+        doors[#doors + 1] = door(t, heart, 3, 1, 4)
+        heart.parent = t.id
+      else
+        doors[#doors + 1] = door(heart, t, 3, -1, 4)
+      end
     end
   end
-  heart.parent = rooms[#rooms].id
   return rooms, doors, { halls = halls, trunks = trunks, shafts = shafts, core = heart, maw = maw }
 end
 
