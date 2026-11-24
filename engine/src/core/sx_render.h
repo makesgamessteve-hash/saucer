@@ -21,6 +21,7 @@ typedef struct sx_texture {
   char path[128];
   int gpu, dirty;
   int is_error;
+  int soft; /* a glow: billboards draw it as a smooth additive falloff, not palette texels */
 } sx_texture;
 
 typedef struct sx_rmesh {
@@ -119,6 +120,8 @@ void sx_render_free(sx_render *r);
 /* Load an index map (grayscale PNG where value = palette index) from memory.
  * Returns texture id (>0). On failure returns the error texture id. */
 int sx_render_texture_from_png(sx_render *r, const char *path, const unsigned char *png, int len);
+/* mark a texture as a soft glow (see sx_texture.soft); returns 0 for a bad id */
+int sx_render_texture_soft(sx_render *r, int id, int soft);
 int sx_render_texture_from_indices(sx_render *r, const char *path, int w, int h, const unsigned char *idx);
 int sx_render_error_texture(sx_render *r);
 int sx_render_find_texture(const sx_render *r, const char *path);

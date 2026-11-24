@@ -64,3 +64,21 @@ Room meshes SHALL be built only when the eye comes within a few doors of them an
 #### Scenario: Lazy meshes
 - **WHEN** `tests/lua/relic_spec.lua` runs "build room meshes as the eye comes near, free them as it leaves, and keep what draws under the web cap"
 - **THEN** it passes
+
+### Requirement: Glows add light
+A glow sprite (a lamp's, the idol's, the engine's) SHALL draw as a smooth camera-facing falloff in its tint that only adds light: it SHALL never darken what is behind it, and SHALL not show the sprite's palette texels as blocks.
+
+#### Scenario: Glow golden
+- **WHEN** `tools/shots/materials.sh` renders the heart and the idol with and without their glow sprites at one render time
+- **THEN** `golden_compare.py --brighter` finds at most 0.2% of the pixels darker with the sprites and at least 0.2% brighter
+
+#### Scenario: Soft textures
+- **WHEN** the C test marks a texture soft and back, and tries a bad id
+- **THEN** the flag follows and the bad id is refused
+
+### Requirement: Grown far hull
+Outside the relic, rooms beyond the full-detail distance SHALL draw as lumpy flesh blobs over their boxes (one to three along a long room), not as boxes.
+
+#### Scenario: Far blobs
+- **WHEN** `tests/lua/relic_spec.lua` draws the relic from far outside
+- **THEN** far rooms draw as blobs that stay centred in their boxes, cover them and keep their axes

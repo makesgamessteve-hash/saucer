@@ -24,3 +24,10 @@
       lazy meshes and the triangle cap from every room
 - [x] 4.2 `tests/game/relic.lua`: the Villa flies from the maw to the heart; seeds 42 and 7
 - [x] 4.3 `tools/shots/relic_slice.lua`: the warren tour (halls, trunks, shafts, the heart, chambers, phenomena)
+
+## 5. Glow and far hull fix
+- [x] 5.1 Soft textures (`saucer.render.texture(path, { soft = true })`): billboards draw a smooth additive falloff,
+      camera-facing; dark tints still blend (a shade)
+- [x] 5.2 `golden_compare.py --brighter` and the glow pairs in `tools/shots/materials.lua`
+- [x] 5.3 Far rooms as flesh blobs (`view/relic.lua` blob/blobs) instead of grey hull boxes
+- [x] 5.4 Relic goldens re-recorded for the warren; the core's full-vs-off gate 6.0 (the heart's haze)

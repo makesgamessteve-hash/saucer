@@ -23,7 +23,7 @@ M.DISH = 2.4          -- m: an inside cushion dishes this far outward (always le
 M.HIDE = 3.0          -- m: the outside hide swells this far out from the wall's outer face
 M.RIB_OUT = 1.9       -- m: a rib stands this far out from the wall's inner face (it hides the cushion seams)
 M.SPINE = 7.0         -- m: a PIERCE spine's length outside the hide
-M.NEAR = 300          -- m: outside the relic, rooms nearer than this draw in full; the rest as plain hull boxes
+M.NEAR = 300          -- m: outside the relic, rooms nearer than this draw in full; the rest as flesh blobs
 M.SEG = 4             -- cushion quads per side (inside cushions; 4 keeps the relic inside the web triangle cap)
 M.SHOW_GHOST = true   -- the ghost Villa for a Seat in a Villa-class space (shot scripts may hide it)
 
@@ -615,6 +615,42 @@ function M.engine_rings()
   return cache.rings
 end
 
+-- the far hull: each far room as a few swollen flesh lobes along its length (built once per room, in world units: the
+-- flesh's wobble is in metres, so a scaled unit mesh would shred), so the relic reads as grown, not as boxes, from a
+-- distance (fix-glow: the old grey hull boxes read boxy)
+M.BLOB_SEG = 10
+-- the lobes of one far room -> { { c, r, h } ... }: one to four along the long axis, each a little larger than its share
+-- of the box so they merge, with a smaller swelling on alternate sides
+function M.blobs(rm)
+  local d = vec.sub(rm.max, rm.min)
+  local long = d[1] >= d[3] and 1 or 3
+  local short = d[4 - long]
+  local n = math.max(1, math.min(4, math.floor(d[long] / short + 0.5)))
+  local out = {}
+  for k = 1, n do
+    local c = { rm.center[1], rm.center[2], rm.center[3] }
+    c[long] = rm.min[long] + d[long] * (k - 0.5) / n
+    local r = math.max(short, d[long] / n) * 0.62
+    out[#out + 1] = { c = c, r = r, h = d[2] * 0.6 }
+    local s = { c[1], c[2] + d[2] * 0.22, c[3] }
+    s[4 - long] = c[4 - long] + ((k + (rm.id or 0)) % 2 == 0 and 1 or -1) * short * 0.3
+    out[#out + 1] = { c = s, r = r * 0.55, h = d[2] * 0.4 }
+  end
+  return out
+end
+
+function M.blob(rm)
+  if rm.far then return rm.far end
+  local cc = colors()
+  local parts = {}
+  for _, b in ipairs(M.blobs(rm)) do
+    parts[#parts + 1] = { kind = "sphere", c = b.c, r = b.r, h = b.h, seg = M.BLOB_SEG, rings = 6, color = cc.membrane,
+                          mat = S.dominant }
+  end
+  rm.far = saucer.mesh.build({ parts = parts })
+  return rm.far
+end
+
 -- the parts of one room (inside and outside skins, its cradles; the maw's valve; the heart's decor and engine)
 local function room_parts(ruin, origin, r, ctx)
   local kit, cc = ctx.kit, ctx.cc
@@ -901,7 +937,7 @@ end
 
 -- draw the relic near the eye; -> stats { rooms, culled, built, tris }. Inside the relic only the rooms a few doors
 -- from the eye's room draw (and are kept built); outside it the rooms near the eye draw in full and the rest as
--- plain hull boxes.
+-- flesh blobs (M.blobs).
 function M.draw(v, A, state, cam, xr, time)
   local render = require("view.render")
   local st = { rooms = 0, culled = 0, built = 0, tris = 0 }
@@ -934,7 +970,8 @@ function M.draw(v, A, state, cam, xr, time)
       if not keep[j] then M.release(set, j) end
       st.culled = st.culled + 1
       if not here and rm.villa and render.visible(cam, rm.center, rm.radius, xr) then
-        v:mesh(A.unit, { pos = rm.center, scale = vec.sub(rm.max, rm.min), tint = { 0.42, 0.3, 0.38, 1 } })
+        v:mesh(M.blob(rm), opts)
+        st.blobs = (st.blobs or 0) + 1
       end
     end
   end

@@ -730,6 +730,24 @@ describe("relic skins", function()
     expect(calls.mats.time).to_be(1.5)
     expect(calls.mats.slots[matv.SLOT.lung].breath).to_be(matv.BREATH)
     expect(calls.billboard >= 1).to_be(true) -- the closed lock's socket
+    -- fix-glow: far rooms are flesh blobs over their boxes (not grey hull boxes): one to three lobes along the length
+    local far = relicv.draw(v, A, st, { pos = { door[1], door[2] + 200, door[3] - 700 }, yaw = 0, pitch = 0 }, false, 1.5)
+    expect((far.blobs or 0) > 0).to_be(true)
+    for _, rm in ipairs(set.rooms) do
+      if rm.villa then
+        local bl = relicv.blobs(rm)
+        expect(#bl >= 2 and #bl <= 8).to_be(true)
+        local d = { rm.max[1] - rm.min[1], rm.max[2] - rm.min[2], rm.max[3] - rm.min[3] }
+        for _, b in ipairs(bl) do
+          for q = 1, 3 do expect(b.c[q] >= rm.min[q] and b.c[q] <= rm.max[q]).to_be(true) end
+          expect(b.h <= d[2] * 0.6 + 1e-9).to_be(true)
+        end
+        -- the main lobes reach the box's sides
+        expect(bl[1].r * 2 >= math.min(d[1], d[3])).to_be(true)
+      end
+    end
+    local some = set.rooms[r.relic.core]
+    expect(relicv.blob(some)).to_be(relicv.blob(some))
     -- inside the first hall: only the rooms a few doors on draw, and nothing far stays built
     local hall = r.relic.halls[1]
     local c = set.rooms[hall].center

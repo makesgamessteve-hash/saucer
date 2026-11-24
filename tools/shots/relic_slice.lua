@@ -114,6 +114,53 @@ local function door_between(a, b)
 end
 local function add(p, d, k) return { p[1] + d[1] * k, p[2] + d[2] * k, p[3] + d[3] * k } end
 
+-- --script-arg glow: the quick look at the lamp glows, the heart and the far hull (fix for dark blocky glows)
+if mode == "glow" then
+  local c, mn, mx = centre(core)
+  local route = r.relic.route
+  local dc, dir = door_between(route[#route - 1], core)
+  park(add(dc, dir, 30), 0)
+  look_at(add({ dc[1], dc[2] + 30, dc[3] }, dir, 8), { c[1], mn[2] + 70, c[3] }, 84)
+  T.wait(30)
+  compare("g1_heart_engine")
+  local idol
+  for _, s2 in ipairs(r.slots) do if s2.idol then idol = s2 end end
+  look_at({ idol.pos[1] + 16, idol.pos[2] + 5, idol.pos[3] - 18 }, { idol.pos[1] - 4, idol.pos[2] + 1, idol.pos[3] + 6 }, 74)
+  compare("g2_heart_idol")
+  -- the nearest lamps in the heart, from close by
+  local lamps = require("view.lights").room_lamps(r, site.pos, i).list
+  local best, bd
+  for _, l in ipairs(lamps) do
+    local p = l.pos
+    if p[1] > mn[1] and p[1] < mx[1] and p[2] > mn[2] and p[2] < mx[2] and p[3] > mn[3] and p[3] < mx[3] then
+      local d = math.abs(p[2] - (mn[2] + 20))
+      if not bd or d < bd then best, bd = l, d end
+    end
+  end
+  if best then
+    local p = best.pos
+    local from = { p[1] + 14, p[2] + 3, p[3] - 14 }
+    for q = 1, 3 do from[q] = math.max(mn[q] + 3, math.min(mx[q] - 3, from[q])) end
+    look_at(from, p, 70)
+    compare("g3_heart_lamp")
+  end
+  -- the hall lamps
+  local hc, hmn = centre(hall1)
+  look_at({ hc[1], floor_of(hall1) + 8, hmn[3] + 4 }, { hc[1], floor_of(hall1) + 10, hc[3] }, 74)
+  compare("g4_hall_lamps")
+  -- the hull from 450 m and from 150 m
+  local sc = set.center
+  park({ door[1], door[2], door[3] - 400 }, 0)
+  look_at({ sc[1] + 300, sc[2] + 160, sc[3] - 380 }, sc, 62)
+  T.wait(4)
+  compare("g5_hull_far")
+  look_at({ door[1] + 90, door[2] + 40, door[3] - 140 }, { door[1], door[2], door[3] + 40 }, 66)
+  T.wait(4)
+  compare("g6_hull_near")
+  free = nil
+  return
+end
+
 -- 1. the maw from outside, the Villa in front of it for scale
 park({ door[1] + 14, door[2] - 2, door[3] - 70 }, sm.atan2(-0.2, 1))
 look_at({ door[1] + 46, door[2] + 9, door[3] - 84 }, { door[1] - 2, door[2] + 3, door[3] + 4 }, 66)
