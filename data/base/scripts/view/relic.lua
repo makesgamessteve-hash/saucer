@@ -25,6 +25,7 @@ M.RIB_OUT = 1.9       -- m: a rib stands this far out from the wall's inner face
 M.SPINE = 7.0         -- m: a PIERCE spine's length outside the hide
 M.NEAR = 700          -- m: rooms nearer than this draw their own mesh; the rest of the relic is one silhouette
 M.SEG = 6             -- cushion quads per side
+M.SHOW_GHOST = true   -- the ghost Villa for a Seat in a Villa-class space (shot scripts may hide it)
 
 local cache = {}
 
@@ -513,7 +514,7 @@ function M.draw(v, A, state, cam, xr, time)
     end
   end
   -- the ghost Villa: where a Seat would grow, green if it fits, red if not
-  if p then
+  if p and M.SHOW_GHOST then
     local gpos, fits = relic.ghost(state, p)
     if gpos then
       local tint = fits and { 0.35, 1, 0.55, 0.85 } or { 1, 0.3, 0.25, 0.85 }

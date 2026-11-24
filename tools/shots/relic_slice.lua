@@ -66,6 +66,8 @@ local Q = r.relic.branches[1].reliquary
 if mode == "frames" then
   -- the Reel: approach the maw, through it, down the spine (the breathing hall, the bays), into the Core
   local fd = D .. "frames/"
+  -- the game's low-res target is landscape; a 9:16 Reel wants a portrait target (no letterbox)
+  saucer.render.settings({ width = 360, height = 640 })
   local n = 0
   local function frame() T.wait(1) T.screenshot(string.format("%sf%04d.png", fd, n)) n = n + 1 end
   local cc, _, cmx = centre(core)
@@ -99,7 +101,7 @@ end
 
 -- 1. the maw from outside, the Villa in front of it for scale
 park({ door[1] + 14, door[2] - 2, door[3] - 70 }, sm.atan2(-0.2, 1))
-look_at({ door[1] + 62, door[2] + 16, door[3] - 128 }, { door[1] - 4, door[2] + 2, door[3] + 6 }, 64)
+look_at({ door[1] + 46, door[2] + 9, door[3] - 84 }, { door[1] - 2, door[2] + 3, door[3] + 4 }, 66)
 shot("01_maw_exterior")
 -- 2. the whole spine from above and aside
 do
@@ -131,10 +133,19 @@ do
   local pc = br.port.pos
   local s = get().ship
   s.size = 2
-  clean = false
-  park({ pc[1] - 4, pc[2], pc[3] }, math.pi / 2)
-  look_at({ pc[1] - 14, pc[2] + 4, pc[3] - 7 }, { pc[1], pc[2], pc[3] }, 62)
+  local relicv = require("view.relic")
+  relicv.SHOW_GHOST = false
+  park({ pc[1] - 5, pc[2] - 0.3, pc[3] + 0.5 }, math.pi / 2)
+  look_at({ pc[1] - 13, pc[2] + 1.6, pc[3] - 3.5 }, { pc[1], pc[2] - 0.2, pc[3] + 0.3 }, 58)
   shot("05_seat_port")
+  -- the same with the HUD: the ghost Villa (green: it fits here) and the Seat's prompts
+  relicv.SHOW_GHOST = true
+  clean = false
+  free = nil
+  get().cam = "chase"
+  park({ pc[1] - 16, pc[2] + 4, pc[3] - 6 }, math.pi / 2)
+  shot("05b_seat_ghost_villa_hud")
+  get().cam = "first"
   clean = true
   local B = r.rooms[br.rooms[2]]
   local bmn, bmx = ruinm.room_box(B, kit, site.pos)
