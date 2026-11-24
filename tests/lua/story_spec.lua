@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: MIT
 -- OpenSpec add-run-story, slice 1: the generator. Every `it` name is a scenario of
--- openspec/changes/add-run-story. A story is a pure function of the universe seed.
+-- openspec/specs/run-story (archived change add-run-story). A story is a pure function of the universe seed.
 local game = require("sim.game")
 local story = require("sim.story")
 local galaxy = require("sim.galaxy")
