@@ -25,11 +25,12 @@ M.NEAR = 170              -- room lamps nearer the eye than this are offered to 
 M.CELL = 96               -- lamp bucket size (m)
 -- add-lighting-mood: the dark between the lamps, and light you can see in the air
 M.POOL_LUX = 0.55         -- a room's lamp pool: this much at its centre-ish (intensity = POOL_LUX * reach^2)
+M.CITY_LUX = 1.6          -- a city's pools are this much brighter
 M.DARK_ROOMS = 3          -- one room in this many has no lamp at all (hash of site and room)
 M.LAMP_SCALE = 0.6        -- every placed lamp (rooms, bays, stations, sentries): one global dimmer
-M.HAZE = 0.004            -- how much the air scatters (beams and halos); per light it is haze * HAZE
+M.HAZE = 0.02             -- how much the air scatters (beams and halos); per light it is haze * HAZE
 M.HAZE_LAMP = 0.3         -- a placed lamp's halo
-M.HAZE_HEAD, M.HAZE_FLOOD, M.HAZE_SENTRY = 1.0, 0.35, 0.6
+M.HAZE_HEAD, M.HAZE_FLOOD, M.HAZE_SENTRY = 1.0, 0.12, 0.6
 
 -- the kinds of star, by how common they are in the game's sectors
 M.STARS = {
@@ -100,8 +101,9 @@ function M.room_lamps(ruin, origin, site)
     local long = sx > sz and 1 or 3
     -- add-lighting-mood: pools of light low in the room with darkness between them, not a ceiling flood;
     -- some rooms stay dark. 1-3 pools along the long axis, each lighting about a third of the room.
-    local dark = hash(site, i, 99) % M.DARK_ROOMS == 0 and #ruin.rooms > 1
-    local n = math.max(1, math.min(3, math.ceil(math.max(sx, sz) / 34)))
+    -- (a city's streets and halls are lived in: every room has its pools, a little brighter and more of them)
+    local dark = not ruin.city and hash(site, i, 99) % M.DARK_ROOMS == 0 and #ruin.rooms > 1
+    local n = math.max(1, math.min(ruin.city and 4 or 3, math.ceil(math.max(sx, sz) / (ruin.city and 24 or 34))))
     local reach = math.max(7, math.min(17, math.max(sx, sz) / n * 0.5))
     for k = 1, dark and 0 or n do
       local h = hash(site, i, k)
@@ -113,7 +115,7 @@ function M.room_lamps(ruin, origin, site)
       pos[side] = (sgn < 0 and mn[side] + 1.2) or (mx[side] - 1.2)
       if mx[side] - mn[side] < 8 then pos[side] = (mn[side] + mx[side]) / 2 end
       list[#list + 1] = { pos = pos, color = pal[h % #pal + 1], range = reach, district = r.district,
-                          intensity = M.POOL_LUX * reach * reach }
+                          intensity = M.POOL_LUX * (ruin.city and M.CITY_LUX or 1) * reach * reach }
     end
   end
   for _, lamp in ipairs(list) do

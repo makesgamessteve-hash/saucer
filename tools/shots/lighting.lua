@@ -91,16 +91,26 @@ local ax = math.abs(f[1]) > math.abs(f[3]) and 1 or 3
 local len = (f[ax] > 0 and (hmx[ax] - wd.pos[ax]) or (wd.pos[ax] - hmn[ax]))
 print(string.format("lighting shots: hall %.0f x %.0f x %.0f, %.0f m down the gaze", hmx[1] - hmn[1], hmx[2] - hmn[2],
                     hmx[3] - hmn[3], len))
+-- add-lighting-mood staging: the saucer in the middle of the hall facing the Watcher, the camera high up
+-- in a far corner behind it, so the beams run away from the camera down the hall
+local C = { (hmn[1] + hmx[1]) / 2, (hmn[2] + hmx[2]) / 2, (hmn[3] + hmx[3]) / 2 }
+local side = { -f[3], 0, f[1] }
+local L2 = (hmx[ax] - hmn[ax]) / 2
+local Wd = (ax == 1 and (hmx[3] - hmn[3]) or (hmx[1] - hmn[1])) / 2
 local function stage()
   s.vel = { 0, 0, 0 }
-  s.pos = inside(vec.add(wd.pos, { f[1] * len * 0.5, -8.0, f[3] * len * 0.5 }))
+  s.pos = inside({ C[1] + f[1] * L2 * 0.2, hmn[2] + 9, C[3] + f[3] * L2 * 0.2 })
   s.yaw = sm.atan2(-f[1], -f[3])
+  s.pitch = 0
   T.wait(2)
+end
+local function corner()
+  look_at(inside(vec.add(s.pos, { f[1] * L2 * 0.75 + side[1] * Wd * 0.7, 9, f[3] * L2 * 0.75 + side[3] * Wd * 0.7 })),
+          vec.add(s.pos, { -f[1] * 25, -3, -f[3] * 25 }), 70)
 end
 stage()
 lights(false, false, false)
--- behind the saucer, looking down the hall at the Watcher
-look_at(inside(vec.add(s.pos, { f[1] * 9, 15, f[3] * 9 })), vec.add(wd.pos, { 0, -6, 0 }), 72)
+corner()
 shot("05_ruin_dark_no_saucer_lights")
 lights(true, false, false)
 stage()
@@ -108,7 +118,7 @@ shot("06_ruin_headlights")
 lights(true, true, false)
 stage()
 shot("07_ruin_headlights_and_floods")
-look_at(inside(vec.add(s.pos, { f[1] * 6 - f[3] * 16, 10, f[3] * 6 + f[1] * 16 })), s.pos, 75)
+look_at(inside(vec.add(s.pos, { -f[1] * 18 + side[1] * Wd * 0.8, 6, -f[3] * 18 + side[3] * Wd * 0.8 })), s.pos, 75)
 shot("08_ruin_floods_around_the_saucer")
 lights(false, false, true)
 free = nil
