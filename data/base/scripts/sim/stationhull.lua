@@ -1,21 +1,26 @@
 -- SPDX-License-Identifier: MIT
--- The outside of a trader station (OpenSpec add-huge-stations).
+-- The outside of a trader station (OpenSpec add-huge-stations, add-alien-stations).
 --
--- generate(seed, class) lays out a kilometre-scale megastructure in "anchor" meters: the origin is the
--- trader's `pos`, the dock anchor, and the hangar cell of sim/dock.lua sits at its +x end, so the station
--- hangs off the cell's back wall toward -x: a long visitor arm to a hub drum, one or two rings that spin
--- about the x axis, spokes, docking arms with pods and parked ships, habitat drums, solar wings, radiator
--- fins, masts with dishes, cargo racks, lit windows, beacons and panel greebles. The hangar cell is one small
--- bay among many.
+-- generate(seed, class, bay_no, mesh, family) lays out a multi-kilometre alien megastructure in "anchor"
+-- meters: the origin is the trader's `pos`, the dock anchor, and the hangar cell of sim/dock.lua sits at its +x
+-- end, so the station grows off the cell's back wall toward -x: a stem studded with docking pods, floating
+-- glyph monoliths and cocoons, then the family's body:
+--   coral    (Reef)     a coral trunk with chitin plates, tendrils ending in glowing polyps, habitat bulbs,
+--                       a halo of drifting spores
+--   crystal  (Lattice)  a cut-crystal core in a lattice of nodes and struts, great shards, a splinter halo
+--   spiral   (Helix)    a horn, a nautilus of chambers and lopsided flaring helices turning round it
+--   shells   (Gyre)     a great orb in nested shells turning on tilted axes, standing stones, a tail of orbs
+-- The hangar cell is one small bay among many.
 --
--- The result is plain data, a pure function of (seed, class, the dock tune and the kit): the same on every
--- platform, never saved. Mesh parts come in layers (view/stationhull.lua turns each into one mesh):
---   core    standing hull: arm, hub, spine, pods, arrays, the hangar cell's shell
---   detail  its trusses, greebles, windows and the hangar's dressing (drawn near)
---   ring    spinning rings, spokes and drums (turn about the x axis through `spin`)
---   ringd   their windows and greebles (drawn near)
+-- The result is plain data, a pure function of (seed, class, family, the dock tune and the kit): the same on
+-- every platform, never saved. Mesh parts come in layers (view/stationhull.lua turns each into one mesh):
+--   core    the standing hull: stem, body, pods, the hangar cell's shell
+--   detail  its plates, pores, glyphs, irises, conduits and the hangar's dressing (drawn near)
+--   ring    the spinning layer (halos, helices, shells) turning about the x axis through `spin_pos`
+--   ringd   its lit nodes (drawn near)
 --   far     one cheap silhouette of everything (drawn from afar)
--- plus `solids` (boxes for the physics world), `lights` and `far_bay`, where the far hangar's pod opens.
+-- plus `solids` (boxes for the physics world; the spinning layer has none), `lights` and `far_bay`, where the
+-- far hangar's pod opens.
 local data = require("lib.data")
 local sm = saucer.math
 local M = {}
@@ -44,21 +49,37 @@ local DIGITS = {
 -- the builder: a context with the layers, a counter per layer and primitive helpers. y is relative to the
 -- station's axis (AY above the anchor) unless a helper says it is spinning (then it is about the axis).
 -- ---------------------------------------------------------------------------------------------------
-local function new_ctx(seed, class, mesh)
+-- the families of the kit by id, and the one a seed picks
+function M.families() return M.kit().families end
+function M.family(id)
+  for _, f in ipairs(M.kit().families) do
+    if f.id == id then return f end
+  end
+  error("unknown station family " .. tostring(id))
+end
+function M.family_of(seed)
+  local fams = M.kit().families
+  return fams[saucer.seed_child(seed or 0, "family", 1) % #fams + 1].id
+end
+
+local function new_ctx(seed, class, mesh, family)
   local H = M.kit()
   local K = H.classes[class]
   if not K then error("unknown station class " .. tostring(class)) end
   local T = data.load("saucer/dock.lua")
   local c = {
-    H = H, K = K, T = T, class = class, seed = seed,
+    H = H, K = K, T = T, class = class, seed = seed, s = K.scale or 1,
     AY = T.floor_y + T.height / 2,
     parts = { core = {}, detail = {}, ring = {}, ringd = {}, far = {} },
     solids = {}, lights = {}, mesh = mesh,
+    fam = M.family(family or M.family_of(seed)),
     rng = saucer.rng.new(saucer.seed_child(seed, "hull", 1)),
     drng = saucer.rng.new(saucer.seed_child(seed, "hull", 2)),
     mrng = saucer.rng.new(saucer.seed_child(seed, "hull", 3)),   -- only for what the triangles need (skipped in a layout-only pass)
+    grng = saucer.rng.new(saucer.seed_child(seed, "hull", 4)),   -- the glyphs (triangles only too)
   }
-  c.pal = H.palettes[c.rng:int(1, #H.palettes)]
+  c.pal_name = c.fam.palettes[c.rng:int(1, #c.fam.palettes)]
+  c.pal = H.palettes[c.pal_name]
   return c
 end
 
@@ -170,7 +191,7 @@ local function bay_cell(c, bay_no)
   local hi = { T.front_x, T.floor_y + T.height, T.half_w }
   local ch = T.floor_y + T.height
   local dz, dh = T.door.half, T.door.height
-  local WALL, FLOOR, STRIP, WARN = { 0.36, 0.39, 0.47 }, { 0.27, 0.3, 0.35 }, { 0.35, 0.9, 1.0 }, { 1.0, 0.75, 0.15 }
+  local WALL, FLOOR, STRIP, WARN = { 0.36, 0.39, 0.47 }, { 0.27, 0.3, 0.35 }, P.glow, { 1.0, 0.75, 0.15 }
   -- the boxes of dock.solids (kept in step by the tests), unskinned: walls are one colour inside and out
   local function raw(x0, y0, z0, x1, y1, z1, col) add(c, "core", { kind = "box", min = { x0, y0, z0 }, max = { x1, y1, z1 }, color = col }) end
   raw(lo[1], lo[2] - 2, lo[3] - w, hi[1], lo[2], hi[3] + w, FLOOR)
@@ -320,467 +341,830 @@ local function bay_cell(c, bay_no)
 end
 
 -- ---------------------------------------------------------------------------------------------------
--- the megastructure
+-- alien building blocks (add-alien-stations). Points are { x, y, z } in anchor meters, y relative to the
+-- station's axis; on the spinning layers ("ring", "ringd") x is relative to the spin centre and y to it too.
 -- ---------------------------------------------------------------------------------------------------
-local function window_rows(c, layer, x, hw, r, rows, spacing, a0, a1, glow, density, facing)
-  -- lit window strips on a cylinder of radius r about the axis: `rows` rows across hw*2 at x +/- ...
+local function lay_y(c, layer) return (layer == "ring" or layer == "ringd") and 0 or c.AY end
+
+-- a tapered limb from a to b: radius r0 at a, r1 at b (r1 = 0: a shard's point)
+local function limb(c, layer, a, b, r0, r1, color, seg, emi)
   if not c.mesh then return end
-  local rng = c.mrng
-  local n = math.max(6, math.floor((a1 - a0) * r / spacing))
-  for row = 1, rows do
-    local xx = x - hw + (row - 0.5) * (2 * hw / rows)
-    local k = 0
-    while k < n do
-      if rng:float() < density then
-        local run = rng:int(1, 2)
-        local a = a0 + (a1 - a0) * (k + run / 2) / n
-        local len = run * (a1 - a0) * r / n * 0.8
-        local th = 0.9
-        if facing > 0 then rbox(c, layer, xx - 0.9, xx + 0.9, r - 0.1, r + th, len / 2, a, glow, 1)
-        else rbox(c, layer, xx - 0.9, xx + 0.9, r - th, r + 0.1, len / 2, a, glow, 1) end
-        k = k + run
-      else
-        k = k + 1
+  local dx, dy, dz = b[1] - a[1], b[2] - a[2], b[3] - a[3]
+  local hz = sm.sqrt(dx * dx + dz * dz)
+  local len = sm.sqrt(hz * hz + dy * dy)
+  if len < 1e-3 then return nil end
+  -- pitch tips +y toward the horizontal, yaw turns it about y: +y lands on (b - a) / len
+  return add(c, layer, { kind = (r1 == r0) and "cylinder" or "cone", c = { 0, 0, 0 }, r = r0, r1 = r1, h = len,
+                         seg = seg or 8, color = color, emissive = emi, pitch = sm.atan2(hz, dy), yaw = sm.atan2(dx, dz),
+                         pos = { a[1], a[2] + lay_y(c, layer), a[3] } })
+end
+
+-- an ellipsoid (a sphere scaled per axis), optionally turned
+local function blob(c, layer, p, rx, ry, rz, color, emi, seg, yaw, pitch, roll)
+  if not c.mesh then return end
+  seg = seg or 10
+  return add(c, layer, { kind = "sphere", c = { 0, 0, 0 }, r = 1, h = 1, seg = seg, rings = seg <= 6 and 2 or 3,
+                         color = color, emissive = emi, scale = { rx, ry, rz }, yaw = yaw, pitch = pitch, roll = roll,
+                         pos = { p[1], p[2] + lay_y(c, layer), p[3] } })
+end
+
+-- a box turned about its own centre p (half sizes hx, hy, hz)
+local function slab(c, layer, p, hx, hy, hz, color, emi, yaw, pitch, roll)
+  if not c.mesh then return end
+  return add(c, layer, { kind = "box", min = { -hx, -hy, -hz }, max = { hx, hy, hz }, color = color, emissive = emi,
+                         yaw = yaw, pitch = pitch, roll = roll, pos = { p[1], p[2] + lay_y(c, layer), p[3] } })
+end
+
+-- the turn of view/mesh parts (roll about z, then pitch about x, then yaw about y), for placing things on a turned part
+local function turn(p, yaw, pitch, roll)
+  local a, b, cc = p[1], p[2], p[3]
+  local cr, sr = sm.cos(roll or 0), sm.sin(roll or 0)
+  local cp, sp = sm.cos(pitch or 0), sm.sin(pitch or 0)
+  local cy, sy = sm.cos(yaw or 0), sm.sin(yaw or 0)
+  a, b = a * cr - b * sr, a * sr + b * cr
+  b, cc = b * cp - cc * sp, b * sp + cc * cp
+  a, cc = a * cy + cc * sy, -a * sy + cc * cy
+  return { a, b, cc }
+end
+M.turn = turn
+
+local function len3(x, y, z) return sm.sqrt(x * x + y * y + z * z) end
+local function lerp3(a, b, t) return { a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, a[3] + (b[3] - a[3]) * t } end
+
+-- keep a point within reach r of the axis (its y, z pulled in)
+local function clamp_r(p, r)
+  local d = sm.sqrt(p[2] * p[2] + p[3] * p[3])
+  if d > r then return { p[1], p[2] * r / d, p[3] * r / d } end
+  return p
+end
+
+-- collision along a limb: a box every ~2r of its length (y relative to the axis like the limb)
+local function solid_limb(c, a, b, r)
+  local d = len3(b[1] - a[1], b[2] - a[2], b[3] - a[3])
+  local n = math.max(1, math.min(8, math.floor(d / (2 * r)) + 1))
+  local h = r * 0.75
+  for i = 0, n - 1 do
+    local p = lerp3(a, b, (i + 0.5) / n)
+    solid(c, p[1] - h, c.AY + p[2] - h, p[3] - h, p[1] + h, c.AY + p[2] + h, p[3] + h)
+  end
+end
+
+local function solid_ball(c, p, r)
+  local h = r * 0.72
+  solid(c, p[1] - h, c.AY + p[2] - h, p[3] - h, p[1] + h, c.AY + p[2] + h, p[3] + h)
+end
+
+-- a unit vector from yaw and elevation (y up)
+local function dir(yaw, el)
+  local ce = sm.cos(el)
+  return { ce * sm.sin(yaw), sm.sin(el), ce * sm.cos(yaw) }
+end
+
+-- the station's alphabet: a dozen glyphs of 3 x 4 cells, from the station's own glyph stream
+local function alphabet(c)
+  local out = {}
+  for g = 1, 12 do
+    local bits, on = {}, 0
+    for k = 1, 12 do
+      bits[k] = c.grng:int(0, 9) < 5
+      if bits[k] then on = on + 1 end
+    end
+    if on < 4 then bits[2], bits[5], bits[8], bits[11] = true, true, true, true end
+    out[g] = bits
+  end
+  return out
+end
+
+-- a line of n glyphs on a wall facing +x (face = 1) or -x, running along z, centred at (x, y, z), cell size s
+local function glyphs(c, layer, n, x, y, z, s, color, face)
+  if not c.mesh then return end
+  c.alpha = c.alpha or alphabet(c)
+  local w = n * 4 * s - s
+  for i = 1, n do
+    local g = c.alpha[c.grng:int(1, #c.alpha)]
+    for row = 1, 4 do
+      for col = 1, 3 do
+        if g[(row - 1) * 3 + col] then
+          local zz = z - w / 2 + ((i - 1) * 4 + col - 1) * s
+          box(c, layer, x, y + (4 - row) * s, zz, x + face * s * 0.6, y + (5 - row) * s, zz + s, color, 1)
+        end
       end
     end
   end
 end
 
--- a docking arm pod facing +x: beam from the arm, a body with a lit mouth, a frame, a number, a beacon
-local function pod(c, x, a, rad, no, ship)
-  local P, K = c.pal, c.K
-  local s = (c.class == "outpost") and 0.3 or 1.0
-  local ca, sa = sm.cos(a), sm.sin(a)
-  local cy, cz = rad * sa, rad * ca       -- the pod's centre off the axis
-  local axw = 5 * s                         -- beam half-thickness
-  rod(c, "core", { x, 0, 0 }, { x, cy, cz }, axw, P.trim)
-  rod(c, "detail", { x, 0, 0 }, { x, cy, cz }, axw * 0.45, P.panel)
-  for k = 1, 3 do
-    local f = k / 4
-    rod(c, "detail", { x - 3 * s, cy * f, cz * f }, { x + 3 * s, cy * f, cz * f }, axw * 1.15, P.panel)
+-- a column of n glyphs down a slab's face: centred at p, on the side facing (sin yaw, 0, cos yaw), cell size s
+local function glyph_column(c, layer, n, p, yaw, s, color)
+  if not c.mesh then return end
+  c.alpha = c.alpha or alphabet(c)
+  local top = p[2] + n * 5 * s / 2
+  for i = 1, n do
+    local g = c.alpha[c.grng:int(1, #c.alpha)]
+    for row = 1, 4 do
+      for col = 1, 3 do
+        if g[(row - 1) * 3 + col] then
+          local q = turn({ (col - 2) * s, 0, 0 }, yaw)
+          slab(c, layer, { p[1] + q[1], top - ((i - 1) * 5 + row) * s, p[3] + q[3] }, s * 0.48, s * 0.48, s * 0.3, color, 1, yaw)
+        end
+      end
+    end
   end
-  local px0, px1 = x - 36 * s, x + 6 * s
-  local hh, hz = 9 * s, 12 * s
-  box(c, "core", px0, cy - hh, cz - hz, px1, cy + hh, cz + hz, P.plate)
-  box(c, "core", px0 + 2 * s, cy + hh, cz - hz + 1 * s, px1 - 2 * s, cy + hh + 1.5 * s, cz + hz - 1 * s, P.trim)
-  -- the mouth: a dark recess with a glowing back, a frame and a hazard lip
-  box(c, "core", px1 - 0.2, cy - hh * 0.62, cz - hz * 0.75, px1 + 0.4, cy + hh * 0.62, cz + hz * 0.75, { 1.0, 0.85, 0.55 }, 0.9)
-  local fw = 0.8 * s + 0.4
-  box(c, "core", px1, cy - hh * 0.62 - fw, cz - hz * 0.75 - fw, px1 + 0.9, cy - hh * 0.62, cz + hz * 0.75 + fw, P.accent, 0.8)
-  box(c, "core", px1, cy + hh * 0.62, cz - hz * 0.75 - fw, px1 + 0.9, cy + hh * 0.62 + fw, cz + hz * 0.75 + fw, P.accent, 0.8)
-  box(c, "core", px1, cy - hh * 0.62, cz - hz * 0.75 - fw, px1 + 0.9, cy + hh * 0.62, cz - hz * 0.75, P.accent, 0.8)
-  box(c, "core", px1, cy - hh * 0.62, cz + hz * 0.75, px1 + 0.9, cy + hh * 0.62, cz + hz * 0.75 + fw, P.accent, 0.8)
-  if s > 0.5 then sign(c, "detail", string.format("%02d", no), px1, cy + hh * 0.62 + fw + 1.2, cz, 0.9, P.glow, 1) end
-  -- flank windows and ribs
+end
+
+-- the silhouette's own cheap limb (axis-relative points, a few sides)
+local function far_limb(c, far, a, b, r, color)
+  local dx, dy, dz = b[1] - a[1], b[2] - a[2], b[3] - a[3]
+  local hz = sm.sqrt(dx * dx + dz * dz)
+  far[#far + 1] = { kind = "cylinder", c = { 0, 0, 0 }, r = r, h = sm.sqrt(hz * hz + dy * dy), seg = 4, color = color,
+                    pitch = sm.atan2(hz, dy), yaw = sm.atan2(dx, dz), pos = { a[1], a[2] + c.AY, a[3] } }
+end
+
+-- a ring on the spinning layer, centred on the spin centre, its axis turned by roll then yaw
+local function add_ring(c, ri, w, roll, yaw, color)
+  if not c.mesh then return end
+  return add(c, "ring", { kind = "ring", c = { 0, -w, 0 }, rin = ri - w * 1.5, r = ri, h = 2 * w, seg = 48, color = color,
+                          roll = roll, yaw = yaw, pos = { 0, 0, 0 } })
+end
+
+-- ---------------------------------------------------------------------------------------------------
+-- the pieces every family shares: docking pods, floating monoliths, cocoon clusters and conduits
+-- ---------------------------------------------------------------------------------------------------
+-- a docking pod on a stalk off the stem at x, angle a (0 = +z, pi/2 = +y), rad off the axis; its iris mouth
+-- faces +x. Shaped by the family: a polyp, a cut crystal, a cocoon or an orb
+local function pod(c, x, a, rad, no)
+  local P, s, fam = c.pal, c.s, c.fam.id
+  local cy, cz = rad * sm.sin(a), rad * sm.cos(a)
+  local root = { x - 14 * s, 0, 0 }
+  local tip = { x - 16 * s, cy, cz }
+  limb(c, "core", root, tip, 7 * s, 4.5 * s, P.trim, 8)
+  limb(c, "detail", lerp3(root, tip, 0.15), lerp3(root, tip, 0.85), 1.4 * s, 1.4 * s, P.glow, 5, 0.8)
+  solid_limb(c, lerp3(root, tip, 0.2), lerp3(root, tip, 0.8), 5 * s)
+  local px0, px1 = x - 40 * s, x + 6 * s
+  local mid = { (px0 + px1) / 2, cy, cz }
+  if fam == "coral" then
+    blob(c, "core", mid, 24 * s, 13 * s, 15 * s, P.plate, nil, 10)
+    for k = -1, 1 do xring(c, "detail", mid[1] + k * 12 * s, 2 * s, 12 * s, 15.5 * s, 10, P.trim) end
+    for k = 1, 4 do
+      local q = turn({ 0, 15 * s, 0 }, 0, 0, k * 1.57 + 0.4)
+      blob(c, "detail", { mid[1] - 8 * s, cy + q[2], cz + q[1] }, 3 * s, 3 * s, 3 * s, P.accent, 0.5, 6)
+    end
+  elseif fam == "crystal" then
+    slab(c, "core", mid, 23 * s, 11 * s, 11 * s, P.plate, nil, 0, PI / 4)
+    for k = 0, 2 do
+      local d = dir(k * 2.1 + a, 0.6)
+      limb(c, "core", { mid[1] - 10 * s, cy, cz }, { mid[1] - 10 * s + d[1] * 6 * s, cy + d[2] * 26 * s, cz + d[3] * 26 * s },
+           5 * s, 0, P.glow, 4, 0.35)
+    end
+  elseif fam == "spiral" then
+    blob(c, "core", mid, 26 * s, 10 * s, 10 * s, P.plate, nil, 10)
+    for k = 0, 9 do
+      local t = k / 9
+      local q = turn({ 0, 10.5 * s, 0 }, 0, 0, t * TAU * 1.5)
+      blob(c, "detail", { px0 + 6 * s + t * 34 * s, cy + q[2], cz + q[1] }, 2.2 * s, 2.2 * s, 2.2 * s, P.accent, 0.4, 5)
+    end
+  else
+    blob(c, "core", mid, 17 * s, 15 * s, 15 * s, P.plate, nil, 12)
+    xring(c, "core", mid[1], 2.5 * s, 18 * s, 21 * s, 16, P.glow, 0.7)
+  end
+  -- the iris: a glowing disc in a ring of petals, the pod's number and a line of glyphs over it
+  xcyl(c, "core", px1 - 1, px1 + 0.5, cy, cz, 7.5 * s, { 1.0, 0.85, 0.6 }, 12, 0.9)
+  xring(c, "core", px1, 1.6 * s, 7.5 * s, 10 * s, 12, P.accent, 0.8)
   for k = 0, 5 do
-    local xx = px0 + 3 * s + k * 6 * s
-    if c.drng:int(1, 3) > 1 then box(c, "detail", xx, cy - hh * 0.3, cz + hz, xx + 2.4 * s, cy + hh * 0.3, cz + hz + 0.25, P.glow, 1) end
-    box(c, "detail", xx + 3 * s, cy - hh, cz - hz - 0.3, xx + 3.6 * s, cy + hh, cz + hz + 0.3, P.trim)
+    local q = turn({ 0, 10.5 * s, 0 }, 0, 0, k * TAU / 6)
+    limb(c, "detail", { px1, cy + q[2], cz + q[1] }, { px1 + 4 * s, cy + q[2] * 1.25, cz + q[1] * 1.25 }, 1.6 * s, 0, P.trim, 4)
   end
-  light(c, px1 + 1, cy + hh + 2 * s - 0 - 0 - 0, cz, c.drng:int(1, 2) == 1 and { 1, 0.25, 0.2 } or { 0.3, 1, 0.4 }, "blink", 3.5, 80)
-  if ship and s > 0.5 then
-    parked_ship(c, "detail", px1 + 14, cy - hh * 0.5, cz + c.drng:int(-4, 4), c.drng:float() * 0.5 - 0.25, 1.0,
-                c.drng:int(0, 1) == 0 and { 0.62, 0.64, 0.7 } or { 0.7, 0.5, 0.32 }, P.accent)
+  if s > 0.5 then
+    sign(c, "detail", string.format("%02d", no), px1 + 0.6, cy + 13 * s, cz, 0.9, P.glow, 1)
+    glyphs(c, "detail", 3, px1 + 0.6, cy - 17 * s, cz, 1.0, P.accent, 1)
   end
-  solid(c, px0 + 1, c.AY + cy - hh + 1, cz - hz + 1, px1 - 1, c.AY + cy + hh - 1, cz + hz - 1)
+  light(c, px1 + 1, cy + 16 * s, cz, c.drng:int(1, 2) == 1 and P.accent or P.glow, "pulse", 3.5, 120)
+  solid(c, px0 + 2, c.AY + cy - 10 * s, cz - 11 * s, px1 - 1, c.AY + cy + 10 * s, cz + 11 * s)
   return { x = px1, y = cy, z = cz }
 end
 
--- a dish on a mast: the mast from the axis' radius out, a hemisphere dish, its feed, and a beacon
-local function mast(c, x, a, r0, len)
-  local P = c.pal
-  local ca, sa = sm.cos(a), sm.sin(a)
-  local s = (c.class == "outpost") and 0.35 or 1.0
-  local y0, z0 = r0 * sa, r0 * ca
-  local y1, z1 = (r0 + len) * sa, (r0 + len) * ca
-  rod(c, "core", { x, y0, z0 }, { x, y1, z1 }, 1.4 * s, P.trim)
-  for k = 1, math.floor(len / (9 * s)) do
-    local f = (k * 9 * s) / len
-    if f < 1 then
-      local yy, zz = y0 + (y1 - y0) * f, z0 + (z1 - z0) * f
-      rod(c, "detail", { x - 2.5 * s, yy, zz }, { x + 2.5 * s, yy, zz }, 0.35 * s, P.panel)
+-- a floating monolith: a tall slab, slightly askew, with glyph columns lit down both faces and a light over it
+local function monolith(c, p, h, yaw)
+  local P, s = c.pal, c.s
+  slab(c, "core", p, 4 * s, h / 2, 1.6 * s, P.panel, nil, yaw, 0, 0.08)
+  slab(c, "detail", { p[1], p[2] - h / 2 - 3 * s, p[3] }, 2.5 * s, 1.0 * s, 1.0 * s, P.glow, 0.9, yaw)
+  if s > 0.5 then
+    for _, side in ipairs({ -1, 1 }) do
+      local f = turn({ 0, 0, side * 1.7 * s }, yaw)
+      glyph_column(c, "detail", math.max(2, math.floor(h / (7 * s))), { p[1] + f[1], p[2], p[3] + f[3] }, yaw, 1.1 * s, P.glow)
     end
   end
-  -- the dish: a hemisphere facing +x
-  add(c, "core", { kind = "hemisphere", c = { 0, 0, 0 }, r = 12 * s, h = 5 * s, seg = 10, rings = 3, color = P.plate, roll = -PI / 2,
-                   pos = { x - 0.5, y1 + c.AY, z1 } })
-  rod(c, "core", { x, y1, z1 }, { x + 9 * s, y1, z1 }, 0.35 * s, P.trim)
-  box(c, "core", x + 8.5 * s, y1 - 1 * s, z1 - 1 * s, x + 10 * s, y1 + 1 * s, z1 + 1 * s, P.accent, 0.7)
-  light(c, x - 1, y1 + 0, z1, { 1, 0.2, 0.15 }, "blink", 3, 110)
-  solid(c, x - 1.0, c.AY + math.min(y0, y1) - 1, math.min(z0, z1) - 1, x + 1.0, c.AY + math.max(y0, y1) + 1, math.max(z0, z1) + 1)
+  light(c, p[1], p[2] + h / 2 + 4 * s, p[3], P.glow, "pulse", 3, 160)
+  solid(c, p[1] - 3 * s, c.AY + p[2] - h * 0.45, p[3] - 3 * s, p[1] + 3 * s, c.AY + p[2] + h * 0.45, p[3] + 3 * s)
 end
 
--- the sphere that holds a station of this seed, without building it (sector placement asks for every sector):
--- centre and radius in anchor meters; the draws are the first ones of generate's stream (kept in step by the tests)
-function M.envelope(seed, class)
-  class = class or "port"
-  local c = new_ctx(seed, class, false)
+-- a cluster of cocoons hung on a surface point p (outward normal nrm): silk threads, lit seams
+local function cocoons(c, p, nrm, n, size)
+  local P = c.pal
+  local r = c.drng
+  for k = 1, n do
+    local off = { (r:float() - 0.5) * size * 3, (r:float() - 0.5) * size * 3, (r:float() - 0.5) * size * 3 }
+    local q = { p[1] + nrm[1] * size * 1.6 + off[1], p[2] + nrm[2] * size * 1.6 + off[2], p[3] + nrm[3] * size * 1.6 + off[3] }
+    local yaw, pitch = sm.atan2(nrm[1], nrm[3]), sm.atan2(sm.sqrt(nrm[1] * nrm[1] + nrm[3] * nrm[3]), nrm[2])
+    blob(c, "detail", q, size * 0.55, size * (1.1 + r:float() * 0.6), size * 0.55, k % 3 == 0 and P.accent or P.plate,
+         k % 3 == 0 and 0.35 or nil, 8, yaw, pitch)
+    blob(c, "detail", q, size * 0.6, size * 0.12, size * 0.6, P.glow, 0.8, 6, yaw, pitch)
+    limb(c, "detail", p, q, size * 0.08, size * 0.04, P.trim, 4)
+  end
+end
+
+-- a pulsing conduit: a thin lit line with swollen nodes every `step`
+local function conduit(c, layer, a, b, r, step, color)
+  limb(c, layer, a, b, r, r, color, 5, 0.85)
+  local d = len3(b[1] - a[1], b[2] - a[2], b[3] - a[3])
+  local n = math.max(1, math.floor(d / step))
+  for k = 1, n - 1 do blob(c, layer, lerp3(a, b, k / n), r * 2.6, r * 2.6, r * 2.6, color, 1, 6) end
+end
+
+-- ---------------------------------------------------------------------------------------------------
+-- the stem: from the cell's back passage to the body, shaped by the family
+-- ---------------------------------------------------------------------------------------------------
+local function stem(c, F)
+  local P, s, fam = c.pal, c.s, c.fam.id
+  local x0, x1 = F.body_front, F.back
+  local L = x1 - x0
+  local sw = 10 * s
+  solid(c, x0, c.AY - sw * 0.8, -sw * 0.8, x1, c.AY + sw * 0.8, sw * 0.8)
+  if fam == "coral" then
+    limb(c, "core", { x0, 0, 0 }, { x1, 0, 0 }, 9 * s, 7 * s, P.trim, 10)
+    local n = math.max(3, math.floor(L / (38 * s)))
+    for k = 0, n - 1 do
+      local x = x1 - (k + 0.5) * L / n
+      local w = (k % 2 == 0) and 1.0 or 0.75
+      blob(c, "core", { x, 0, 0 }, 18 * s * w, 13 * s * w, 14 * s * w, P.plate, nil, 10)
+      xring(c, "detail", x + 9 * s * w, 1.6 * s, 11 * s * w, 14.5 * s * w, 10, P.trim)
+    end
+  elseif fam == "crystal" then
+    xcyl(c, "core", x0, x1, 0, 0, 10 * s, P.plate, 6)
+    local n = math.max(3, math.floor(L / (70 * s)))
+    for k = 1, n do
+      local x = x1 - k * L / (n + 1)
+      xcyl(c, "core", x, x + 9 * s, 0, 0, 19 * s, P.glow, 6, 0.3, 10 * s)
+      xcyl(c, "core", x - 9 * s, x, 0, 0, 10 * s, P.glow, 6, 0.3, 19 * s)
+    end
+  elseif fam == "spiral" then
+    limb(c, "core", { x0, 0, 0 }, { x1, 0, 0 }, 5 * s, 5 * s, P.trim, 8)
+    local n = math.max(8, math.floor(L / (14 * s)))
+    for strand = 0, 2 do
+      local prev
+      for k = 0, n do
+        local t = k / n
+        local q = turn({ 0, 9 * s, 0 }, 0, 0, strand * TAU / 3 + t * L / (120 * s) * TAU)
+        local p = { x1 - t * L, q[2], q[1] }
+        if prev then limb(c, "core", prev, p, 4.5 * s, 4.5 * s, P.plate, 6) end
+        prev = p
+      end
+    end
+  else
+    xcyl(c, "core", x0, x1, 0, 0, 8 * s, P.plate, 10)
+    local n = math.max(3, math.floor(L / (50 * s)))
+    for k = 1, n do
+      local x = x1 - k * L / (n + 1)
+      xring(c, "core", x, 3 * s, 14 * s, 18 * s, 16, P.glow, 0.6)
+    end
+  end
+  -- three lit conduits along it
+  for k = 0, 2 do
+    local q = turn({ 0, (fam == "coral" and 10.5 or 11.5) * s, 0 }, 0, 0, k * TAU / 3 + 0.5)
+    conduit(c, "detail", { x0, q[2], q[1] }, { x1 - 4, q[2], q[1] }, 0.7 * math.max(s, 0.5), 30 * s, P.glow)
+  end
+end
+
+-- ---------------------------------------------------------------------------------------------------
+-- the families' bodies. Each grows within F.R of the axis between F.aft_end and F.body_front, adds its
+-- solids and lights, fills the spinning layer, and returns the silhouette's parts and a few surface points
+-- (where cocoons hang) as { p, normal } pairs.
+-- ---------------------------------------------------------------------------------------------------
+local B = {}
+
+-- Reef: a coral trunk, branching tendrils ending in glowing polyps, habitat bulbs and a halo of drifting spores
+function B.coral(c, F, far)
+  local P, s, R, rng = c.pal, c.s, F.R, c.rng
+  local spots = {}
+  local n = rng:int(9, 12)
+  local ph1, ph2 = rng:float() * TAU, rng:float() * TAU
+  local trunk = {}
+  for i = 0, n - 1 do
+    local t = i / (n - 1)
+    local x = F.body_front - t * F.body
+    trunk[i + 1] = { p = { x, 0.12 * R * sm.sin(t * PI * 1.3 + ph1), 0.12 * R * sm.sin(t * PI * 0.9 + ph2) },
+                     r = R * (0.15 + 0.09 * sm.sin(t * PI)) }
+  end
+  for i, tk in ipairs(trunk) do
+    blob(c, "core", tk.p, tk.r * 1.35, tk.r, tk.r * 0.95, P.plate, nil, 12)
+    far[#far + 1] = { kind = "sphere", c = { 0, 0, 0 }, r = 1, h = 1, seg = 6, rings = 2, color = P.plate, scale = { tk.r * 1.35, tk.r, tk.r * 0.95 },
+                      pos = { tk.p[1], tk.p[2] + c.AY, tk.p[3] } }
+    solid_ball(c, tk.p, tk.r)
+    if i > 1 then limb(c, "core", trunk[i - 1].p, tk.p, trunk[i - 1].r * 0.7, tk.r * 0.7, P.trim, 10) end
+    -- chitin plates along its back, lit pores between them
+    for k = 0, c.mesh and 4 or -1 do
+      local a = k * TAU / 5 + i * 0.4
+      local q = turn({ 0, tk.r * 0.98, 0 }, 0, 0, a)
+      slab(c, "detail", { tk.p[1], tk.p[2] + q[2], tk.p[3] + q[1] }, tk.r * 0.45, tk.r * 0.06, tk.r * 0.22, P.trim, nil, 0, -a)
+      local g = turn({ 0, tk.r * 0.93, 0 }, 0, 0, a + TAU / 10)
+      blob(c, "detail", { tk.p[1], tk.p[2] + g[2], tk.p[3] + g[1] }, tk.r * 0.05, tk.r * 0.05, tk.r * 0.05, P.glow, 1, 6)
+    end
+    spots[#spots + 1] = { p = { tk.p[1], tk.p[2] - tk.r * 0.9, tk.p[3] }, n = { 0, -1, 0 } }
+  end
+  -- tendrils: four or five bending segments each, tapering to a polyp
+  local nb = rint(rng, c.K.branches)
+  for b = 1, nb do
+    local tk = trunk[rng:int(1, n)]
+    local d = dir(rng:float() * TAU, (rng:float() - 0.5) * 2.4)
+    d = { d[1] * 0.35, d[2], d[3] }
+    local p = { tk.p[1] + d[1] * tk.r, tk.p[2] + d[2] * tk.r, tk.p[3] + d[3] * tk.r }
+    local total = R * (0.45 + 0.25 * rng:float())
+    local segs = 5
+    local r0 = R * 0.055
+    for k = 1, segs do
+      local bend = dir(rng:float() * TAU, (rng:float() - 0.5) * 2)
+      d = { d[1] * 0.8 + bend[1] * 0.35, d[2] * 0.8 + bend[2] * 0.35, d[3] * 0.8 + bend[3] * 0.35 }
+      local dl = len3(d[1], d[2], d[3])
+      d = { d[1] / dl, d[2] / dl, d[3] / dl }
+      local q = clamp_r({ p[1] + d[1] * total / segs, p[2] + d[2] * total / segs, p[3] + d[3] * total / segs }, R * 0.9)
+      q[1] = math.max(F.aft_end + 30 * s, math.min(F.body_front, q[1]))
+      local r1 = r0 * (1 - k / (segs + 1.5))
+      limb(c, "core", p, q, r0 * (1 - (k - 1) / (segs + 1.5)), r1, k % 2 == 0 and P.plate or P.trim, 8)
+      if k <= 3 then solid_limb(c, p, q, r1 * 1.2) end
+      if k == 1 then far[#far + 1] = { kind = "cone", c = { 0, 0, 0 }, r = r0, r1 = r1, h = len3(q[1] - p[1], q[2] - p[2], q[3] - p[3]), seg = 5,
+                                       color = P.trim, pitch = sm.atan2(sm.sqrt((q[1] - p[1]) ^ 2 + (q[3] - p[3]) ^ 2), q[2] - p[2]),
+                                       yaw = sm.atan2(q[1] - p[1], q[3] - p[3]), pos = { p[1], p[2] + c.AY, p[3] } } end
+      -- buds along the way
+      if c.mesh and c.mrng:int(0, 2) > 0 then
+        blob(c, "detail", lerp3(p, q, 0.5), r1 * 0.9, r1 * 0.9, r1 * 0.9, P.accent, 0.25, 6)
+      end
+      p = q
+    end
+    -- the polyp: a crown of petals round a glowing mouth
+    local pr = R * 0.03
+    blob(c, "core", p, pr, pr, pr, P.plate, nil, 8)
+    blob(c, "core", { p[1] + d[1] * pr, p[2] + d[2] * pr, p[3] + d[3] * pr }, pr * 0.6, pr * 0.6, pr * 0.6, P.glow, 1, 8)
+    for k = 0, c.mesh and 5 or -1 do
+      local side = dir(k * TAU / 6, 0)
+      limb(c, "detail", p, { p[1] + (d[1] + side[1] * 0.7) * pr * 2.2, p[2] + (d[2] + side[2] * 0.7) * pr * 2.2,
+                             p[3] + (d[3] + side[3] * 0.7) * pr * 2.2 }, pr * 0.25, 0, P.accent, 4)
+    end
+    light(c, p[1], p[2], p[3], (b % 2 == 0) and P.glow or P.accent, "pulse", 6, 100 + b * 7)
+    if b % 3 == 0 then spots[#spots + 1] = { p = p, n = d } end
+  end
+  -- habitat bulbs on the trunk, their window bands lit
+  for k = 1, rng:int(7, 10) do
+    local tk = trunk[rng:int(2, n - 1)]
+    local a = rng:float() * TAU
+    local q = turn({ 0, 1, 0 }, 0, 0, a)
+    local nrm = { 0, q[2], q[1] }
+    local base = { tk.p[1], tk.p[2] + nrm[2] * tk.r * 0.85, tk.p[3] + nrm[3] * tk.r * 0.85 }
+    local hgt = R * (0.12 + 0.06 * rng:float())
+    local wid = hgt * 0.45
+    if c.mesh then
+      local pts = { 0.25 * wid, 0, 0.8 * wid, 0.12 * hgt, wid, 0.4 * hgt, 0.75 * wid, 0.72 * hgt, 0.3 * wid, 0.92 * hgt, 0.35 * wid, hgt }
+      add(c, "core", { kind = "lathe", points = pts, seg = 12, color = P.plate, pitch = -a, pos = { base[1], base[2] + c.AY, base[3] } })
+      add(c, "detail", { kind = "ring", c = { 0, 0.5 * hgt, 0 }, rin = wid * 0.9, r = wid * 1.02, h = hgt * 0.03, seg = 12, color = P.glow,
+                         emissive = 1, pitch = -a, pos = { base[1], base[2] + c.AY, base[3] } })
+    end
+    local top = { base[1], base[2] + nrm[2] * hgt, base[3] + nrm[3] * hgt }
+    solid_limb(c, base, top, wid * 0.8)
+    light(c, top[1], top[2], top[3], P.glow, "steady", 5, 0)
+  end
+  -- aft: a fan of short tendrils behind the trunk
+  local tail = trunk[n]
+  for k = 0, 4 do
+    local a = k * TAU / 5
+    local q = turn({ 0, R * 0.25, 0 }, 0, 0, a)
+    local e = { F.aft_end + 30 * s, tail.p[2] + q[2], tail.p[3] + q[1] }
+    limb(c, "core", tail.p, e, tail.r * 0.3, R * 0.01, P.trim, 6)
+    solid_limb(c, tail.p, lerp3(tail.p, e, 0.6), tail.r * 0.25)
+    light(c, e[1], e[2], e[3], P.accent, "blink", 4, 90)
+  end
+  -- the spore halo: two drifting rings of seeds on the spinning layer
+  for h = -1, 1, 2 do
+    local x = h * F.body * 0.22
+    local rr = R * (0.72 + 0.08 * h)
+    xring(c, "ring", x, 1.5 * s, rr - 0.6 * s, rr + 0.6 * s, 48, P.glow, 0.6)
+    for k = 0, (c.mesh and 27 or -1) do
+      local q = turn({ 0, rr, 0 }, 0, 0, k * TAU / 28)
+      blob(c, "ring", { x + ((k % 3) - 1) * 6 * s, q[2], q[1] }, 7 * s, 7 * s, 7 * s, k % 4 == 0 and P.glow or P.plate, k % 4 == 0 and 0.8 or nil, 6)
+    end
+    far[#far + 1] = { kind = "ring", c = { 0, -1, 0 }, rin = rr - 1, r = rr + 1, h = 2, seg = 24, color = P.glow, emissive = 0.6, roll = -PI / 2,
+                      pos = { F.hx + x, c.AY, 0 } }
+  end
+  return spots
+end
+
+-- Lattice: a cut-crystal core in a lattice of nodes and struts, great shards grown out of it, a halo of
+-- floating splinters turning round it
+function B.crystal(c, F, far)
+  local P, s, R, rng = c.pal, c.s, F.R, c.rng
+  local spots = {}
+  local hx, half = F.hx, F.body / 2
+  -- the core: a long double pyramid, square in section, with lit seams down its edges
+  local cr = R * 0.26
+  for _, e in ipairs({ { F.body_front, 1 }, { F.body_back, -1 } }) do
+    limb(c, "core", { hx, 0, 0 }, { e[1], 0, 0 }, cr, 0, P.plate, 4, 0.12)
+    far[#far + 1] = { kind = "cone", c = { 0, 0, 0 }, r = cr, r1 = 0, h = half, seg = 4, color = P.plate, emissive = 0.12,
+                      pitch = PI / 2, yaw = e[2] * PI / 2, pos = { hx, c.AY, 0 } }
+    for k = 0, 3 do
+      local q = turn({ 0, cr, 0 }, 0, 0, k * PI / 2)
+      limb(c, "detail", { hx, q[2], q[1] }, { e[1], 0, 0 }, 1.6 * s, 0.4 * s, P.glow, 4, 1)
+    end
+  end
+  for k = -2, 2 do
+    local x = hx + k * half * 0.3
+    local w = cr * (1 - math.abs(k) * 0.3) * 0.72
+    solid(c, x - half * 0.15, c.AY - w, -w, x + half * 0.15, c.AY + w, w)
+  end
+  -- the lattice: jittered grid nodes inside an ellipsoid round the core, struts between neighbours
+  local nx, ny = 6, 5
+  local sp = R * 0.38
+  local nodes, at = {}, {}
+  for i = 0, nx - 1 do
+    for j = 0, ny - 1 do
+      for k = 0, ny - 1 do
+        local x = F.body_back + (i + 0.5) * F.body / nx + (rng:float() - 0.5) * sp * 0.3
+        local y = (j - (ny - 1) / 2) * sp + (rng:float() - 0.5) * sp * 0.3
+        local z = (k - (ny - 1) / 2) * sp + (rng:float() - 0.5) * sp * 0.3
+        local ex, er = (x - hx) / half, sm.sqrt(y * y + z * z) / (R * 0.86)
+        if ex * ex + er * er <= 1 and sm.sqrt(y * y + z * z) > cr * 0.8 then
+          local nd = { p = { x, y, z }, i = i, j = j, k = k }
+          nodes[#nodes + 1] = nd
+          at[i .. "," .. j .. "," .. k] = nd
+        end
+      end
+    end
+  end
+  for _, nd in ipairs(nodes) do
+    local glow = (nd.i + nd.j + nd.k) % 4 == 0
+    blob(c, "core", nd.p, R * 0.028, R * 0.04, R * 0.028, glow and P.glow or P.trim, glow and 0.7 or nil, 4)
+    for _, o in ipairs({ { 1, 0, 0 }, { 0, 1, 0 }, { 0, 0, 1 } }) do
+      local nb = at[(nd.i + o[1]) .. "," .. (nd.j + o[2]) .. "," .. (nd.k + o[3])]
+      if nb and rng:int(0, 99) < 60 then
+        rod(c, "core", nd.p, nb.p, R * 0.0055, P.trim)
+        if c.mesh and c.mrng:int(0, 3) == 0 then rod(c, "detail", nd.p, nb.p, R * 0.0065, P.glow, 0.7) end
+      end
+    end
+  end
+  -- great shards out of the outer nodes, siblings at their feet
+  local nb = rint(rng, c.K.branches)
+  for b = 1, nb do
+    local nd = nodes[rng:int(1, #nodes)]
+    local p = nd.p
+    local rr = sm.sqrt(p[2] * p[2] + p[3] * p[3])
+    local d = { (rng:float() - 0.5) * 0.5, p[2] / rr, p[3] / rr }
+    local dl = len3(d[1], d[2], d[3])
+    d = { d[1] / dl, d[2] / dl, d[3] / dl }
+    local L = R * (0.22 + 0.3 * rng:float())
+    local tip = clamp_r({ p[1] + d[1] * L, p[2] + d[2] * L, p[3] + d[3] * L }, R * 0.97)
+    local base_r = R * (0.035 + 0.035 * rng:float())
+    local glow = b % 3 == 0
+    limb(c, "core", p, tip, base_r, 0, glow and P.glow or P.plate, rng:int(4, 6), glow and 0.45 or 0.1)
+    solid_limb(c, p, lerp3(p, tip, 0.55), base_r * 0.9)
+    if b <= 8 then
+      far[#far + 1] = { kind = "cone", c = { 0, 0, 0 }, r = base_r, r1 = 0, h = len3(tip[1] - p[1], tip[2] - p[2], tip[3] - p[3]), seg = 4,
+                        color = P.plate, pitch = sm.atan2(sm.sqrt((tip[1] - p[1]) * (tip[1] - p[1]) + (tip[3] - p[3]) * (tip[3] - p[3])), tip[2] - p[2]),
+                        yaw = sm.atan2(tip[1] - p[1], tip[3] - p[3]), pos = { p[1], p[2] + c.AY, p[3] } }
+    end
+    for k = 1, (c.mesh and 3 or 0) do
+      local side = dir(c.mrng:float() * TAU, (c.mrng:float() - 0.5) * 2)
+      local e = { p[1] + (d[1] + side[1] * 0.6) * L * 0.35, p[2] + (d[2] + side[2] * 0.6) * L * 0.35, p[3] + (d[3] + side[3] * 0.6) * L * 0.35 }
+      limb(c, "detail", p, clamp_r(e, R * 0.97), base_r * 0.45, 0, k == 2 and P.glow or P.trim, 4, k == 2 and 0.6 or nil)
+    end
+    light(c, tip[1], tip[2], tip[3], glow and P.glow or P.accent, "pulse", 5, 140 + b * 5)
+    if b % 3 == 1 then spots[#spots + 1] = { p = lerp3(p, tip, 0.3), n = { 0, -1, 0 } } end
+  end
+  -- the aft: a cluster of shards pointing back
+  for k = 0, 5 do
+    local q = turn({ 0, R * 0.12, 0 }, 0, 0, k * TAU / 6)
+    local e = { F.aft_end + 25 * s, q[2] * 1.6, q[1] * 1.6 }
+    limb(c, "core", { F.body_back + 40 * s, q[2], q[1] }, e, R * 0.04, 0, k % 2 == 0 and P.plate or P.glow, 5, k % 2 == 0 and 0.1 or 0.5)
+    solid_limb(c, { F.body_back + 40 * s, q[2], q[1] }, lerp3({ F.body_back + 40 * s, q[2], q[1] }, e, 0.5), R * 0.03)
+  end
+  light(c, F.aft_end + 20 * s, 0, 0, P.glow, "strobe", 8, 150)
+  -- the halo: splinters on the spinning layer, laid along their circle
+  for h = 0, 1 do
+    local x = (h == 0 and -1 or 1) * half * 0.35
+    local rr = R * (0.9 - 0.12 * h)
+    for k = 0, (c.mesh and 23 or -1) do
+      local a = k * TAU / 24 + h * 0.13
+      local q = turn({ 0, rr, 0 }, 0, 0, a)
+      local t = turn({ 0, 1, 0 }, 0, 0, a + PI / 2)
+      local p = { x, q[2], q[1] }
+      local l = R * (0.04 + 0.03 * (k % 3))
+      limb(c, "ring", { p[1], p[2] - t[2] * l, p[3] - t[1] * l }, { p[1], p[2] + t[2] * l, p[3] + t[1] * l }, R * 0.012, 0,
+           k % 2 == 0 and P.glow or P.plate, 4, k % 2 == 0 and 0.6 or 0.1)
+    end
+    far[#far + 1] = { kind = "ring", c = { 0, -1, 0 }, rin = rr - 2, r = rr + 2, h = 2, seg = 24, color = P.glow, emissive = 0.5, roll = -PI / 2,
+                      pos = { F.hx + x, c.AY, 0 } }
+  end
+  return spots
+end
+
+-- Helix: a long horn down the axis, a nautilus of growing chambers round its middle, and two or three
+-- flaring helices of linked nodules that turn round it, lopsided, one bigger than the rest
+function B.spiral(c, F, far)
+  local P, s, R, rng = c.pal, c.s, F.R, c.rng
+  local spots = {}
+  local hx = F.hx
+  -- the horn
+  local r0 = R * 0.1
+  limb(c, "core", { F.body_front + 20 * s, 0, 0 }, { F.aft_end + 10 * s, 0, 0 }, r0, R * 0.012, P.plate, 10)
+  far[#far + 1] = { kind = "cone", c = { 0, 0, 0 }, r = r0, r1 = R * 0.012, h = F.body_front - F.aft_end, seg = 6, color = P.plate,
+                    pitch = PI / 2, yaw = -PI / 2, pos = { F.body_front + 20 * s, c.AY, 0 } }
+  local span = F.body_front - F.aft_end
+  for k = 0, 9 do
+    local x0 = F.body_front - k * span / 10
+    local x1 = x0 - span / 10
+    local w = r0 + (R * 0.012 - r0) * (k + 0.5) / 10
+    solid(c, x1, c.AY - w * 0.75, -w * 0.75, x0, c.AY + w * 0.75, w * 0.75)
+    xring(c, "detail", x0 - 6 * s, 4 * s, w * 0.95, w * 1.12, 12, k % 2 == 0 and P.trim or P.accent, k % 2 == 0 and nil or 0.4)
+  end
+  -- the nautilus: chambers on a widening spiral in the x-y plane round the horn's middle
+  local nc = rng:int(12, 15)
+  local prev
+  for k = 1, nc do
+    local t = k / nc
+    local ang = k * 0.62
+    local rho = R * (0.03 + 0.25 * t * t)
+    local p = { hx + sm.cos(ang) * rho * 1.6, sm.sin(ang) * rho, 0 }
+    local br = R * (0.02 + 0.09 * t)
+    blob(c, "core", p, br * 1.2, br, br * 1.1, (k % 2 == 0) and P.plate or P.trim, nil, 10)
+    solid_ball(c, p, br)
+    if k % 3 == 0 then
+      blob(c, "detail", { p[1], p[2], p[3] + br * 1.02 }, br * 0.35, br * 0.35, br * 0.08, P.glow, 1, 8)
+      blob(c, "detail", { p[1], p[2], p[3] - br * 1.02 }, br * 0.35, br * 0.35, br * 0.08, P.glow, 1, 8)
+      light(c, p[1], p[2] + br, p[3], P.glow, "steady", 5, 0)
+    end
+    if prev then limb(c, "core", prev.p, p, prev.br * 0.6, br * 0.6, P.trim, 8) end
+    if k > nc - 5 then
+      far[#far + 1] = { kind = "sphere", c = { 0, 0, 0 }, r = 1, h = 1, seg = 6, rings = 2, color = P.plate, scale = { br * 1.2, br, br * 1.1 },
+                        pos = { p[1], p[2] + c.AY, p[3] } }
+    end
+    spots[#spots + 1] = { p = { p[1], p[2] - br, p[3] }, n = { 0, -1, 0 } }
+    prev = { p = p, br = br }
+  end
+  -- the helices (spinning): flaring out toward the back, nodules on them, rungs between
+  local nh = rng:int(2, 3)
+  local turns = 1.4 + rng:float()
+  local npts = 40
+  local hel = {}
+  for h = 1, nh do
+    local k_h = 1 - 0.16 * (h - 1)
+    local a0 = h * TAU / nh + rng:float() * 0.4
+    local pts = {}
+    for i = 0, npts do
+      local t = i / npts
+      local x = (F.body_front - t * F.body * 1.04) - hx
+      local rad = R * k_h * (0.22 + 0.66 * t * (2 - t) * 0.5 + 0.33 * t * 0.5)
+      local q = turn({ 0, math.min(rad, R * 0.92), 0 }, 0, 0, a0 + t * turns * TAU)
+      pts[i + 1] = { x, q[2], q[1] }
+    end
+    hel[h] = pts
+    local th = R * 0.035 * k_h
+    for i = 1, npts do
+      local a, b = pts[i], pts[i + 1]
+      limb(c, "ring", a, b, th * (1 - 0.45 * (i - 1) / npts), th * (1 - 0.45 * i / npts), (i % 2 == 0) and P.plate or P.trim, 8)
+      if i % 4 == 0 then
+        local nr = th * 1.8
+        blob(c, "ring", b, nr, nr, nr, P.plate, nil, 8)
+        blob(c, "ringd", { b[1] + nr * 0.6, b[2], b[3] }, nr * 0.45, nr * 0.45, nr * 0.45, P.glow, 1, 6)
+      end
+      if i % 3 == 0 then far_limb(c, far, { hel[h][i - 2][1] + hx, hel[h][i - 2][2], hel[h][i - 2][3] }, { b[1] + hx, b[2], b[3] }, th, P.plate) end
+    end
+    -- the helix grows out of the horn on two spokes
+    limb(c, "ring", { pts[1][1], 0, 0 }, pts[1], th * 0.8, th, P.trim, 8)
+    limb(c, "ring", { pts[npts // 2 + 1][1], 0, 0 }, pts[npts // 2 + 1], th * 0.6, th * 0.8, P.trim, 8)
+  end
+  for i = 4, npts, 6 do
+    for h = 1, nh - 1 do
+      limb(c, "ringd", hel[h][i], hel[h + 1][i], R * 0.006, R * 0.006, P.glow, 5, 0.8)
+    end
+  end
+  -- the aft: the horn's point and a few barbs round it
+  for k = 0, 3 do
+    local q = turn({ 0, R * 0.08, 0 }, 0, 0, k * PI / 2 + 0.4)
+    local base = { F.aft_end + 120 * s, 0, 0 }
+    limb(c, "core", base, { F.aft_end + 20 * s, q[2], q[1] }, R * 0.015, 0, P.trim, 5)
+  end
+  light(c, F.aft_end + 6 * s, 0, 0, P.accent, "strobe", 8, 150)
+  -- (the barbs on the horn's flank, where cocoons hang)
+  for k = 1, rint(rng, c.K.branches) // 3 do
+    local x = F.body_front - rng:float() * span * 0.9
+    local a = rng:float() * TAU
+    local q = turn({ 0, 1, 0 }, 0, 0, a)
+    local w = r0 * (1 - (F.body_front - x) / span * 0.85)
+    local p = { x, q[2] * w, q[1] * w }
+    limb(c, "core", p, { x - R * 0.06, q[2] * (w + R * 0.12), q[1] * (w + R * 0.12) }, R * 0.012, 0, P.accent, 5, 0.2)
+    spots[#spots + 1] = { p = p, n = { 0, q[2], q[1] } }
+  end
+  return spots
+end
+
+-- Gyre: a great orb cradled on the stem, nested shells of rings and plates turning round it on tilted axes,
+-- standing stones circling it and a tail of smaller orbs behind
+function B.shells(c, F, far)
+  local P, s, R, rng = c.pal, c.s, F.R, c.rng
+  local spots = {}
+  local hx = F.hx
+  local orb = R * 0.3
+  blob(c, "core", { hx, 0, 0 }, orb, orb, orb, P.plate, nil, 16)
+  far[#far + 1] = { kind = "sphere", c = { 0, 0, 0 }, r = orb, h = orb, seg = 8, rings = 3, color = P.plate, pos = { hx, c.AY, 0 } }
+  solid_ball(c, { hx, 0, 0 }, orb)
+  for _, dx in ipairs({ -0.55, 0.55 }) do solid_ball(c, { hx + dx * orb, 0, 0 }, orb * 0.75) end
+  -- lit bands and irises on the orb
+  for k = -2, 2 do
+    local x = hx + k * orb * 0.33
+    local rr = sm.sqrt(math.max(0, orb * orb - (k * orb * 0.33) * (k * orb * 0.33)))
+    xring(c, "detail", x, 3 * s, rr - 1, rr + 2.5 * s, 32, k == 0 and P.glow or P.trim, k == 0 and 1 or nil)
+  end
+  for k = 0, 5 do
+    local a = k * TAU / 6 + 0.3
+    local q = turn({ 0, orb * 0.97, 0 }, 0, 0, a)
+    blob(c, "core", { hx + orb * 0.25, q[2] * 0.97, q[1] * 0.97 }, orb * 0.12, orb * 0.16, orb * 0.16, P.glow, 0.9, 10)
+    light(c, hx + orb * 0.25, q[2], q[1], P.glow, "pulse", 7, 200 + k * 11)
+    spots[#spots + 1] = { p = { hx - orb * 0.3, q[2] * 0.95, q[1] * 0.95 }, n = { 0, q[2] / orb, q[1] / orb } }
+  end
+  -- the cradle: four arms from the stem's end round the orb
+  for k = 0, 3 do
+    local q = turn({ 0, orb * 1.15, 0 }, 0, 0, k * PI / 2 + PI / 4)
+    local a = { F.body_front, 0, 0 }
+    local m = { hx + orb * 0.4, q[2], q[1] }
+    limb(c, "core", a, m, R * 0.025, R * 0.018, P.trim, 8)
+    limb(c, "core", m, { hx - orb * 0.5, q[2] * 0.9, q[1] * 0.9 }, R * 0.018, R * 0.008, P.trim, 8)
+    solid_limb(c, a, m, R * 0.02)
+  end
+  -- the shells (spinning): rings on tilted axes, each with plates and lit nodes on it
+  local rmax = math.min(R * 0.92, F.body / 2 + R * 0.05)
+  local tilts = { 0.45, 1.15, 0.2, 1.45 }
+  local ns = 4
+  for i = 1, ns do
+    local ri = orb + (rmax - orb) * (i - 0.4) / (ns - 0.4)
+    local tau, psi = tilts[i] + (rng:float() - 0.5) * 0.3, rng:float() * TAU
+    local roll = -PI / 2 + tau
+    local w = R * (0.018 + 0.006 * i)
+    add_ring(c, ri, w, roll, psi, i % 2 == 0 and P.trim or P.plate)
+    if i >= ns - 1 then
+      far[#far + 1] = { kind = "ring", c = { 0, -w, 0 }, rin = ri - w, r = ri, h = 2 * w, seg = 28, color = P.plate, roll = roll, yaw = psi,
+                        pos = { hx, c.AY, 0 } }
+    end
+    local plates = rng:int(6, 10)
+    for k = 0, plates - 1 do
+      local u = k * TAU / plates + rng:float() * 0.2
+      local p = turn({ ri * sm.cos(u), 0, ri * sm.sin(u) }, psi, 0, roll)
+      local tnd = turn({ -sm.sin(u), 0, sm.cos(u) }, psi, 0, roll)
+      local half = ri * 0.12
+      limb(c, "ring", { p[1] - tnd[1] * half, p[2] - tnd[2] * half, p[3] - tnd[3] * half }, { p[1] + tnd[1] * half, p[2] + tnd[2] * half, p[3] + tnd[3] * half },
+           w * 2.2, w * 2.2, k % 3 == 0 and P.accent or P.plate, 6, k % 3 == 0 and 0.3 or nil)
+      blob(c, "ringd", p, w * 1.6, w * 1.6, w * 1.6, P.glow, 1, 6)
+    end
+  end
+  -- standing stones circling the orb (still): monoliths at the shells' edge
+  local nst = math.max(4, rint(rng, c.K.branches) // 2)
+  for k = 0, nst - 1 do
+    local a = k * TAU / nst + 0.2
+    local q = turn({ 0, math.min(R * 0.95, rmax + R * 0.06), 0 }, 0, 0, a)
+    local p = { hx + (rng:float() - 0.5) * F.body * 0.5, q[2], q[1] }
+    if c.mesh then
+      slab(c, "core", p, 6 * s, R * 0.06, 6 * s, P.panel, nil, 0, -a)
+      slab(c, "detail", p, 6.4 * s, R * 0.004, 6.4 * s, P.glow, 1, 0, -a)
+    end
+    solid_ball(c, p, 8 * s)
+    light(c, p[1], p[2], p[3], P.accent, "pulse", 5, 170)
+  end
+  -- the tail: smaller orbs behind, on a bending line
+  local prev = { hx - orb * 0.9, 0, 0 }
+  local n = rng:int(3, 5)
+  for k = 1, n do
+    local t = k / n
+    local p = { hx - orb - (hx - orb - F.aft_end - 30 * s) * t, R * 0.08 * sm.sin(t * 3), R * 0.06 * sm.cos(t * 2) }
+    local r = orb * (0.45 - 0.3 * t)
+    blob(c, "core", p, r, r, r, k % 2 == 0 and P.trim or P.plate, nil, 12)
+    xring(c, "detail", p[1], 2 * s, r * 0.98, r * 1.1, 16, P.glow, 0.8)
+    limb(c, "core", prev, p, r * 0.25, r * 0.2, P.trim, 6)
+    solid_ball(c, p, r)
+    prev = p
+  end
+  light(c, prev[1] - 10 * s, prev[2], prev[3], P.glow, "strobe", 7, 150)
+  return spots
+end
+
+-- ---------------------------------------------------------------------------------------------------
+-- the frame: the station's measures, the first draws of its stream (envelope and generate share it, so the
+-- placement knows the hull's box without building it)
+-- ---------------------------------------------------------------------------------------------------
+local function frame(c)
   local K, T, rng = c.K, c.T, c.rng
-  local s = (class == "outpost") and 0.3 or 1.0
-  local R = rint(rng, K.radius)
-  local arm = rint(rng, K.arm)
-  local _, hub_len = rint(rng, K.hub_r), rint(rng, K.hub_len)
-  for _, k in ipairs({ K.rings, K.spokes, K.arms, K.drums, K.masts, K.wings, K.cargo }) do rint(rng, k) end
-  local aft = rint(rng, K.aft)
-  local hub_front = T.back_x - 3.5 - T.wall - arm
-  local aft_end = hub_front - hub_len - aft
-  local lo, hi = aft_end - 14, T.front_x + 6
-  return { hub_front - hub_len / 2, c.AY, 0 }, sm.sqrt(((hi - lo) / 2) ^ 2 + R * R)
+  local s = c.s
+  local F = { s = s }
+  F.R = rint(rng, K.radius)
+  F.stem = rint(rng, K.stem)
+  F.body = rint(rng, K.body)
+  F.aft = rint(rng, K.aft)
+  F.back = T.back_x - 3.5 - T.wall                 -- where the cell's door passage ends: the stem starts here
+  F.body_front = F.back - F.stem
+  F.body_back = F.body_front - F.body
+  F.aft_end = F.body_back - F.aft
+  F.hx = (F.body_front + F.body_back) / 2
+  local pad = 24 * s
+  -- the box in anchor meters (y absolute); the body keeps within R of the axis, the pods and stones too
+  F.lo = { F.aft_end - pad, c.AY - F.R - pad, -F.R - pad }
+  F.hi = { T.front_x + 6, c.AY + F.R + pad, F.R + pad }
+  F.centre = { (F.lo[1] + F.hi[1]) / 2, c.AY, 0 }
+  local hx_, hr = (F.hi[1] - F.lo[1]) / 2, F.R + pad
+  F.radius = sm.sqrt(hx_ * hx_ + hr * hr)
+  return F
+end
+
+-- the sphere that holds a station of this seed, without building it -> centre (anchor meters), radius,
+-- and its bounding box lo, hi
+function M.envelope(seed, class, family)
+  local c = new_ctx(seed, class or "port", false, family)
+  local F = frame(c)
+  return F.centre, F.radius, F.lo, F.hi
 end
 
 -- mesh ~= false builds the triangles too; the sim asks for the layout alone (M.get) and the view builds the parts
 -- the first time it draws (M.parts): the same stream of random numbers either way, so the same station
-function M.generate(seed, class, bay_no_in, mesh)
+function M.generate(seed, class, bay_no_in, mesh, family)
   class = class or "port"
-  local c = new_ctx(seed, class, mesh ~= false)
-  local K, P, T, rng, H = c.K, c.pal, c.T, c.rng, c.H
-  local s = (class == "outpost") and 0.3 or 1.0
-  local R = rint(rng, K.radius)
-  local arm = rint(rng, K.arm)
-  local hub_r, hub_len = rint(rng, K.hub_r), rint(rng, K.hub_len)
-  local nrings, nspokes = rint(rng, K.rings), rint(rng, K.spokes)
-  local narms, ndrums, nmasts = rint(rng, K.arms), rint(rng, K.drums), rint(rng, K.masts)
-  local nwings, ncargo = rint(rng, K.wings), rint(rng, K.cargo)
-  local aft = rint(rng, K.aft)
+  local c = new_ctx(seed, class, mesh ~= false, family)
+  local F = frame(c)
+  local K, P, rng = c.K, c.pal, c.rng
+  local s = c.s
   local bay_no = bay_no_in or rng:int(1, 24)
-  rng:int(1, 24)   -- (the stream stays the same whether or not the number is given)
-  local back = T.back_x - 3.5 - T.wall            -- where the cell's door passage ends: the arm starts here
-  local hub_front = back - arm
-  local hx = hub_front - hub_len / 2
-  local hub_back = hub_front - hub_len
-  local aft_end = hub_back - aft
-  local aw = math.max(2.5, hub_r * 0.12)          -- visitor arm half-width
-  local tube_w, tube_t = 56 * s, 34 * s            -- the big ring's width along x and its radial thickness
-  local rin, rout = R - tube_t / 2, R + tube_t / 2
-  local ring_seg = math.max(24, math.min(64, math.floor(R / 9)))
-  local info = { R = R, arm = arm, hub_r = hub_r, hub_len = hub_len, rings = nrings, spokes = nspokes, arms = narms,
-                 drums = ndrums, masts = nmasts, wings = nwings, cargo = ncargo, aft = aft, bay_no = bay_no, hx = hx,
-                 palette = P.name, axis_y = c.AY, hub_front = hub_front, aft_end = aft_end, back = back }
+  if bay_no_in then rng:int(1, 24) end   -- (the stream stays the same whether or not the number is given)
+  local npods, nmono, ncoc = rint(rng, K.pods), rint(rng, K.monoliths), rint(rng, K.cocoons)
+  local info = { R = F.R, arm = F.stem, stem = F.stem, body = F.body, aft = F.aft, bay_no = bay_no, hx = F.hx,
+                 family = c.fam.id, family_name = c.fam.name, palette = c.pal_name, axis_y = c.AY,
+                 body_front = F.body_front, body_back = F.body_back, aft_end = F.aft_end, back = F.back,
+                 monoliths = nmono, cocoons = ncoc }
 
-  -- the hangar cell and the arm that carries it
+  -- the hangar cell, the stem that carries it, and a glyph band over its mouth
   local cell = bay_cell(c, bay_no)
-  box(c, "core", hub_front, -aw, -aw, back, aw, aw, P.trim)
-  box(c, "core", hub_front + 2, -aw * 1.3, -aw * 0.5, back - 1, -aw * 0.7, aw * 0.5, P.panel)
-  solid(c, hub_front, c.AY - aw * 0.8, -aw * 0.8, back, c.AY + aw * 0.8, aw * 0.8)
-  for _, sy in ipairs({ -1, 1 }) do
-    for _, sz in ipairs({ -1, 1 }) do
-      box(c, "core", hub_front, sy * aw - 0.5, sz * aw - 0.5, back, sy * aw + 0.5, sz * aw + 0.5, shade(P.plate, 1.1))
-    end
-  end
-  -- collars with lit windows every ~55 m, truss bays between them
-  local nc = math.max(2, math.floor(arm / (55 * math.max(s, 0.6))))
-  for k = 1, nc do
-    local x = back - k * arm / (nc + 1)
-    box(c, "core", x - 3 * s, -aw * 1.5, -aw * 1.5, x + 3 * s, aw * 1.5, aw * 1.5, P.plate)
-    box(c, "detail", x - 3.2 * s, -aw * 0.6, aw * 1.5, x + 3.2 * s, aw * 0.6, aw * 1.5 + 0.3, P.glow, 1)
-    box(c, "detail", x - 3.2 * s, -aw * 0.6, -aw * 1.5 - 0.3, x + 3.2 * s, aw * 0.6, -aw * 1.5, P.glow, 1)
-    box(c, "detail", x - 1 * s, aw * 1.5, -aw * 0.3, x + 1 * s, aw * 1.5 + 2.5 * s, aw * 0.3, P.accent, 0.6)
-  end
-  local nb = math.floor(arm / (9 * math.max(s, 0.5)))
-  for k = 0, nb - 1 do
-    local x0 = hub_front + k * arm / nb
-    local x1 = x0 + arm / nb
-    local w = aw * 1.02
-    rod(c, "detail", { x0, -w, -w }, { x1, w, -w }, 0.35 * math.max(s, 0.6), P.panel)
-    rod(c, "detail", { x0, w, -w }, { x1, -w, -w }, 0.35 * math.max(s, 0.6), P.panel)
-    rod(c, "detail", { x0, -w, w }, { x1, w, w }, 0.35 * math.max(s, 0.6), P.panel)
-    rod(c, "detail", { x0, w, w }, { x1, -w, w }, 0.35 * math.max(s, 0.6), P.panel)
-  end
-  -- cable run and a pipe bundle along the arm
-  add(c, "detail", { kind = "cylinder", c = { 0, 0, 0 }, r = 0.5 * math.max(s, 0.6), h = arm, seg = 6, color = { 0.8, 0.55, 0.15 }, roll = -PI / 2,
-                     pos = { hub_front, c.AY + aw + 1.2, 0 } })
+  glyphs(c, "core", 5, cell.hi[1] + 1.3, cell.hi[2] + 6.2, 0, 1.0, P.glow, 1)
+  stem(c, F)
 
-  -- the hub: a drum with a nose, a lit observation band and docking collars, a tower on top
-  xcyl(c, "core", hub_back, hub_front, 0, 0, hub_r, P.plate, 20)
-  xcyl(c, "core", hub_front, hub_front + 22 * s, 0, 0, hub_r, P.trim, 20, nil, hub_r * 0.5)   -- the nose cone toward the bay
-  xcyl(c, "core", hub_back - 18 * s, hub_back, 0, 0, hub_r * 0.55, P.trim, 14, nil, hub_r)
-  xring(c, "core", hx, 8 * s, hub_r - 0.3, hub_r + 1.2, 20, P.glow, 1)
-  xring(c, "core", hx + hub_len * 0.3, 3 * s, hub_r - 0.3, hub_r + 0.9, 20, P.accent, 0.7)
-  xring(c, "core", hx - hub_len * 0.3, 3 * s, hub_r - 0.3, hub_r + 0.9, 20, P.accent, 0.7)
-  box(c, "core", hx - 14 * s, hub_r - 2, -9 * s, hx + 14 * s, hub_r + 26 * s, 9 * s, P.plate)
-  box(c, "detail", hx - 14.2 * s, hub_r + 14 * s, -7 * s, hx + 14.2 * s, hub_r + 20 * s, 7 * s, P.glow, 1)
-  sphere(c, "core", hx, hub_r + 28 * s, 0, 7 * s, P.trim, nil, 8)
-  solid(c, hub_back, c.AY - hub_r * 0.78, -hub_r * 0.78, hub_front, c.AY + hub_r * 0.78, hub_r * 0.78)
-  solid(c, hx - 12 * s, c.AY + hub_r - 4, -7 * s, hx + 12 * s, c.AY + hub_r + 24 * s, 7 * s)
-  light(c, hx, hub_r + 36 * s, 0, { 1, 1, 1 }, "strobe", 5, 150)
-  -- hub detail: window grids and panel seams around the drum
-  for k = 0, c.mesh and 23 or -1 do
-    local a = k * TAU / 24
-    if k % 2 == 0 then rbox(c, "detail", hub_back + 4, hub_front - 4, hub_r - 0.2, hub_r + 0.5, 0.7 * (hub_r / 60), a, P.panel) end
-    for row = 1, 4 do
-      if c.mrng:int(1, 10) > 3 then
-        local xx = hub_back + 10 + (row - 1) * (hub_len - 20) / 3
-        rbox(c, "detail", xx, xx + 5, hub_r - 0.2, hub_r + 0.7, 1.4 * math.max(s, 0.5), a + 0.065, P.glow, 1)
-      end
-    end
-  end
+  -- the body
+  local far = c.mesh and c.parts.far or {}
+  local spots = B[c.fam.id](c, F, far)
 
-  -- the aft spine: a long mast behind the hub, with cargo racks, wings and a thruster cluster
-  local sr = hub_r * 0.28
-  xcyl(c, "core", aft_end, hub_back - 18 * s, 0, 0, sr, P.trim, 12)
-  solid(c, aft_end, c.AY - sr * 0.8, -sr * 0.8, hub_back - 18 * s, c.AY + sr * 0.8, sr * 0.8)
-  for k = 1, math.floor(aft / (22 * math.max(s, 0.5))) do
-    local x = hub_back - 18 * s - k * 22 * math.max(s, 0.5)
-    if x > aft_end + 6 then xring(c, "detail", x, 2 * s, sr, sr * 1.35, 12, P.panel) end
-  end
-  -- thrusters: four glowing nozzles
-  for k = 0, 3 do
-    local a = k * TAU / 4 + PI / 4
-    local y, z = sm.sin(a) * sr * 0.6, sm.cos(a) * sr * 0.6
-    xcyl(c, "core", aft_end - 9 * s, aft_end, y, z, sr * 0.35, P.panel, 8, nil, sr * 0.55)
-    xcyl(c, "core", aft_end - 10 * s, aft_end - 9 * s, y, z, sr * 0.38, { 0.4, 0.8, 1.0 }, 8, 1)
-  end
-  light(c, aft_end - 12 * s, 0, 0, { 0.4, 0.8, 1.0 }, "steady", 8, 0)
-  -- cargo racks: a frame with a grid of coloured containers
-  local cargo_cols = { P.accent, { 0.6, 0.6, 0.62 }, { 0.35, 0.5, 0.7 }, { 0.7, 0.3, 0.25 }, { 0.8, 0.75, 0.55 } }
-  for rk = 1, ncargo do
-    local x = hub_back - 18 * s - (rk * aft / (ncargo + 1.5))
-    local half = 3.6 * s
-    for arm_i = 0, 3 do
-      local a = arm_i * PI / 2
-      local ca, sa = sm.cos(a), sm.sin(a)
-      rod(c, "core", { x, sr * sa, sr * ca }, { x, (sr + 40 * s) * sa, (sr + 40 * s) * ca }, 1.0 * s, P.trim)
-      for i = 0, 3 do
-        for j = 0, 1 do
-          local rr = sr + 8 * s + i * 8 * s
-          local oy, oz = rr * sa, rr * ca
-          local px, py = -sa, ca   -- sideways
-          local col = cargo_cols[(rk + arm_i + i + j) % #cargo_cols + 1]
-          local lx = x - half + j * 2 * half * 0.5
-          box(c, "core", lx, oy - 3 * s + 0, oz - 3 * s, lx + half * 0.9, oy + 3 * s, oz + 3 * s, col)
-          if i == 0 and j == 0 then box(c, "detail", lx, oy + (px ~= 0 and 0 or 0), oz, lx, oy, oz, col) end
-        end
-      end
-    end
-    solid(c, x - half, c.AY - 44 * s, -44 * s, x + half, c.AY + 44 * s, 44 * s)
-  end
-  -- solar wings: paired panels with a grid and a spar, and nav lights at the tips
-  for wi = 1, nwings do
-    local x = hub_back - 18 * s - aft * (0.3 + 0.55 * (wi - 1) / math.max(1, nwings))
-    local len = (R * 0.62) * (0.8 + 0.4 * rng:float())
-    local wd = 55 * s * (0.8 + 0.5 * rng:float())
-    local twist = (wi - 1) * PI / 2
-    for sgn = -1, 1, 2 do
-      local ey, ez = sm.cos(twist) * sgn, sm.sin(twist) * sgn
-      -- panel in the x-(y or z) plane
-      local y0, y1 = 0, len * ey
-      local z0, z1 = 0, len * ez
-      if wi % 2 == 1 then
-        box(c, "core", x - wd / 2, math.min(sr, sgn * len), -0.8 * s, x + wd / 2, math.max(sgn * len, sr), 0.8 * s, { 0.16, 0.2, 0.42 })
-        box(c, "core", x - 1.2 * s, math.min(0, sgn * len), -2 * s, x + 1.2 * s, math.max(0, sgn * len), 2 * s, P.trim)
-        local cells = math.max(4, math.floor(len / (22 * math.max(s, 0.5))))
-        for k = 0, cells do
-          local yy = sgn * (k * len / cells)
-          box(c, "detail", x - wd / 2, yy - 0.3, -0.9 * s, x + wd / 2, yy + 0.3, 0.9 * s, { 0.4, 0.5, 0.85 }, 0.15)
-        end
-        for k = 1, 3 do
-          local xx = x - wd / 2 + k * wd / 4
-          box(c, "detail", xx - 0.25, math.min(0, sgn * len), -0.9 * s, xx + 0.25, math.max(0, sgn * len), 0.9 * s, { 0.4, 0.5, 0.85 }, 0.15)
-        end
-        light(c, x, sgn * len, 0, sgn > 0 and { 0.3, 1, 0.4 } or { 1, 0.25, 0.2 }, "blink", 3.5, 100)
-        solid(c, x - wd / 2, c.AY + math.min(sr, sgn * len) , -1.2 * s, x + wd / 2, c.AY + math.max(sgn * len, sr), 1.2 * s)
-      else
-        box(c, "core", x - wd / 2, -0.8 * s, math.min(sr, sgn * len), x + wd / 2, 0.8 * s, math.max(sgn * len, sr), { 0.16, 0.2, 0.42 })
-        box(c, "core", x - 1.2 * s, -2 * s, math.min(0, sgn * len), x + 1.2 * s, 2 * s, math.max(0, sgn * len), P.trim)
-        local cells = math.max(4, math.floor(len / (22 * math.max(s, 0.5))))
-        for k = 0, cells do
-          local zz = sgn * (k * len / cells)
-          box(c, "detail", x - wd / 2, -0.9 * s, zz - 0.3, x + wd / 2, 0.9 * s, zz + 0.3, { 0.4, 0.5, 0.85 }, 0.15)
-        end
-        light(c, x, 0, sgn * len, sgn > 0 and { 0.3, 1, 0.4 } or { 1, 0.25, 0.2 }, "blink", 3.5, 100)
-        solid(c, x - wd / 2, c.AY - 1.2 * s, math.min(sr, sgn * len), x + wd / 2, c.AY + 1.2 * s, math.max(sgn * len, sr))
-      end
-    end
-    -- radiator fins on the spine beside the wings
-    for k = 0, 3 do
-      local a = k * PI / 2 + PI / 4
-      local fx = x + wd * 0.75
-      local ca, sa = sm.cos(a), sm.sin(a)
-      rod(c, "core", { fx, sr * sa, sr * ca }, { fx, (sr + 46 * s) * sa, (sr + 46 * s) * ca }, 0.9 * s, { 0.85, 0.85, 0.88 })
-      for q = 1, 3 do
-        local f = q / 4
-        rod(c, "detail", { fx - 6 * s, (sr + 46 * s * f) * sa, (sr + 46 * s * f) * ca }, { fx + 6 * s, (sr + 46 * s * f) * sa, (sr + 46 * s * f) * ca }, 0.25 * s, { 0.7, 0.3, 0.2 })
-      end
-    end
-  end
-
-  -- the big ring: a body, bands, spokes and habitat drums, all turning about the x axis through the hub
-  local function ring_at(x, Rr, w, t, seg, spokes, spoke_r0, wide)
-    local rin2, rout2 = Rr - t / 2, Rr + t / 2
-    xring(c, "ring", x - hx, w, rin2, rout2, seg, P.plate)
-    xring(c, "ring", x - hx - w * 0.5, 1.6 * s, rin2 - 0.4, rout2 + 0.4, seg, P.trim)
-    xring(c, "ring", x - hx + w * 0.5, 1.6 * s, rin2 - 0.4, rout2 + 0.4, seg, P.trim)
-    xring(c, "ring", x - hx - w * 0.24, 1.0 * s, rout2 - 0.1, rout2 + 0.9, seg, P.accent, 0.8)
-    xring(c, "ring", x - hx + w * 0.24, 1.0 * s, rout2 - 0.1, rout2 + 0.9, seg, P.accent, 0.8)
-    xring(c, "ring", x - hx, 1.0 * s, rin2 - 0.9, rin2 + 0.1, seg, P.glow, 1)
-    for k = 0, spokes - 1 do
-      local a = k * TAU / spokes + 0.2
-      rbox(c, "ring", x - hx - 3.5 * wide, x - hx + 3.5 * wide, spoke_r0, rin2 + 1, 3.5 * wide, a, P.trim)
-      rbox(c, "ring", x - hx - 1, x - hx + 1, spoke_r0, rin2, 4.2 * wide, a, P.panel)
-      -- a lit tube along each spoke
-      rbox(c, "ringd", x - hx - 0.4, x - hx + 0.4, spoke_r0 + 4, rin2 - 2, 3.6 * wide, a, P.glow, 0.9)
-    end
-    -- seams: radial ribs on the rim every few segments
-    for k = 0, seg - 1 do
-      local a = k * TAU / seg
-      rbox(c, "ringd", x - hx - w / 2, x - hx + w / 2, rout2, rout2 + 0.4 * math.max(s, 0.6), 0.5 * math.max(s, 0.6), a, P.panel)
-    end
-  end
-  ring_at(hx, R, tube_w, tube_t, ring_seg, nspokes, hub_r * 0.5, math.max(s, 0.4))
-  -- window rows on the rim, outside and in
-  window_rows(c, "ringd", 0, tube_w * 0.45, rout, K.window_rows, 15 * math.max(s, 0.5), 0, TAU, P.glow, 0.72, 1)
-  window_rows(c, "ringd", 0, tube_w * 0.45, rin, K.window_rows - 1, 15 * math.max(s, 0.5), 0, TAU, P.glow, 0.72, -1)
-  -- habitat drums riding the outer rim
-  for k = 1, ndrums do
-    local a = (k - 1) * TAU / ndrums + rng:float() * 0.3
-    local dr = (22 + rng:int(0, 12)) * s
-    local dl = (70 + rng:int(0, 60)) * s
-    local ox = rng:int(-6, 6) * s
-    local rr = rout + dr * 0.9
-    local y, z = rr * sm.sin(a), rr * sm.cos(a)
-    xcyl(c, "ring", ox - dl / 2, ox + dl / 2, y, z, dr, P.plate, 14)
-    xcyl(c, "ring", ox - dl / 2 - 3 * s, ox - dl / 2, y, z, dr * 0.5, P.trim, 10, nil, dr * 0.95)
-    xcyl(c, "ring", ox + dl / 2, ox + dl / 2 + 3 * s, y, z, dr * 0.5, P.trim, 10, nil, dr * 0.95)
-    xcyl(c, "ring", ox - dl / 2 + dl * 0.2, ox - dl / 2 + dl * 0.2 + 2 * s, y, z, dr * 1.04, P.accent, 14, 0.7)
-    for q = 1, 8 do
-      local xa = ox - dl / 2 + dl * (q - 0.5) / 8
-      local wa = q * 0.7
-      local yy, zz = y + dr * 0.97 * sm.sin(a + PI / 2 + wa * 0.0), z
-      -- port windows on the drum's flank facing the hub's neighbour (a short strip on top)
-      local rb = rr + dr * 0.99
-      rbox(c, "ringd", xa - 1.2, xa + 1.2, rb - 0.1, rb + 0.5, 1.0 * s + 0.4, a + (q % 2 == 0 and 0.04 or -0.04) * (dr * 0.5 / rr) * 10, P.glow, 1)
-    end
-    rod(c, "ring", { ox, rout * sm.sin(a), rout * sm.cos(a) }, { ox, y, z }, 2 * s, P.trim)
-  end
-  -- ring collision: a polygon of short tangent boxes, a little inside the plating
-  do
-    local n = math.max(24, math.floor(2 * PI * R / (34 * math.max(s, 0.4))))
-    local L = 2 * PI * R / n
-    for k = 0, n - 1 do
-      local a = (k + 0.5) * TAU / n
-      local cy, cz = R * sm.sin(a), R * sm.cos(a)
-      local hh = math.max(tube_t * 0.38, 1.5)
-      local ex = math.abs(sm.sin(a)) * L / 2 + math.abs(sm.cos(a)) * hh
-      local ez = math.abs(sm.cos(a)) * L / 2 + math.abs(sm.sin(a)) * hh
-      solid(c, hx - tube_w * 0.4, c.AY + cy - ex * 0.9, cz - ez * 0.9, hx + tube_w * 0.4, c.AY + cy + ex * 0.9, cz + ez * 0.9)
-    end
-  end
-  -- the inner ring, nearer the bay, on spokes to the visitor arm
-  if nrings > 1 then
-    local R2 = R * 0.5
-    local x2 = hub_front + arm * 0.42
-    local t2 = tube_t * 0.62
-    ring_at(x2, R2, tube_w * 0.55, t2, math.max(20, ring_seg - 12), 4, aw * 1.2, math.max(s, 0.4) * 0.8)
-    window_rows(c, "ringd", x2 - hx, tube_w * 0.2, R2 + t2 / 2, 2, 14 * math.max(s, 0.5), 0, TAU, P.glow, 0.7, 1)
-    local n = math.max(16, math.floor(2 * PI * R2 / (30 * math.max(s, 0.4))))
-    local L = 2 * PI * R2 / n
-    for k = 0, n - 1 do
-      local a = (k + 0.5) * TAU / n
-      local cy, cz = R2 * sm.sin(a), R2 * sm.cos(a)
-      local hh = math.max(t2 * 0.38, 1.2)
-      local ex = math.abs(sm.sin(a)) * L / 2 + math.abs(sm.cos(a)) * hh
-      local ez = math.abs(sm.cos(a)) * L / 2 + math.abs(sm.sin(a)) * hh
-      solid(c, x2 - tube_w * 0.2, c.AY + cy - ex * 0.9, cz - ez * 0.9, x2 + tube_w * 0.2, c.AY + cy + ex * 0.9, cz + ez * 0.9)
-    end
-    info.inner = { x = x2, r = R2 }
-  end
-
-  -- docking arms: pods on beams off the visitor arm, one of them the far hangar
+  -- docking pods off the stem: the first near the cell (the far hangar's), the rest spread along it
   local pods = {}
-  local span0, span1 = back - 40 * s - 30, hub_front + 40 * s
-  for k = 1, narms do
-    local f = (k - 0.5) / narms
+  local span0, span1 = F.back - 40 * s - 30, F.body_front + 60 * s
+  for k = 1, npods do
+    local f = (k - 0.5) / npods
     local x = span0 + (span1 - span0) * f + rng:int(-6, 6)
-    -- keep clear of the inner ring's plane
-    if info.inner and math.abs(x - info.inner.x) < 40 * s + 10 then x = x + 55 * s end
-    local a = (k * 2.399) % TAU           -- golden angle: arms spread round the arm
-    local rad = (60 + rng:int(0, 80)) * s + (class == "outpost" and 8 or 18)
+    local a = (k * 2.399) % TAU          -- golden angle: pods spread round the stem
+    local rad = (70 + rng:int(0, 110)) * s + (class == "outpost" and 8 or 18)
     if k == 1 then
-      -- the far hangar's pod sits near the cell, so a Villa grown there is still "docked" at the trader
-      x = back - 70 * s - 8
+      x = F.back - 70 * s - 8
       rad = (62 + rng:int(0, 30)) * s + (class == "outpost" and 8 or 18)
     end
-    pods[k] = pod(c, x, a, rad, rng:int(1, 40), rng:int(0, 2) > 0)
+    pods[k] = pod(c, x, a, rad, rng:int(1, 40))
   end
-  -- the pod whose mouth faces most nearly away from the others is the far hangar's: take the first
-  local far = pods[1]
-  info.far_bay = far and { far.x + 36, c.AY + far.y, far.z } or { back, c.AY, 0 }
+  local fp = pods[1]
+  info.far_bay = fp and { fp.x + 36, c.AY + fp.y, fp.z } or { F.back, c.AY, 0 }
+  info.pods = #pods
 
-  -- masts with dishes and beacons
-  for k = 1, nmasts do
-    local a = (k - 0.5) * TAU / nmasts + rng:float() * 0.5
-    local x = hub_back + rng:int(0, math.floor(hub_len)) * 0.9
-    local len = (60 + rng:int(0, 70)) * s
-    mast(c, x, a, hub_r + 2, len)
+  -- monoliths floating round the stem, between the pods
+  for k = 1, nmono do
+    local x = F.body_front + (F.back - F.body_front) * (k / (nmono + 1)) + rng:int(-20, 20) * s
+    local a = rng:float() * TAU
+    local q = turn({ 0, (150 + rng:int(0, 90)) * s, 0 }, 0, 0, a)
+    monolith(c, { x, q[2], q[1] }, (50 + rng:int(0, 30)) * s, rng:float() * PI)
   end
-
-  -- greeble pass on the hub, arm and spine: small boxes (vents, hatches, tanks) seeded round the surfaces
-  local dg = K.detail
-  local n_greeble = math.floor(380 * dg)
-  for _ = 1, c.mesh and n_greeble or 0 do
-    local x = rfloat(c.mrng, aft_end + 10, hub_front)
-    local a = c.mrng:float() * TAU
-    local rr
-    local hwid
-    if x > hub_back then rr, hwid = hub_r, 6 * s
-    elseif x < hub_back - 18 * s then rr, hwid = sr, 2 * s
-    else rr, hwid = hub_r * 0.55, 3 * s end
-    local kind = c.mrng:int(1, 4)
-    local col = kind == 1 and P.panel or (kind == 2 and P.trim or (kind == 3 and P.accent or shade(P.plate, 0.85)))
-    local lx = c.mrng:int(2, 7) * s * 1.2
-    rbox(c, "detail", x, x + lx, rr - 0.3, rr + (0.5 + c.mrng:float() * 1.4) * math.max(s, 0.6), hwid * (0.3 + c.mrng:float() * 0.7) * 0.5, a, col, kind == 3 and 0.2 or nil)
+  -- cocoon clusters on the body's surface spots and along the stem
+  for k = 1, ncoc do
+    local sp = spots[(k * 5) % math.max(1, #spots) + 1]
+    if k % 3 == 0 or not sp then
+      local x = F.body_front + (F.back - F.body_front) * (0.2 + 0.6 * rng:float())
+      sp = { p = { x, -12 * s, 0 }, n = { 0, -1, 0 } }
+    end
+    cocoons(c, sp.p, sp.n, rng:int(3, 6), 9 * s)
   end
 
-  -- ---- the silhouette: everything as a few dozen parts -------------------------------------------
-  local f = c.mesh and c.parts.far or {}
-  local function fbox(x0, y0, z0, x1, y1, z1, col, emi) f[#f + 1] = { kind = "box", min = { x0, y0 + c.AY, z0 }, max = { x1, y1 + c.AY, z1 }, color = col, emissive = emi } end
-  f[#f + 1] = { kind = "ring", c = { 0, -tube_w / 2, 0 }, rin = rin, r = rout, h = tube_w, seg = 28, color = P.plate, roll = -PI / 2, pos = { hx, c.AY, 0 } }
-  f[#f + 1] = { kind = "ring", c = { 0, -0.6, 0 }, rin = rout - 0.5, r = rout + 1.0, h = 1.2, seg = 28, color = P.glow, emissive = 0.8, roll = -PI / 2, pos = { hx, c.AY, 0 } }
-  if info.inner then
-    f[#f + 1] = { kind = "ring", c = { 0, -tube_w * 0.27, 0 }, rin = info.inner.r - tube_t * 0.31, r = info.inner.r + tube_t * 0.31, h = tube_w * 0.55, seg = 20,
-                  color = P.plate, roll = -PI / 2, pos = { info.inner.x, c.AY, 0 } }
-  end
-  for k = 0, 3 do
-    local a = k * PI / 2 + 0.2
-    f[#f + 1] = { kind = "box", min = { -3, -3, hub_r }, max = { 3, 3, rin }, color = P.trim, pitch = a, pos = { hx, c.AY, 0 } }
-  end
-  f[#f + 1] = { kind = "cylinder", c = { 0, 0, 0 }, r = hub_r, h = hub_len + 22 * s, seg = 12, color = P.plate, roll = -PI / 2, pos = { hub_back, c.AY, 0 } }
-  f[#f + 1] = { kind = "cylinder", c = { 0, 0, 0 }, r = sr, h = aft, seg = 6, color = P.trim, roll = -PI / 2, pos = { aft_end, c.AY, 0 } }
-  fbox(hub_front, -aw, -aw, back, aw, aw, P.trim)
-  fbox(hx - 14 * s, hub_r - 2, -9 * s, hx + 14 * s, hub_r + 26 * s, 9 * s, P.plate)
-  fbox(hx - hub_len * 0.5 + 6, hub_r * 0.2, hub_r - 0.2, hx - hub_len * 0.5 + 12, hub_r * 0.3, hub_r + 0.8, P.glow, 1)
+  -- the silhouette: the stem, the cell and the pods as a few boxes (the body added its own)
+  local function fbox(x0, y0, z0, x1, y1, z1, col, emi) far[#far + 1] = { kind = "box", min = { x0, y0 + c.AY, z0 }, max = { x1, y1 + c.AY, z1 }, color = col, emissive = emi } end
+  fbox(F.body_front, -9 * s, -9 * s, F.back, 9 * s, 9 * s, P.trim)
   fbox(cell.lo[1] - 4, cell.lo[2] - 2.9 - c.AY, cell.lo[3] - 1.5, cell.hi[1], cell.hi[2] + 1.5 - c.AY, cell.hi[3] + 1.5, P.plate)
   fbox(cell.hi[1], cell.lo[2] - c.AY + 2, -9, cell.hi[1] + 0.8, cell.hi[2] - c.AY - 2, 9, { 1.0, 0.85, 0.55 }, 1)
   for k = 1, #pods do
     local p = pods[k]
-    local sz = 12 * s
-    fbox(p.x - 42 * s, p.y - 9 * s, p.z - sz, p.x, p.y + 9 * s, p.z + sz, P.plate)
-    fbox(p.x, p.y - 5 * s, p.z - 9 * s, p.x + 0.6, p.y + 5 * s, p.z + 9 * s, { 1.0, 0.85, 0.55 }, 1)
-    local a = sm.atan2(p.y, p.z)
-    f[#f + 1] = { kind = "box", min = { -3 * s, -3 * s, 0 }, max = { 3 * s, 3 * s, sm.sqrt(p.y * p.y + p.z * p.z) }, color = P.trim, pitch = a,
-                  pos = { p.x - 30 * s, c.AY, 0 } }
+    fbox(p.x - 44 * s, p.y - 10 * s, p.z - 12 * s, p.x, p.y + 10 * s, p.z + 12 * s, P.plate)
+    fbox(p.x, p.y - 6 * s, p.z - 6 * s, p.x + 0.6, p.y + 6 * s, p.z + 6 * s, { 1.0, 0.85, 0.55 }, 1)
   end
-  -- wings, as flat boxes
-  for wi = 1, nwings do
-    local x = hub_back - 18 * s - aft * (0.3 + 0.55 * (wi - 1) / math.max(1, nwings))
-    for _, sgn in ipairs({ -1, 1 }) do
-      -- (the near layers drew them from their own seeds; this is the same footprint, rounded)
-      local len = R * 0.62
-      local wd = 55 * s
-      if wi % 2 == 1 then fbox(x - wd / 2, math.min(sr, sgn * len), -0.8, x + wd / 2, math.max(sgn * len, sr), 0.8, { 0.16, 0.2, 0.42 })
-      else fbox(x - wd / 2, -0.8, math.min(sr, sgn * len), x + wd / 2, 0.8, math.max(sgn * len, sr), { 0.16, 0.2, 0.42 }) end
-    end
-  end
+
   -- (the hull data the view and the tests read)
-  local ext = { lo = { aft_end - 14, -R - 40 * s, -R - 40 * s }, hi = { cell.hi[1] + 6, R + 40 * s, R + 40 * s } }
-  info.extent = { lo = { ext.lo[1], c.AY + ext.lo[2], ext.lo[3] }, hi = { ext.hi[1], c.AY + ext.hi[2], ext.hi[3] } }
-  info.centre = { hx, c.AY, 0 }
-  info.radius = sm.sqrt(((ext.hi[1] - ext.lo[1]) / 2) ^ 2 + R * R)
-  info.pods = #pods
-  info.length = ext.hi[1] - ext.lo[1]
-  info.width = 2 * (R + tube_t / 2)
+  info.extent = { lo = F.lo, hi = F.hi }
+  info.centre = F.centre
+  info.radius = F.radius
+  info.length = F.hi[1] - F.lo[1]
+  info.width = F.hi[3] - F.lo[3]
+  info.height = F.hi[2] - F.lo[2]
   local L = { seed = seed, class = class, info = info, parts = c.mesh and c.parts or nil, solids = c.solids, lights = c.lights, far_bay = info.far_bay,
-              pal = P, spin_pos = { hx, c.AY, 0 }, bay = cell, ring_r = R }
+              pal = P, spin_pos = { F.hx, c.AY, 0 }, bay = cell, ring_r = F.R, family = c.fam.id }
   L.counts = {}
   if c.mesh then for k, v in pairs(c.parts) do L.counts[k] = #v end end
   L.hash = M.hash(L)
@@ -788,7 +1172,7 @@ function M.generate(seed, class, bay_no_in, mesh)
 end
 
 function M.hash(L)
-  local parts = { L.class, L.info.palette, string.format("%.1f,%.1f,%.1f,%d,%d", L.info.R, L.info.arm, L.info.hub_r, L.info.pods, L.info.bay_no) }
+  local parts = { L.class, L.family, L.info.palette, string.format("%.1f,%.1f,%.1f,%d,%d", L.info.R, L.info.stem, L.info.body, L.info.pods, L.info.bay_no) }
   for _, b in ipairs(L.solids) do parts[#parts + 1] = string.format("s%.1f,%.1f,%.1f,%.1f", b[1][1], b[1][2], b[1][3], b[2][1]) end
   for _, l in ipairs(L.lights) do parts[#parts + 1] = string.format("l%.1f,%.1f,%.1f,%d", l.p[1], l.p[2], l.p[3], l.phase) end
   return string.format("%016x", saucer.hash64(table.concat(parts, ";"), 1))
@@ -803,11 +1187,12 @@ function M.seed_of(seed, sid, idx) return saucer.seed_child(seed or 0, "hull", (
 function M.seed_for(state, idx) return M.seed_of(state.seed, state.sector and state.sector.id or 1, idx) end
 
 local cache, order = {}, {}
-function M.get(seed, class, bay_no)
-  local key = class .. ":" .. seed .. ":" .. tostring(bay_no)
+function M.get(seed, class, bay_no, family)
+  family = family or M.family_of(seed)
+  local key = class .. ":" .. seed .. ":" .. tostring(bay_no) .. ":" .. family
   local L = cache[key]
   if not L then
-    L = M.generate(seed, class, bay_no, false)
+    L = M.generate(seed, class, bay_no, false, family)
     cache[key] = L
     order[#order + 1] = key
     if #order > 24 then cache[table.remove(order, 1)] = nil end
@@ -821,7 +1206,7 @@ function M.parts(L)
   if L.parts then return L.parts end
   local F = full[L.hash]
   if not F then
-    F = M.generate(L.seed, L.class, L.info.bay_no, true)
+    F = M.generate(L.seed, L.class, L.info.bay_no, true, L.family)
     full[L.hash] = F
     full_order[#full_order + 1] = L.hash
     if #full_order > 3 then full[table.remove(full_order, 1)] = nil end
@@ -836,7 +1221,8 @@ function M.for_trader(state, idx)
   local tr = list[idx] or list[1]
   -- the arrival hangar's number inside (sim/stationgen.lua) is the one over the mouth outside
   local sg = require("sim.stationgen")
-  return M.get(M.seed_for(state, idx or 1), M.class_of(tr), sg.bay_number(sg.seed_for(state, idx or 1))), tr
+  local ss = sg.seed_for(state, idx or 1)
+  return M.get(M.seed_for(state, idx or 1), M.class_of(tr), sg.bay_number(ss), M.family_of(ss)), tr
 end
 
 -- the collision boxes of every trader's hull in world meters (the cell's own are sim/dock.lua's)
