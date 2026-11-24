@@ -23,7 +23,7 @@ Outside, each sector's star (its colour and direction fixed by the seed and the 
 - **THEN** no sun is active and point lamps light the room
 
 ### Requirement: Shadow quality presets
-Shadows SHALL be drawn into one depth atlas: sun cascades, spot maps and cube maps for the strongest point lights. Presets off, low and high SHALL set the atlas size and the number of maps (`--shadows`, `saucer.render.settings{shadows=}`), low being the default on the web. A three or four way split screen SHALL get one map of each kind.
+Shadows SHALL be drawn into one depth atlas: sun cascades, spot maps and cube maps for the strongest point lights. Presets off, low and high SHALL set the atlas size and the number of maps (`--shadows`, `saucer.render.settings{shadows=}`), low being the default on the web. A three or four way split screen SHALL keep one sun cascade and one spot map per view and no cube maps.
 
 #### Scenario: Shadows off
 - **WHEN** the shadow preset is off
@@ -31,4 +31,4 @@ Shadows SHALL be drawn into one depth atlas: sun cascades, spot maps and cube ma
 
 #### Scenario: Four views
 - **WHEN** four players share the screen on the high preset
-- **THEN** each view uses at most one cascade, one spot map and one cube map
+- **THEN** each view uses at most one cascade and one spot map, and no cube map

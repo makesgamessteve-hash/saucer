@@ -75,7 +75,8 @@ TEST(light_quality_names_and_budgets) {
   b = sx_shadow_budget_for(SX_SHADOWS_HIGH, 4); /* a four-way split screen gets the minimum */
   CHECK_EQ_INT(b.cascades, 1);
   CHECK_EQ_INT(b.spots, 1);
-  CHECK_EQ_INT(b.omni, 1);
+  CHECK_EQ_INT(b.omni, 0);
+  CHECK_EQ_INT(b.atlas, 512);
   CHECK_EQ_INT(b.max_lights, 8);
   CHECK_NEAR(b.radius[0], 60.0f, 1e-6f);
   b = sx_shadow_budget_for(SX_SHADOWS_LOW, 1);

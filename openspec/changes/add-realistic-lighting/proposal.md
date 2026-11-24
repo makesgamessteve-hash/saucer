@@ -15,7 +15,7 @@ light all around so the player can find their bearings.
 - ADDED `retro-renderer`: shadow maps in one depth atlas: two sun cascades, two spot maps (a saucer's
   headlight pair shares one), three cube (omni) maps for the strongest point lights, cached between
   frames in a single view; presets `--shadows off|low|high` and `saucer.render.settings{shadows=}`,
-  low by default on the web.
+  low by default on the web; a 3-4 way split screen keeps one sun cascade and one spot map per view.
 - ADDED: each sector's star (colour and direction from the seed) is the dominant light outside; inside a
   derelict, a city, a station or a hangar bay no sunlight reaches, only coloured point lamps placed per
   room by the generators (stations warm and white, alien places colourful, a city's dark grid stays dark).

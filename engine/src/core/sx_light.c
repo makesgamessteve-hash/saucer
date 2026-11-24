@@ -98,10 +98,12 @@ sx_shadow_budget sx_shadow_budget_for(int quality, int nviews) {
   }
   /* a split screen shades every view: two views share the budget, three or four get the minimum */
   if (nviews >= 3) {
+    /* every view draws its own maps: keep the sun and one spot (headlights), no cube maps, a small atlas */
     b.max_lights = 8;
     if (b.cascades > 1) b.cascades = 1;
     if (b.spots > 1) b.spots = 1;
-    if (b.omni > 1) b.omni = 1;
+    b.omni = 0;
+    if (b.atlas > 512) b.atlas = 512;
     if (b.cascades) b.radius[0] = 60.0f;
   } else if (nviews == 2 && b.omni > 2) {
     b.omni = 2;
