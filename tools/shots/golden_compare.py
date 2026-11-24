@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: MIT
 # add-material-system: compare two PNG screenshots (8-bit RGB or RGBA, non-interlaced; stdlib only).
 # Usage: golden_compare.py GOLDEN SHOT [MEAN_TOL] [BAD_TOL]
+#        golden_compare.py --differ MIN_MEAN A B   (passes when the images differ by at least MIN_MEAN: the material
+#        look must stay clearly visible, full against off)
 #   passes when the mean absolute channel difference is <= MEAN_TOL (default 2.0 of 255) and the share of pixels
 #   that differ by more than 24 in any channel is <= BAD_TOL (default 0.02); prints the numbers either way.
 import struct, sys, zlib
@@ -44,7 +46,25 @@ def load(path):
         prev = line
     return w, h, bpp, out
 
+def mean_diff(a, b):
+    w1, h1, b1, p1 = load(a)
+    w2, h2, b2, p2 = load(b)
+    if (w1, h1) != (w2, h2):
+        return None
+    total = 0
+    for i in range(w1 * h1):
+        for k in range(3):
+            total += abs(p1[i * b1 + k] - p2[i * b2 + k])
+    return total / (w1 * h1 * 3)
+
 def main():
+    if len(sys.argv) == 5 and sys.argv[1] == "--differ":
+        need = float(sys.argv[2])
+        m = mean_diff(sys.argv[3], sys.argv[4])
+        ok = m is not None and m >= need
+        print("%s vs %s: mean difference %s (at least %.2f) -> %s" % (sys.argv[3], sys.argv[4],
+              "size differs" if m is None else "%.3f" % m, need, "ok" if ok else "FAIL"))
+        return 0 if ok else 1
     if len(sys.argv) < 3:
         raise SystemExit(__doc__ or "usage: golden_compare.py GOLDEN SHOT [MEAN_TOL] [BAD_TOL]")
     mean_tol = float(sys.argv[3]) if len(sys.argv) > 3 else 2.0

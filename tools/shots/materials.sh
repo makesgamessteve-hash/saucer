@@ -2,7 +2,8 @@
 # Usage: tools/shots/materials.sh BINARY ROOT WORKDIR [LEGACY_BINARY [LEGACY_ROOT]]
 # Renders tools/shots/materials.lua (640 x 360) and compares with tests/golden/: the relic reference scene with
 # materials full and off, and the legacy scene with materials off. With LEGACY_BINARY (a build from before the
-# material system) it first re-renders the legacy reference instead of using the committed one.
+# material system) it first re-renders the legacy reference instead of using the committed one. LEGACY_TOL="MEAN BAD"
+# loosens the legacy compare (default exact).
 BIN=$1; ROOT=$2; WORK=$3; OLD=$4; OLDROOT=${5:-$2}
 HERE=$(cd "$(dirname "$0")" && pwd)
 GOLD="$ROOT/tests/golden"
@@ -21,5 +22,10 @@ fail=0
 for n in relic_trunk_full relic_trunk_off relic_core_full relic_core_off; do
   python3 "$HERE/golden_compare.py" "$GOLD/$n.png" "shots_materials/$n.png" || fail=1
 done
-python3 "$HERE/golden_compare.py" "$LEG" shots_materials/legacy_off.png 0.0 0.0 || fail=1
+# full must look clearly different from off (add-relic-stations polish: the material look is not subtle)
+for n in relic_trunk relic_core; do
+  python3 "$HERE/golden_compare.py" --differ 9.5 "shots_materials/${n}_full.png" "shots_materials/${n}_off.png" || fail=1
+done
+# the legacy scene must match bit for bit on the box that rendered the golden; CI (another Mesa) sets LEGACY_TOL
+python3 "$HERE/golden_compare.py" "$LEG" shots_materials/legacy_off.png ${LEGACY_TOL:-0.0 0.0} || fail=1
 exit $fail
