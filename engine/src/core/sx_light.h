@@ -15,6 +15,7 @@
 #define SX_SHADOW_RECTS (SX_SHADOW_CASCADES + SX_SHADOW_SPOTS + SX_SHADOW_OMNI)
 #define SX_LIGHT_SOFT 0.0625f   /* falloff I / (d^2 + (range / 4)^2): inverse-square with a soft source */
 #define SX_LIGHT_REACH 150.0f   /* a light this far beyond its range from the eye is dropped */
+#define SX_MAX_HAZE 4           /* add-lighting-mood: lights whose glow shows in the air (beams, halos) */
 
 enum { SX_LIGHT_SUN = 0, SX_LIGHT_POINT = 1, SX_LIGHT_SPOT = 2 };
 enum { SX_SHADOWS_OFF = 0, SX_SHADOWS_LOW = 1, SX_SHADOWS_HIGH = 2 };
@@ -30,6 +31,7 @@ typedef struct sx_light {
   int shadow;        /* wants to cast shadows */
   int owner;         /* the shadow pass skips meshes of the same owner (a saucer's own hull) */
   float priority;    /* importance scale (1 = plain) */
+  float haze;        /* add-lighting-mood: how strongly the light shows in the air (0 none; beams ~1) */
   /* filled by sx_lighting_select */
   float score;
   int slot; /* -1 none; sun 0 (cascades 0..n-1), spot SX_SHADOW_CASCADES + k, point SX_SHADOW_CASCADES + SX_SHADOW_SPOTS + k */
@@ -41,6 +43,8 @@ typedef struct sx_shadow_budget {
   int cascades; /* sun cascades */
   int spots, omni;
   int max_lights; /* shaded per pixel (<= SX_MAX_ACTIVE_LIGHTS) */
+  int haze;       /* add-lighting-mood: lights drawn as beams / halos (<= SX_MAX_HAZE); 0 off */
+  int haze_steps; /* ray samples through a spot's cone */
   float radius[SX_SHADOW_CASCADES]; /* sun cascade half-sizes (m) */
 } sx_shadow_budget;
 
@@ -61,6 +65,10 @@ typedef struct sx_lighting {
   float shadow_rect[SX_SHADOW_RECTS][4];                      /* atlas uv x, y, w, h (omni: the 3x2 block) */
   int atlas;
   float omni_key[SX_SHADOW_OMNI][4]; /* the light (pos, range) each omni block holds; kept across frames */
+  /* add-lighting-mood: the glowing lights (indices into lights), strongest glow at the eye first */
+  int hz[SX_MAX_HAZE];
+  int nhz, haze_steps;
+  float haze_density; /* scale of the in-air glow (view:lighting{haze=}) */
 } sx_lighting;
 
 void sx_lighting_reset(sx_lighting *lt);

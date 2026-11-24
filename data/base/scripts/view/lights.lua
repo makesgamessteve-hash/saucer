@@ -23,6 +23,14 @@ M.SUN = 2.8               -- the star's irradiance on a face turned to it
 M.ROOM_LUX = 0.25         -- a room lamp gives about this much at half its reach (dim: space is dark)
 M.NEAR = 170              -- room lamps nearer the eye than this are offered to the engine
 M.CELL = 96               -- lamp bucket size (m)
+-- add-lighting-mood: the dark between the lamps, and light you can see in the air
+M.POOL_LUX = 0.55         -- a room's lamp pool: this much at its centre-ish (intensity = POOL_LUX * reach^2)
+M.CITY_LUX = 1.6          -- a city's pools are this much brighter
+M.DARK_ROOMS = 3          -- one room in this many has no lamp at all (hash of site and room)
+M.LAMP_SCALE = 0.6        -- every placed lamp (rooms, bays, stations, sentries): one global dimmer
+M.HAZE = 0.02             -- how much the air scatters (beams and halos); per light it is haze * HAZE
+M.HAZE_LAMP = 0.3         -- a placed lamp's halo
+M.HAZE_HEAD, M.HAZE_FLOOD, M.HAZE_SENTRY = 1.0, 0.12, 0.6
 
 -- the kinds of star, by how common they are in the game's sectors
 M.STARS = {
@@ -78,8 +86,8 @@ end
 local floor = math.floor
 local function bucket_key(x, y, z) return floor(x / M.CELL) .. "," .. floor(y / M.CELL) .. "," .. floor(z / M.CELL) end
 
--- a derelict's (or a city's) lamps: per room one to three near the ceiling along its long side,
--- the reach the room's diagonal, the colour from the place's palette. Cached per ruin, bucketed.
+-- a derelict's (or a city's) lamps: per room one to three (a city: four) low pools along its long side,
+-- the reach a share of the room's length, the colour from the place's palette. Cached per ruin, bucketed.
 local lamps_of = setmetatable({}, { __mode = "k" })
 function M.room_lamps(ruin, origin, site)
   local c = lamps_of[ruin]
@@ -91,26 +99,23 @@ function M.room_lamps(ruin, origin, site)
     local mn, mx = ruinm.room_box(r, kit, origin)
     local sx, sy, sz = mx[1] - mn[1], mx[2] - mn[2], mx[3] - mn[3]
     local long = sx > sz and 1 or 3
-    local n = math.max(1, math.min(3, math.ceil(math.max(sx, sz) / 30)))
-    local reach = sm.sqrt(sx * sx + sy * sy + sz * sz) / (n > 1 and 1.5 or 1.0) + 4
-    for k = 1, n do
-      local pos = { (mn[1] + mx[1]) / 2, mx[2] - math.min(1.6, sy * 0.15), (mn[3] + mx[3]) / 2 }
-      pos[long] = mn[long] + (mx[long] - mn[long]) * (k - 0.5) / n
+    -- add-lighting-mood: pools of light low in the room with darkness between them, not a ceiling flood;
+    -- some rooms stay dark. 1-3 pools along the long axis, each lighting about a third of the room.
+    -- (a city's streets and halls are lived in: every room has its pools, a little brighter and more of them)
+    local dark = not ruin.city and hash(site, i, 99) % M.DARK_ROOMS == 0 and #ruin.rooms > 1
+    local n = math.max(1, math.min(ruin.city and 4 or 3, math.ceil(math.max(sx, sz) / (ruin.city and 24 or 34))))
+    local reach = math.max(7, math.min(17, math.max(sx, sz) / n * 0.5))
+    for k = 1, dark and 0 or n do
       local h = hash(site, i, k)
-      local lamp = { pos = pos, color = pal[h % #pal + 1], range = reach, district = r.district,
-                     intensity = M.ROOM_LUX * (reach * 0.5) ^ 2 }
-      list[#list + 1] = lamp
-    end
-    -- a big room also has a pair of small coloured fixtures low on its long walls (pools of light)
-    if math.min(sx, sz) >= 16 and sy >= 6 then
       local side = long == 1 and 3 or 1
-      for k, sgn in ipairs({ -1, 1 }) do
-        local pos = { (mn[1] + mx[1]) / 2, mn[2] + math.min(3.0, sy * 0.3), (mn[3] + mx[3]) / 2 }
-        pos[side] = (sgn < 0 and mn[side] + 0.9) or (mx[side] - 0.9)
-        local h = hash(site, i, 10 + k)
-        list[#list + 1] = { pos = pos, color = pal[(h >> 3) % #pal + 1], range = 18, district = r.district,
-                            intensity = M.ROOM_LUX * 0.5 * 9 * 9, fixture = true }
-      end
+      local pos = { (mn[1] + mx[1]) / 2, mn[2] + math.min(3.5, sy * 0.35), (mn[3] + mx[3]) / 2 }
+      pos[long] = mn[long] + (mx[long] - mn[long]) * (k - 0.5) / n
+      -- against a wall, alternating sides: a lamp you can see, a pool on the floor beside it
+      local sgn = (k + h) % 2 == 0 and -1 or 1
+      pos[side] = (sgn < 0 and mn[side] + 1.2) or (mx[side] - 1.2)
+      if mx[side] - mn[side] < 8 then pos[side] = (mn[side] + mx[side]) / 2 end
+      list[#list + 1] = { pos = pos, color = pal[h % #pal + 1], range = reach, district = r.district,
+                          intensity = M.POOL_LUX * (ruin.city and M.CITY_LUX or 1) * reach * reach }
     end
   end
   for _, lamp in ipairs(list) do
@@ -170,7 +175,19 @@ function M.inside_bay(state, pos)
   return nil
 end
 
-local function add(v, l) if v.light then v:light(l) end end
+-- every light goes through here. A placed lamp (no owner) is dimmed by LAMP_SCALE; each light's glow in the
+-- air is its haze (lamps: HAZE_LAMP) times HAZE (add-lighting-mood)
+local function add(v, l)
+  if not v.light then return end
+  if l.kind ~= "sun" then
+    if not l.owner and not l.cabin then
+      l.intensity = (l.intensity or 1) * M.LAMP_SCALE
+      l.haze = l.haze or M.HAZE_LAMP
+    end
+    l.haze = (l.haze or 0) * M.HAZE
+  end
+  v:light(l)
+end
 
 -- the bay's lamps: a 3 x 2 grid of warm-white ceiling floods and the pad's green and red beacons
 function M.bay_lamps(v, b, tick)
@@ -223,6 +240,7 @@ end
 -- the light a Watcher's eye throws where it looks (its pool on the floor)
 function M.sentry_spot(v, pos, dir, tint, reach, half)
   add(v, { kind = "spot", pos = pos, dir = dir, color = { tint[1], tint[2], tint[3] }, intensity = 0.3 * reach * reach,
+           haze = M.HAZE_SENTRY,
            range = reach * 1.15, inner = math.deg(half) * 0.6, outer = math.deg(half) * 1.05 })
 end
 
@@ -251,14 +269,14 @@ function M.saucer(v, o, d, at, eye)
     for _, side in ipairs({ -1, 1 }) do
       add(v, { kind = "spot", pos = at(d, { hd.x * side, hd.y, hd.z }), dir = f, color = { 1.0, 0.95, 0.86 },
                intensity = hd.intensity * d.scale, range = hd.range, inner = M.HEAD_INNER, outer = M.HEAD_OUTER,
-               shadow = true, owner = own, priority = 1.5 })
+               shadow = true, owner = own, priority = 1.5, haze = M.HAZE_HEAD })
       n = n + 1
     end
   end
   local fl = M.FLOOD[c.id]
   if l.flood and fl then
     add(v, { kind = "point", pos = at(d, { 0, fl.y, 0 }), color = { 0.86, 0.93, 1.0 }, intensity = fl.intensity * d.scale,
-             range = fl.range, shadow = true, owner = own, priority = 1.5 })
+             range = fl.range, shadow = true, owner = own, priority = 1.5, haze = M.HAZE_FLOOD })
     n = n + 1
   end
   if l.cabin and c.interior and not o.ship.morph and vec.dist(eye, d.pos) < M.CABIN_NEAR then
@@ -273,7 +291,7 @@ function M.saucer(v, o, d, at, eye)
         local y = deck.floor + hgt - 0.35
         add(v, { kind = "point", pos = at(d, { (b[1] + b[3]) / 2, y, (b[2] + b[4]) / 2 }),
                  color = M.CABIN_COLORS[r.name] or M.CABIN_WARM, intensity = 1.2 * (reach * 0.4) ^ 2, range = reach,
-                 shadow = true })
+                 shadow = true, cabin = true })
         n = n + 1
       end
     end
