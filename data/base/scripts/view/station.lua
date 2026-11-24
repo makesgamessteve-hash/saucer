@@ -554,8 +554,8 @@ function M.colors(L)
   return W.colors[L.family] or W.colors.coral
 end
 
-local function ell(out, x, y, z, rx, ry, rz, color, emi, seg)
-  out[#out + 1] = { kind = "sphere", c = { 0, 0, 0 }, r = 1, h = 1, seg = seg or 8, rings = 3, color = color, emissive = emi,
+local function ell(out, x, y, z, rx, ry, rz, color, emi, seg, rings)
+  out[#out + 1] = { kind = "sphere", c = { 0, 0, 0 }, r = 1, h = 1, seg = seg or 8, rings = rings or 3, color = color, emissive = emi,
                     scale = { rx, ry, rz }, pos = { x, y, z } }
 end
 
@@ -599,14 +599,14 @@ end
 local function organic_wall(out, s, C, rng)
   local len = s.u1 - s.u0
   if len < 1 then return end
-  local n = math.max(1, math.floor(len / 3.2))
+  local n = math.max(1, math.floor(len / 4.2))
   for i = 0, n - 1 do
     local u = s.u0 + (i + 0.5) * len / n + (rng:float() - 0.5) * 0.8
     local y = 0.6 + rng:float() * math.min(s.h - 1.5, 5)
     local r = 0.5 + rng:float() * 0.9
     local at = s.at + s.inward * 0.05
-    if s.axis == 1 then ell(out, at, y, u, r * 0.45, r * 1.4, r, C.trim, nil, 7)
-    else ell(out, u, y, at, r, r * 1.4, r * 0.45, C.trim, nil, 7) end
+    if s.axis == 1 then ell(out, at, y, u, r * 0.45, r * 1.4, r, C.trim, nil, 6, 2)
+    else ell(out, u, y, at, r, r * 1.4, r * 0.45, C.trim, nil, 6, 2) end
     if i % 2 == 0 then
       local a3 = s.axis == 1 and { s.at + s.inward * 0.12, 0.2, u } or { u, 0.2, s.at + s.inward * 0.12 }
       local du = (rng:float() - 0.5) * 2.4
@@ -631,7 +631,7 @@ local function ribs(out, q, C)
   local w = (chi - clo) / 2
   local mid = (clo + chi) / 2
   local top = q.h - 0.2
-  local n = 8
+  local n = 6
   local u = lo + q.step * 0.5
   local k = 0
   while u < hi - 0.4 do
@@ -648,7 +648,7 @@ local function ribs(out, q, C)
     end
     -- a glowing node at the crown
     local cp = along == 1 and { u, top - 0.15, mid } or { mid, top - 0.15, u }
-    ell(out, cp[1], cp[2], cp[3], 0.22, 0.22, 0.22, C.glow, 1, 6)
+    ell(out, cp[1], cp[2], cp[3], 0.22, 0.22, 0.22, C.glow, 1, 5, 2)
     u = u + q.step
     k = k + 1
   end
@@ -664,7 +664,7 @@ local function alien_solid(out, s, C)
     while y < s.h - 0.5 do
       local rr = r * (0.9 + rng:float() * 0.5)
       ell(out, x + (rng:float() - 0.5) * r * 0.4, y + rr * 0.6, z + (rng:float() - 0.5) * r * 0.4, rr, rr * 1.3, rr, C.wall, nil, 8)
-      if rng:int(0, 2) == 0 then ell(out, x + rr * 0.85, y + rr * 0.6, z, rr * 0.2, rr * 0.2, rr * 0.2, C.glow, 1, 6) end
+      if rng:int(0, 2) == 0 then ell(out, x + rr * 0.85, y + rr * 0.6, z, rr * 0.2, rr * 0.2, rr * 0.2, C.glow, 1, 5, 2) end
       y = y + rr * 2.2
     end
     out[#out + 1] = { kind = "cone", c = { x, s.h - 2.5, z }, r = r * 0.5, r1 = r * 2.0, h = 2.5, seg = 8, color = C.trim }
@@ -692,7 +692,7 @@ local function alien_solid(out, s, C)
       local y = 0.5 + (s.h - 1) * (k + 0.5) / n
       local rr = math.min(b[3] - b[1], b[4] - b[2]) * 0.38
       ell(out, cx, y, cz, rr, (s.h - 1) / n * 0.42, rr, k % 2 == 0 and C.wall or C.accent, k % 2 == 0 and nil or 0.3, 8)
-      ell(out, cx, y, cz, rr * 1.05, 0.05, rr * 1.05, C.glow, 1, 8)
+      ell(out, cx, y, cz, rr * 1.05, 0.05, rr * 1.05, C.glow, 1, 8, 2)
     end
   elseif s.look == "altar" then
     local b = s.box
@@ -730,7 +730,7 @@ local function alien_prop(out, q, L, C)
                       yaw = q.yaw, pos = { q.at[1], q.y, q.at[2] } }
     local rng = saucer.rng.new(math.floor(q.at[1] * 7 + q.at[2] * 13) % 9973 + 1)
     for _, f in ipairs({ -1, 1 }) do
-      local n = math.max(1, math.floor(q.h / 1.2))
+      local n = math.max(1, math.min(6, math.floor(q.h / 1.2)))
       for k = 0, n - 1 do
         local g = glyph_bits(rng)
         for row = 1, 4 do

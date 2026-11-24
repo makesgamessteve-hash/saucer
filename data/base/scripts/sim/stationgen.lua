@@ -615,7 +615,7 @@ function M.alien_wing(L, seed)
     if a.kind == "chamber" then furnish_chamber(L, a, rng, W) end
     if a.wing and a.kind == "corridor" then
       prop(L, "ribs", { at = M.center(a), box = { a.box[1], a.box[2], a.box[3], a.box[4] }, h = a.h, skew = (rng:float() - 0.5) * 0.7,
-                        step = 2, axis = (a.box[3] - a.box[1]) >= (a.box[4] - a.box[2]) and 1 or 3 })
+                        step = 3, axis = (a.box[3] - a.box[1]) >= (a.box[4] - a.box[2]) and 1 or 3 })
     end
   end
   L.wing = made
