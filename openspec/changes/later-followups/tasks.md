@@ -37,3 +37,8 @@
 - [ ] 6.2 Rivals
 - [ ] 6.3 A fabricator
 - [ ] 6.4 A macOS port
+
+## 7. Cities, for `add-alien-cities` (moved from `add-cities` on 2026-11-24)
+
+- [ ] 7.1 Lazy district generation on approach (design/civs-and-relics.md §4.4)
+- [ ] 7.2 Canals and on-foot hand-locks for the city grid

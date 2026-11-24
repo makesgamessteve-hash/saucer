@@ -1,10 +1,10 @@
 ## MODIFIED Requirements
 
 ### Requirement: Watcher
-A Watcher SHALL detect targets only within its sensor cone and its civ's size band (a hull below the band only up close) and SHALL keep a suspicion meter (0 to 1) that fills while it sees the player, scaled by the player's signature (hull size, speed, a working beam, Loud modules), closeness and the site alarm, and drains out of sight. When Locked it SHALL fire stun bolts that reduce shields, then hull, or Suit Charge on foot.
+A Watcher SHALL detect targets only within its sensor cone and its civ's size band (a hull below the band, the Seat, only within a short range, 25 m by default) and SHALL keep a suspicion meter (0 to 1) that fills while it sees the player, scaled by the player's signature (hull size, speed, a working beam, Loud modules), closeness and the site alarm, and drains out of sight. When Locked it SHALL fire stun bolts that reduce shields, then hull, or Suit Charge on foot, hitting a saucer only inside its hull ellipsoid scaled by a hurt scale (0.8 by default).
 
 #### Scenario: Shrink below the band
-- **WHEN** the saucer shrinks to Seat inside the cone of a Watcher whose band is M–XL
+- **WHEN** the saucer shrinks to Seat inside the cone of a Watcher whose band is M–XL, farther than 25 m from it
 - **THEN** the Watcher returns to Dormant within 2 s
 
 #### Scenario: A glimpse slips away
@@ -14,6 +14,14 @@ A Watcher SHALL detect targets only within its sensor cone and its civ's size ba
 #### Scenario: The Villa is read fast
 - **WHEN** the Villa hovers still in front of a Watcher 20 m away
 - **THEN** the meter fills within about a second and the Watcher Locks after its Alert time
+
+#### Scenario: A Seat up close
+- **WHEN** a Seat flies 10 m in front of a Watcher whose band is M–XL
+- **THEN** the Watcher sees it
+
+#### Scenario: Rim corner
+- **WHEN** a bolt passes the corner of the box around a saucer's rim
+- **THEN** it does not hit
 
 ## ADDED Requirements
 
