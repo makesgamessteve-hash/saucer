@@ -32,7 +32,9 @@ lua_run() { # name, then saucer_headless arguments
   local t0=$SECONDS limit=$LIMIT
   # the specs ran in 2365 s of the 2400 s budget on main (94b23f3); with add-fun-fixes' specs they
   # need the same longer leash as the mystery (they run in parallel, so the step is not longer)
-  case "$name" in mystery|specs) limit=$LIMIT_MYSTERY ;; esac
+  # add-realistic-lighting: the sentries run (72k ticks, 2335 s on main a29a693) grew past 2400 s with the
+  # per-frame light list (2400+ s on CI), so the long 72k-tick runs get the same leash too
+  case "$name" in mystery|specs|sentries|strategic) limit=$LIMIT_MYSTERY ;; esac
   if LUACOV_CONFIG="$part.luacov" timeout "$limit" "$B"/saucer_headless --root . --user-dir "$B/test-user-$name" \
       --quiet --coverage "$@" > "$part.log" 2>&1; then
     echo "luacov $name: ok in $((SECONDS - t0)) s"
