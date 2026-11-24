@@ -209,7 +209,9 @@ function M.station_lamps(v, L, eye)
   for ai, a in ipairs(L.areas) do
     local b = a.box
     local sx, sz = b[3] - b[1], b[4] - b[2]
-    local nx, nz = math.max(1, math.floor(sx / 11 + 0.5)), math.max(1, math.floor(sz / 11 + 0.5))
+    -- (the wing's lamps are sparser, and only the one nearest each chamber's middle casts shadows)
+    local step = a.wing and 15 or 11
+    local nx, nz = math.max(1, math.floor(sx / step + 0.5)), math.max(1, math.floor(sz / step + 0.5))
     local h = a.h or 6
     local pal = (a.wing and fam) or M.STATION_KIND[a.kind] or M.PALETTES.trader
     local tall = h > 20
@@ -222,7 +224,8 @@ function M.station_lamps(v, L, eye)
         if dx * dx + dz * dz < 70 * 70 then
           local reach = math.max(lh * 2.4, 14)
           add(v, { kind = "point", pos = { x, y, z }, color = pal[(ai + ix + iz) % #pal + 1],
-                   intensity = 1.2 * (reach * 0.45) ^ 2, range = reach, shadow = true })
+                   intensity = 1.2 * (reach * 0.45) ^ 2, range = reach,
+                   shadow = not a.wing or (ix == (nx - 1) // 2 and iz == (nz - 1) // 2) })
           n = n + 1
         end
       end

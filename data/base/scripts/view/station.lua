@@ -759,24 +759,51 @@ local function alien_prop(out, q, L, C)
   end
 end
 
-function M.alien_parts(L, out)
+-- alien_parts(L, out[, pick]): the alien wing's parts. pick(area) -> the list an area's parts go in (default: out)
+function M.alien_parts(L, out, pick)
   local C = M.colors(L)
   local rng = saucer.rng.new(saucer.seed_child(L.seed or 1, "alien-view", 1))
+  local function into(a) return (pick and a and pick(a)) or out end
+  local function at(x, z) return into(sg.area_at(L, x, z)) end
   for _, s in ipairs(M.wall_segments(L)) do
-    if s.area.wing then organic_wall(out, s, C, rng) end
+    if s.area.wing then organic_wall(into(s.area), s, C, rng) end
   end
-  for _, s in ipairs(L.solids) do alien_solid(out, s, C) end
-  for _, q in ipairs(L.props) do alien_prop(out, q, L, C) end
+  for _, s in ipairs(L.solids) do
+    local c = s.c or { (s.box[1] + s.box[3]) / 2, (s.box[2] + s.box[4]) / 2 }
+    alien_solid(at(c[1], c[2]), s, C)
+  end
+  for _, q in ipairs(L.props) do
+    local c = q.at or (q.box and { (q.box[1] + q.box[3]) / 2, (q.box[2] + q.box[4]) / 2 }) or { 0, 0 }
+    alien_prop(at(c[1], c[2]), q, L, C)
+  end
   -- the chambers' ceilings: a glowing ring of pores round a dark eye
   for _, a in ipairs(L.areas) do
     if a.kind == "chamber" then
       local c = sg.center(a)
       local r = math.min(a.box[3] - a.box[1], a.box[4] - a.box[2]) * 0.2
-      out[#out + 1] = { kind = "ring", c = { c[1], a.h - 0.25, c[2] }, rin = r, r = r + 0.5, h = 0.2, seg = 20, color = C.glow, emissive = 1 }
-      out[#out + 1] = { kind = "cylinder", c = { c[1], a.h - 0.3, c[2] }, r = r, h = 0.25, seg = 20, color = shade(C.trim, 0.4) }
+      local o = into(a)
+      o[#o + 1] = { kind = "ring", c = { c[1], a.h - 0.25, c[2] }, rin = r, r = r + 0.5, h = 0.2, seg = 20, color = C.glow, emissive = 1 }
+      o[#o + 1] = { kind = "cylinder", c = { c[1], a.h - 0.3, c[2] }, r = r, h = 0.25, seg = 20, color = shade(C.trim, 0.4) }
     end
   end
   return out
+end
+
+-- the wing's parts as one mesh per wing area, with the area's box (drawn only near it: M.WING_DRAW)
+M.WING_DRAW = 70
+function M.wing_meshes(L)
+  local lists, order = {}, {}
+  local rest = {}
+  M.alien_parts(L, rest, function(a)
+    if not a.wing then return nil end
+    if not lists[a.id] then lists[a.id] = {} order[#order + 1] = a end
+    return lists[a.id]
+  end)
+  local out = {}
+  for _, a in ipairs(order) do
+    out[#out + 1] = { mesh = saucer.mesh.build({ parts = lists[a.id] }), box = a.box, n = #lists[a.id] }
+  end
+  return out, rest
 end
 
 function M.detail_parts(L)
@@ -784,7 +811,6 @@ function M.detail_parts(L)
   for _, s in ipairs(M.wall_segments(L)) do if not s.area.wing then wall_detail(out, s) end end
   for _, s in ipairs(L.solids) do solid_detail(out, s) end
   for _, q in ipairs(L.props) do prop_detail(out, q, L) end
-  M.alien_parts(L, out)
   -- ceiling light strips, door frames and the signs over doorways
   for _, a in ipairs(L.areas) do
     local b = a.box
@@ -903,7 +929,9 @@ function M.meshes(L)
       walls[#walls + 1] = { kind = q.kind, min = q.min, max = q.max, uv = 0.1, color = vec.scale(c, 0.9) }
     end
   end
-  hit = { shell = saucer.mesh.build({ parts = shell }), detail = saucer.mesh.build({ parts = det }),
+  local wing, rest = M.wing_meshes(L)
+  for _, q in ipairs(rest) do det[#det + 1] = q end
+  hit = { shell = saucer.mesh.build({ parts = shell }), detail = saucer.mesh.build({ parts = det }), wing = wing,
           floor = saucer.mesh.build({ parts = floors }), walls = saucer.mesh.build({ parts = walls }),
           ceiling = saucer.mesh.build({ parts = ceilings }),
           nshell = #shell, ndetail = #det }
@@ -1098,6 +1126,14 @@ function M.render(v, state, p)
   end
   v:mesh(ms.detail, { palette = A.pal.base })
   local n = 4
+  -- add-alien-stations: each wing area's growths and props only when the eye is near it
+  for _, w in ipairs(ms.wing or {}) do
+    local b, d = w.box, M.WING_DRAW
+    if eye[1] > b[1] - d and eye[1] < b[3] + d and eye[3] > b[2] - d and eye[3] < b[4] + d then
+      v:mesh(w.mesh, { palette = A.pal.base })
+      n = n + 1
+    end
+  end
   -- the force fields across the hangar mouths
   for _, h in pairs(sg.hangars(L)) do
     local m, b = h.mouth, h.box

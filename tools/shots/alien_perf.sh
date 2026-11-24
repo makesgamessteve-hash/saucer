@@ -4,7 +4,7 @@
 BIN=$1; ROOT=$2; WORK=$3; SEED=${4:-42}
 HERE=$(cd "$(dirname "$0")" && pwd)
 mkdir -p "$WORK"; cd "$WORK" || exit 1
-for ph in orbit wide inside wing; do
+for ph in ${PHASES:-orbit wide inside wing}; do
   sed "s/^local PHASE = .*/local PHASE = \"$ph\"/" "$HERE/alien_perf.lua" > "$WORK/perf_$ph.lua"
   SAUCER_FRAME_CSV="$WORK/frames_$ph.csv" SDL_AUDIODRIVER=dummy xvfb-run -a -s "-screen 0 1280x720x24" "$BIN" --root "$ROOT" --user-dir "$WORK/ud_$ph" --seed "$SEED" \
     --windowed --width 1280 --height 720 --frame-stats --script "$WORK/perf_$ph.lua" > "$WORK/perf_$ph.log" 2>&1

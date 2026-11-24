@@ -127,12 +127,54 @@ describe("the alien wing's look", function()
         vstation.alien_parts(L, out)
         expect(#out > 100).to_be(true)
         local m = vstation.meshes(L)
-        expect(m.ndetail > #out).to_be(true)
         expect(saucer.mesh.info(m.detail).triangles > 0).to_be(true)
+        -- one mesh per wing area that has anything in it, all of the wing's parts between them
+        local n = 0
+        for _, w in ipairs(m.wing) do
+          n = n + w.n
+          expect(saucer.mesh.info(w.mesh).triangles > 0).to_be(true)
+        end
+        expect(#m.wing >= L.wing).to_be(true)
+        expect(n <= #out and n > #out * 0.9).to_be(true)
       end
     end
     -- a layout without a family (an old save's) still gets colours
     expect(#vstation.colors({ family = "teapot" }).glow).to_be(3)
+  end)
+
+  it("draws a wing area's growths only when you are near it", function()
+    local game = require("sim.game")
+    local visit = require("sim.visit")
+    local render = require("view.render")
+    local st = {}
+    game.init(st, { seed = 42, players = 1 })
+    local p = st.players[1]
+    p.mode, p.panel = "helm", false
+    local tp = st.sector.trader.pos
+    p.ship.pos = { tp[1] + 60, tp[2], tp[3] + 60 }
+    p.site = 0
+    expect(visit.pocket(st, p, visit.pocket_size(), { msg = function() end, fx = function() end })).to_be(true)
+    p.ship.morph, p.ship.t_left = false, 0
+    p.station.coin = "pocket"
+    local L = visit.layout(st, p)
+    local function draws(x, z)
+      p.station.body.pos = { x, 0, z }
+      local v = { calls = {}, width = 480, height = 270, player = 1, index = 1, xr = false, texts = "", meshes = {} }
+      for _, m in ipairs({ "camera", "fog", "billboard", "rect", "text", "image" }) do
+        v[m] = function(self, ...) if m == "text" then return #select(3, ...) * 8 end end
+      end
+      function v:mesh(id) self.meshes[id] = true end
+      render.render(v, st, 1)
+      local n = 0
+      for _, w in ipairs(vstation.meshes(L).wing) do if v.meshes[w.mesh] then n = n + 1 end end
+      return n
+    end
+    local far
+    for _, a in ipairs(L.areas) do if a.wing and a.kind == "chamber" then far = a end end
+    local c = sg.center(far)
+    expect(draws(c[1], c[2]) >= 1).to_be(true)
+    local hg = sg.center(sg.hangars(L)[1])
+    expect(draws(hg[1], hg[2]) < #vstation.meshes(L).wing).to_be(true)
   end)
 
   it("lights the wing in its family's colours, up the shafts too", function()
