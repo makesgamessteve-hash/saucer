@@ -92,7 +92,9 @@ T.assert(nc >= 1, "coloured lamps")
 T.press(1, "headlights")
 T.wait(4)
 T.assert(count("spot", own) == 2, "headlights inside too")
--- add-lighting-mood: the headlight beams show in the air of the dark hall
+-- add-lighting-mood: the headlight beams show in the air of the dark hall (high preset: the web starts on low)
+saucer.render.settings({ shadows = "high" })
+T.wait(4)
 T.assert(L().haze >= 1 and L().haze <= 4 and L().haze_steps == 8, "high: beams and halos glow")
 T.assert(#L().glow == L().haze, "the glowing lights are listed")
 
