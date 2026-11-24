@@ -210,6 +210,8 @@ static const char *mesh_fs =
     "uniform vec4 u_lpos[16]; uniform vec4 u_lcol[16]; uniform vec4 u_ldir[16]; uniform vec4 u_lpar[16];\n"
     "uniform highp sampler2DShadow u_shadow; uniform mat4 u_shmat[4]; uniform vec4 u_shrect[7]; uniform float u_shbias[7];\n"
     "uniform int u_ncasc; uniform float u_shtexel; uniform int u_lidx[16];\n"
+    "uniform vec3 u_eye; uniform int u_nhz; uniform int u_hzsteps; uniform int u_sky;\n"
+    "uniform vec4 u_hzpos[4]; uniform vec4 u_hzcol[4]; uniform vec4 u_hzdir[4];\n"
     "out vec4 o_col;\n"
     "const float bayer[16] = float[16](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0,\n"
     "                                  3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);\n"
@@ -252,6 +254,39 @@ static const char *mesh_fs =
     "  vec4 r = vec4(b.x + float(f - (f / 3) * 3) * b.z / 3.0, b.y + float(f / 3) * b.w * 0.5, b.z / 3.0, b.w * 0.5);\n"
     "  return tap(r, uv, z);\n"
     "}\n"
+    "// add-lighting-mood: light scattered by the air between the eye and this pixel. A point light's glow is\n"
+    "// the closed-form integral of I / (d^2 + s^2) along the ray; a spot's beam is a few jittered samples\n"
+    "// through its cone. Unshadowed: the ray ends at the surface, so a wall still cuts the beam.\n"
+    "vec3 haze(vec3 wp, float jit) {\n"
+    "  vec3 rd; float T;\n"
+    "  if (u_sky == 1) { rd = normalize(wp); T = 400.0; }\n"
+    "  else { vec3 dv = wp - u_eye; T = length(dv); rd = dv / max(T, 1e-4); }\n"
+    "  vec3 acc = vec3(0.0);\n"
+    "  for (int k = 0; k < 4; k++) {\n"
+    "    if (k >= u_nhz) break;\n"
+    "    vec4 lp = u_hzpos[k]; vec4 lc = u_hzcol[k]; vec4 ld = u_hzdir[k];\n"
+    "    float R = lp.w; vec3 o = lp.xyz - u_eye; float b = dot(o, rd);\n"
+    "    float t0 = max(b - R, 0.0), t1 = min(b + R, T);\n"
+    "    if (t1 <= t0) continue;\n"
+    "    float s2 = 0.0625 * R * R;\n"
+    "    if (ld.w < -1.5) {\n"
+    "      float H = sqrt(max(dot(o, o) - b * b, 0.0) + s2);\n"
+    "      acc += lc.rgb * ((atan((t1 - b) / H) - atan((t0 - b) / H)) / H);\n"
+    "    } else {\n"
+    "      float dt = (t1 - t0) / float(u_hzsteps);\n"
+    "      for (int i = 0; i < 8; i++) {\n"
+    "        if (i >= u_hzsteps) break;\n"
+    "        vec3 dv = u_eye + rd * (t0 + (float(i) + jit) * dt) - lp.xyz; float d2 = dot(dv, dv);\n"
+    "        float x = d2 / (R * R);\n"
+    "        if (x >= 1.0) continue;\n"
+    "        float w = 1.0 - x * x;\n"
+    "        float cone = smoothstep(ld.w, lc.w, dot(dv * inversesqrt(max(d2, 1e-6)), ld.xyz));\n"
+    "        acc += lc.rgb * (w * w * cone / (d2 + s2) * dt);\n"
+    "      }\n"
+    "    }\n"
+    "  }\n"
+    "  return acc;\n"
+    "}\n"
     "void main() {\n"
     "  vec4 base = vec4(1.0);\n"
     "  if (u_tex == 1) {\n"
@@ -292,9 +327,10 @@ static const char *mesh_fs =
     "  }\n"
     "  c = mix(lit, c * 1.25, clamp(v_emi, 0.0, 1.0));\n"
     "  if (u_fog > 0.0) c = mix(u_fogcol, c, exp(-u_fog * v_dist));\n"
+    "  ivec2 p = ivec2(gl_FragCoord.xy) % 4;\n"
+    "  float b = (bayer[p.y * 4 + p.x] + 0.5) / 16.0;\n"
+    "  if (u_nhz > 0) c += vec3(1.0) - exp(-haze(v_wpos, b) * u_expo);\n"
     "  if (u_dither == 1) {\n"
-    "    ivec2 p = ivec2(gl_FragCoord.xy) % 4;\n"
-    "    float b = (bayer[p.y * 4 + p.x] + 0.5) / 16.0;\n"
     "    c = floor(clamp(c, 0.0, 1.0) * 31.0 + b) / 31.0;\n"
     "  }\n"
     "  float a = base.a * u_tint.a;\n"
@@ -340,6 +376,7 @@ typedef struct prog {
   GLuint id;
   GLint mvp, mv, model, snap, affine, idx, pal, palrow, tex, tint, light, ambient, lit, fogcol, fog, dither, size, color;
   GLint mode, nl, amb, expo, lpos, lcol, ldir, lpar, shadow, shmat, shrect, shbias, ncasc, shtexel, lidx;
+  GLint eye, nhz, hzsteps, sky, hzpos, hzcol, hzdir;
 } prog;
 
 static struct {
@@ -352,6 +389,7 @@ static struct {
   unsigned omni_turn, omni_drawn;
   float lsph[SX_MAX_ACTIVE_LIGHTS][4]; /* the view's active lights: pos + range (-1: a sun, reaches all) */
   int nview_lights, last_lmask;
+  int view_hz; /* add-lighting-mood: glowing lights of the view being drawn */
   int cap_spheres;
   GLuint pal_tex;
   GLuint white_tex;
@@ -410,6 +448,7 @@ static int link_prog(prog *p, const char *vs, const char *fs, int ui) {
   U(fogcol); U(fog); U(dither); U(size); U(color);
   U(mode); U(nl); U(amb); U(expo); U(lpos); U(lcol); U(ldir); U(lpar); U(shadow); U(shmat); U(shrect); U(shbias);
   U(ncasc); U(shtexel); U(lidx);
+  U(eye); U(nhz); U(hzsteps); U(sky); U(hzpos); U(hzcol); U(hzdir);
 #undef U
   glUseProgram(p->id);
   glUniform1i(p->idx, 0);
@@ -817,6 +856,37 @@ static void set_lights(const sx_viewport *v) {
   glActiveTexture(GL_TEXTURE0);
 }
 
+/* add-lighting-mood: the view's glowing lights (beams and halos) and the eye they are seen from */
+static void set_haze(const sx_viewport *v, const float view[16]) {
+  const sx_lighting *lt = &v->lighting;
+  float hp[SX_MAX_HAZE][4], hc[SX_MAX_HAZE][4], hd[SX_MAX_HAZE][4], eye[3];
+  int k, j, n = lt->on ? lt->nhz : 0;
+  for (j = 0; j < 3; j++) eye[j] = -(view[j * 4] * view[12] + view[j * 4 + 1] * view[13] + view[j * 4 + 2] * view[14]);
+  glUniform3f(G.mesh.eye, eye[0], eye[1], eye[2]);
+  G.view_hz = n;
+  glUniform1i(G.mesh.nhz, n);
+  if (n <= 0) return;
+  memset(hp, 0, sizeof hp);
+  memset(hc, 0, sizeof hc);
+  memset(hd, 0, sizeof hd);
+  for (k = 0; k < n; k++) {
+    const sx_light *l = &lt->lights[lt->hz[k]];
+    float s = l->intensity * l->haze * lt->haze_density;
+    for (j = 0; j < 3; j++) {
+      hp[k][j] = l->pos[j];
+      hc[k][j] = l->color[j] * s;
+      hd[k][j] = l->dir[j];
+    }
+    hp[k][3] = l->range;
+    hc[k][3] = l->cos_inner;
+    hd[k][3] = l->kind == SX_LIGHT_SPOT ? l->cos_outer : -2.0f;
+  }
+  glUniform1i(G.mesh.hzsteps, lt->haze_steps > 0 ? lt->haze_steps : 1);
+  glUniform4fv(G.mesh.hzpos, SX_MAX_HAZE, &hp[0][0]);
+  glUniform4fv(G.mesh.hzcol, SX_MAX_HAZE, &hc[0][0]);
+  glUniform4fv(G.mesh.hzdir, SX_MAX_HAZE, &hd[0][0]);
+}
+
 /* --------------------------------------------------------------- drawing */
 static void bind_tex(const sx_render *r, int tex) {
   glActiveTexture(GL_TEXTURE0);
@@ -896,6 +966,7 @@ static void draw_mesh(const sx_render *r, const sx_viewport *v, const frame_mats
   glUniform1i(G.mesh.tex, d->tex > 0 ? 1 : 0);
   glUniform1i(G.mesh.palrow, pal_row(r, d->palette));
   glUniform1i(G.mesh.lit, (d->flags & SX_DRAW_UNLIT) ? 0 : 1);
+  glUniform1i(G.mesh.sky, (d->flags & SX_DRAW_SKY) ? 1 : 0);
   if (G.nview_lights > 0 && !(d->flags & (SX_DRAW_UNLIT | SX_DRAW_SKY))) mesh_lights(r, d);
   glUniform1f(G.mesh.fog, (d->flags & SX_DRAW_NOFOG) ? 0.0f : v->fog_density);
   if (d->flags & SX_DRAW_GHOST) glUniform4f(G.mesh.tint, d->tint[0] * 0.6f, d->tint[1] * 0.85f, d->tint[2], d->tint[3] * 0.35f);
@@ -1025,6 +1096,7 @@ static void draw_view(const sx_render *r, const sx_viewport *v, int fb_h, int xr
   glBindTexture(GL_TEXTURE_2D, G.pal_tex);
   set_common(v, r, xr);
   set_lights(v);
+  set_haze(v, fm.view);
   glEnable(GL_DEPTH_TEST);
   glDepthFunc(GL_LEQUAL);
   glDisable(GL_CULL_FACE);
@@ -1036,7 +1108,9 @@ static void draw_view(const sx_render *r, const sx_viewport *v, int fb_h, int xr
     if (pass == 2) {
       glEnable(GL_BLEND);
       glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+      glUniform1i(G.mesh.nhz, 0); /* a glow sprite is not lit air: it would add the haze twice */
       draw_billboards(r, v, &fm);
+      glUniform1i(G.mesh.nhz, G.view_hz);
       continue;
     }
     if (pass == 3) glDepthMask(GL_FALSE);

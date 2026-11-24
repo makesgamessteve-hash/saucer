@@ -231,3 +231,101 @@ describe("the lights a frame submits", function()
     assert.equals(0, lv.saucer(light_view(), p, d, at, p.ship.pos))
   end)
 end)
+
+-- add-lighting-mood: pools of light with dark between them, one global dimmer, light you see in the air
+describe("dark interiors and light in the air", function()
+  local ruinm = require("sim.ruin")
+  local function room_of(ruin, origin, pos)
+    local kit = ruinm.kit_of(ruin.kit)
+    for i, r in ipairs(ruin.rooms) do
+      local mn, mx = ruinm.room_box(r, kit, origin)
+      local inside = true
+      for a = 1, 3 do inside = inside and pos[a] >= mn[a] - 0.01 and pos[a] <= mx[a] + 0.01 end
+      if inside then return i end
+    end
+  end
+
+  it("a derelict's rooms get one to three low pools each, and some rooms stay dark", function()
+    local st = new_state()
+    local dark, lit = 0, 0
+    for i, site in ipairs(st.sector.sites) do
+      local ruin = game.ruin(i)
+      if ruin and not ruin.city then
+        local c = lv.room_lamps(ruin, site.pos, i)
+        local per = {}
+        for _, l in ipairs(c.list) do
+          local ri = room_of(ruin, site.pos, l.pos)
+          assert.is_truthy(ri)
+          per[ri] = (per[ri] or 0) + 1
+          assert.is_true(l.range >= 7 and l.range <= 17)
+          assert.near(lv.POOL_LUX * l.range * l.range, l.intensity, 1e-6)
+        end
+        for ri = 1, #ruin.rooms do
+          local k = per[ri] or 0
+          assert.is_true(k <= 3)
+          if k == 0 then dark = dark + 1 else lit = lit + 1 end
+        end
+      end
+    end
+    assert.is_true(dark >= 1)
+    assert.is_true(lit > dark)
+  end)
+
+  it("a city's rooms are all lit, with more and brighter pools", function()
+    local st = new_state()
+    local ruin, site, idx
+    for i, s in ipairs(st.sector.sites) do
+      local r = game.ruin(i)
+      if r and not ruin and #r.rooms > 2 then ruin, site, idx = r, s, i end
+    end
+    assert.is_truthy(ruin)
+    local city = {}
+    for k, val in pairs(ruin) do city[k] = val end
+    city.city = {}
+    local c = lv.room_lamps(city, site.pos, idx)
+    local lit = {}
+    for _, l in ipairs(c.list) do
+      lit[room_of(city, site.pos, l.pos)] = true
+      assert.near(lv.POOL_LUX * lv.CITY_LUX * l.range * l.range, l.intensity, 1e-6)
+    end
+    for ri = 1, #city.rooms do assert.is_true(lit[ri] == true) end
+    assert.is_true(#c.list >= #lv.room_lamps(ruin, site.pos, idx).list)
+  end)
+
+  it("placed lamps are dimmed by one global scale and glow faintly; the saucer's lights cut beams", function()
+    local v = light_view()
+    local L = { areas = { { kind = "nonesuch", box = { 0, 0, 30, 22 }, h = 6 } } }
+    lv.station_lamps(v, L, { 15, 2, 11 })
+    local old = lv.LAMP_SCALE
+    lv.LAMP_SCALE = 1
+    local v1 = light_view()
+    lv.station_lamps(v1, L, { 15, 2, 11 })
+    lv.LAMP_SCALE = old
+    assert.near(v1.lights[1].intensity * old, v.lights[1].intensity, 1e-6)
+    assert.near(lv.HAZE_LAMP * lv.HAZE, v.lights[1].haze, 1e-9)
+    local v2 = light_view()
+    lv.sentry_spot(v2, { 0, 10, 0 }, { 0, -1, 0 }, { 1, 0.2, 0.2 }, 40, 0.3)
+    assert.near(lv.HAZE_SENTRY * lv.HAZE, v2.lights[1].haze, 1e-9)
+    -- the saucer: headlights glow most, floods a little, cabin lamps not at all and never dimmed
+    local st = new_state()
+    local p = st.players[1]
+    local d = { pos = p.ship.pos, yaw = p.ship.yaw, size = p.ship.size, scale = 1 }
+    local function at(dd, off) return vec.add(dd.pos, off) end
+    p.lights = { head = true, flood = true, cabin = true }
+    local v3 = light_view()
+    lv.saucer(v3, p, d, at, p.ship.pos)
+    local head, flood, cabin
+    for _, l in ipairs(v3.lights) do
+      if l.kind == "spot" then head = l elseif l.owner then flood = l elseif l.cabin then cabin = l end
+    end
+    assert.near(lv.HAZE_HEAD * lv.HAZE, head.haze, 1e-9)
+    assert.near(lv.HAZE_FLOOD * lv.HAZE, flood.haze, 1e-9)
+    assert.is_true(head.haze > flood.haze)
+    assert.near(lv.FLOOD[require("sim.config").get(d.size).id].intensity, flood.intensity, 1e-6)
+    if cabin then assert.equals(0, cabin.haze) end
+    -- the sun never glows
+    local v4 = light_view()
+    lv.begin(v4, st, p, { pos = { 0, 5000, 0 } }, nil)
+    assert.is_nil(v4.lights[1].haze)
+  end)
+end)
