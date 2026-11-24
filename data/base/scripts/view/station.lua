@@ -147,16 +147,17 @@ function M.shell_parts(L)
   local k = sg.kit()
   local wall_c, uv = k.color, k.uv or 0.125
   local parts = {}
+  local C = M.colors(L)
   for _, a in ipairs(L.areas) do
     local b = a.box
-    local wt = WALL_TINT[a.kind] or { 1, 1, 1 }
+    local wt = (a.wing and C.wall) or WALL_TINT[a.kind] or { 1, 1, 1 }
     local tint = { wall_c[1] * wt[1], wall_c[2] * wt[2], wall_c[3] * wt[3] }
-    parts[#parts + 1] = box(b[1], -0.25, b[2], b[3], 0, b[4], FLOOR_TINT[a.kind] or FLOOR, { uv = 0.25, mat = "floor" })
+    parts[#parts + 1] = box(b[1], -0.25, b[2], b[3], 0, b[4], (a.wing and C.floor) or FLOOR_TINT[a.kind] or FLOOR, { uv = 0.25, mat = "floor" })
     parts[#parts + 1] = box(b[1], a.h, b[2], b[3], a.h + 0.3, b[4], shade(tint, 0.7), { uv = uv, mat = "ceiling" })
   end
   for _, s in ipairs(M.wall_segments(L)) do
     local mn, mx = seg_box(s, 0, s.h, sg.WALL)
-    local wt = WALL_TINT[s.area.kind] or { 1, 1, 1 }
+    local wt = (s.area.wing and C.wall) or WALL_TINT[s.area.kind] or { 1, 1, 1 }
     parts[#parts + 1] = { kind = "box", min = mn, max = mx, color = { wall_c[1] * wt[1], wall_c[2] * wt[2], wall_c[3] * wt[3] },
                           uv = uv }
   end
@@ -542,16 +543,279 @@ local function prop_detail(out, q, L, rng)
   end
 end
 
+-- ---------------------------------------------------------------------------------------------------
+-- add-alien-stations: the alien wing's look. Ribs arching over halls and passages (a little askew), organic
+-- walls (half-sunk growths and glowing veins), and the chambers' things: growth pillars, pods, cocoon racks,
+-- eggs, glowing plants, altars, braziers, pools, ledges, floating monoliths, glyph walls and orbiting lights.
+-- Coloured by the station's family (kits/station.lua walk.alien.colors).
+-- ---------------------------------------------------------------------------------------------------
+function M.colors(L)
+  local W = sg.kit().walk.alien
+  return W.colors[L.family] or W.colors.coral
+end
+
+local function ell(out, x, y, z, rx, ry, rz, color, emi, seg, rings)
+  out[#out + 1] = { kind = "sphere", c = { 0, 0, 0 }, r = 1, h = 1, seg = seg or 8, rings = rings or 3, color = color, emissive = emi,
+                    scale = { rx, ry, rz }, pos = { x, y, z } }
+end
+
+-- a square rod from a to b (3D), half-thickness w
+local function rod3(out, a, b, w, color, emi)
+  local dx, dy, dz = b[1] - a[1], b[2] - a[2], b[3] - a[3]
+  local hz = sm.sqrt(dx * dx + dz * dz)
+  local len = sm.sqrt(hz * hz + dy * dy)
+  if len < 1e-3 then return end
+  out[#out + 1] = { kind = "box", min = { -w, -w, 0 }, max = { w, w, len }, color = color, emissive = emi,
+                    yaw = sm.atan2(dx, dz), pitch = -sm.atan2(dy, hz), pos = a }
+end
+
+local function glyph_bits(rng)
+  local bits, on = {}, 0
+  for k = 1, 12 do
+    bits[k] = rng:int(0, 9) < 5
+    if bits[k] then on = on + 1 end
+  end
+  if on < 4 then bits[2], bits[5], bits[8], bits[11] = true, true, true, true end
+  return bits
+end
+
+-- a glyph on a wall plane: axis 1 (x = at, running along z) or 3, at u (its middle), y (its foot), cell s
+local function glyph(out, axis, at, inward, u, y, s, color, rng)
+  local g = glyph_bits(rng)
+  for row = 1, 4 do
+    for col = 1, 3 do
+      if g[(row - 1) * 3 + col] then
+        local uu = u + (col - 2.5) * s
+        local yy = y + (4 - row) * s
+        local p0, p1 = at + inward * 0.04, at + inward * 0.1
+        if axis == 1 then out[#out + 1] = box(p0, yy, uu, p1, yy + s * 0.9, uu + s * 0.9, color, { emissive = 1 })
+        else out[#out + 1] = box(uu, yy, p0, uu + s * 0.9, yy + s * 0.9, p1, color, { emissive = 1 }) end
+      end
+    end
+  end
+end
+
+-- an organic wall: growths half sunk into it and glowing veins climbing it
+local function organic_wall(out, s, C, rng)
+  local len = s.u1 - s.u0
+  if len < 1 then return end
+  local n = math.max(1, math.floor(len / 4.2))
+  for i = 0, n - 1 do
+    local u = s.u0 + (i + 0.5) * len / n + (rng:float() - 0.5) * 0.8
+    local y = 0.6 + rng:float() * math.min(s.h - 1.5, 5)
+    local r = 0.5 + rng:float() * 0.9
+    local at = s.at + s.inward * 0.05
+    if s.axis == 1 then ell(out, at, y, u, r * 0.45, r * 1.4, r, C.trim, nil, 6, 2)
+    else ell(out, u, y, at, r, r * 1.4, r * 0.45, C.trim, nil, 6, 2) end
+    if i % 2 == 0 then
+      local a3 = s.axis == 1 and { s.at + s.inward * 0.12, 0.2, u } or { u, 0.2, s.at + s.inward * 0.12 }
+      local du = (rng:float() - 0.5) * 2.4
+      local top = math.min(s.h - 0.3, 3 + rng:float() * 4)
+      local b3 = s.axis == 1 and { a3[1], top, math.max(s.u0, math.min(s.u1, u + du)) } or { math.max(s.u0, math.min(s.u1, u + du)), top, a3[3] }
+      rod3(out, a3, b3, 0.05, C.glow, 0.9)
+    end
+  end
+  -- a lit band of glyphs at eye height, now and then
+  if len > 6 and rng:int(0, 2) == 0 then
+    local u = s.u0 + len * (0.25 + 0.5 * rng:float())
+    for k = 0, 2 do glyph(out, s.axis, s.at, s.inward, u + (k - 1) * 0.9, 1.7, 0.2, C.accent, rng) end
+  end
+end
+
+-- ribs arching across a hall every q.step meters along its long axis, a little askew
+local function ribs(out, q, C)
+  local b = q.box
+  local along = q.axis
+  local lo, hi = along == 1 and b[1] or b[2], along == 1 and b[3] or b[4]
+  local clo, chi = along == 1 and b[2] or b[1], along == 1 and b[4] or b[3]
+  local w = (chi - clo) / 2
+  local mid = (clo + chi) / 2
+  local top = q.h - 0.2
+  local n = 6
+  local u = lo + q.step * 0.5
+  local k = 0
+  while u < hi - 0.4 do
+    local sk = q.skew * ((k % 3) - 1) * 0.5
+    local prev
+    for i = 0, n do
+      local th = i * sm.pi / n
+      local across = -sm.cos(th) * (w - 0.25)
+      local y = sm.sin(th) * top
+      local uu = math.max(lo + 0.1, math.min(hi - 0.1, u + across * sk))
+      local p = along == 1 and { uu, y, mid + across } or { mid + across, y, uu }
+      if prev then rod3(out, prev, p, 0.13, k % 2 == 0 and C.trim or shade(C.trim, 0.8)) end
+      prev = p
+    end
+    -- a glowing node at the crown
+    local cp = along == 1 and { u, top - 0.15, mid } or { mid, top - 0.15, u }
+    ell(out, cp[1], cp[2], cp[3], 0.22, 0.22, 0.22, C.glow, 1, 5, 2)
+    u = u + q.step
+    k = k + 1
+  end
+end
+
+local function alien_solid(out, s, C)
+  local seed = s.seed or 1
+  local rng = saucer.rng.new(seed)
+  if s.look == "growth" then
+    local x, z, r = s.c[1], s.c[2], s.r
+    out[#out + 1] = { kind = "cone", c = { x, 0, z }, r = r, r1 = r * 0.5, h = s.h, seg = 8, color = C.trim }
+    local y = 0.4
+    while y < s.h - 0.5 do
+      local rr = r * (0.9 + rng:float() * 0.5)
+      ell(out, x + (rng:float() - 0.5) * r * 0.4, y + rr * 0.6, z + (rng:float() - 0.5) * r * 0.4, rr, rr * 1.3, rr, C.wall, nil, 8)
+      if rng:int(0, 2) == 0 then ell(out, x + rr * 0.85, y + rr * 0.6, z, rr * 0.2, rr * 0.2, rr * 0.2, C.glow, 1, 5, 2) end
+      y = y + rr * 2.2
+    end
+    out[#out + 1] = { kind = "cone", c = { x, s.h - 2.5, z }, r = r * 0.5, r1 = r * 2.0, h = 2.5, seg = 8, color = C.trim }
+  elseif s.look == "pod" then
+    ell(out, s.c[1], s.h * 0.5, s.c[2], s.r, s.h * 0.55, s.r, C.wall, nil, 10)
+    ell(out, s.c[1], s.h * 0.5, s.c[2], s.r * 1.03, s.h * 0.08, s.r * 1.03, C.glow, 1, 10)
+  elseif s.look == "egg" then
+    ell(out, s.c[1], s.h * 0.48, s.c[2], s.r, s.h * 0.5, s.r, C.accent, 0.25, 10)
+    ell(out, s.c[1], 0.1, s.c[2], s.r * 1.25, 0.12, s.r * 1.25, C.trim, nil, 10)
+  elseif s.look == "plant" then
+    local x, z = s.c[1], s.c[2]
+    out[#out + 1] = cyl(x, 0, z, s.r * 0.18, s.h, C.trim, 6)
+    ell(out, x, s.h, z, s.r * 0.8, s.r * 0.55, s.r * 0.8, C.glow, 0.9, 8)
+    for k = 0, 3 do
+      local a = k * sm.tau / 4 + rng:float()
+      rod3(out, { x, s.h * 0.4, z }, { x + sm.sin(a) * s.r, s.h * 0.7, z + sm.cos(a) * s.r }, 0.04, C.accent, 0.6)
+    end
+  elseif s.look == "rack" then
+    local b = s.box
+    out[#out + 1] = box(b[1], 0, b[2], b[3], 0.2, b[4], C.trim)
+    out[#out + 1] = box(b[1], s.h - 0.2, b[2], b[3], s.h, b[4], C.trim)
+    local cx, cz = (b[1] + b[3]) / 2, (b[2] + b[4]) / 2
+    local n = s.n or 3
+    for k = 0, n - 1 do
+      local y = 0.5 + (s.h - 1) * (k + 0.5) / n
+      local rr = math.min(b[3] - b[1], b[4] - b[2]) * 0.38
+      ell(out, cx, y, cz, rr, (s.h - 1) / n * 0.42, rr, k % 2 == 0 and C.wall or C.accent, k % 2 == 0 and nil or 0.3, 8)
+      ell(out, cx, y, cz, rr * 1.05, 0.05, rr * 1.05, C.glow, 1, 8, 2)
+    end
+  elseif s.look == "altar" then
+    local b = s.box
+    out[#out + 1] = box(b[1], 0, b[2], b[3], s.h, b[4], C.trim)
+    out[#out + 1] = box(b[1] + 0.2, s.h, b[2] + 0.2, b[3] - 0.2, s.h + 0.05, b[4] - 0.2, C.glow, { emissive = 1 })
+  elseif s.look == "brazier" then
+    out[#out + 1] = { kind = "cone", c = { s.c[1], 0, s.c[2] }, r = s.r * 0.5, r1 = s.r, h = s.h, seg = 6, color = C.trim }
+    ell(out, s.c[1], s.h + 0.25, s.c[2], s.r * 0.6, 0.45, s.r * 0.6, C.accent, 1, 6)
+  end
+end
+
+local function alien_prop(out, q, L, C)
+  if q.kind == "ribs" then
+    ribs(out, q, C)
+  elseif q.kind == "pool" then
+    out[#out + 1] = { kind = "cylinder", c = { q.at[1], 0.0, q.at[2] }, r = q.r, h = 0.04, seg = 20, color = C.glow, emissive = 0.8 }
+    out[#out + 1] = { kind = "ring", c = { q.at[1], 0.0, q.at[2] }, rin = q.r, r = q.r + 0.6, h = 0.25, seg = 20, color = C.trim }
+  elseif q.kind == "orbiter" then
+    ell(out, q.at[1], q.y, q.at[2], q.r, q.r, q.r, C.accent, 0.9, 8)
+    out[#out + 1] = { kind = "ring", c = { q.at[1], q.y - 0.05, q.at[2] }, rin = q.r * 1.5, r = q.r * 1.7, h = 0.1, seg = 16, color = C.glow,
+                      emissive = 1 }
+  elseif q.kind == "ledge" then
+    local b = q.box
+    local w = q.w
+    local sides = { { b[1], b[2], b[3], b[2] + w }, { b[1], b[4] - w, b[3], b[4] }, { b[1], b[2] + w, b[1] + w, b[4] - w },
+                    { b[3] - w, b[2] + w, b[3], b[4] - w } }
+    for i, sd in ipairs(sides) do
+      if i ~= (q.gap or 0) + 1 then
+        out[#out + 1] = box(sd[1], q.y - 0.35, sd[2], sd[3], q.y, sd[4], C.trim)
+        out[#out + 1] = box(sd[1], q.y - 0.42, sd[2], sd[3], q.y - 0.35, sd[4], C.glow, { emissive = 0.9 })
+      end
+    end
+  elseif q.kind == "monolith" then
+    out[#out + 1] = { kind = "box", min = { -q.w / 2, 0, -q.w * 0.2 }, max = { q.w / 2, q.h, q.w * 0.2 }, color = shade(C.trim, 0.5),
+                      yaw = q.yaw, pos = { q.at[1], q.y, q.at[2] } }
+    local rng = saucer.rng.new(math.floor(q.at[1] * 7 + q.at[2] * 13) % 9973 + 1)
+    for _, f in ipairs({ -1, 1 }) do
+      local n = math.max(1, math.min(6, math.floor(q.h / 1.2)))
+      for k = 0, n - 1 do
+        local g = glyph_bits(rng)
+        for row = 1, 4 do
+          for col = 1, 3 do
+            if g[(row - 1) * 3 + col] then
+              local s = q.w / 5
+              out[#out + 1] = { kind = "box", min = { (col - 2.5) * s, 0, f * q.w * 0.2 }, max = { (col - 1.6) * s, s * 0.9, f * (q.w * 0.2 + 0.03) },
+                                color = C.glow, emissive = 1, yaw = q.yaw,
+                                pos = { q.at[1], q.y + q.h - (k + 0.15) * 1.2 - row * s, q.at[2] } }
+            end
+          end
+        end
+      end
+    end
+    ell(out, q.at[1], q.y - 0.6, q.at[2], q.w * 0.6, 0.15, q.w * 0.6, C.glow, 1, 8)
+  elseif q.kind == "glyphwall" then
+    local b = q.box
+    local rng = saucer.rng.new(q.seed or 1)
+    for _, f in ipairs({ { 1, b[1], 1, b[2], b[4] }, { 1, b[3], -1, b[2], b[4] }, { 3, b[2], 1, b[1], b[3] }, { 3, b[4], -1, b[1], b[3] } }) do
+      local u = f[4] + 2
+      while u < f[5] - 2 do
+        if rng:int(0, 2) > 0 then glyph(out, f[1], f[2], f[3], u, 2.4 + rng:int(0, 2) * 1.2, 0.3, C.glow, rng) end
+        u = u + 1.6
+      end
+    end
+  end
+end
+
+-- alien_parts(L, out[, pick]): the alien wing's parts. pick(area) -> the list an area's parts go in (default: out)
+function M.alien_parts(L, out, pick)
+  local C = M.colors(L)
+  local rng = saucer.rng.new(saucer.seed_child(L.seed or 1, "alien-view", 1))
+  local function into(a) return (pick and a and pick(a)) or out end
+  local function at(x, z) return into(sg.area_at(L, x, z)) end
+  for _, s in ipairs(M.wall_segments(L)) do
+    if s.area.wing then organic_wall(into(s.area), s, C, rng) end
+  end
+  for _, s in ipairs(L.solids) do
+    local c = s.c or { (s.box[1] + s.box[3]) / 2, (s.box[2] + s.box[4]) / 2 }
+    alien_solid(at(c[1], c[2]), s, C)
+  end
+  for _, q in ipairs(L.props) do
+    local c = q.at or (q.box and { (q.box[1] + q.box[3]) / 2, (q.box[2] + q.box[4]) / 2 }) or { 0, 0 }
+    alien_prop(at(c[1], c[2]), q, L, C)
+  end
+  -- the chambers' ceilings: a glowing ring of pores round a dark eye
+  for _, a in ipairs(L.areas) do
+    if a.kind == "chamber" then
+      local c = sg.center(a)
+      local r = math.min(a.box[3] - a.box[1], a.box[4] - a.box[2]) * 0.2
+      local o = into(a)
+      o[#o + 1] = { kind = "ring", c = { c[1], a.h - 0.25, c[2] }, rin = r, r = r + 0.5, h = 0.2, seg = 20, color = C.glow, emissive = 1 }
+      o[#o + 1] = { kind = "cylinder", c = { c[1], a.h - 0.3, c[2] }, r = r, h = 0.25, seg = 20, color = shade(C.trim, 0.4) }
+    end
+  end
+  return out
+end
+
+-- the wing's parts as one mesh per wing area, with the area's box (drawn only near it: M.WING_DRAW)
+M.WING_DRAW = 70
+function M.wing_meshes(L)
+  local lists, order = {}, {}
+  local rest = {}
+  M.alien_parts(L, rest, function(a)
+    if not a.wing then return nil end
+    if not lists[a.id] then lists[a.id] = {} order[#order + 1] = a end
+    return lists[a.id]
+  end)
+  local out = {}
+  for _, a in ipairs(order) do
+    out[#out + 1] = { mesh = saucer.mesh.build({ parts = lists[a.id] }), box = a.box, n = #lists[a.id] }
+  end
+  return out, rest
+end
+
 function M.detail_parts(L)
   local out = {}
-  for _, s in ipairs(M.wall_segments(L)) do wall_detail(out, s) end
+  for _, s in ipairs(M.wall_segments(L)) do if not s.area.wing then wall_detail(out, s) end end
   for _, s in ipairs(L.solids) do solid_detail(out, s) end
   for _, q in ipairs(L.props) do prop_detail(out, q, L) end
   -- ceiling light strips, door frames and the signs over doorways
   for _, a in ipairs(L.areas) do
     local b = a.box
     local col = KIND_COLOR[a.kind] or TRIM
-    if a.kind == "corridor" then
+    if a.kind == "corridor" and not a.wing then
       local long = (b[4] - b[2]) >= (b[3] - b[1])
       for _, o in ipairs({ -1, 1 }) do
         if long then
@@ -665,7 +929,9 @@ function M.meshes(L)
       walls[#walls + 1] = { kind = q.kind, min = q.min, max = q.max, uv = 0.1, color = vec.scale(c, 0.9) }
     end
   end
-  hit = { shell = saucer.mesh.build({ parts = shell }), detail = saucer.mesh.build({ parts = det }),
+  local wing, rest = M.wing_meshes(L)
+  for _, q in ipairs(rest) do det[#det + 1] = q end
+  hit = { shell = saucer.mesh.build({ parts = shell }), detail = saucer.mesh.build({ parts = det }), wing = wing,
           floor = saucer.mesh.build({ parts = floors }), walls = saucer.mesh.build({ parts = walls }),
           ceiling = saucer.mesh.build({ parts = ceilings }),
           nshell = #shell, ndetail = #det }
@@ -718,7 +984,7 @@ end
 M.SIGN_OF = { scrap = "sign_scrap", chandler = "sign_scrap", curio = "sign_gems", archive = "sign_gems",
               outfit = "sign_gems", grocer = "sign_food" }
 M.FOLK_SPRITES = { "folk_1", "folk_2", "folk_3", "folk_4" }
-M.CROWD = { market = 6, bar = 3, corridor = 2, hangar = 1 }
+M.CROWD = { market = 6, bar = 3, corridor = 2, hangar = 1, chamber = 2 }
 
 M.decal = assets.decal
 
@@ -860,6 +1126,14 @@ function M.render(v, state, p)
   end
   v:mesh(ms.detail, { palette = A.pal.base })
   local n = 4
+  -- add-alien-stations: each wing area's growths and props only when the eye is near it
+  for _, w in ipairs(ms.wing or {}) do
+    local b, d = w.box, M.WING_DRAW
+    if eye[1] > b[1] - d and eye[1] < b[3] + d and eye[3] > b[2] - d and eye[3] < b[4] + d then
+      v:mesh(w.mesh, { palette = A.pal.base })
+      n = n + 1
+    end
+  end
   -- the force fields across the hangar mouths
   for _, h in pairs(sg.hangars(L)) do
     local m, b = h.mouth, h.box

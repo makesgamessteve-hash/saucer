@@ -19,14 +19,16 @@ function M.extent(kit_id)
 end
 
 
--- add-huge-stations: a trader station is a kilometre-scale megastructure that hangs off its dock anchor
--- (the trader's `pos`) toward -x (sim/stationhull.lua). Place the anchor so the whole hull clears every
--- site, the vault and the arrival point: of 24 bearings x 3 distances x 3 heights round the sector's
--- origin, the hull's centre goes where its sphere has the most room. Pure; no rng. obstacles are
--- { x, y, z, r } spheres. -> anchor pos
+-- add-huge-stations, add-alien-stations: a trader station is a multi-kilometre alien megastructure that grows
+-- off its dock anchor (the trader's `pos`) toward -x (sim/stationhull.lua). Place the anchor so the hull's box
+-- clears every site, the vault and the arrival point by a margin: of 24 bearings x 6 distances x 5 heights round
+-- the sector's origin, the anchor goes as near the origin as it can while the box has room, and where the way in
+-- from the arrival point to the hangar mouth does not cross the hull. Pure; no rng. obstacles are { x, y, z, r }
+-- spheres. -> anchor pos
 M.STATION_BEARINGS = 24
-M.STATION_DISTANCES = { 700, 950, 1200 }
-M.STATION_HEIGHTS = { 0, 160, -160 }
+M.STATION_DISTANCES = { 700, 1000, 1350, 1750, 2200, 2700 }
+M.STATION_HEIGHTS = { 0, 250, -250, 550, -550 }
+M.STATION_ROOM = 120     -- m of clear space between the hull's box and any obstacle
 local placed, placed_order = {}, {}
 function M.place_station(seed, sid, obstacles)
   -- the same sector is generated again and again (loads, tests): the answer is a pure function of its inputs
@@ -43,35 +45,96 @@ function M.place_station(seed, sid, obstacles)
   return { hit[1], hit[2], hit[3] }
 end
 
-function M.place_station_uncached(seed, sid, obstacles)
-  local sh = require("sim.stationhull")
-  -- (the station's envelope alone: building the whole layout for every sector would be slow)
-  local ctr, rad = sh.envelope(sh.seed_of(seed, sid, 1), "port")
-  local best, best_score
+-- distance from a point to a box (0 inside)
+local function box_gap(p, lo, hi)
+  local s = 0
+  for k = 1, 3 do
+    local d = math.max(lo[k] - p[k], 0, p[k] - hi[k])
+    s = s + d * d
+  end
+  return saucer.math.sqrt(s)
+end
+M.box_gap = box_gap
+
+-- does the segment a-b pass through the box? (slab test)
+local function seg_hits_box(a, b, lo, hi)
+  local t0, t1 = 0, 1
+  for k = 1, 3 do
+    local d = b[k] - a[k]
+    if math.abs(d) < 1e-9 then
+      if a[k] < lo[k] or a[k] > hi[k] then return false end
+    else
+      local u, v = (lo[k] - a[k]) / d, (hi[k] - a[k]) / d
+      if u > v then u, v = v, u end
+      t0, t1 = math.max(t0, u), math.min(t1, v)
+      if t0 > t1 then return false end
+    end
+  end
+  return true
+end
+M.seg_hits_box = seg_hits_box
+
+-- the station of sector sid's main trader: its family follows the walk-in seed (sim/stationgen.lua)
+function M.station_family(seed, sid)
+  local sg = require("sim.stationgen")
+  return require("sim.stationhull").family_of(sg.seed_of(seed, sid, 1))
+end
+
+local spots_cache
+function M.station_spots(T)
+  if spots_cache then return spots_cache end
   local sin, cos, sqrt = saucer.math.sin, saucer.math.cos, saucer.math.sqrt
+  local out = {}
   for k = 0, M.STATION_BEARINGS - 1 do
     local a = saucer.math.tau * k / M.STATION_BEARINGS
     local sa, ca = sin(a), cos(a)
     for _, d in ipairs(M.STATION_DISTANCES) do
       for _, hy in ipairs(M.STATION_HEIGHTS) do
-        local hx, hz = sa * d, ca * d
-        local pen = 0.05 * d + math.abs(hy) * 0.1
-        -- a spot only wins with a room above this; the first obstacle that rules it out ends the check
-        local need = best_score and (best_score + pen + 1e-9) or -math.huge
-        local room = math.huge
-        for _, o in ipairs(obstacles) do
-          local dx, dy, dz = hx - o[1], hy - o[2], hz - o[3]
-          local r = sqrt(dx * dx + dy * dy + dz * dz) - o[4] - rad
-          if r < room then room = r end
-          if room <= need then room = nil break end
-        end
-        if room and need < 400 then
-          best_score = math.min(room, 400) - pen
-          best = { hx - ctr[1], hy - ctr[2], hz - ctr[3] }
-        end
+        local p = { sa * d, hy, ca * d }
+        local mouth = { p[1] + T.mouth_x, p[2] + T.floor_y + T.height / 2, p[3] }
+        out[#out + 1] = { p = p, mouth = mouth, i = #out + 1,
+                          near = sqrt(mouth[1] * mouth[1] + mouth[2] * mouth[2] + mouth[3] * mouth[3]) + math.abs(hy) * 0.5 }
       end
     end
   end
+  table.sort(out, function(u, w) if u.near ~= w.near then return u.near < w.near end return u.i < w.i end)
+  spots_cache = out
+  return out
+end
+
+function M.place_station_uncached(seed, sid, obstacles, from)
+  local sh = require("sim.stationhull")
+  -- (the station's box alone: building the whole layout for every sector would be slow)
+  local _, _, lo, hi = sh.envelope(sh.seed_of(seed, sid, 1), "port", M.station_family(seed, sid))
+  local T = require("sim.dock").tune()
+  -- the hull's box without the cell and its approach (the way in ends at the mouth)
+  local body_hi = { T.back_x - 10, hi[2], hi[3] }
+  from = from or { 0, 0, -120 }
+  local best, best_score, best_i
+  -- every spot, nearest first (the order and the bearings, distances and heights are fixed, so made once);
+  -- a spot whose best possible score cannot beat the best so far ends the search (ties go to the earlier
+  -- spot in bearing, distance, height order, as a plain sweep would pick)
+  local spots = M.station_spots(T)
+  for _, sp in ipairs(spots) do
+    if best_score and sp.near - 80 > best_score then break end
+    local p = sp.p
+    local blo, bhi = { p[1] + lo[1], p[2] + lo[2], p[3] + lo[3] }, { p[1] + hi[1], p[2] + hi[2], p[3] + hi[3] }
+    local room = math.huge
+    for _, o in ipairs(obstacles) do
+      local r = box_gap(o, blo, bhi) - o[4]
+      if r < room then room = r end
+      if room < M.STATION_ROOM then break end
+    end
+    if room >= M.STATION_ROOM then
+      local blocked = seg_hits_box(from, sp.mouth, blo, { p[1] + body_hi[1], p[2] + body_hi[2], p[3] + body_hi[3] })
+      local score = sp.near + (blocked and 2000 or 0) - math.min(room, 400) * 0.2
+      if not best_score or score < best_score or (score == best_score and sp.i < best_i) then
+        best, best_score, best_i = p, score, sp.i
+      end
+    end
+  end
+  -- (nothing fits: the farthest, highest spot; the hull may brush an obstacle)
+  best = best or { 0, M.STATION_HEIGHTS[4] + hi[2] - lo[2], M.STATION_DISTANCES[#M.STATION_DISTANCES] }
   return { best[1] // 1, best[2] // 1, best[3] // 1 }
 end
 

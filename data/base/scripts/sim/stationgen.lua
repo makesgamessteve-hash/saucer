@@ -356,14 +356,279 @@ function M.dress(L, seed)
   end
 end
 
--- generate(seed) -> layout
-function M.generate(seed)
+
+-- ---------------------------------------------------------------------------------------------------
+-- add-alien-stations: the alien wing. Off the market's far wall a chain of passages (straight or doglegged,
+-- angled ribs inside) and chambers grows, branching now and then: atriums with growth pillars, brood halls
+-- of cocoon racks, glowing gardens, glyph shrines with a floating monolith, and vertical shafts with ledges
+-- climbing the walls. Named and coloured by the station's family. Its own rng stream, after the rest of the
+-- layout, so the concourse, the market, the bar and the hangars are as they were. Everything stays on the one
+-- walkable floor; the routes from each chamber's middle to its doorways are kept clear.
+-- ---------------------------------------------------------------------------------------------------
+M.LOOKS = { "atrium", "shaft", "brood", "garden", "shrine" }
+
+local function overlaps(L, b, extra)
+  local m = 0.01
+  for _, a in ipairs(L.areas) do
+    local o = a.box
+    if b[1] < o[3] - m and b[3] > o[1] + m and b[2] < o[4] - m and b[4] > o[2] + m then return true end
+  end
+  for _, o in ipairs(extra) do
+    if b[1] < o[3] - m and b[3] > o[1] + m and b[2] < o[4] - m and b[4] > o[2] + m then return true end
+  end
+  return false
+end
+
+-- a box `len` out of face (axis, sign) of box b, `half` wide about u on the other axis -> box, the face's plane
+local function out_box(b, axis, sign, u, len, half)
+  if axis == 1 then
+    local f = sign > 0 and b[3] or b[1]
+    return { math.min(f, f + sign * len), u - half, math.max(f, f + sign * len), u + half }, f
+  end
+  local f = sign > 0 and b[4] or b[2]
+  return { u - half, math.min(f, f + sign * len), u + half, math.max(f, f + sign * len) }, f
+end
+
+-- the span of box b along the axis that is not `axis`
+local function span(b, axis)
+  if axis == 1 then return b[2], b[4] end
+  return b[1], b[3]
+end
+
+-- the space beyond every hangar's mouth stays open (you see space through it)
+local function mouth_zones(L)
+  local out = {}
+  for _, a in ipairs(L.areas) do
+    if a.kind == "hangar" and a.mouth then
+      local b = a.box
+      local zb = out_box(b, a.mouth.axis, a.mouth.sign, (a.mouth.axis == 1) and (b[2] + b[4]) / 2 or (b[1] + b[3]) / 2, 400,
+                         ((a.mouth.axis == 1) and (b[4] - b[2]) or (b[3] - b[1])) / 2 + 40)
+      out[#out + 1] = zb
+    end
+  end
+  return out
+end
+
+-- distance from p to the segment a-b (2D)
+local function seg_dist(p, a, b)
+  local dx, dz = b[1] - a[1], b[2] - a[2]
+  local l2 = dx * dx + dz * dz
+  local t = l2 > 0 and math.max(0, math.min(1, ((p[1] - a[1]) * dx + (p[2] - a[2]) * dz) / l2)) or 0
+  local ex, ez = p[1] - (a[1] + dx * t), p[2] - (a[2] + dz * t)
+  return sm.sqrt(ex * ex + ez * ez)
+end
+
+-- is (x, z) at least r clear of the walks from the chamber's middle to its doorways (and of the walls)?
+local function off_paths(L, a, x, z, r)
+  local b = a.box
+  if x < b[1] + r + 0.4 or x > b[3] - r - 0.4 or z < b[2] + r + 0.4 or z > b[4] - r - 0.4 then return false end
+  local c = M.center(a)
+  for _, d in ipairs(L.doors) do
+    if d.a == a.id or d.b == a.id then
+      if seg_dist({ x, z }, c, M.door_center(d)) < r + 1.6 then return false end
+      local db = M.door_box(d)
+      if x > db[1] - r - 1.5 and x < db[3] + r + 1.5 and z > db[2] - r - 1.5 and z < db[4] + r + 1.5 then return false end
+    end
+  end
+  for _, s in ipairs(L.solids) do
+    if s.kind == "circle" then
+      local dx, dz = x - s.c[1], z - s.c[2]
+      if dx * dx + dz * dz < (r + s.r + 0.8) * (r + s.r + 0.8) then return false end
+    end
+  end
+  return true
+end
+M.off_paths = off_paths
+
+-- fill a chamber by its look (props for the view, a few solids)
+local function furnish_chamber(L, a, rng, W)
+  local b = a.box
+  local cx, cz = (b[1] + b[3]) / 2, (b[2] + b[4]) / 2
+  local sx, sz = b[3] - b[1], b[4] - b[2]
+  local look = a.alien
+  local function try_circle(n, r0, r1, h, extra, ring)
+    local placed = 0
+    for _ = 1, n * 6 do
+      if placed >= n then break end
+      local x, z
+      if ring then
+        local ang = rng:float() * sm.tau
+        x, z = cx + sm.sin(ang) * sx * ring, cz + sm.cos(ang) * sz * ring
+      else
+        x, z = b[1] + rng:float() * sx, b[2] + rng:float() * sz
+      end
+      local r = r0 + (r1 - r0) * rng:float()
+      if off_paths(L, a, x, z, r) then
+        local t = {}
+        for k, v in pairs(extra) do t[k] = v end
+        t.seed = rng:int(1, 9999)
+        solid_circle(L, x, z, r, h or a.h, t)
+        placed = placed + 1
+      end
+    end
+    return placed
+  end
+  -- ribs arch over every chamber, slightly askew; a glowing pool or floor pattern in the middle
+  prop(L, "ribs", { at = { cx, cz }, box = { b[1], b[2], b[3], b[4] }, h = a.h, skew = (rng:float() - 0.5) * 0.5,
+                    step = 3 + rng:int(0, 2), axis = sx >= sz and 1 or 3 })
+  if look == "atrium" then
+    try_circle(rng:int(5, 8), 0.7, 1.5, a.h, { look = "growth" }, 0.33)
+    prop(L, "pool", { at = { cx, cz }, r = math.min(sx, sz) * 0.16 })
+    for _ = 1, rng:int(2, 4) do
+      prop(L, "orbiter", { at = { cx + (rng:float() - 0.5) * sx * 0.4, cz + (rng:float() - 0.5) * sz * 0.4 }, y = a.h * (0.45 + rng:float() * 0.35),
+                           r = 0.6 + rng:float() * 0.8, phase = rng:int(0, 999) / 1000 })
+    end
+  elseif look == "shaft" then
+    local levels = math.floor(a.h / 9)
+    for k = 1, levels do prop(L, "ledge", { box = { b[1], b[2], b[3], b[4] }, y = k * 9 - 0.5, w = 1.6, gap = rng:int(0, 3) }) end
+    prop(L, "monolith", { at = { cx, cz }, y = 8 + rng:float() * 4, h = a.h * 0.45, w = 1.4, yaw = rng:float() * sm.pi, spin = true })
+    try_circle(rng:int(2, 4), 0.5, 0.9, 1.6, { look = "pod" })
+  elseif look == "brood" then
+    -- cocoon racks along the two long walls, broken at the doorways
+    local long = sx >= sz and 1 or 3
+    local lo, hi = span(b, long == 1 and 3 or 1)   -- along the long walls
+    for _, side in ipairs({ -1, 1 }) do
+      local wall = long == 1 and (side < 0 and b[2] or b[4]) or (side < 0 and b[1] or b[3])
+      local u = lo + 1.5
+      while u < hi - 2.5 do
+        local len = 2.2
+        local x0, z0, x1, z1
+        if long == 1 then x0, x1, z0, z1 = u, u + len, wall - side * 0.1, wall - side * 1.3
+        else x0, x1, z0, z1 = wall - side * 0.1, wall - side * 1.3, u, u + len end
+        local mx, mz = (x0 + x1) / 2, (z0 + z1) / 2
+        if off_paths(L, a, mx, mz, 1.1) then
+          solid_box(L, x0, z0, x1, z1, math.min(a.h - 1, 5.5), { look = "rack", n = rng:int(2, 4), seed = rng:int(1, 9999) })
+        end
+        u = u + len + 0.6
+      end
+    end
+    try_circle(rng:int(2, 3), 0.8, 1.1, 2.2, { look = "egg" }, 0.2)
+  elseif look == "garden" then
+    try_circle(rng:int(9, 14), 0.35, 0.8, 1.2 + rng:float() * 1.5, { look = "plant" })
+    prop(L, "pool", { at = { cx, cz }, r = math.min(sx, sz) * 0.12 })
+  else
+    -- shrine: a floating monolith over a low altar at the far side, glyph walls all round
+    local far_ok = false
+    for _ = 1, 8 do
+      local x, z = cx + (rng:float() - 0.5) * sx * 0.5, cz + (rng:float() - 0.5) * sz * 0.5
+      if off_paths(L, a, x, z, 1.3) then
+        solid_box(L, x - 1.2, z - 1.2, x + 1.2, z + 1.2, 0.9, { look = "altar" })
+        prop(L, "monolith", { at = { x, z }, y = 2.2, h = math.min(a.h - 3, 7), w = 1.1, yaw = rng:float() * sm.pi })
+        far_ok = true
+        break
+      end
+    end
+    if not far_ok then prop(L, "monolith", { at = { cx, cz }, y = a.h * 0.5, h = a.h * 0.3, w = 0.9, yaw = 0 }) end
+    prop(L, "glyphwall", { box = { b[1], b[2], b[3], b[4] }, h = a.h, seed = rng:int(1, 9999) })
+    try_circle(rng:int(2, 4), 0.4, 0.6, 2.4, { look = "brazier" }, 0.4)
+  end
+end
+
+function M.alien_wing(L, seed)
+  local W = M.kit().walk.alien
+  local c = L.cell
+  local fam = L.family
+  local names = W.names[fam] or W.names.coral
+  local rng = saucer.rng.new(saucer.seed_child(seed, "alien", 1))
+  local market
+  for _, a in ipairs(L.areas) do if a.kind == "market" then market = a end end
+  local zones = mouth_zones(L)
+  -- where the wing starts: the market's wall away from the concourse
+  local mb = market.box
+  local msign = (mb[1] + mb[3]) / 2 > 0 and 1 or -1
+  local heads = { { area = market, axis = 1, sign = msign, u = (mb[2] + mb[4]) / 2, fixed = true } }
+  local want = rint(rng, W.chambers)
+  local pw = W.passage_w * c / 2
+  local made = 0
+  local looks_left = {}
+  for i, lk in ipairs(M.LOOKS) do looks_left[i] = lk end
+  for _ = 1, want * 6 do
+    if made >= want then break end
+    -- the newest chamber grows on most of the time; now and then an older one branches
+    local hd = heads[#heads]
+    if #heads > 2 and rng:int(0, 99) < 30 then hd = heads[rng:int(2, #heads)] end
+    local axis, sign, u = hd.axis, hd.sign, hd.u
+    if not hd.fixed then
+      local dirs = { { 1, 1 }, { 1, -1 }, { 3, 1 }, { 3, -1 } }
+      local d = dirs[rng:int(1, 4)]
+      axis, sign = d[1], d[2]
+      local lo, hi = span(hd.area.box, axis)
+      if hi - lo < 2 * pw + 2 then axis = nil else u = lo + pw + 1 + rng:float() * (hi - lo - 2 * pw - 2) end
+    end
+    if axis then
+      -- the passage: straight, or a dogleg with a sideways leg
+      local plen = rint(rng, W.passage) * c
+      local boxes = {}
+      local p1, f1 = out_box(hd.area.box, axis, sign, u, plen, pw)
+      boxes[1] = { box = p1, axis = axis, at = f1, lo = u - pw, hi = u + pw }
+      local end_axis, end_sign, end_u, last = axis, sign, u, p1
+      if rng:int(0, 99) < 45 then
+        local turn = rng:int(0, 1) * 2 - 1
+        local ax2 = axis == 1 and 3 or 1
+        -- the leg leaves from the side of the first part's far end
+        local lo1, hi1 = (axis == 1) and p1[1] or p1[2], (axis == 1) and p1[3] or p1[4]
+        local u2 = sign > 0 and (hi1 - pw) or (lo1 + pw)
+        local p2, f2 = out_box(p1, ax2, turn, u2, rint(rng, W.passage) * c, pw)
+        boxes[2] = { box = p2, axis = ax2, at = f2, lo = u2 - pw, hi = u2 + pw }
+        end_axis, end_sign, end_u, last = ax2, turn, u2, p2
+      end
+      local look = looks_left[rng:int(1, #looks_left)]
+      local wcells, dcells = rint(rng, W.size), rint(rng, W.size)
+      local h = look == "shaft" and rint(rng, W.shaft_h) or rint(rng, W.hall_h)
+      if look == "shaft" then wcells, dcells = math.max(5, wcells - 3), math.max(5, dcells - 3) end
+      local half = wcells * c / 2
+      local shift = (rng:float() - 0.5) * 2 * math.max(0, half - pw - 2)
+      local ch, fc = out_box(last, end_axis, end_sign, end_u + shift, dcells * c, half)
+      local ok = not overlaps(L, ch, zones)
+      for _, pb in ipairs(boxes) do ok = ok and not overlaps(L, pb.box, zones) end
+      -- (the chamber must not swallow the passage's own first part)
+      if ok and #boxes == 2 then
+        local q = boxes[1].box
+        if ch[1] < q[3] - 0.01 and ch[3] > q[1] + 0.01 and ch[2] < q[4] - 0.01 and ch[4] > q[2] + 0.01 then ok = false end
+      end
+      if ok then
+        local prev = hd.area
+        for k, pb in ipairs(boxes) do
+          local pa = area(L, "corridor", names.passage, pb.box[1], pb.box[2], pb.box[3], pb.box[4], W.passage_h)
+          pa.alien = "passage"
+          pa.wing = true
+          door(L, prev, pa, pb.axis, pb.at, pb.lo, pb.hi, math.min(L.door_h, W.passage_h - 0.4))
+          pa.door_at = M.door_center(L.doors[#L.doors])
+          prev = pa
+          if k == 1 then hd.fixed = nil end
+        end
+        local a = area(L, "chamber", names[look], ch[1], ch[2], ch[3], ch[4], h)
+        a.alien = look
+        a.wing = true
+        door(L, prev, a, end_axis, fc, end_u - pw, end_u + pw, math.min(L.door_h + 1, W.passage_h - 0.4))
+        a.door_at = M.door_center(L.doors[#L.doors])
+        heads[#heads + 1] = { area = a }
+        made = made + 1
+        -- every look once before any repeats
+        for i, lk in ipairs(looks_left) do if lk == look then table.remove(looks_left, i) break end end
+        if #looks_left == 0 then for i, lk in ipairs(M.LOOKS) do looks_left[i] = lk end end
+      end
+    end
+  end
+  -- furnish once every doorway is in place (the clear routes know all of them)
+  for _, a in ipairs(L.areas) do
+    if a.kind == "chamber" then furnish_chamber(L, a, rng, W) end
+    if a.wing and a.kind == "corridor" then
+      prop(L, "ribs", { at = M.center(a), box = { a.box[1], a.box[2], a.box[3], a.box[4] }, h = a.h, skew = (rng:float() - 0.5) * 0.7,
+                        step = 3, axis = (a.box[3] - a.box[1]) >= (a.box[4] - a.box[2]) and 1 or 3 })
+    end
+  end
+  L.wing = made
+end
+
+-- generate(seed, family) -> layout (family: sim/stationhull.lua's, from the seed when not given)
+function M.generate(seed, family)
   local K = M.kit().walk
   local folk = M.folk()
   local c = K.cell
   local rng = saucer.rng.new(seed)
   local L = { seed = seed, cell = c, areas = {}, doors = {}, solids = {}, props = {}, stalls = {}, walkers = {},
-              door_h = K.door_h, pad_y = K.pad_y }
+              door_h = K.door_h, pad_y = K.pad_y, family = family or require("sim.stationhull").family_of(seed) }
   local sw = K.spine.w * c / 2
   -- the arrival hangar and the spine
   local h1w, h1d = rint(rng, K.hangar.w), rint(rng, K.hangar.d)
@@ -461,6 +726,7 @@ function M.generate(seed)
   for _, s in ipairs(folk.species) do if s.thief then L.thief.species = species_of(folk, s.id) end end
   L.spawn = { pos = { 0, 0, -6 }, yaw = sm.pi }
   L.spine_len = len * c
+  M.alien_wing(L, seed)
   M.dress(L, seed)
   M.build_nav(L)
   L.hash = M.hash(L)
@@ -478,11 +744,13 @@ function M.build_nav(L)
   for _, a in ipairs(L.areas) do if a.name == "Concourse" then spine = a end end
   local last = L.spine_len
   local end_door = false
-  for _, d in ipairs(L.doors) do if d.axis == 3 and d.at == last then end_door = true end end
+  -- (only the concourse's own doorways make stops on it: the alien wing's doors are elsewhere)
+  local function on_spine(d) return d.a == spine.id or d.b == spine.id end
+  for _, d in ipairs(L.doors) do if d.axis == 3 and d.at == last and on_spine(d) then end_door = true end end
   if not end_door then last = last - 1.5 end
   local stops = { [0] = true, [last] = true }
   for _, d in ipairs(L.doors) do
-    if d.axis == 1 then stops[(d.lo + d.hi) / 2] = true end
+    if d.axis == 1 and on_spine(d) then stops[(d.lo + d.hi) / 2] = true end
   end
   local zs = {}
   for z in pairs(stops) do zs[#zs + 1] = z end
@@ -539,17 +807,25 @@ function M.hash(L)
 end
 
 local cache = {}
-function M.get(seed)
-  local L = cache[seed]
+function M.get(seed, family)
+  local key = tostring(seed) .. ":" .. tostring(family)
+  local L = cache[key]
   if not L then
-    L = M.generate(seed)
-    cache[seed] = L
+    L = M.generate(seed, family)
+    cache[key] = L
   end
   return L
 end
 
+-- the walk-in seed of sector sid's trader idx (the home sector's are the old ones; far sectors' differ, so their
+-- stations' families and wings do too)
+function M.seed_of(seed, sid, idx)
+  if (sid or 1) == 1 then return saucer.seed_child(seed or 0, "station", idx or 1) end
+  return saucer.seed_child(seed or 0, "station", sid * 16 + (idx or 1))
+end
+
 function M.seed_for(state, trader_idx)
-  return saucer.seed_child(state.seed or 0, "station", trader_idx or 1)
+  return M.seed_of(state.seed, state.sector and state.sector.id or 1, trader_idx)
 end
 
 local function inside(b, x, z, r)
@@ -580,6 +856,29 @@ local function hit_solid(s, x, z, r)
   return dx * dx + dz * dz < r * r
 end
 
+-- the layout's solids bucketed by SOLID_CELL squares (built on first use, kept on the cached layout; a
+-- solid sits in every square its footprint touches)
+local SOLID_CELL = 4
+local function solid_grid(L)
+  if L.solid_grid and L.solid_grid.n == #L.solids then return L.solid_grid.cells end
+  local cells = {}
+  for _, s in ipairs(L.solids) do
+    local x0, z0, x1, z1
+    if s.kind == "circle" then x0, z0, x1, z1 = s.c[1] - s.r, s.c[2] - s.r, s.c[1] + s.r, s.c[2] + s.r
+    else x0, z0, x1, z1 = s.box[1], s.box[2], s.box[3], s.box[4] end
+    for gx = math.floor(x0 / SOLID_CELL), math.floor(x1 / SOLID_CELL) do
+      for gz = math.floor(z0 / SOLID_CELL), math.floor(z1 / SOLID_CELL) do
+        local k = gx * 65536 + gz
+        local c = cells[k]
+        if not c then c = {} cells[k] = c end
+        c[#c + 1] = s
+      end
+    end
+  end
+  L.solid_grid = { n = #L.solids, cells = cells }
+  return cells
+end
+
 -- can a body of radius r stand at (x, z)?
 function M.free(L, x, z, r)
   r = r or M.BODY_R
@@ -593,8 +892,18 @@ function M.free(L, x, z, r)
     end
   end
   if not ok then return false end
-  for _, s in ipairs(L.solids) do
-    if hit_solid(s, x, z, r) then return false end
+  -- (the solids are looked up in a coarse grid: the bigger stations have a lot of furniture)
+  local g = solid_grid(L)
+  local G = SOLID_CELL
+  for gx = math.floor((x - r) / G), math.floor((x + r) / G) do
+    for gz = math.floor((z - r) / G), math.floor((z + r) / G) do
+      local cell = g[gx * 65536 + gz]
+      if cell then
+        for _, s in ipairs(cell) do
+          if hit_solid(s, x, z, r) then return false end
+        end
+      end
+    end
   end
   return true
 end
@@ -613,13 +922,17 @@ end
 
 -- the nav node nearest to p that p can walk to in a straight line
 function M.nearest(L, p, r)
-  local best, bd
+  -- nearest first (ties to the lower id), so the first clear one is the answer
+  local order = {}
   for i, q in ipairs(L.nav.nodes) do
     local dx, dz = q[1] - p[1], q[2] - p[2]
-    local dd = dx * dx + dz * dz
-    if (not bd or dd < bd) and M.clear(L, p, q, r) then best, bd = i, dd end
+    order[i] = { dx * dx + dz * dz, i }
   end
-  return best
+  table.sort(order, function(u, w) if u[1] ~= w[1] then return u[1] < w[1] end return u[2] < w[2] end)
+  for _, o in ipairs(order) do
+    if M.clear(L, p, L.nav.nodes[o[2]], r) then return o[2] end
+  end
+  return nil
 end
 
 -- fewest-links node path between nav nodes -> list of node ids

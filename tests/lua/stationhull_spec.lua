@@ -59,49 +59,90 @@ describe("the megastructure generator", function()
     expect(sh.parts(b)).to_be(b.parts)
     for s2 = 1, 5 do sh.parts(sh.get(s2 * 13, "outpost", 1)) end
   end)
-  it("knows a station's sphere without building it", function()
+  it("knows a station's sphere and box without building it", function()
     for _, class in ipairs({ "port", "outpost" }) do
       for _, seed in ipairs({ 1, 42, 99, 4242 }) do
-        local c, r = sh.envelope(seed, class)
-        local L = sh.generate(seed, class, 3, false)
-        expect(c[1]).to_be_near(L.info.centre[1], 1e-9)
-        expect(c[2]).to_be_near(L.info.centre[2], 1e-9)
-        expect(r).to_be_near(L.info.radius, 1e-9)
+        for _, fam in ipairs({ "coral", "crystal", "spiral", "shells" }) do
+          local c, r, lo, hi = sh.envelope(seed, class, fam)
+          local L = sh.generate(seed, class, 3, false, fam)
+          expect(c[1]).to_be_near(L.info.centre[1], 1e-9)
+          expect(c[2]).to_be_near(L.info.centre[2], 1e-9)
+          expect(r).to_be_near(L.info.radius, 1e-9)
+          expect(lo[1]).to_be_near(L.info.extent.lo[1], 1e-9)
+          expect(hi[3]).to_be_near(L.info.extent.hi[3], 1e-9)
+        end
       end
     end
     expect(sh.envelope(1)).to_be_truthy()
   end)
-  it("is kilometre-scale with the hangar cell a tiny part of it", function()
-    local L = sh.generate(42, "port", 7)
-    local i = L.info
-    local size = i.extent.hi[1] - i.extent.lo[1]
-    expect(size).to_be_greater(700)
-    expect(i.R).to_be_greater(399)
-    expect(i.radius).to_be_greater(400)
+  it("is multi-kilometre with the hangar cell a tiny part of it, everything inside its box and its budgets", function()
     local T = dock.tune()
     local cell = (T.front_x - T.back_x) * T.half_w * 2 * T.height
-    local hull = (i.extent.hi[1] - i.extent.lo[1]) * (i.extent.hi[2] - i.extent.lo[2]) * (i.extent.hi[3] - i.extent.lo[3])
-    expect(cell / hull < 0.01).to_be(true)
-    expect(i.rings >= 1 and i.pods >= 6 and i.masts >= 3 and i.spokes >= 6).to_be(true)
-    expect(#L.lights >= 20 and #L.solids >= 60).to_be(true)
-  end)
-  it("stays inside the triangle budgets and builds fast enough", function()
-    local kit = sh.kit()
-    for _, seed in ipairs({ 1, 42, 99 }) do
-      local L = sh.generate(seed, "port", 3)
+    for _, fam in ipairs({ "coral", "crystal", "spiral", "shells" }) do
+      local L = sh.generate(42, "port", 7, true, fam)
+      local i = L.info
+      local e = i.extent
+      expect(e.hi[1] - e.lo[1]).to_be_greater(1800)
+      expect(e.hi[2] - e.lo[2]).to_be_greater(1600)
+      expect(e.hi[3] - e.lo[3]).to_be_greater(1600)
+      expect(i.family).to_be(fam)
+      local hull = (e.hi[1] - e.lo[1]) * (e.hi[2] - e.lo[2]) * (e.hi[3] - e.lo[3])
+      expect(cell / hull < 0.001).to_be(true)
+      expect(i.pods >= 7 and i.monoliths >= 4 and i.cocoons >= 5).to_be(true)
+      expect(#L.lights >= 15 and #L.solids >= 60).to_be(true)
+      for _, b in ipairs(L.solids) do
+        for k = 1, 3 do
+          expect(b[1][k] >= e.lo[k] - 1e-6 and b[2][k] <= e.hi[k] + 1e-6).to_be(true)
+        end
+      end
+      -- the standing layers' triangles stay in the box; the spinning ones within its reach of the axis
+      for _, layer in ipairs({ "core", "detail", "far" }) do
+        local m = saucer.mesh.info(vhull.mesh(L, layer))
+        for k = 1, 3 do
+          expect(m.min[k] >= e.lo[k] - 2 and m.max[k] <= e.hi[k] + 2).to_be(true)
+        end
+      end
+      -- inside the triangle budgets (under luacov every build is slow: the budgets are checked on these same builds)
+      local kit = sh.kit()
       local t = vhull.layer_tris(L)
       expect(t.core + t.ring <= kit.budget.core).to_be(true)
       expect(t.detail + t.ringd <= kit.budget.detail).to_be(true)
       expect(t.far <= kit.budget.far).to_be(true)
-      expect(t.core).to_be_greater(1000)
+      expect(t.core).to_be_greater(4000)
       expect(t.detail).to_be_greater(t.core)
+      for _, layer in ipairs({ "ring", "ringd" }) do
+        local id = vhull.mesh(L, layer)
+        local m = saucer.mesh.info(id)
+        if m.triangles > 0 then
+          local reach = e.hi[3]
+          for k = 2, 3 do
+            local lo, hi = m.min[k], m.max[k]
+            expect(math.max(math.abs(lo), math.abs(hi)) <= reach + 2).to_be(true)
+          end
+        end
+      end
+      vhull.free_all()
     end
-    vhull.free_all()
   end)
-  it("makes an outpost about a tenth the size", function()
+  it("picks every family from seeds, the same one for the same seed", function()
+    local seen = {}
+    for s = 1, 40 do seen[sh.family_of(s)] = true end
+    for _, f in ipairs(sh.families()) do expect(seen[f.id]).to_be(true) end
+    expect(sh.family_of(1234)).to_be(sh.family_of(1234))
+    expect(sh.family("crystal").name).to_be("Lattice")
+    expect(pcall(sh.family, "teapot")).to_be(false)
+    expect(sh.family_of(nil)).to_be_truthy()
+    -- the walk-in seed picks the hull's family
+    local st = new_state(42)
+    expect(sh.for_trader(st, 1).family).to_be(sh.family_of(sg.seed_for(st, 1)))
+    expect(sg.get(sg.seed_for(st, 1)).family).to_be(sh.for_trader(st, 1).family)
+  end)
+  it("makes an outpost about a quarter the size", function()
     local port = sh.generate(5, "port", 1)
     local out = sh.generate(5, "outpost", 1)
     expect(out.info.R < port.info.R / 3).to_be(true)
+    expect(out.info.length < port.info.length / 3).to_be(true)
+    expect(out.family).to_be(port.family)
     expect(out.class).to_be("outpost")
     expect(sh.class_of({ outpost = true })).to_be("outpost")
     expect(sh.class_of({})).to_be("port")
@@ -154,14 +195,20 @@ describe("the megastructure generator", function()
 end)
 
 describe("placing the station in a sector", function()
-  it("clears the arrival, the vault and every site for many seeds", function()
+  it("clears the arrival, the vault and every site for many seeds, near the start", function()
     for _, seed in ipairs({ 1, 7, 42, 99, 1234, 31337, 8675309 }) do
       local st = new_state(seed)
-      local c, r = sh.bounds(st, 1)
+      local _, _, lo, hi = sh.bounds(st, 1)
       for _, site in ipairs(st.sector.sites) do
-        expect(vec.dist(c, site.pos) > r).to_be(true)
+        local ext = sector.extent(site.kit)
+        local c = { site.pos[1] + ext[1] / 2, site.pos[2] + ext[2] / 2, site.pos[3] + ext[3] / 2 }
+        local r = 0.5 * sm.sqrt(ext[1] * ext[1] + ext[2] * ext[2] + ext[3] * ext[3])
+        expect(sector.box_gap(c, lo, hi) - r >= sector.STATION_ROOM - 1).to_be(true)
       end
-      expect(vec.dist(c, st.sector.vault.pos) > r).to_be(true)
+      local v = st.sector.vault.pos
+      expect(sector.box_gap(v, lo, hi) - 80 >= sector.STATION_ROOM - 1).to_be(true)
+      expect(sector.box_gap({ 0, 0, -120 }, lo, hi) - 260 >= sector.STATION_ROOM - 1).to_be(true)
+      expect(vec.len(st.sector.trader.pos) < 3000).to_be(true)
       -- the hull is physical: its solids reached the physics world
       expect(#sh.world_solids(st) > 50).to_be(true)
     end
@@ -169,9 +216,10 @@ describe("placing the station in a sector", function()
   it("place_station moves away from a crowd of obstacles", function()
     local obs = { { 0, 0, 0, 300 }, { 900, 0, 0, 300 } }
     local p = sector.place_station(1, 1, obs)
-    local L = sh.get(sh.seed_of(1, 1, 1), "port")
-    local c = { p[1] + L.info.centre[1], p[2] + L.info.centre[2], p[3] + L.info.centre[3] }
-    for _, o in ipairs(obs) do expect(vec.dist(c, o) > o[4] + L.info.radius - 1).to_be(true) end
+    local _, _, lo, hi = sh.envelope(sh.seed_of(1, 1, 1), "port", sector.station_family(1, 1))
+    for _, o in ipairs(obs) do
+      expect(sector.box_gap(o, vec.add(p, lo), vec.add(p, hi)) - o[4] >= sector.STATION_ROOM - 1).to_be(true)
+    end
     local q = sector.place_station(1, 1, {})
     expect(#q).to_be(3)
     -- asked again it answers the same (from its memory) and the caller's copy is its own
@@ -180,6 +228,15 @@ describe("placing the station in a sector", function()
     p2[1] = 0
     expect(sector.place_station(1, 1, obs)[1]).to_be(p[1])
     for sd = 1, 70 do sector.place_station(sd + 1000, 1, {}) end
+    -- boxed in on every side: the fallback spot far out
+    local wall = {}
+    for k = -6, 6 do for j = -6, 6 do wall[#wall + 1] = { k * 900, 0, j * 900, 700 } end end
+    expect(#sector.place_station_uncached(1, 1, wall)).to_be(3)
+    -- the segment test
+    expect(sector.seg_hits_box({ -10, 0, 0 }, { 10, 0, 0 }, { -1, -1, -1 }, { 1, 1, 1 })).to_be(true)
+    expect(sector.seg_hits_box({ -10, 5, 0 }, { 10, 5, 0 }, { -1, -1, -1 }, { 1, 1, 1 })).to_be(false)
+    expect(sector.seg_hits_box({ 0, 5, 0 }, { 0, 5, 0 }, { -1, -1, -1 }, { 1, 1, 1 })).to_be(false)
+    expect(sector.seg_hits_box({ 5, 0, 0 }, { 5, 3, 0 }, { -1, -1, -1 }, { 1, 1, 1 })).to_be(false)
   end)
   it("reaches the far sectors too", function()
     local st = new_state(42)

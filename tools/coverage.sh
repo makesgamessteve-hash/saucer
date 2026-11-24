@@ -34,7 +34,9 @@ lua_run() { # name, then saucer_headless arguments
   # need the same longer leash as the mystery (they run in parallel, so the step is not longer)
   # add-realistic-lighting: the sentries run (72k ticks, 2335 s on main a29a693) grew past 2400 s with the
   # per-frame light list (2400+ s on CI), so the long 72k-tick runs get the same leash too
-  case "$name" in mystery|specs|sentries|strategic) limit=$LIMIT_MYSTERY ;; esac
+  # add-alien-stations: the bigger stations' specs ran past 3600 s on CI (the hulls and their meshes are built in
+  # Lua under the line hook); they get 5000 s, still inside the step's 110 minutes since they start first
+  case "$name" in mystery|sentries|strategic) limit=$LIMIT_MYSTERY ;; specs) limit=${SAUCER_COV_TIMEOUT_SPECS:-5000} ;; esac
   if LUACOV_CONFIG="$part.luacov" timeout "$limit" "$B"/saucer_headless --root . --user-dir "$B/test-user-$name" \
       --quiet --coverage "$@" > "$part.log" 2>&1; then
     echo "luacov $name: ok in $((SECONDS - t0)) s"
@@ -54,7 +56,7 @@ start specs --test-lua tests/lua
 # longest first so the slow ones overlap the rest. tests/game/widerdark.lua
 # (four views, ~47k ticks) runs in ctest only: under luacov it takes over
 # half an hour; tests/lua/widerdark_spec.lua and coop_replay cover its code.
-for s in sentries strategic mystery station excursion hatch dock land_anywhere eva holodeck story slice derelict3d home trade vertical coop interior fold tractor city lighting xr xr_hands boot coop_replay; do
+for s in sentries strategic mystery station excursion alien hatch dock land_anywhere eva holodeck story slice derelict3d home trade vertical coop interior fold tractor city lighting xr xr_hands boot coop_replay; do
   extra=""
   [ "$s" = coop ] && extra="--local-players 2 --viewports 2"
   [ "$s" = coop_replay ] && extra="--coop --viewports 4"
@@ -62,6 +64,7 @@ for s in sentries strategic mystery station excursion hatch dock land_anywhere e
   [ "$s" = sentries ] && extra="--ticks 72000"
   [ "$s" = strategic ] && extra="--ticks 72000"
   [ "$s" = station ] && extra="--ticks 40000"
+  [ "$s" = alien ] && extra="--ticks 40000"
   [ "$s" = excursion ] && extra="--ticks 40000"
   throttle
   # shellcheck disable=SC2086

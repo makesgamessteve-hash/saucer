@@ -52,5 +52,37 @@ return {
     pad_y = 7.2,            -- where a growing Villa's hull centre sits above the hangar floor
     bay_dist = 85,          -- meters from the station's centre to the second hangar's space door
     walkers = { 3, 5 },     -- people strolling the concourse
+    -- add-alien-stations: the alien wing off the market's far wall (sim/stationgen.lua alien_wing): passages
+    -- (straight or doglegged) and chambers of five looks, named and coloured by the station's family
+    alien = {
+      chambers = { 6, 8 },
+      size = { 6, 10 },        -- chamber sides in cells
+      passage = { 1, 3 },      -- passage legs in cells
+      passage_w = 2,
+      passage_h = 6.0,
+      hall_h = { 10, 16 },
+      shaft_h = { 36, 54 },    -- vertical shafts, ledges climbing their walls
+      names = {
+        coral = { passage = "Gullet passage", atrium = "Spore atrium", shaft = "Tide shaft", brood = "Brood hall",
+                  garden = "Polyp garden", shrine = "Chitin shrine" },
+        crystal = { passage = "Prism passage", atrium = "Geode atrium", shaft = "Resonance shaft", brood = "Seed vault",
+                    garden = "Crystal garden", shrine = "Echo shrine" },
+        spiral = { passage = "Coil passage", atrium = "Whorl atrium", shaft = "Spiral shaft", brood = "Nautilus brood",
+                   garden = "Tendril garden", shrine = "Helix shrine" },
+        shells = { passage = "Gyre passage", atrium = "Orrery", shaft = "Gyre shaft", brood = "Shell nursery",
+                   garden = "Stillwater garden", shrine = "Stone circle" },
+      },
+      -- the inside's colours per family: walls, floor, growth (trim), glow and accent
+      colors = {
+        coral = { wall = { 0.62, 0.42, 0.46 }, floor = { 0.36, 0.24, 0.26 }, trim = { 0.5, 0.3, 0.36 }, glow = { 0.35, 1.0, 0.9 },
+                  accent = { 1.0, 0.45, 0.75 } },
+        crystal = { wall = { 0.42, 0.44, 0.6 }, floor = { 0.22, 0.22, 0.32 }, trim = { 0.3, 0.32, 0.46 }, glow = { 0.55, 0.9, 1.0 },
+                    accent = { 0.8, 0.55, 1.0 } },
+        spiral = { wall = { 0.6, 0.48, 0.32 }, floor = { 0.34, 0.26, 0.16 }, trim = { 0.46, 0.33, 0.18 }, glow = { 1.0, 0.8, 0.3 },
+                   accent = { 0.55, 1.0, 0.4 } },
+        shells = { wall = { 0.6, 0.6, 0.7 }, floor = { 0.3, 0.3, 0.38 }, trim = { 0.42, 0.42, 0.55 }, glow = { 0.5, 0.75, 1.0 },
+                   accent = { 1.0, 0.82, 0.45 } },
+      },
+    },
   },
 }
