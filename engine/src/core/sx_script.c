@@ -948,6 +948,10 @@ static void read_style(lua_State *L, int idx, sx_part_style *s) {
   field_vec(L, idx, "color", s->color, 3);
   s->emissive = field_num(L, idx, "emissive", 0.0f);
   s->uv_scale = field_num(L, idx, "uv", 0.25f);
+  /* add-material-system: mat = the material slot 0-7 */
+  s->material = field_num(L, idx, "mat", 0.0f);
+  if (s->material < 0.0f || s->material > (float)(SX_MAT_SLOTS - 1)) s->material = 0.0f;
+  s->material = (float)(int)s->material;
 }
 
 typedef struct part_xf {
@@ -1219,10 +1223,19 @@ static int l_r_settings(lua_State *L) {
       e->render.settings.shadows = q;
     }
     lua_pop(L, 1);
+    lua_getfield(L, 1, "materials");
+    if (lua_isstring(L, -1)) {
+      int q = sx_materials_mode_from_name(lua_tostring(L, -1));
+      if (q < 0) return luaL_error(L, "materials: off, lite or full");
+      e->render.settings.materials = q;
+    }
+    lua_pop(L, 1);
   }
   lua_createtable(L, 0, 6);
   lua_pushstring(L, sx_shadow_quality_name(e->render.settings.shadows));
   lua_setfield(L, -2, "shadows");
+  lua_pushstring(L, sx_materials_mode_name(e->render.settings.materials));
+  lua_setfield(L, -2, "materials");
   lua_pushinteger(L, e->render.settings.width);
   lua_setfield(L, -2, "width");
   lua_pushinteger(L, e->render.settings.height);
@@ -1282,6 +1295,83 @@ static int l_v_camera(lua_State *L) {
   v->cam.znear = field_num(L, 2, "near", v->cam.znear);
   v->cam.zfar = field_num(L, 2, "far", v->cam.zfar);
   return 0;
+}
+
+/* add-material-system: view:materials{ time = render seconds, matcap = texture id, slots = { [1..7] = {
+ * kind = "metal"|"crystal"|"organic"|"plain", reflect, spec, f0, emit, wobble = {amp, period, scale}, breath, pulse,
+ * wrap, lo = {r,g,b}, hi = {r,g,b}, sss = {r,g,b} } } } -> number of slots set. Slot 0 stays plain. */
+static int l_v_materials(lua_State *L) {
+  sx_viewport *v = check_view(L);
+  int k, n = 0;
+  luaL_checktype(L, 2, LUA_TTABLE);
+  v->materials.on = 1;
+  v->materials.time = field_num(L, 2, "time", v->materials.time);
+  v->materials.matcap = (int)field_num(L, 2, "matcap", (float)v->materials.matcap);
+  lua_getfield(L, 2, "slots");
+  if (lua_istable(L, -1)) {
+    int t = lua_gettop(L);
+    for (k = 1; k < SX_MAT_SLOTS; k++) {
+      lua_rawgeti(L, t, k);
+      if (lua_istable(L, -1)) {
+        int e = lua_gettop(L);
+        sx_material *m = &v->materials.slot[k];
+        sx_material_default(m);
+        lua_getfield(L, e, "kind");
+        m->kind = lua_isstring(L, -1) ? sx_material_kind_from_name(lua_tostring(L, -1)) : SX_MAT_PLAIN;
+        lua_pop(L, 1);
+        if (m->kind < 0) return luaL_error(L, "materials: kind must be plain, metal, crystal or organic");
+        m->reflect = field_num(L, e, "reflect", m->reflect);
+        m->spec = field_num(L, e, "spec", m->spec);
+        m->f0 = field_num(L, e, "f0", m->f0);
+        m->emit = field_num(L, e, "emit", m->emit);
+        field_vec(L, e, "wobble", m->wobble, 3);
+        m->breath = field_num(L, e, "breath", m->breath);
+        m->pulse = field_num(L, e, "pulse", m->pulse);
+        m->wrap = field_num(L, e, "wrap", m->wrap);
+        field_vec(L, e, "lo", m->ramp_lo, 3);
+        field_vec(L, e, "hi", m->ramp_hi, 3);
+        field_vec(L, e, "sss", m->sss, 3);
+        n++;
+      }
+      lua_pop(L, 1);
+    }
+  }
+  lua_pop(L, 1);
+  lua_pushinteger(L, n);
+  return 1;
+}
+
+/* saucer.render.matcap(name, { {dx, dy, dz, intensity}, ... }, ambient) -> texture id: a 64 x 64 luminance
+ * matcap baked once (sx_matcap_bake) and kept under its name */
+static int l_r_matcap(lua_State *L) {
+  sx_engine *e = get_engine(L);
+  const char *name = luaL_checkstring(L, 1);
+  float lights[SX_MATCAP_LIGHTS][4];
+  unsigned char px[SX_MATCAP_SIZE * SX_MATCAP_SIZE];
+  int n = 0, id = sx_render_find_texture(&e->render, name);
+  if (id > 0) {
+    lua_pushinteger(L, id);
+    return 1;
+  }
+  luaL_checktype(L, 2, LUA_TTABLE);
+  while (n < SX_MATCAP_LIGHTS) {
+    int k;
+    if (lua_rawgeti(L, 2, n + 1) != LUA_TTABLE) {
+      lua_pop(L, 1);
+      break;
+    }
+    for (k = 0; k < 4; k++) {
+      lua_rawgeti(L, -1, k + 1);
+      lights[n][k] = (float)luaL_optnumber(L, -1, k == 3 ? 1.0 : 0.0);
+      lua_pop(L, 1);
+    }
+    lua_pop(L, 1);
+    n++;
+  }
+  sx_matcap_bake(px, (const float(*)[4])lights, n, (float)luaL_optnumber(L, 3, 0.08));
+  id = sx_render_texture_from_indices(&e->render, name, SX_MATCAP_SIZE, SX_MATCAP_SIZE, px);
+  lua_pushinteger(L, id);
+  return 1;
 }
 
 static int l_v_fog(lua_State *L) {
@@ -2161,6 +2251,14 @@ static int l_test_xr_haptics(lua_State *L) {
   return 3;
 }
 
+/* add-relic-stations: saucer.test.arg() -> the --script-arg string ("" when none), so one shot script can run
+ * in several modes (the relic Reel: stills or a frame sequence) */
+static int l_test_arg(lua_State *L) {
+  sx_engine *e = get_engine(L);
+  lua_pushstring(L, e->opt.script_arg);
+  return 1;
+}
+
 static int l_test_viewports(lua_State *L) {
   sx_engine *e = get_engine(L);
   int n = (int)luaL_checkinteger(L, 1);
@@ -2319,7 +2417,8 @@ static void build_saucer_api(lua_State *L, sx_engine *e) {
   static const luaL_Reg procgen_f[] = {{"grid_new", l_grid_new}, {"reachable", l_reachable}, {NULL, NULL}};
   static const luaL_Reg mesh_f[] = {{"build", l_mesh_build}, {"info", l_mesh_info}, {"free", l_mesh_free}, {NULL, NULL}};
   static const luaL_Reg render_f[] = {
-      {"texture", l_r_texture}, {"palette", l_r_palette}, {"settings", l_r_settings}, {"stats", l_r_stats}, {"lights", l_r_lights}, {NULL, NULL}};
+      {"texture", l_r_texture}, {"palette", l_r_palette}, {"settings", l_r_settings}, {"stats", l_r_stats}, {"lights", l_r_lights},
+      {"matcap", l_r_matcap}, {NULL, NULL}};
   static const luaL_Reg xr_f[] = {
       {"available", l_xr_available}, {"session", l_xr_session}, {"comfort", l_xr_comfort}, {"haptic", l_xr_haptic},
       {"set_comfort", l_xr_set_comfort}, {"save_comfort", l_xr_save_comfort}, {"head", l_xr_head},
@@ -2343,7 +2442,7 @@ static void build_saucer_api(lua_State *L, sx_engine *e) {
                                     {"audio_loops", l_test_audio_loops}, {"audio_flush", l_test_audio_flush},
                                     {"touch", l_test_set_touch}, {"touch_metrics", l_test_touch_metrics},       {"xr", l_test_set_xr},
                                     {"xr_haptics", l_test_xr_haptics},
-                                    {"viewports", l_test_viewports},   {NULL, NULL}};
+                                    {"viewports", l_test_viewports},   {"arg", l_test_arg}, {NULL, NULL}};
   struct {
     const char *name;
     const luaL_Reg *f;
@@ -2533,6 +2632,7 @@ int sx_script_open(sx_engine *e) {
                                      {"seed", l_rng_seed},   {NULL, NULL}};
     static const luaL_Reg grid_m[] = {{"place", l_grid_place}, {"free", l_grid_free}, {"get", l_grid_get}, {NULL, NULL}};
     static const luaL_Reg view_m[] = {{"camera", l_v_camera}, {"fog", l_v_fog}, {"light", l_v_light}, {"lighting", l_v_lighting},     {"mesh", l_v_mesh},
+                                      {"materials", l_v_materials},
                                       {"billboard", l_v_billboard}, {"rect", l_v_rect}, {"text", l_v_text},
                                       {"image", l_v_image},   {"vignette", l_v_vignette}, {NULL, NULL}};
     static const luaL_Reg cmd_m[] = {{"held", l_cmd_held}, {"pressed", l_cmd_pressed}, {"axis", l_cmd_axis}, {NULL, NULL}};

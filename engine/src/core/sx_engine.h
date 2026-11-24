@@ -58,6 +58,9 @@ typedef struct sx_options {
   int net_players;     /* host: players in the session (2-4) */
   int net_delay;       /* input delay in ticks */
   int hardcore;        /* --hardcore: a new game starts in Hardcore */
+  int relic_slice;     /* add-relic-stations --relic-slice: a new game adds the Vyrr relic and starts at its maw */
+  int materials;       /* add-material-system --materials off|lite|full, -1 = the platform default */
+  char script_arg[128]; /* --script-arg: read by a test script with saucer.test.arg() */
   int show_help;
 } sx_options;
 

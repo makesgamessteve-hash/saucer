@@ -6,6 +6,7 @@
 #define SX_RENDER_H
 #include <stdint.h>
 #include "sx_light.h"
+#include "sx_material.h"
 #include "sx_mesh.h"
 
 #define SX_MAX_VIEWPORTS 4
@@ -73,6 +74,7 @@ typedef struct sx_viewport {
   float clear_color[3];
   float light_dir[3], ambient;
   sx_lighting lighting; /* add-realistic-lighting: lights of this view (view:light / view:lighting) */
+  sx_materials materials; /* add-material-system: material slots of this view (view:materials), reset every frame */
   sx_draw_mesh *meshes;
   int nmeshes, cap_meshes;
   sx_draw_billboard *bills;
@@ -87,6 +89,7 @@ typedef struct sx_render_settings {
   int split_horizontal; /* add-wider-dark: 2 players stacked (default side by side) */
   int fill;             /* add-mobile-touch-ux: the platform sizes the target to the window (no letterbox) */
   int shadows;          /* add-realistic-lighting: SX_SHADOWS_OFF / LOW / HIGH */
+  int materials;        /* add-material-system: SX_MATERIALS_OFF / LITE / FULL */
 } sx_render_settings;
 
 /* add-retro-renderer-basic: the retro effects in force for one view. Vertex snapping and affine

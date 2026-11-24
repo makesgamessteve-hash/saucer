@@ -21,6 +21,7 @@ void sx_style_default(sx_part_style *s) {
   s->color[0] = s->color[1] = s->color[2] = 1.0f;
   s->emissive = 0.0f;
   s->uv_scale = 0.25f;
+  s->material = 0.0f;
 }
 
 static int add_vertex(sx_mesh *m, const float p[3], const float n[3], float u, float v, const sx_part_style *s) {
@@ -41,6 +42,7 @@ static int add_vertex(sx_mesh *m, const float p[3], const float n[3], float u, f
   o[6] = u;
   o[7] = v;
   o[11] = s->emissive;
+  o[12] = s->material;
   return m->nv++;
 }
 

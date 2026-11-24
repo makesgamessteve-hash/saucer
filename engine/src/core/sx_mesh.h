@@ -7,7 +7,7 @@
 #define SX_MESH_H
 #include <stdint.h>
 
-#define SX_VTX_FLOATS 12 /* pos3 normal3 uv2 color3 emissive1 */
+#define SX_VTX_FLOATS 13 /* pos3 normal3 uv2 color3 emissive1 material1 (add-material-system: slot 0-7) */
 
 typedef struct sx_mesh {
   float *v;      /* SX_VTX_FLOATS per vertex */
@@ -20,6 +20,7 @@ typedef struct sx_part_style {
   float color[3];
   float emissive; /* 0..1, unlit glow */
   float uv_scale; /* texels per meter / tile size; default 0.25 (4 m tile) */
+  float material; /* add-material-system: the material slot 0-7 (0 = plain) */
 } sx_part_style;
 
 void sx_mesh_init(sx_mesh *m);
