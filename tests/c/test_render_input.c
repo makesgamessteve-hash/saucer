@@ -344,3 +344,112 @@ TEST(split_keyboard_and_coop_layout) {
   sx_viewport_layout_split(4, 100, 50, 1, rects);
   CHECK(rects[3][0] == 50 && rects[3][1] == 25);
 }
+
+/* add-material-system, "Slot round trip": a two-material part carries each part's slot in the 13th float */
+TEST(material_slot_round_trip) {
+  sx_mesh m;
+  sx_part_style a, b;
+  float mn[3] = {0, 0, 0}, mx[3] = {1, 1, 1}, mn2[3] = {2, 0, 0}, mx2[3] = {3, 1, 1};
+  int i, na;
+  CHECK(SX_VTX_FLOATS == 13);
+  sx_mesh_init(&m);
+  sx_style_default(&a);
+  CHECK(a.material == 0.0f);
+  sx_style_default(&b);
+  a.material = 3.0f;
+  b.material = 5.0f;
+  sx_mesh_box(&m, mn, mx, &a);
+  na = m.nv;
+  sx_mesh_box(&m, mn2, mx2, &b);
+  CHECK(na > 0 && m.nv == 2 * na);
+  for (i = 0; i < m.nv; i++) CHECK(m.v[i * SX_VTX_FLOATS + 12] == (i < na ? 3.0f : 5.0f));
+  /* the emissive float is untouched next to it */
+  CHECK(m.v[11] == 0.0f);
+  sx_mesh_free(&m);
+}
+
+TEST(material_pack_modes) {
+  static sx_materials ms;
+  float out[SX_MAT_SLOTS * SX_MAT_VEC4 * 4];
+  sx_material *c, *o, *g;
+  sx_materials_reset(&ms);
+  /* nothing submitted: every slot packs plain */
+  CHECK(sx_materials_pack(&ms, SX_MATERIALS_FULL, out) == 0 && out[0] == 0.0f);
+  ms.on = 1;
+  c = &ms.slot[1];
+  c->kind = SX_MAT_METAL;
+  c->reflect = 0.9f;
+  c->spec = 64.0f;
+  c->ramp_hi[0] = 0.8f;
+  g = &ms.slot[2];
+  g->kind = SX_MAT_CRYSTAL;
+  g->reflect = 0.7f;
+  g->emit = 0.5f;
+  o = &ms.slot[3];
+  o->kind = SX_MAT_ORGANIC;
+  o->wobble[0] = 0.2f;
+  o->wobble[1] = 0.0f; /* clamped to 0.5 s */
+  o->wobble[2] = 0.0f; /* clamped to 0.1 m */
+  o->breath = 0.6f;
+  o->pulse = 1.5f;
+  o->wrap = 0.4f;
+  o->sss[0] = 0.9f;
+  ms.slot[4].kind = 9; /* a bad kind packs plain */
+  ms.slot[0].kind = SX_MAT_METAL; /* slot 0 is always plain */
+  CHECK(sx_materials_pack(&ms, SX_MATERIALS_FULL, out) == 3);
+  CHECK(out[0] == 0.0f);
+  CHECK(out[20] == 1.0f && out[21] == 0.9f && out[22] == 64.0f && out[32] == 0.8f);
+  CHECK(out[40] == 2.0f && out[41] == 0.7f && out[44] == 0.5f);
+  CHECK(out[60] == 3.0f && out[65] == 0.2f && out[66] == 0.5f && out[67] == 0.1f && out[71] == 0.6f);
+  CHECK(out[75] == 1.5f && out[79] == 0.4f && out[76] == 0.9f);
+  CHECK(out[80] == 0.0f);
+  /* lite: no refraction, no ripples, half the breathing */
+  CHECK(sx_materials_pack(&ms, SX_MATERIALS_LITE, out) == 3);
+  CHECK(out[41] == 0.0f && out[21] == 0.9f && out[65] == 0.0f && out[71] == 0.3f);
+  /* off: every slot plain, so the shader takes the old path */
+  CHECK(sx_materials_pack(&ms, SX_MATERIALS_OFF, out) == 0 && out[20] == 0.0f && out[60] == 0.0f);
+  CHECK(sx_materials_mode_from_name("full") == SX_MATERIALS_FULL && sx_materials_mode_from_name("lite") == 1);
+  CHECK(sx_materials_mode_from_name("off") == 0 && sx_materials_mode_from_name("ultra") == -1);
+  CHECK(sx_materials_mode_from_name(NULL) == -1);
+  CHECK(strcmp(sx_materials_mode_name(SX_MATERIALS_LITE), "lite") == 0 && strcmp(sx_materials_mode_name(7), "?") == 0);
+  CHECK(sx_material_kind_from_name("organic") == SX_MAT_ORGANIC && sx_material_kind_from_name("glass") == -1);
+  CHECK(sx_material_kind_from_name(NULL) == -1 && sx_material_kind_from_name("plain") == 0);
+}
+
+TEST(matcap_bake) {
+  static unsigned char a[SX_MATCAP_SIZE * SX_MATCAP_SIZE], b[SX_MATCAP_SIZE * SX_MATCAP_SIZE];
+  float key[5][4] = {{0.5f, 0.6f, 0.6f, 1.2f}, {-0.6f, 0.2f, 0.5f, 0.5f}, {0, 0, 0, 1}, {0, -1, 0.2f, 0.3f},
+                     {1, 0, 0, 9}};
+  int i, lo = 255, hi = 0, n = 0, seen[256] = {0};
+  sx_matcap_bake(a, (const float(*)[4])key, 5, 0.06f); /* the fifth light is ignored */
+  sx_matcap_bake(b, (const float(*)[4])key, 4, 0.06f);
+  CHECK(memcmp(a, b, sizeof a) == 0);
+  for (i = 0; i < SX_MATCAP_SIZE * SX_MATCAP_SIZE; i++) {
+    if (a[i] < lo) lo = a[i];
+    if (a[i] > hi) hi = a[i];
+    if (!seen[a[i]]) n++;
+    seen[a[i]] = 1;
+  }
+  /* never 0 (transparent in an index texture), a real highlight, and banded into at most 16 levels */
+  CHECK(lo >= 1 && hi == 255 && n <= 16 && n >= 4);
+  /* the highlight sits toward the key light (upper right), not the lower left */
+  CHECK(a[16 * SX_MATCAP_SIZE + 44] > a[48 * SX_MATCAP_SIZE + 16]);
+  /* no lights: ambient and the rim only */
+  sx_matcap_bake(b, (const float(*)[4])key, -1, 0.0f);
+  CHECK(b[32 * SX_MATCAP_SIZE + 32] == 1 && b[0] > 1);
+}
+
+TEST(material_wobble_bound) {
+  sx_material m;
+  float p[3] = {3, 4, 5}, t;
+  sx_material_default(&m);
+  CHECK(sx_material_wobble(&m, p, 1.0f) == 0.0f);
+  m.wobble[0] = 0.3f;
+  m.wobble[1] = 0.1f; /* clamped period */
+  m.wobble[2] = 0.0f; /* clamped scale */
+  m.breath = 0.2f;
+  for (t = 0; t < 20; t += 0.37f) {
+    float w = sx_material_wobble(&m, p, t);
+    CHECK(w <= 0.5f + 1e-5f && w >= -0.5f - 1e-5f);
+  }
+}

@@ -118,6 +118,18 @@ TEST(shadows_option) {
   CHECK(strstr(sx_usage(), "--shadows") != NULL);
 }
 
+/* add-material-system, add-relic-stations: --materials, --relic-slice and --script-arg */
+TEST(materials_relic_options) {
+  sx_options o;
+  char *full[] = {"x", "--materials", "lite", "--relic-slice", "--script-arg", "frames"};
+  char *bad[] = {"x", "--materials", "shiny"}, *none[] = {"x", "--materials"};
+  sx_options_default(&o);
+  CHECK(o.materials == -1 && !o.relic_slice && o.script_arg[0] == 0);
+  CHECK(parse(&o, 6, full) && o.materials == SX_MATERIALS_LITE && o.relic_slice && strcmp(o.script_arg, "frames") == 0);
+  CHECK(!parse(&o, 3, bad) && !parse(&o, 2, none));
+  CHECK(strstr(sx_usage(), "--relic-slice") != NULL && strstr(sx_usage(), "--materials") != NULL);
+}
+
 TEST(ticks_for_frame) {
   double acc = 0;
   CHECK(sx_ticks_for_frame(&acc, 1.0 / 60) == 1);
