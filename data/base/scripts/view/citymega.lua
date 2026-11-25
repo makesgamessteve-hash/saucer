@@ -47,8 +47,9 @@ end
 function M.full_parts(p, d)
   local col, uv = M.stone(p, d), p.frame.kit.uv or 0.125
   local parts = {}
-  for n, b in ipairs(mega.solids(p, d)) do
-    parts[#parts + 1] = { kind = "box", min = b[1], max = b[2], color = n == 1 and shade(col, 0.6) or shade(col, 0.9 + (n % 3) * 0.06), uv = uv }
+  local sol = mega.solids(p, d)
+  for n, b in ipairs(sol) do
+    parts[#parts + 1] = { kind = "box", min = b[1], max = b[2], color = n <= (sol.found or 1) and shade(col, 0.6) or shade(col, 0.9 + (n % 3) * 0.06), uv = uv }
   end
   return parts
 end
@@ -57,8 +58,9 @@ end
 function M.light_parts(p, d)
   local win = p.style.window or { 1, 0.85, 0.5 }
   local parts = {}
-  for n, b in ipairs(mega.solids(p, d)) do
-    if n > 1 then
+  local sol = mega.solids(p, d)
+  for n, b in ipairs(sol) do
+    if n > (sol.found or 1) then
       local y = b[1][2] + 10
       while y + 3 < b[2][2] do
         parts[#parts + 1] = { kind = "box", min = { b[1][1] - 0.6, y, b[1][3] - 0.6 }, max = { b[2][1] + 0.6, y + 2.5, b[2][3] + 0.6 },
@@ -158,6 +160,25 @@ function M.organ_pose(d, t)
            core = { pos = { c[1], c[2] + bob, c[3] }, size = core }, glow = r2 * (0.8 + 0.4 * pulse), pulse = pulse }
 end
 
+-- the sanctum at the far end of an organ's warren: a cluster of glowing stones circling a dim heart, swelling and
+-- shrinking as if breathing, never touching the floor or the ceiling (a function of the clock)
+-- -> { heart = {pos, size}, stones = { {pos, size, yaw} }, breath }
+M.STONES = 7
+function M.sanctum_pose(d, t)
+  local w = d.warren
+  local c = w.sanctum
+  local ph = (d.k * 1.31) % 6.283
+  local breath = 0.5 + 0.5 * math.sin(t * 0.45 + ph)
+  local R = c.size * (0.22 + 0.08 * breath)
+  local stones = {}
+  for i = 1, M.STONES do
+    local a = t * (0.12 + 0.02 * i) + i * 6.283 / M.STONES + ph
+    local y = c[2] + 9 * math.sin(t * 0.3 + i * 1.7)
+    stones[i] = { pos = { c[1] + math.sin(a) * R, y, c[3] + math.cos(a) * R }, size = 3 + 2 * breath + (i % 3), yaw = a * 2 }
+  end
+  return { heart = { pos = { c[1], c[2], c[3] }, size = 6 + 5 * breath }, stones = stones, breath = breath }
+end
+
 -- the drifters: tall glowing slabs that glide down the avenues on a district's east and south sides, turning and
 -- bobbing, never touching anything, each with a halo and two small followers (a function of the clock)
 -- -> pose { pos, size, yaw, glow, trail = { {pos, size}... } }
@@ -255,6 +276,18 @@ function M.draw(v, A, p, cam, tex, visible, budget, t)
                                                         palette = A.pal.base, tint = { win[1], win[2], win[3], 1 } })
         if A.tex.glow then v:billboard(A.tex.glow, o.core.pos, o.glow, { palette = A.pal.base, tint = { acc[1], acc[2], acc[3], 0.35 + 0.3 * o.pulse } }) end
         st.organs = (st.organs or 0) + 1
+        if d.warren then
+          local sp = M.sanctum_pose(d, t or 0)
+          local box = require("view.assets").unit_box(true)
+          for _, o2 in ipairs(sp.stones) do
+            local z = o2.size
+            v:mesh(box, { pos = o2.pos, scale = { z, z, z }, yaw = o2.yaw, palette = A.pal.base, tint = { acc[1], acc[2], acc[3], 1 } })
+          end
+          local hz = sp.heart.size
+          v:mesh(box, { pos = sp.heart.pos, scale = { hz, hz, hz }, yaw = -o.yaw, palette = A.pal.base, tint = { win[1] * 0.5, win[2] * 0.5, win[3] * 0.5, 1 } })
+          if A.tex.glow then v:billboard(A.tex.glow, sp.heart.pos, hz * 4, { palette = A.pal.base, tint = { win[1], win[2], win[3], 0.25 + 0.3 * sp.breath } }) end
+          st.sanctums = (st.sanctums or 0) + 1
+        end
       end
     elseif c.sil[k] then
       v:mesh(c.sil[k], { palette = A.pal.base })

@@ -84,11 +84,16 @@ describe("megacity", function()
       -- what you see is what you hit: every solid inside the block, from the foundation to the top
       local sol = mega.build(d)
       local c = d.cell
-      expect(sol[1][1][1] == c[1] and sol[1][2][1] == c[3] and sol[1][2][2] == p.frame.y).to_be(true)
+      local fx0, fx1 = math.huge, -math.huge
+      for n = 1, sol.found do
+        fx0, fx1 = math.min(fx0, sol[n][1][1]), math.max(fx1, sol[n][2][1])
+        expect(sol[n][2][2]).to_be(p.frame.y)
+      end
+      expect(fx0 == c[1] and fx1 == c[3]).to_be(true)
       for n, s in ipairs(sol) do
-        if n == 1 then goto next end
+        if n <= sol.found then goto next end
         expect(s[1][1] >= b[1] - 1e-6 and s[2][1] <= b[3] + 1e-6 and s[1][3] >= b[2] - 1e-6 and s[2][3] <= b[4] + 1e-6).to_be(true)
-        expect(s[2][2] <= p.frame.y + d.top + 1e-6 and s[1][2] >= p.frame.y - 40).to_be(true)
+        expect(s[2][2] <= p.frame.y + d.top + 1e-6 and s[1][2] >= p.frame.y - 40 - mega.WARREN_H - mega.FLOOR).to_be(true)
         ::next::
       end
       expect(#sol).to_be_greater(#d.organs)
@@ -412,5 +417,94 @@ describe("megacity", function()
       for _, q in ipairs(megav.light_parts(p, d)) do if q.max[2] - q.min[2] < 0.5 then n0 = n0 + 1 end end
       expect(n0 >= 5 * #mega.bays(p, d)).to_be(true)
     end
+  end)
+
+  it("under each organ a shaft drops into a warren of corridors and chambers, its sanctum's finds beamed only from below", function()
+    for _, body in ipairs({ "planet", "asteroid" }) do
+      local st, i, r, p = in_city(body)
+      local n = 0
+      for _, d in ipairs(p.districts) do
+        local w = d.warren
+        if w then
+          n = n + 1
+          local sol = mega.solids(p, d)
+          expect(sol.found).to_be(4)
+          local function solid_at(x, y, z)
+            for _, b in ipairs(sol) do
+              if x > b[1][1] and x < b[2][1] and y > b[1][2] and y < b[2][2] and z > b[1][3] and z < b[2][3] then return true end
+            end
+            return false
+          end
+          -- the shaft: open from the hall floor down into the hub, and it lies in the hall
+          local sh = w.shaft
+          local sx, sz = (sh[1] + sh[3]) / 2, (sh[2] + sh[4]) / 2
+          expect(mega.in_hall(d, { sx, d.y + 5, sz })).to_be(d.organ)
+          for y = w.y0 + 2, d.y + 10, 4 do
+            expect(solid_at(sx, y, sz)).to_be(false)
+            expect(solid_at(sh[1] + 2, y, sh[2] + 2)).to_be(false)
+          end
+          expect(solid_at(sx, w.y0 - 2, sz)).to_be(true)
+          -- every space is open from floor to ceiling (sampled), shut in by walls around, inside the district
+          local chambers, sanct = 0, 0
+          for _, sp in ipairs(w.spaces) do
+            expect(sp[1] >= d.box[1] and sp[3] <= d.box[3] and sp[2] >= d.box[2] and sp[4] <= d.box[4]).to_be(true)
+            for _, f in ipairs({ { 0.5, 0.5 }, { 0.1, 0.1 }, { 0.9, 0.9 }, { 0.1, 0.9 } }) do
+              local x, z = sp[1] + (sp[3] - sp[1]) * f[1], sp[2] + (sp[4] - sp[2]) * f[2]
+              expect(solid_at(x, w.y0 + 3, z) or solid_at(x, w.y1 - 3, z)).to_be(false)
+              expect(mega.in_warren(d, { x, w.y0 + 20, z })).to_be(w)
+            end
+            if sp[5] == "chamber" or sp[5] == "sanctum" then chambers = chambers + 1 end
+            if sp[5] == "sanctum" then sanct = sanct + 1 end
+          end
+          expect(chambers >= 1 and chambers <= 4).to_be(true)
+          expect(sanct).to_be(1)
+          -- walled: just outside the warren's extent is rock
+          local hub = w.spaces[1]
+          local outside = 0
+          for _, x in ipairs({ hub[1] - 5, hub[3] + 5 }) do if solid_at(x, w.y0 + 20, hub[2] + 5) then outside = outside + 1 end end
+          for _, z in ipairs({ hub[2] - 5, hub[4] + 5 }) do if solid_at(hub[1] + 5, w.y0 + 20, z) then outside = outside + 1 end end
+          expect(outside >= 1).to_be(true)
+          expect(#w.finds >= chambers).to_be(true)
+          for _, f in ipairs(w.finds) do expect(mega.in_warren(d, { f.pos[1], f.pos[2] + 5, f.pos[3] })).to_be(w) end
+          expect(mega.in_warren(d, { sx, d.y + 30, sz })).to_be(nil)
+          expect(mega.in_warren(d, { sh[1] - 20, w.y1 + 2, sz })).to_be(nil)
+        end
+      end
+      expect(n).to_be_greater(#p.districts // 3)
+      -- the warren's finds: sensed from the warren, not from the hall above; taken they stay taken
+      local d
+      for _, x in ipairs(p.districts) do if x.warren and not d then d = x end end
+      local f = d.warren.finds[1]
+      local pl = st.players[1]
+      pl.site = 0
+      local function deep()
+        local out = {}
+        for _, c in ipairs(mega.candidates(st, pl)) do if c.pos[2] < d.y then out[#out + 1] = c end end
+        return out
+      end
+      pl.ship.pos = { f.pos[1], d.y + 30, f.pos[3] }
+      expect(#deep()).to_be(0)
+      pl.ship.pos = { f.pos[1], f.pos[2] + 15, f.pos[3] }
+      local c = deep()
+      expect(#c >= 1).to_be(true)
+      game.pick_up(st, pl, c[1], 0)
+      expect(pl.looted[c[1].key]).to_be(true)
+      expect(#deep()).to_be(#c - 1)
+      -- the sanctum breathes, its stones keep off the floor and ceiling
+      for _, tt in ipairs({ 0, 5, 300 }) do
+        local sp = megav.sanctum_pose(d, tt)
+        expect(#sp.stones).to_be(megav.STONES)
+        for _, o in ipairs(sp.stones) do
+          expect(o.pos[2] - o.size > d.warren.y0 and o.pos[2] + o.size < d.warren.y1).to_be(true)
+          expect(mega.in_warren(d, o.pos)).to_be(d.warren)
+        end
+      end
+      expect(megav.sanctum_pose(d, 0).heart.size ~= megav.sanctum_pose(d, 3).heart.size).to_be(true)
+      local v = fake_view()
+      local s = megav.draw(v, A, p, { pos = d.organ.centre, yaw = 0, pitch = 0 }, 1, function() return true end, 1000, 3)
+      expect((s.sanctums or 0) >= 1).to_be(true)
+    end
+    expect(mega.in_warren(nil, { 0, 0, 0 })).to_be(nil)
+    expect(mega.plan_warren(1, { k = 1 })).to_be(nil)
   end)
 end)

@@ -43,6 +43,16 @@ M.BAY_CLEAR = 30           -- m kept clear above a bay (20 for the Villa, and ro
 M.BAY_MIN_Y = 40           -- m above the street: a terrace, not the street
 M.BAYS = 2                 -- at most this many per district
 M.CRADLE = { 20, 1.5 }     -- m, the cradle's side and height
+-- add-alien-cities-4: the undercity: under each organ a shaft drops from the back of its hall through the foundation
+-- into a warren: a hub, two to four corridors out to chambers, the farthest a sanctum where something breathes
+M.WG = 10                  -- m, the warren's grid
+M.SHAFT = 50               -- m, the shaft's side
+M.WARREN_H = 40            -- m, its rooms' height under the foundation
+M.FLOOR = 6                -- m, its floor
+M.HUB = 80                 -- m, the hub's side
+M.CORR = 40                -- m, a corridor's width
+M.ARM = { 100, 220 }       -- m, a corridor's length
+M.CHAMBER = { 60, 110 }    -- m, a chamber's side
 
 local floor, max, min = math.floor, math.max, math.min
 
@@ -201,6 +211,7 @@ function M.plan_district(seed, k, c, fr, style)
     end
   end
   M.plan_organ(seed, d)
+  M.plan_warren(seed, d)
   return d
 end
 
@@ -241,6 +252,146 @@ function M.plan_organ(seed, d)
   d.organ = { index = best, hall = { x0, d.y, z0, x1, d.y + hh, z1 }, h = hh, side = side, finds = finds,
               centre = { (x0 + x1) / 2, d.y + hh / 2, (z0 + z1) / 2 } }
   return d.organ
+end
+
+local function slab_of(d) return d.body == "asteroid" and 40 or 6 end
+M.slab_of = slab_of
+
+-- the undercity warren under district d's organ (own rng): the shaft at the back of the hall, a hub under it, corridors
+-- out to chambers inside the district's box, the farthest chamber a sanctum; finds in the chambers (more in the
+-- sanctum). d.warren = { shaft = {x0, z0, x1, z1}, spaces = { {x0, z0, x1, z1, kind} }, y0, y1, finds, sanctum, grid }
+function M.plan_warren(seed, d)
+  d.warren = nil
+  local og = d.organ
+  if not og then return nil end
+  local G = M.WG
+  local rng = saucer.rng.new(saucer.seed_child(seed, "warren", d.k))
+  local h = og.hall
+  local function snap(v) return floor(v / G + 0.5) * G end
+  -- the back of the hall: a quarter of the way in from the face opposite the mouth
+  local cx, cz = (h[1] + h[4]) / 2, (h[3] + h[6]) / 2
+  local qx, qz = (h[4] - h[1]) / 4, (h[6] - h[3]) / 4
+  if og.side == 1 then cx = cx + qx elseif og.side == 2 then cx = cx - qx elseif og.side == 3 then cz = cz + qz else cz = cz - qz end
+  cx, cz = snap(cx), snap(cz)
+  local S = M.SHAFT / 2
+  local shaft = { cx - S, cz - S, cx + S, cz + S }
+  local y1 = d.y - slab_of(d)
+  local y0 = y1 - M.WARREN_H
+  local inset = { d.box[1] + 20, d.box[2] + 20, d.box[3] - 20, d.box[4] - 20 }
+  local function inside(r) return r[1] >= inset[1] and r[2] >= inset[2] and r[3] <= inset[3] and r[4] <= inset[4] end
+  local H = M.HUB / 2
+  local spaces = { { cx - H, cz - H, cx + H, cz + H, "hub" } }
+  local chambers = {}
+  local dirs = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }
+  for k = 4, 2, -1 do local j = rng:int(1, k) dirs[k], dirs[j] = dirs[j], dirs[k] end
+  local want = rng:int(2, 4)
+  local C = M.CORR / 2
+  for _, dv in ipairs(dirs) do
+    if #chambers >= want then break end
+    local len = snap(rng:int(M.ARM[1], M.ARM[2]))
+    local cw = snap(rng:int(M.CHAMBER[1], M.CHAMBER[2]) / 2) * 2
+    local cd = snap(rng:int(M.CHAMBER[1], M.CHAMBER[2]))
+    for _ = 1, 3 do
+      local corr, ch
+      if dv[1] ~= 0 then
+        local x0 = dv[1] > 0 and cx + H or cx - H - len
+        corr = { x0, cz - C, x0 + len, cz + C, "corridor" }
+        local ex = dv[1] > 0 and cx + H + len or cx - H - len - cd
+        ch = { ex, cz - cw / 2, ex + cd, cz + cw / 2, "chamber" }
+      else
+        local z0 = dv[2] > 0 and cz + H or cz - H - len
+        corr = { cx - C, z0, cx + C, z0 + len, "corridor" }
+        local ez = dv[2] > 0 and cz + H + len or cz - H - len - cd
+        ch = { cx - cw / 2, ez, cx + cw / 2, ez + cd, "chamber" }
+      end
+      if inside(corr) and inside(ch) then
+        spaces[#spaces + 1] = corr
+        spaces[#spaces + 1] = ch
+        ch.dist = len + cd
+        chambers[#chambers + 1] = ch
+        break
+      end
+      len = snap(len * 0.6)
+      cw, cd = snap(M.CHAMBER[1] / 2) * 2, snap(M.CHAMBER[1])
+    end
+  end
+  if not inside(spaces[1]) or #chambers == 0 then return nil end
+  local sanctum = chambers[1]
+  for _, ch in ipairs(chambers) do if ch.dist > sanctum.dist then sanctum = ch end end
+  sanctum[5] = "sanctum"
+  local finds = {}
+  for _, ch in ipairs(chambers) do
+    local n = ch == sanctum and rng:int(2, 3) or rng:int(1, 2)
+    for _ = 1, n do
+      local fx, fz = rng:int(floor(ch[1]) + 8, floor(ch[3]) - 8), rng:int(floor(ch[2]) + 8, floor(ch[4]) - 8)
+      local id = 100 + #finds + 1
+      finds[#finds + 1] = { id = id, pos = { fx, y0 + 1.5, fz }, max_size = 3, tier = 3, deep = true,
+                            seed = saucer.seed_child(seed, "warrenfind", d.k * 16 + #finds + 1) }
+    end
+  end
+  d.warren = { shaft = shaft, spaces = spaces, y0 = y0, y1 = y1, finds = finds,
+               sanctum = { (sanctum[1] + sanctum[3]) / 2, y0 + M.WARREN_H / 2, (sanctum[2] + sanctum[4]) / 2, size = min(sanctum[3] - sanctum[1], sanctum[4] - sanctum[2]) } }
+  return d.warren
+end
+
+-- the warren's solids: its floor, and walls round every open grid cell (rows of wall cells merged into boxes)
+local function warren_boxes(d, out)
+  local w = d.warren
+  local G = M.WG
+  local bx0, bz0, bx1, bz1 = math.huge, math.huge, -math.huge, -math.huge
+  for _, r in ipairs(w.spaces) do bx0, bz0, bx1, bz1 = min(bx0, r[1]), min(bz0, r[2]), max(bx1, r[3]), max(bz1, r[4]) end
+  bx0, bz0, bx1, bz1 = bx0 - G, bz0 - G, bx1 + G, bz1 + G
+  local nx, nz = floor((bx1 - bx0) / G + 0.5), floor((bz1 - bz0) / G + 0.5)
+  local open = {}
+  for _, r in ipairs(w.spaces) do
+    for iz = floor((r[2] - bz0) / G + 0.5), floor((r[4] - bz0) / G + 0.5) - 1 do
+      for ix = floor((r[1] - bx0) / G + 0.5), floor((r[3] - bx0) / G + 0.5) - 1 do open[iz * nx + ix] = true end
+    end
+  end
+  local function is_open(ix, iz) return ix >= 0 and iz >= 0 and ix < nx and iz < nz and open[iz * nx + ix] end
+  out[#out + 1] = { { bx0, w.y0 - M.FLOOR, bz0 }, { bx1, w.y0, bz1 } }
+  -- wall cells: shut, next to an open cell (diagonals too); greedy rectangles: run along x, then grow along z
+  local wall, used = {}, {}
+  for iz = 0, nz - 1 do
+    for ix = 0, nx - 1 do
+      if not is_open(ix, iz) then
+        for dz = -1, 1 do for dx = -1, 1 do if is_open(ix + dx, iz + dz) then wall[iz * nx + ix] = true end end end
+      end
+    end
+  end
+  local function free(ix, iz) return wall[iz * nx + ix] and not used[iz * nx + ix] end
+  for iz = 0, nz - 1 do
+    for ix = 0, nx - 1 do
+      if free(ix, iz) then
+        local ex = ix
+        while ex + 1 < nx and free(ex + 1, iz) do ex = ex + 1 end
+        local ez = iz
+        local grow = true
+        while grow and ez + 1 < nz do
+          for x = ix, ex do if not free(x, ez + 1) then grow = false break end end
+          if grow then ez = ez + 1 end
+        end
+        for z = iz, ez do for x = ix, ex do used[z * nx + x] = true end end
+        out[#out + 1] = { { bx0 + ix * G, w.y0, bz0 + iz * G }, { bx0 + (ex + 1) * G, w.y1, bz0 + (ez + 1) * G } }
+      end
+    end
+  end
+end
+
+-- a ship-sized point inside district d's warren (or its shaft)? -> the warren or nil
+function M.in_warren(d, pos)
+  local w = d and d.warren
+  if not w then return nil end
+  if pos[2] <= w.y0 or pos[2] >= d.y then return nil end
+  local sh = w.shaft
+  if pos[2] >= w.y1 then
+    if pos[1] > sh[1] and pos[1] < sh[3] and pos[3] > sh[2] and pos[3] < sh[4] then return w end
+    return nil
+  end
+  for _, r in ipairs(w.spaces) do
+    if pos[1] > r[1] and pos[1] < r[3] and pos[3] > r[2] and pos[3] < r[4] then return w end
+  end
+  return nil
 end
 
 -- an organ's base: the walls round its hall (a mouth in one face), the roof, and the rest of its first tier above
@@ -295,8 +446,20 @@ function M.build(d)
   local out = {}
   local y = d.y
   local b = d.cell
-  local slab = d.body == "asteroid" and 40 or 6
-  out[1] = { { b[1], y - slab, b[2] }, { b[3], y, b[4] } }
+  local slab = slab_of(d)
+  local w = d.warren
+  if w then
+    -- the foundation round the shaft: four pieces (the first is the biggest, the rest follow it)
+    local sh = w.shaft
+    out[1] = { { b[1], y - slab, b[2] }, { sh[1], y, b[4] } }
+    out[2] = { { sh[3], y - slab, b[2] }, { b[3], y, b[4] } }
+    out[3] = { { sh[1], y - slab, b[2] }, { sh[3], y, sh[2] } }
+    out[4] = { { sh[1], y - slab, sh[4] }, { sh[3], y, b[4] } }
+    out.found = 4
+  else
+    out[1] = { { b[1], y - slab, b[2] }, { b[3], y, b[4] } }
+    out.found = 1
+  end
   local s = M.SNAP
   for n, o in ipairs(d.organs) do
     local wc, w2c, hc = o.w // s, o.w2 // s, o.h // s
@@ -313,6 +476,7 @@ function M.build(d)
     end
   end
   for _, k in ipairs(d.decks) do out[#out + 1] = { { k[1], y + k[2], k[3] }, { k[4], y + k[5], k[6] } } end
+  if w then warren_boxes(d, out) end
   local bays = M.terrace_bays(d, out)
   for _, bay in ipairs(bays) do out[#out + 1] = bay.cradle_box end
   return out, bays
@@ -328,7 +492,7 @@ end
 function M.terrace_bays(d, solids)
   local half, m = M.BAY / 2, 4
   local tiers = {}
-  for n = 2, #solids do
+  for n = (solids.found or 1) + 1, #solids do
     local b = solids[n]
     if b[2][2] - d.y >= M.BAY_MIN_Y and b[2][1] - b[1][1] >= M.BAY + 2 * m and b[2][3] - b[1][3] >= M.BAY + 2 * m then
       tiers[#tiers + 1] = { n = n, b = b }
@@ -511,9 +675,18 @@ function M.candidates(state, p)
   for _, d in ipairs(plan.districts) do
     local og = d.organ
     if og and rect_dist(d.box, sp[1], sp[3]) <= M.SENSE then
-      for _, f in ipairs(og.finds) do
+      local below = sp[2] < d.y - slab_of(d)
+      local list = og.finds
+      if d.warren then
+        list = {}
+        for _, f in ipairs(og.finds) do list[#list + 1] = f end
+        for _, f in ipairs(d.warren.finds) do list[#list + 1] = f end
+      end
+      for _, f in ipairs(list) do
         local key = "mega" .. i .. ":" .. d.id .. ":" .. f.id
+        -- the warren's finds are sensed from in the warren, the hall's from above the foundation
         local near = math.abs(f.pos[1] - sp[1]) <= M.SENSE and math.abs(f.pos[3] - sp[3]) <= M.SENSE and math.abs(f.pos[2] - sp[2]) <= M.SENSE
+          and (f.deep == true) == below
         if near and not p.looted[key] then
           local item = loot.roll(loot.instance_seed(f.seed, p.record_index), f.max_size, f.tier)
           item.tier, item.civ = f.tier, civ and civ.id
