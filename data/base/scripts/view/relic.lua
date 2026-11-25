@@ -769,7 +769,10 @@ function M.far_parts(rm, civ)
     local dir = { 0, 1, 0 }
     dir[4 - long] = (k % 2 == 0 and 0.25 or -0.25)
     dir = hd.norm(dir)
-    local g = D.motif == "fins" and girth * 4 or (D.motif == "domes" and short * 0.3 or girth)
+    -- thick or thin as the motif is on a station (masts and cages slender, shards stout)
+    local st = hd.kit().station
+    local rel = (st[D.motif] and st[D.motif].girth or st.spines.girth) / st.spines.girth
+    local g = D.motif == "fins" and girth * 4 or (D.motif == "domes" and short * 0.3 or girth * math.max(0.3, math.min(1.5, rel)))
     local l = D.motif == "domes" and short * 0.3 or len
     if D.motif == "arches" then
       -- a hoop standing over the room, across its long axis
@@ -826,7 +829,8 @@ function M.draw_signals(v, A, set, cam, tick, opts)
     local d = vec.dist(l.p, cam.pos)
     if d < K.signal.far and n < K.signal.max then
       local a, c = hd.signal_at(l, tick, D.lamps)
-      v:billboard(A.tex.glow, l.p, math.max(l.size, d * K.signal.min_px), { palette = opts.palette, tint = { c[1], c[2], c[3], a } })
+      local up = hd.fog_lift(d, require("view.render").FOG)
+      v:billboard(A.tex.glow, l.p, math.max(l.size, d * K.signal.min_px), { palette = opts.palette, tint = { c[1] * up, c[2] * up, c[3] * up, a } })
       n = n + 1
     end
   end

@@ -293,4 +293,12 @@ function M.signal_at(l, tick, lamps)
   return 0.18 + 0.12 * (0.5 + 0.5 * sm.sin(t * sm.tau)), c   -- dim
 end
 
+-- the colour lift a signal at distance d needs against a fog of this density (the fog keeps exp(-density d) of it)
+-- (e^x as (1 + x/1024)^1024: ten squarings; the sandbox has no exp)
+function M.fog_lift(d, density)
+  local g = 1 + (density or 0) * d / 1024
+  for _ = 1, 10 do g = g * g end
+  return math.min(M.kit().signal.boost, g)
+end
+
 return M

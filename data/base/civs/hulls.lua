@@ -45,7 +45,9 @@ return {
     orbit = { kind = "orbit", period = 300, size = 1.0 },       -- lights circling the crown
     dark = { kind = "dim", period = 600, size = 0.7 },          -- a faint rim glow only (they live by touch)
   },
-  signal = { far = 9000, min_px = 0.011, max = 64 },  -- drawn out to `far` m, never smaller than min_px x distance
+  -- signals: drawn out to `far` m, never smaller than min_px x distance, their colour lifted against the fog (by up to
+  -- `boost` times) so a far one still reads as a light
+  signal = { far = 9000, min_px = 0.011, max = 64, boost = 8 },
   -- a relic seen from beyond its near range: each big room as a hull of the civ's edge language, crowned by its motif
   relic = { edge_seg = { round = 10, chamfer = 8, fluted = 16, serrated = 5 }, motif_scale = 0.65, girth = 0.14, far = 7000,
             band = 0.08, glow = 0.25, signal = 0.16 },

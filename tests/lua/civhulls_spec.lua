@@ -192,6 +192,10 @@ describe("a station in its builder's dress", function()
     local _, c0 = hd.signal_at({ kind = "chroma", period = 90, phase = 0, k = 0, n = 1 }, 0, lamps)
     local _, c1 = hd.signal_at({ kind = "chroma", period = 90, phase = 0, k = 0, n = 1 }, 30, lamps)
     expect(c0[1] ~= c1[1]).to_be(true)
+    -- lifted against the fog: e^(density d), capped
+    expect(hd.fog_lift(0, 0.0009)).to_be(1)
+    expect(math.abs(hd.fog_lift(1500, 0.0009) - 3.857) < 0.02).to_be(true)
+    expect(hd.fog_lift(90000, 0.0009)).to_be(hd.kit().signal.boost)
     -- drawn from 5 km, never smaller than the kit's share of their distance
     local st = new_state(42)
     local L = sh.for_trader(st, 1)
