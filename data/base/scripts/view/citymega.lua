@@ -227,6 +227,33 @@ function M.warren_lamps(v, p, d, t)
   return n
 end
 
+-- add-alien-cities-5: mag-trains high over the avenues on a district's west and north sides, end to end and back
+-- (a function of the clock, render only), each a string of dark cars with a lit keel
+-- -> { cars = { {pos, size} }, dir }
+M.TRAIN_DRAW = 3000
+M.TRAIN_SPEED = 55     -- m/s
+M.TRAIN_CARS = 6
+M.TRAIN_CAR = { 8, 7, 32 }  -- m, a car's width, height and length
+M.TRAIN_Y = { 260, 320 }    -- m above the street, west line and north line
+function M.train_pose(p, d, k, t)
+  local c = d.cell
+  local len = k == 1 and (c[4] - c[2]) or (c[3] - c[1])
+  local run = 2 * len
+  local u = (t * M.TRAIN_SPEED + d.k * 613 + k * 1777) % run
+  local dir = 1
+  if u > len then u, dir = run - u, -1 end
+  local y = p.frame.y + M.TRAIN_Y[k]
+  local cars = {}
+  local L = M.TRAIN_CAR[3] + 3
+  for n = 0, M.TRAIN_CARS - 1 do
+    local a = math.max(0, math.min(len, u - dir * n * L))
+    local pos = k == 1 and { c[1], y, c[2] + a } or { c[1] + a, y, c[2] }
+    local size = k == 1 and { M.TRAIN_CAR[1], M.TRAIN_CAR[2], M.TRAIN_CAR[3] } or { M.TRAIN_CAR[3], M.TRAIN_CAR[2], M.TRAIN_CAR[1] }
+    cars[#cars + 1] = { pos = pos, size = size }
+  end
+  return { cars = cars, dir = dir }
+end
+
 -- the drifters: tall glowing slabs that glide down the avenues on a district's east and south sides, turning and
 -- bobbing, never touching anything, each with a halo and two small followers (a function of the clock)
 -- -> pose { pos, size, yaw, glow, trail = { {pos, size}... } }
@@ -307,6 +334,19 @@ function M.draw(v, A, p, cam, tex, visible, budget, t)
           end
           if A.tex.glow then v:billboard(A.tex.glow, o.pos, o.glow, { palette = A.pal.base, tint = { win[1], win[2], win[3], 0.45 } }) end
           st.drifters = (st.drifters or 0) + 1
+        end
+      end
+      if dist <= M.TRAIN_DRAW then
+        local acc = p.style.accent or { 0.8, 0.9, 1.0 }
+        local dark, glow = require("view.assets").unit_box(false), require("view.assets").unit_box(true)
+        for kk = 1, 2 do
+          for _, car in ipairs(M.train_pose(p, d, kk, t or 0).cars) do
+            v:mesh(dark, { pos = car.pos, scale = car.size, tex = tex, palette = A.pal.base, tint = { 0.55, 0.58, 0.66, 1 } })
+            local z = car.size
+            v:mesh(glow, { pos = { car.pos[1], car.pos[2] - z[2] / 2 - 0.4, car.pos[3] }, scale = { z[1] * 0.9, 0.8, z[3] * 0.9 },
+                           palette = A.pal.base, tint = { acc[1], acc[2], acc[3], 1 } })
+          end
+          st.trains = (st.trains or 0) + 1
         end
       end
       if d.organ and dist <= M.ORGAN_DRAW then

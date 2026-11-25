@@ -559,4 +559,65 @@ describe("megacity", function()
     end
     expect(ahead >= 2).to_be(true)
   end)
+
+  it("mag-trains run over the outer avenues, the storm blows over the ring, and each sanctum keeps an archive record", function()
+    local st, i, r, p = in_city("planet")
+    local d
+    for _, x in ipairs(p.districts) do if x.warren and not d then d = x end end
+    -- trains: on the district's west and north cell edges, high over the street, inside the cell's span
+    for kk = 1, 2 do
+      for _, tt in ipairs({ 0, 13, 400, 1e4 }) do
+        local o = megav.train_pose(p, d, kk, tt)
+        expect(#o.cars).to_be(megav.TRAIN_CARS)
+        for _, car in ipairs(o.cars) do
+          local c = d.cell
+          if kk == 1 then expect(car.pos[1]).to_be(c[1]) else expect(car.pos[3]).to_be(c[2]) end
+          expect(car.pos[1] >= c[1] and car.pos[1] <= c[3] and car.pos[3] >= c[2] and car.pos[3] <= c[4]).to_be(true)
+          expect(car.pos[2]).to_be(p.frame.y + megav.TRAIN_Y[kk])
+        end
+      end
+      local a, b = megav.train_pose(p, d, kk, 1).cars[1].pos, megav.train_pose(p, d, kk, 2).cars[1].pos
+      expect(a[1] ~= b[1] or a[3] ~= b[3]).to_be(true)
+    end
+    local sd = megav.draw(fake_view(), A, p, { pos = hover_over(p, d), yaw = 0, pitch = 0 }, 1, function() return true end, 1000, 2)
+    expect((sd.trains or 0) >= 2).to_be(true)
+    -- the archive record: sensed from the sanctum (not from the hall), read in place, then gone
+    local pl = st.players[1]
+    pl.site = 0
+    local cp = mega.clue_pos(d)
+    local function clue()
+      for _, c in ipairs(mega.candidates(st, pl)) do if c.kind == "clue" then return c end end
+    end
+    pl.ship.pos = { cp[1], d.y + 30, cp[3] }
+    expect(clue()).to_be(nil)
+    pl.ship.pos = { cp[1], cp[2] + 15, cp[3] }
+    local c = clue()
+    expect(c ~= nil).to_be(true)
+    expect(c.key).to_be("megaclue:" .. i .. ":" .. d.id)
+    local hold = #pl.hold
+    game.pick_up(st, pl, c, 0)
+    expect(#pl.hold).to_be(hold)
+    expect(pl.looted[c.key]).to_be(true)
+    expect(clue()).to_be(nil)
+    -- the storm: at its peak a saucer in the ring's open air drifts; in an organ's hall it does not
+    local cities = require("sim.cities")
+    local peak = cities.phase(r) + cities.STORM_LEN // 2
+    local function drift(pos, tick)
+      pl.mode, pl.panel = "helm", false
+      pl.ship.pos, pl.ship.vel = { pos[1], pos[2], pos[3] }, { 0, 0, 0 }
+      st.tick = tick
+      run(st, 30)
+      local q = pl.ship.pos
+      return math.abs(q[1] - pos[1]) + math.abs(q[3] - pos[3])
+    end
+    local open = { (d.cell[1] + d.box[1]) / 2, p.frame.y + 200, (d.cell[2] + d.cell[4]) / 2 }
+    local calm = drift(open, 10)
+    local blown = drift(open, peak)
+    expect(blown > calm + 1).to_be(true)
+    expect(mega.sheltered(p, open)).to_be(false)
+    expect(mega.sheltered(p, d.organ.centre)).to_be(true)
+    expect(mega.sheltered(p, { 1e6, 0, 1e6 })).to_be(false)
+    local inside = drift(d.organ.centre, peak)
+    expect(inside < blown).to_be(true)
+  end)
 end)

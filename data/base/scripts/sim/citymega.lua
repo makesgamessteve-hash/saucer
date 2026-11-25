@@ -402,6 +402,18 @@ local function warren_boxes(d, out)
   end
 end
 
+-- where the sanctum's archive record lies: on the floor under its heart
+function M.clue_pos(d)
+  local c = d.warren.sanctum
+  return { c[1], d.warren.y0 + 1.5, c[3] }
+end
+
+-- is pos out of the wind in megacity p: in an organ's hall or a warren
+function M.sheltered(p, pos)
+  local d = M.district_at(p, pos[1], pos[3])
+  return d ~= nil and (M.in_hall(d, pos) ~= nil or M.in_warren(d, pos) ~= nil)
+end
+
 -- a ship-sized point inside district d's warren (or its shaft)? -> the warren or nil
 function M.in_warren(d, pos)
   local w = d and d.warren
@@ -723,6 +735,16 @@ function M.candidates(state, p)
         list = {}
         for _, f in ipairs(og.finds) do list[#list + 1] = f end
         for _, f in ipairs(d.warren.finds) do list[#list + 1] = f end
+      end
+      -- add-alien-cities-5: the sanctum keeps an archive record, read in place (the mystery's next lead)
+      local w = d.warren
+      if w and below then
+        local key = "megaclue:" .. i .. ":" .. d.id
+        local cp = M.clue_pos(d)
+        if not p.looted[key] and math.abs(cp[1] - sp[1]) <= M.SENSE and math.abs(cp[3] - sp[3]) <= M.SENSE and math.abs(cp[2] - sp[2]) <= M.SENSE then
+          out[#out + 1] = { key = key, kind = "clue", pos = cp, district = d.id, organ = d.id,
+                            item = { name = "Archive record", type = "clue", size = 1, value = 0, ident = true } }
+        end
       end
       for _, f in ipairs(list) do
         local key = "mega" .. i .. ":" .. d.id .. ":" .. f.id
