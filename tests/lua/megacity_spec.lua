@@ -339,5 +339,16 @@ describe("megacity", function()
     local v = fake_view()
     local s = megav.draw(v, A, p, { pos = d.organ.centre, yaw = 0, pitch = 0 }, 1, function() return true end, 1000, 3)
     expect((s.organs or 0) >= 1).to_be(true)
+    expect((s.drifters or 0) >= 2).to_be(true)
+    -- the drifters glide down the avenue, back and forth, and never leave it
+    for kk = 1, 2 do
+      for _, tt in ipairs({ 0, 7.5, 300, 1e4 }) do
+        local o = megav.drift_pose(p, d, kk, tt)
+        local c = d.cell
+        expect(o.pos[1] >= c[1] - 1e-6 and o.pos[1] <= c[3] + 1e-6 and o.pos[3] >= c[2] - 1e-6 and o.pos[3] <= c[4] + 1e-6).to_be(true)
+        expect(o.pos[2] > p.frame.y + 30).to_be(true)
+      end
+      expect(megav.drift_pose(p, d, kk, 1).pos[kk == 1 and 3 or 1] ~= megav.drift_pose(p, d, kk, 2).pos[kk == 1 and 3 or 1]).to_be(true)
+    end
   end)
 end)

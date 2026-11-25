@@ -17,6 +17,10 @@
 - [x] 2.5 `tests/lua/megacity_spec.lua`, `tests/game/megacity.lua`, shots `tools/shots/megacity.lua`
 
 ## 3. Organs and the undercity (part 3)
-- [ ] 3.1 The best building in each district as a mini relic (relicgen spaces), fold bays on terraces
-- [ ] 3.2 The undercity warrens; the remaining add-cities tasks (transit and storm extras, mystery tie-ins)
-- [ ] 3.3 Taken loot and opened doors in the outer districts as per-district diffs; state version bump, replays re-recorded
+- [x] 3.1 Every outer district's organ (its tallest ordinary megaform) is hollow at the street: a 60-110 m hall behind a
+      mouth facing the avenue, 4-6 finds and a slow turning machine (`citymega.plan_organ`, `view/citymega.lua`)
+- [x] 3.2 Drifters: glowing slabs gliding down the outer avenues, turning and bobbing, render only
+- [x] 3.3 Taken organ finds are per-player `looted` keys (`mega<site>:<district>:<find>`), saved with the rest: no new
+      state, no version bump, replays unchanged
+- [ ] 3.4 (later) Relicgen interiors in the organs, fold bays on terraces, the undercity warrens, transit and storm
+      extras in the ring, mystery tie-ins

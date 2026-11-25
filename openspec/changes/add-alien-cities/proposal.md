@@ -56,3 +56,11 @@ phenomena. The megascale core, lazy district generation, LOD and mini-relic orga
   Over a megacity the far plane is 60 km, the city's air holds over the footprint, and backdrop sprites (nebulae,
   planet, star) are drawn with the sky so far towers stand in front of them. The planet city's haze is thinner (1.6 → 1.0).
 - Per-district diffs and the state version bump move to part 3, when the outer districts get loot and doors.
+
+## Part 3: organs and drifters
+
+- **Organs.** Each outer district's tallest ordinary megaform is hollow at the street: a hall behind a mouth facing the
+  avenue, with 4-6 finds and a slowly turning ring. Its finds are ordinary per-player finds (`looted` keys), so no new
+  state and no version bump.
+- **Drifters.** Glowing slabs glide down the outer avenues, turning and bobbing: harmless, render only.
+- Relicgen interiors, fold bays, the undercity warrens and the remaining add-cities extras stay for a later part.
