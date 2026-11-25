@@ -52,3 +52,14 @@ In a headset view the material slots SHALL drop the crystal sparkle, halve the o
 #### Scenario: XR slots
 - **WHEN** `tests/lua/materials_spec.lua` runs "drops the sparkle, halves the wobble and slows the breathing to at least 4 s in a headset"
 - **THEN** it passes
+
+### Requirement: Sky reflections
+Outside a relic its metals and crystals SHALL reflect (or refract) a 128 x 64 equirectangular luminance map of the sector's sky (its star, the galaxy's band and stars from the seed), baked once per sector, still with one texture fetch per pixel; inside they SHALL keep the matcap.
+
+#### Scenario: Bake
+- **WHEN** the C test `skymap_bake` runs
+- **THEN** the map is deterministic, banded, brightest toward the star, and the band brightens its great circle
+
+#### Scenario: Choice
+- **WHEN** `tests/lua/materials_spec.lua` runs "reflects the sector's sky outside a relic and the matcap inside"
+- **THEN** it passes
