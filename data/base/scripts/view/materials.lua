@@ -53,6 +53,51 @@ function M.civ_slots(civ)
   slots[M.SLOT.ring] = M.slot(rec(m.signature and m.signature.ring or "wound"))
   slots[M.SLOT.decay] = M.slot(rec(m.decay and m.decay[1] or "flesh_necrotic"), { pulse = 0 })
   slots[M.SLOT.floor] = M.slot(rec("chitin"))
+  return M.fate(slots, civ, lib)
+end
+
+-- add-material-system §2.3.4: what the civ's fate did to its materials (the decay slot already holds its decay
+-- material; this ages the rest). Plague keeps its look (its necrosis is the plague halls' decay slot).
+--   war of silence  scorch: every ramp darkened toward soot, metals dulled
+--   ascension       crust: the rare crystal blazes, the skin's rim takes the crystal's colour
+--   sleep           dormancy: glow, pulse, wobble and breathing nearly stilled
+--   flight          stripping: the accent metal stripped dull, the rare crystal dark (taken when they left)
+--   schism          split: the breathing half of the skin takes the decay material's ramp
+M.SCORCH = 0.55       -- war: ramp scale
+M.CRUST = 1.6         -- ascension: rare glow scale
+M.DORMANT = 0.25      -- sleep: glow / pulse / wobble scale
+M.STRIP = 0.3         -- flight: the accent's reflect and spec scale
+local function scale3(c, k) return c and { c[1] * k, c[2] * k, c[3] * k } end
+function M.fate(slots, civ, lib)
+  local fate = civ.fate or (civ.axes and civ.axes.fate)
+  if fate == "war of silence" then
+    for i = 1, 7 do
+      local s = slots[i]
+      s.lo, s.hi = scale3(s.lo, M.SCORCH * 0.7), scale3(s.hi, M.SCORCH)
+      if s.kind == "metal" then s.reflect, s.spec = s.reflect * 0.6, math.max(8, s.spec * 0.5) end
+    end
+  elseif fate == "ascension" then
+    local r = slots[M.SLOT.rare]
+    r.emit = math.min(1, (r.emit or 0.4) * M.CRUST)
+    for _, i in ipairs({ M.SLOT.dominant, M.SLOT.lung }) do slots[i].sss = r.hi end
+  elseif fate == "sleep" then
+    for i = 1, 7 do
+      local s = slots[i]
+      if s.emit then s.emit = s.emit * M.DORMANT end
+      if s.pulse then s.pulse = s.pulse * M.DORMANT end
+      if s.wobble then s.wobble = { s.wobble[1] * M.DORMANT, s.wobble[2] / M.DORMANT, s.wobble[3] } end
+      if s.breath then s.breath = s.breath * 0.5 end
+    end
+  elseif fate == "flight" then
+    local a = slots[M.SLOT.accent]
+    a.reflect, a.spec = a.reflect * M.STRIP, math.max(8, a.spec * M.STRIP)
+    local r = slots[M.SLOT.rare]
+    r.emit, r.pulse = 0, 0
+  elseif fate == "schism" then
+    local d = (lib or M.library())[civ.materials.decay and civ.materials.decay[1] or "flesh_necrotic"] or {}
+    local l = slots[M.SLOT.lung]
+    l.lo, l.hi = d.lo or l.lo, d.hi or l.hi
+  end
   return slots
 end
 

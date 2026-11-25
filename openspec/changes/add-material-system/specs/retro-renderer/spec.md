@@ -28,3 +28,9 @@ Every pull request SHALL render the material golden shots under Xvfb and Mesa an
 - **WHEN** the `golden` job of `.github/workflows/ci.yml` runs `tools/shots/materials.sh`
 - **THEN** every shot matches its golden within tolerance and full differs from off by at least 9.5
 
+### Requirement: Fate materials
+A civ's fate SHALL age its material slots (war of silence scorches every ramp and dulls metals, ascension makes the rare crystal blaze and tints the skin's rim, sleep stills glow, pulse, wobble and breathing, flight strips the accent metal and darkens the rare crystal, schism gives the breathing skin the decay ramp), while plague keeps its look and the material library is never changed.
+
+#### Scenario: Fates
+- **WHEN** `tests/lua/materials_spec.lua` runs "leaves the plague's look to its decay slot and ages the others by their fate"
+- **THEN** it passes

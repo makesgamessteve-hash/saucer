@@ -98,3 +98,45 @@ describe("the Vyrr's materials", function()
     expect(got.time).to_be(3)
   end)
 end)
+
+describe("fate materials", function()
+  local civs = require("sim.civs")
+  local function as(fate)
+    local base = civs.universe(42)[3]
+    return setmetatable({ id = "fate_" .. fate, fate = fate }, { __index = base })
+  end
+  local S = matv.SLOT
+  it("leaves the plague's look to its decay slot and ages the others by their fate", function()
+    local base = civs.universe(42)[3]
+    local plain = matv.civ_slots(as("plague"))
+    local lib = matv.library()
+    -- war: every ramp darker, metals duller
+    local war = matv.civ_slots(as("war of silence"))
+    for i = 1, 7 do
+      expect(war[i].hi[1] <= plain[i].hi[1] + 1e-9).to_be(true)
+      if war[i].kind == "metal" then expect(war[i].reflect < plain[i].reflect).to_be(true) end
+    end
+    -- ascension: the rare crystal blazes, the skin's rim in its colour
+    local asc = matv.civ_slots(as("ascension"))
+    expect(asc[S.rare].emit >= (plain[S.rare].emit or 0)).to_be(true)
+    expect(asc[S.dominant].sss).to_be(asc[S.rare].hi)
+    -- sleep: everything stills
+    local sl = matv.civ_slots(as("sleep"))
+    for i = 1, 7 do
+      if plain[i].pulse and plain[i].pulse > 0 then expect(sl[i].pulse < plain[i].pulse).to_be(true) end
+      if plain[i].wobble then expect(sl[i].wobble[1] <= plain[i].wobble[1]).to_be(true) end
+    end
+    expect(sl[S.lung].breath).to_be(matv.BREATH * 0.5)
+    -- flight: the accent stripped, the rare dark
+    local fl = matv.civ_slots(as("flight"))
+    expect(fl[S.accent].reflect < plain[S.accent].reflect + 1e-9).to_be(true)
+    expect(fl[S.rare].emit).to_be(0)
+    -- schism: the breathing half takes the decay ramp
+    local sc = matv.civ_slots(as("schism"))
+    local d = lib[base.materials.decay and base.materials.decay[1] or "flesh_necrotic"]
+    expect(sc[S.lung].hi).to_be(d.hi)
+    expect(sc[S.dominant].hi).to_be(plain[S.dominant].hi)
+    -- the library itself is never changed
+    expect(matv.library().chrome.reflect).to_be(0.92)
+  end)
+end)
