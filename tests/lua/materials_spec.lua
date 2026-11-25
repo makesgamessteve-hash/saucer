@@ -140,3 +140,21 @@ describe("fate materials", function()
     expect(matv.library().chrome.reflect).to_be(0.92)
   end)
 end)
+
+describe("sparkle, brushing and ripples", function()
+  it("carries a crystal's sparkle and a metal's brushing and ripple into its slot", function()
+    local lib = matv.library()
+    expect(matv.slot(lib.quartz).sparkle).to_be(lib.quartz.sparkle)
+    expect(matv.slot(lib.titanium_blue).brushed).to_be(lib.titanium_blue.brushed)
+    expect(matv.slot(lib.mercury).ripple).to_be(lib.mercury.ripple)
+    -- the slice's materials keep their look (no sparkle on amethyst, no brushing on chrome)
+    expect(matv.slot(lib.amethyst).sparkle).to_be(nil)
+    expect(matv.slot(lib.chrome).brushed).to_be(nil)
+    for id, rec in pairs(lib) do
+      if rec.sparkle then expect(rec.kind == "crystal" and rec.sparkle > 0 and rec.sparkle <= 1).to_be(true) end
+      if rec.brushed then expect(rec.kind == "metal" and rec.brushed > 0 and rec.brushed <= 1).to_be(true) end
+      if rec.ripple then expect(rec.kind == "metal" and rec.ripple > 0 and rec.ripple <= 0.3).to_be(true) end
+      expect(type(id)).to_be("string")
+    end
+  end)
+end)

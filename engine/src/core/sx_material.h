@@ -10,7 +10,7 @@
 #define SX_MATERIAL_H
 
 #define SX_MAT_SLOTS 8   /* slot 0 is plain (today's look) */
-#define SX_MAT_VEC4 5    /* vec4s per slot in the shader's u_mat array */
+#define SX_MAT_VEC4 6    /* vec4s per slot in the shader's u_mat array */
 #define SX_MATCAP_SIZE 64
 #define SX_MATCAP_LIGHTS 4
 
@@ -30,6 +30,9 @@ typedef struct sx_material {
   float ramp_lo[3];  /* the ramp the reflection / body luminance maps through: dark end */
   float ramp_hi[3];  /* bright end */
   float sss[3];      /* subsurface tint (organic) / rim tint (crystal) */
+  float sparkle;     /* crystal: share of facet cells that twinkle 0-1 (lite: off) */
+  float brushed;     /* metal: how far the highlight stretches across the brushing 0-1 */
+  float ripple;      /* metal: liquid ripple of the normal 0-0.3 (lite: halved) */
 } sx_material;
 
 typedef struct sx_materials {
@@ -48,8 +51,9 @@ int sx_material_kind_from_name(const char *name);
 /* Packs the slots for the shader: SX_MAT_SLOTS * SX_MAT_VEC4 vec4s.
  *  [0] kind, reflect, spec, f0     [1] emit, wobble amp, wobble period, wobble scale
  *  [2] ramp_lo rgb, breath         [3] ramp_hi rgb, pulse            [4] sss rgb, wrap
+ *  [5] sparkle, brushed, ripple, 0
  * Mode off packs every slot as plain; lite keeps the shading but drops refraction and the wobble's small
- * ripples (breathing stays, at half amplitude). Returns the number of non-plain slots. */
+ * ripples (breathing stays, at half amplitude), crystal sparkle goes and a liquid metal's ripple halves. Returns the number of non-plain slots. */
 int sx_materials_pack(const sx_materials *ms, int mode, float out[SX_MAT_SLOTS * SX_MAT_VEC4 * 4]);
 /* Bakes a 64 x 64 luminance matcap (index values 1-255; 0 stays transparent for index textures): the lit
  * sphere seen head-on under up to four key lights given as { dir x, y, z, intensity } (dirs in view space,

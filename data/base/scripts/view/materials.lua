@@ -21,10 +21,11 @@ function M.slot(rec, over)
   local k = rec.kind
   local s
   if k == "metal" then
-    s = { kind = "metal", reflect = rec.reflect or 0.8, spec = rec.spec or 48, f0 = rec.f0 or 0.5 }
+    s = { kind = "metal", reflect = rec.reflect or 0.8, spec = rec.spec or 48, f0 = rec.f0 or 0.5, brushed = rec.brushed,
+          ripple = rec.ripple }
   elseif k == "crystal" then
     s = { kind = "crystal", reflect = rec.refract or 0.6, spec = 96, f0 = 0.08, emit = rec.emit or 0.4,
-          pulse = rec.pulse or 0.3, sss = rec.rim or rec.hi }
+          pulse = rec.pulse or 0.3, sss = rec.rim or rec.hi, sparkle = rec.sparkle }
   elseif k == "organic" then
     local w = rec.wobble or { 0, 4, 8 }
     s = { kind = "organic", reflect = rec.wet or 0.3, spec = 24, f0 = 0.04, wrap = rec.wrap or 0.4, sss = rec.sss or rec.hi,

@@ -71,6 +71,9 @@ int sx_materials_pack(const sx_materials *ms, int mode, float out[SX_MAT_SLOTS *
     o[11] = m->breath * (lite > 0.0f ? 0.5f : 1.0f);
     o[15] = m->pulse;
     o[19] = m->wrap;
+    o[20] = (kind == SX_MAT_CRYSTAL && lite == 0.0f) ? m->sparkle : 0.0f;
+    o[21] = kind == SX_MAT_METAL ? m->brushed : 0.0f;
+    o[22] = kind == SX_MAT_METAL ? m->ripple * (lite > 0.0f ? 0.5f : 1.0f) : 0.0f;
   }
   return n;
 }

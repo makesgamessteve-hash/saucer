@@ -1309,7 +1309,7 @@ static int l_v_camera(lua_State *L) {
 
 /* add-material-system: view:materials{ time = render seconds, matcap = texture id, slots = { [1..7] = {
  * kind = "metal"|"crystal"|"organic"|"plain", reflect, spec, f0, emit, wobble = {amp, period, scale}, breath, pulse,
- * wrap, lo = {r,g,b}, hi = {r,g,b}, sss = {r,g,b} } } } -> number of slots set. Slot 0 stays plain. */
+ * wrap, lo = {r,g,b}, hi = {r,g,b}, sss = {r,g,b}, sparkle, brushed, ripple } } } -> number of slots set. Slot 0 stays plain. */
 static int l_v_materials(lua_State *L) {
   sx_viewport *v = check_view(L);
   int k, n = 0;
@@ -1341,6 +1341,9 @@ static int l_v_materials(lua_State *L) {
         field_vec(L, e, "lo", m->ramp_lo, 3);
         field_vec(L, e, "hi", m->ramp_hi, 3);
         field_vec(L, e, "sss", m->sss, 3);
+        m->sparkle = field_num(L, e, "sparkle", m->sparkle);
+        m->brushed = field_num(L, e, "brushed", m->brushed);
+        m->ripple = field_num(L, e, "ripple", m->ripple);
         n++;
       }
       lua_pop(L, 1);

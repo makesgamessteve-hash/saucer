@@ -401,18 +401,28 @@ TEST(material_pack_modes) {
   o->sss[0] = 0.9f;
   ms.slot[4].kind = 9; /* a bad kind packs plain */
   ms.slot[0].kind = SX_MAT_METAL; /* slot 0 is always plain */
+  c->brushed = 0.6f;
+  c->ripple = 0.2f;
+  g->sparkle = 0.8f;
+  o->sparkle = 0.5f; /* sparkle is a crystal's, brushing and ripples a metal's */
+  o->brushed = 0.5f;
+#define P(slot, i) out[(slot) * SX_MAT_VEC4 * 4 + (i)]
   CHECK(sx_materials_pack(&ms, SX_MATERIALS_FULL, out) == 3);
   CHECK(out[0] == 0.0f);
-  CHECK(out[20] == 1.0f && out[21] == 0.9f && out[22] == 64.0f && out[32] == 0.8f);
-  CHECK(out[40] == 2.0f && out[41] == 0.7f && out[44] == 0.5f);
-  CHECK(out[60] == 3.0f && out[65] == 0.2f && out[66] == 0.5f && out[67] == 0.1f && out[71] == 0.6f);
-  CHECK(out[75] == 1.5f && out[79] == 0.4f && out[76] == 0.9f);
-  CHECK(out[80] == 0.0f);
-  /* lite: no refraction, no ripples, half the breathing */
+  CHECK(P(1, 0) == 1.0f && P(1, 1) == 0.9f && P(1, 2) == 64.0f && P(1, 12) == 0.8f);
+  CHECK(P(2, 0) == 2.0f && P(2, 1) == 0.7f && P(2, 4) == 0.5f);
+  CHECK(P(3, 0) == 3.0f && P(3, 5) == 0.2f && P(3, 6) == 0.5f && P(3, 7) == 0.1f && P(3, 11) == 0.6f);
+  CHECK(P(3, 15) == 1.5f && P(3, 19) == 0.4f && P(3, 16) == 0.9f);
+  CHECK(P(4, 0) == 0.0f);
+  CHECK(P(1, 21) == 0.6f && P(1, 22) == 0.2f && P(1, 20) == 0.0f);
+  CHECK(P(2, 20) == 0.8f && P(2, 21) == 0.0f && P(3, 20) == 0.0f && P(3, 21) == 0.0f);
+  /* lite: no refraction, no ripples, half the breathing, no sparkle, half a liquid metal's ripple */
   CHECK(sx_materials_pack(&ms, SX_MATERIALS_LITE, out) == 3);
-  CHECK(out[41] == 0.0f && out[21] == 0.9f && out[65] == 0.0f && out[71] == 0.3f);
+  CHECK(P(2, 1) == 0.0f && P(1, 1) == 0.9f && P(3, 5) == 0.0f && P(3, 11) == 0.3f);
+  CHECK(P(2, 20) == 0.0f && P(1, 22) == 0.1f && P(1, 21) == 0.6f);
   /* off: every slot plain, so the shader takes the old path */
-  CHECK(sx_materials_pack(&ms, SX_MATERIALS_OFF, out) == 0 && out[20] == 0.0f && out[60] == 0.0f);
+  CHECK(sx_materials_pack(&ms, SX_MATERIALS_OFF, out) == 0 && P(1, 0) == 0.0f && P(3, 0) == 0.0f && P(1, 21) == 0.0f);
+#undef P
   CHECK(sx_materials_mode_from_name("full") == SX_MATERIALS_FULL && sx_materials_mode_from_name("lite") == 1);
   CHECK(sx_materials_mode_from_name("off") == 0 && sx_materials_mode_from_name("ultra") == -1);
   CHECK(sx_materials_mode_from_name(NULL) == -1);
