@@ -13,6 +13,7 @@ M.SLOT = { plain = 0, dominant = 1, lung = 2, accent = 3, rare = 4, ring = 5, de
 M.BREATH = 0.45      -- m: the breathing hall's slow swell along the skin's normal (period 3x the wobble's)
 M.AMBIENT = 0.22     -- matcap ambient
 M.DOMINANT_GLOW = 0.3 -- a dominant crystal's emission scale
+M.DOMINANT_TONE = 0.55 -- a dominant crystal's bright ramp, rim and reflection scale (pale quartz halls blew out to white)
 
 function M.library() return data.load("civs/materials.lua") end
 
@@ -38,6 +39,15 @@ function M.slot(rec, over)
   return s
 end
 
+-- a crystal covering most of the skin: a third of the glow, and its pale ramp, rim and reflection toned down, so a
+-- quartz hall reads as frosted glass instead of clipping to white (add-material-system §5)
+local function tone(c) return { c[1] * M.DOMINANT_TONE, c[2] * M.DOMINANT_TONE, c[3] * M.DOMINANT_TONE } end
+function M.calm_crystal(rec)
+  local hi = rec.hi or { 1, 1, 1 }
+  return { emit = (rec.emit or 0.4) * M.DOMINANT_GLOW, hi = tone(hi), sss = tone(rec.rim or hi),
+           reflect = (rec.refract or 0.6) * M.DOMINANT_TONE }
+end
+
 -- a civ's eight slots (index 1-7; slot 0 is plain)
 function M.civ_slots(civ)
   local lib = M.library()
@@ -46,9 +56,11 @@ function M.civ_slots(civ)
   local slots = {}
   -- add-design-language: a crystal that covers most of the skin glows a third as much (else whole halls blow out)
   local dom = rec(m.dominant.id)
-  local calm = dom.kind == "crystal" and { emit = (dom.emit or 0.4) * M.DOMINANT_GLOW } or nil
+  local calm = dom.kind == "crystal" and M.calm_crystal(dom) or nil
   slots[M.SLOT.dominant] = M.slot(dom, calm)
-  slots[M.SLOT.lung] = M.slot(dom, { breath = M.BREATH, emit = calm and calm.emit or nil })
+  local lung = { breath = M.BREATH }
+  for k, v in pairs(calm or {}) do lung[k] = v end
+  slots[M.SLOT.lung] = M.slot(dom, lung)
   slots[M.SLOT.accent] = M.slot(rec(m.accent.id))
   slots[M.SLOT.rare] = M.slot(rec(m.rare.id))
   slots[M.SLOT.ring] = M.slot(rec(m.signature and m.signature.ring or "wound"))

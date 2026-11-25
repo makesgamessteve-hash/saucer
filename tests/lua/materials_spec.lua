@@ -135,7 +135,7 @@ describe("fate materials", function()
     local sc = matv.civ_slots(as("schism"))
     local d = lib[base.materials.decay and base.materials.decay[1] or "flesh_necrotic"]
     expect(sc[S.lung].hi).to_be(d.hi)
-    expect(sc[S.dominant].hi).to_be(plain[S.dominant].hi)
+    for c = 1, 3 do expect(sc[S.dominant].hi[c]).to_be(plain[S.dominant].hi[c]) end
     -- the library itself is never changed
     expect(matv.library().chrome.reflect).to_be(0.92)
   end)
