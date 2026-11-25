@@ -507,4 +507,56 @@ describe("megacity", function()
     expect(mega.in_warren(nil, { 0, 0, 0 })).to_be(nil)
     expect(mega.plan_warren(1, { k = 1 })).to_be(nil)
   end)
+
+  it("the warren is lit, the hall's finds keep off the shaft, and districts near a ship are built ahead of need", function()
+    local st, i, r, p = in_city("planet")
+    local d
+    for _, x in ipairs(p.districts) do
+      local w = x.warren
+      if w then
+        d = d or x
+        local sh = w.shaft
+        for _, f in ipairs(x.organ.finds) do
+          local fp = f.pos
+          local over = fp[1] > sh[1] - mega.FIND_CLEAR and fp[1] < sh[3] + mega.FIND_CLEAR and fp[3] > sh[2] - mega.FIND_CLEAR and fp[3] < sh[4] + mega.FIND_CLEAR
+          expect(over).to_be(false)
+          expect(mega.in_hall(x, fp)).to_be(x.organ)
+        end
+      end
+    end
+    -- lamps: one or two per space, offered when the eye is low and near; none from high above
+    local lamps = {}
+    local v = fake_view()
+    function v:light(l) lamps[#lamps + 1] = l end
+    local w = d.warren
+    local hub = w.spaces[1]
+    local eye = { (hub[1] + hub[3]) / 2, w.y0 + 20, (hub[2] + hub[4]) / 2 }
+    local s1 = megav.draw(v, A, p, { pos = eye, yaw = 0, pitch = 0 }, 1, function() return true end, 1000, 2)
+    expect(s1.lamps >= #w.spaces and s1.lamps <= 2 * #w.spaces).to_be(true)
+    expect(#lamps).to_be(s1.lamps)
+    for _, l in ipairs(lamps) do
+      expect(l.pos[2] < w.y1 and l.pos[2] > w.y0).to_be(true)
+      expect(l.intensity > 0 and l.range > 0).to_be(true)
+    end
+    local s2 = megav.draw(fake_view(), A, p, { pos = { eye[1], d.y + 400, eye[3] }, yaw = 0, pitch = 0 }, 1, function() return true end, 1000, 2)
+    expect(s2.lamps).to_be(nil)
+    -- lit strips on every space's ceiling and floor
+    local strips = 0
+    for _, q in ipairs(megav.light_parts(p, d)) do if q.max[2] <= w.y1 and q.min[2] >= w.y0 - 1e-6 then strips = strips + 1 end end
+    expect(strips >= 2 * #w.spaces).to_be(true)
+    -- built ahead: hover over a district's middle; within a few steps its unbuilt neighbours are built too
+    mega.clear_cache()
+    local pl = st.players[1]
+    local far = p.districts[1]
+    pl.ship.pos = hover_over(p, far)
+    pl.ship.pos[2] = p.frame.y + 3000
+    local before = mega.stats.prebuilt or 0
+    run(st, 12)
+    expect((mega.stats.prebuilt or 0) > before).to_be(true)
+    local ahead = 0
+    for _, x in ipairs(p.districts) do
+      if mega.rect_dist(x.box, pl.ship.pos[1], pl.ship.pos[3]) <= mega.PREBUILD and mega.is_built(p, x) then ahead = ahead + 1 end
+    end
+    expect(ahead >= 2).to_be(true)
+  end)
 end)

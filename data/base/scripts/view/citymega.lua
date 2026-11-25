@@ -57,6 +57,7 @@ end
 -- lit window bands round every tier (a little proud of the face so they never fight it)
 function M.light_parts(p, d)
   local win = p.style.window or { 1, 0.85, 0.5 }
+  local acc0 = p.style.accent or { 0.8, 0.9, 1.0 }
   local parts = {}
   local sol = mega.solids(p, d)
   for n, b in ipairs(sol) do
@@ -67,6 +68,23 @@ function M.light_parts(p, d)
                               color = win, emissive = 1 }
         y = y + M.BAND_GAP
       end
+    end
+  end
+  -- the warren: a lit strip down the middle of every space's ceiling, a glowing line along its floor, a lit collar
+  -- where the shaft comes down
+  local w = d.warren
+  if w then
+    for _, r in ipairs(w.spaces) do
+      local cx, cz = (r[1] + r[3]) / 2, (r[2] + r[4]) / 2
+      local along_x = r[3] - r[1] >= r[4] - r[2]
+      local hx, hz = along_x and (r[3] - r[1]) / 2 - 4 or 3, along_x and 3 or (r[4] - r[2]) / 2 - 4
+      parts[#parts + 1] = { kind = "box", min = { cx - hx, w.y1 - 0.5, cz - hz }, max = { cx + hx, w.y1 - 0.1, cz + hz }, color = win, emissive = 1 }
+      local fx, fz = along_x and hx or 0.8, along_x and 0.8 or hz
+      parts[#parts + 1] = { kind = "box", min = { cx - fx, w.y0, cz - fz }, max = { cx + fx, w.y0 + 0.3, cz + fz }, color = acc0, emissive = 1 }
+    end
+    local sh = w.shaft
+    for _, r in ipairs({ { sh[1], sh[2], sh[3], sh[2] + 1.5 }, { sh[1], sh[4] - 1.5, sh[3], sh[4] }, { sh[1], sh[2], sh[1] + 1.5, sh[4] }, { sh[3] - 1.5, sh[2], sh[3], sh[4] } }) do
+      parts[#parts + 1] = { kind = "box", min = { r[1], w.y1 - 3, r[2] }, max = { r[3], w.y1 - 0.1, r[4] }, color = acc0, emissive = 1 }
     end
   end
   -- the fold bays: a lit rim round each pad and a glowing plate on its cradle
@@ -179,6 +197,36 @@ function M.sanctum_pose(d, t)
   return { heart = { pos = { c[1], c[2], c[3] }, size = 6 + 5 * breath }, stones = stones, breath = breath }
 end
 
+-- the warren's lamps: one under the middle of each space's ceiling (two down a long corridor), coloured by the city,
+-- the sanctum's breathing with its heart. Offered when the eye is near and low (the engine keeps those that matter).
+M.WARREN_LAMPS = 700     -- m from the district
+M.WARREN_LAMP_Y = 80     -- m above the street: higher than this the eye cannot see down the shaft
+M.WARREN_LUX = 0.9
+function M.warren_lamps(v, p, d, t)
+  local w = d.warren
+  local win = p.style.window or { 1, 0.85, 0.5 }
+  local acc = p.style.accent or { 0.8, 0.9, 1.0 }
+  local lights = require("view.lights")
+  local n = 0
+  local y = w.y1 - 3
+  for _, r in ipairs(w.spaces) do
+    local sx, sz = r[3] - r[1], r[4] - r[2]
+    local long = math.max(sx, sz)
+    local k = long > 140 and 2 or 1
+    for i = 1, k do
+      local f = (i - 0.5) / k
+      local x = sx >= sz and r[1] + sx * f or (r[1] + r[3]) / 2
+      local z = sx >= sz and (r[2] + r[4]) / 2 or r[2] + sz * f
+      local reach = math.min(long / k, math.min(sx, sz)) * 0.9 + 30
+      local col, k2 = win, 1
+      if r[5] == "sanctum" then col, k2 = acc, 0.6 + 0.8 * M.sanctum_pose(d, t).breath end
+      lights.lamp(v, { kind = "point", pos = { x, y, z }, color = col, intensity = M.WARREN_LUX * k2 * reach * reach, range = reach })
+      n = n + 1
+    end
+  end
+  return n
+end
+
 -- the drifters: tall glowing slabs that glide down the avenues on a district's east and south sides, turning and
 -- bobbing, never touching anything, each with a halo and two small followers (a function of the clock)
 -- -> pose { pos, size, yaw, glow, trail = { {pos, size}... } }
@@ -276,6 +324,9 @@ function M.draw(v, A, p, cam, tex, visible, budget, t)
                                                         palette = A.pal.base, tint = { win[1], win[2], win[3], 1 } })
         if A.tex.glow then v:billboard(A.tex.glow, o.core.pos, o.glow, { palette = A.pal.base, tint = { acc[1], acc[2], acc[3], 0.35 + 0.3 * o.pulse } }) end
         st.organs = (st.organs or 0) + 1
+        if d.warren and cam.pos[2] < d.y + M.WARREN_LAMP_Y and dist <= M.WARREN_LAMPS then
+          st.lamps = (st.lamps or 0) + M.warren_lamps(v, p, d, t or 0)
+        end
         if d.warren then
           local sp = M.sanctum_pose(d, t or 0)
           local box = require("view.assets").unit_box(true)
