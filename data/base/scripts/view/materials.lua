@@ -109,13 +109,37 @@ function M.base_color(id)
   return { (r.lo[1] + r.hi[1] * 2) / 3, (r.lo[2] + r.hi[2] * 2) / 3, (r.lo[3] + r.hi[3] * 2) / 3 }
 end
 
+-- add-material-system 5.4: comfort in a headset (WebXR): no sparkle, half the wobble, and no breathing faster than
+-- M.XR_BREATH seconds a cycle (the breathing period is three wobble periods)
+M.XR_BREATH = 4.0
+function M.xr_slots(slots)
+  local out = {}
+  for i, s in pairs(slots) do
+    local c = {}
+    for k, val in pairs(s) do c[k] = val end
+    c.sparkle = nil
+    if s.wobble then c.wobble = { s.wobble[1] * 0.5, math.max(s.wobble[2], M.XR_BREATH / 3), s.wobble[3] } end
+    out[i] = c
+  end
+  return out
+end
+
 local slot_cache = setmetatable({}, { __mode = "k" })
--- set a civ's slots and matcap on this view; `time` is render seconds (breathing, glow, pulse)
-function M.apply(v, civ, time)
+local xr_cache = setmetatable({}, { __mode = "k" })
+-- set a civ's slots and matcap on this view; `time` is render seconds (breathing, glow, pulse); `xr` a headset view
+function M.apply(v, civ, time, xr)
   local slots = slot_cache[civ]
   if not slots then
     slots = M.civ_slots(civ)
     slot_cache[civ] = slots
+  end
+  if xr then
+    local x = xr_cache[civ]
+    if not x then
+      x = M.xr_slots(slots)
+      xr_cache[civ] = x
+    end
+    slots = x
   end
   local mc = saucer.render.matcap and saucer.render.matcap("matcap:" .. civ.id, civ.matcap or {}, M.AMBIENT) or 0
   return v:materials({ time = time, matcap = mc, slots = slots })

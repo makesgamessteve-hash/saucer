@@ -31,4 +31,5 @@
       sparkle and halves the ripple; the slice's amethyst and chrome keep their look, goldens unchanged);
       `tools/shots/material_sheet.lua`
 - [ ] 5.3 A 128 x 64 sector-sky reflection map for exteriors
-- [ ] 5.4 WebXR lite defaults: sparkle off, wobble halved within 120 m, breathing no faster than 4 s
+- [x] 5.4 Headset comfort (`view/materials.lua` `xr_slots`): sparkle off, wobble halved, breathing no faster than 4 s
+      (whole view: a relic's interior is always within 120 m of the eye)

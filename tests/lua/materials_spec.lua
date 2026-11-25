@@ -158,3 +158,31 @@ describe("sparkle, brushing and ripples", function()
     end
   end)
 end)
+
+describe("headset comfort", function()
+  it("drops the sparkle, halves the wobble and slows the breathing to at least 4 s in a headset", function()
+    local civs = require("sim.civs")
+    local base = civs.universe(42)[3]
+    local c = setmetatable({ id = "xr_test", materials = { dominant = { id = "membrane" }, accent = { id = "silver" },
+                                                           rare = { id = "quartz" }, decay = { "flesh_necrotic" } } },
+                           { __index = base })
+    local slots = matv.civ_slots(c)
+    local x = matv.xr_slots(slots)
+    local S = matv.SLOT
+    expect(slots[S.rare].sparkle ~= nil).to_be(true)
+    expect(x[S.rare].sparkle).to_be(nil)
+    expect(x[S.dominant].wobble[1]).to_be(slots[S.dominant].wobble[1] * 0.5)
+    for _, s in pairs(x) do
+      if s.wobble then expect(s.wobble[2] * 3 >= matv.XR_BREATH - 1e-9).to_be(true) end
+    end
+    -- apply hands the headset its own slots (cached), the flat view the full ones
+    local got = {}
+    local v = { materials = function(_, t) got[#got + 1] = t return 7 end }
+    matv.apply(v, c, 1, true)
+    matv.apply(v, c, 1, true)
+    matv.apply(v, c, 1, false)
+    expect(got[1].slots).to_be(got[2].slots)
+    expect(got[1].slots[S.rare].sparkle).to_be(nil)
+    expect(got[3].slots[S.rare].sparkle).to_be(slots[S.rare].sparkle)
+  end)
+end)

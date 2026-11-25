@@ -45,3 +45,10 @@ A crystal slot SHALL be able to sparkle (facet cells that twinkle with render ti
 #### Scenario: Library
 - **WHEN** `tests/lua/materials_spec.lua` runs "carries a crystal's sparkle and a metal's brushing and ripple into its slot"
 - **THEN** it passes
+
+### Requirement: Headset comfort
+In a headset view the material slots SHALL drop the crystal sparkle, halve the organic wobble and never breathe faster than one cycle in 4 seconds.
+
+#### Scenario: XR slots
+- **WHEN** `tests/lua/materials_spec.lua` runs "drops the sparkle, halves the wobble and slows the breathing to at least 4 s in a headset"
+- **THEN** it passes
