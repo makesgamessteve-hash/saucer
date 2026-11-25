@@ -4,6 +4,7 @@
 -- tables in civs/traits.lua, each from its own child seed of the universe
 -- seed. Nothing here is saved: the list is a pure function of the seed.
 local data = require("lib.data")
+local roster = require("sim.civroster")
 local M = {}
 
 function M.traits() return data.load("civs/traits.lua") end
@@ -41,7 +42,7 @@ function M.generate(seed, i, taken)
   }
 end
 
-local memo = {}
+local memo, hist, hashes = {}, {}, {}
 local current = nil
 -- the universe the sim runs right now (game.init / rebuild set it), so code
 -- that only has a civ id (item labels, prices) can find its civ
@@ -57,14 +58,35 @@ function M.universe(seed)
     c.index = i
     taken[c.id] = true
   end
-  for i = #out + 1, M.traits().count do
+  for i = #out + 1, roster.size() do
     local c = M.generate(seed, i, taken)
     taken[c.id] = true
     out[i] = c
   end
+  -- add-civ-roster: trait axes (diversity-guarded), names, the generated history and the roster hash
+  roster.apply(seed, out)
+  for _, c in ipairs(out) do roster.name(seed, c) end
   memo[key] = out
+  hist[key] = roster.history(seed, out)
+  hashes[key] = roster.hash(out, hist[key])
   return out
 end
+
+-- add-civ-roster: the universe's generated history and the roster hash (both pure functions of the seed)
+function M.history(seed)
+  M.universe(seed)
+  return hist[tostring(seed)]
+end
+function M.roster_hash(seed)
+  M.universe(seed)
+  return hashes[tostring(seed)]
+end
+-- lore(seed, i, n) -> a scanner lore line about civ i
+function M.lore(seed, i, n) return roster.lore(seed, M.universe(seed), M.history(seed), i, n) end
+-- wing(seed, i, n) -> the conqueror's civ index when relic n of civ i carries a later wing (palimpsest), else nil
+function M.wing(seed, i, n) return roster.wing(seed, M.history(seed), i, n) end
+-- relation(seed, i, j) -> trade, war, alliance, tutelage, conquest or ignorance
+function M.relation(seed, i, j) return roster.relation_of(M.history(seed), i, j) end
 
 function M.get(seed, i) return M.universe(seed)[i] end
 
