@@ -1,8 +1,7 @@
 -- SPDX-License-Identifier: MIT
 -- add-alien-cities-2 (design civs-and-relics §4.4): drawing the megacity round a city's core (sim/citymega.lua).
 -- Levels of detail by the distance from the eye to a district's box:
---   near (NEAR m)  the district's full mesh and its lit window bands
---   mid (MID m)    the full mesh, every tier of every megaform
+--   near (NEAR m)  the district's full mesh (every tier of every megaform) and its lit window bands
 --   far (FAR m)    a silhouette: one box per megaform
 --   beyond         the horizon band, a ring of far towers round the city (one mesh)
 -- Meshes are built ahead of the eye (PREFETCH m) and only while the frame's BUDGET_MS lasts, nearest first; the
@@ -10,7 +9,7 @@
 local mega = require("sim.citymega")
 
 local M = {}
-M.NEAR = 700
+M.NEAR = 4000
 M.MID = 4000
 M.PREFETCH = 4600
 M.FREE = 5200        -- a full mesh this far away is freed (its silhouette is drawn instead)
@@ -22,6 +21,8 @@ M.ZONE = 8000        -- m past the footprint where the megacity still owns the f
 M.BUDGET_MS = 6
 M.AIR = 400          -- m off an outer district's block where the city's air and light still hold
 M.BAND_GAP = 24      -- m between two window bands
+M.SIL_GAP = 150      -- m between two lit bands of a silhouette
+M.SIL_GLOW = 0.18    -- a silhouette's own faint light (the far city never goes black)
 
 local caches = setmetatable({}, { __mode = "k" })
 local function cache(p)
@@ -73,11 +74,17 @@ end
 -- the silhouette: a foundation and one box per megaform
 function M.sil_parts(p, d)
   local col, y = M.stone(p, d), p.frame.y
-  local b = d.box
+  local b = d.cell
   local parts = { { kind = "box", min = { b[1], y - 6, b[2] }, max = { b[3], y, b[4] }, color = shade(col, 0.6) } }
+  local win = p.style.window or { 1, 0.85, 0.5 }
+  local glow = shade(win, 0.8)
   for _, o in ipairs(d.organs) do
-    parts[#parts + 1] = { kind = "box", min = { o.x0 + o.w * 0.1, y, o.z0 + o.w2 * 0.1 }, max = { o.x0 + o.w * 0.9, y + o.h, o.z0 + o.w2 * 0.9 },
-                          color = col }
+    local x0, z0, x1, z1 = o.x0 + o.w * 0.1, o.z0 + o.w2 * 0.1, o.x0 + o.w * 0.9, o.z0 + o.w2 * 0.9
+    parts[#parts + 1] = { kind = "box", min = { x0, y, z0 }, max = { x1, y + o.h, z1 }, color = col, emissive = M.SIL_GLOW }
+    -- a few broad lit bands, so the far city still reads at night
+    for yy = y + 60, y + o.h - 30, M.SIL_GAP do
+      parts[#parts + 1] = { kind = "box", min = { x0 - 1, yy, z0 - 1 }, max = { x1 + 1, yy + 30, z1 + 1 }, color = glow, emissive = 1 }
+    end
   end
   return parts
 end

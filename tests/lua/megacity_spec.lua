@@ -83,15 +83,19 @@ describe("megacity", function()
       end
       -- what you see is what you hit: every solid inside the block, from the foundation to the top
       local sol = mega.build(d)
-      for _, s in ipairs(sol) do
+      local c = d.cell
+      expect(sol[1][1][1] == c[1] and sol[1][2][1] == c[3] and sol[1][2][2] == p.frame.y).to_be(true)
+      for n, s in ipairs(sol) do
+        if n == 1 then goto next end
         expect(s[1][1] >= b[1] - 1e-6 and s[2][1] <= b[3] + 1e-6 and s[1][3] >= b[2] - 1e-6 and s[2][3] <= b[4] + 1e-6).to_be(true)
         expect(s[2][2] <= p.frame.y + d.top + 1e-6 and s[1][2] >= p.frame.y - 40).to_be(true)
+        ::next::
       end
       expect(#sol).to_be_greater(#d.organs)
     end
     expect(mf).to_be(1)
     expect(tall).to_be_greater(0)
-    -- canyons: neighbouring blocks never touch
+    -- canyons: neighbouring blocks never touch (their foundations meet under the avenue)
     for a = 1, #p.districts do
       for b2 = a + 1, #p.districts do
         local x, y = p.districts[a].box, p.districts[b2].box
@@ -198,7 +202,7 @@ describe("megacity", function()
     local v = fake_view()
     local s = megav.draw(v, A, p, cam, 1, vis, 1000)
     expect(s.full).to_be_greater(0)
-    expect(s.lights).to_be(1)
+    expect(s.lights).to_be(s.full)
     expect(s.band).to_be(1)
     expect(s.sil).to_be_greater(0)
     expect(s.full + s.sil <= #p.districts).to_be(true)

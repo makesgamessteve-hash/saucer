@@ -149,7 +149,7 @@ function M.plan_district(seed, k, c, fr, style)
   local b = { c.box[1] + av / 2, c.box[2] + av / 2, c.box[3] - av / 2, c.box[4] - av / 2 }
   local g = rng:int(3, 4)
   local lot = floor((b[3] - b[1]) / g)
-  local d = { id = M.BASE_ID + k, k = k, ix = c.ix, iz = c.iz, box = b, value = value, archetype = citygen.ARCHETYPES[value].label,
+  local d = { id = M.BASE_ID + k, k = k, ix = c.ix, iz = c.iz, box = b, cell = c.box, value = value, archetype = citygen.ARCHETYPES[value].label,
               lot = lot, g = g, organs = {}, decks = {}, y = fr.y, body = fr.body, top = 0 }
   d.label = string.format("D%d %s", d.id, d.archetype)
   local grid = {}
@@ -188,11 +188,12 @@ function M.plan_district(seed, k, c, fr, style)
   return d
 end
 
--- the solids of one outer district (world { min, max } boxes): a foundation, each megaform's tiers, the decks. Pure.
+-- the solids of one outer district (world { min, max } boxes): a foundation under its whole cell (the avenues' floor
+-- too), each megaform's tiers, the decks. Pure.
 function M.build(d)
   local out = {}
   local y = d.y
-  local b = d.box
+  local b = d.cell
   local slab = d.body == "asteroid" and 40 or 6
   out[1] = { { b[1], y - slab, b[2] }, { b[3], y, b[4] } }
   local s = M.SNAP

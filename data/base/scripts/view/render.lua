@@ -912,13 +912,14 @@ M.SKY = {
   { tex = "planet", pal = "sky", at = { -380, 260, 760 }, size = 210, tint = { 1, 1, 1, 1 } },
   { tex = "galaxy", pal = "sky", at = { 860, -260, -420 }, size = 260, tint = { 0.9, 0.9, 1, 0.8 } },
 }
+-- (add-alien-cities-2: drawn with the sky, so a tower however far stands in front of them)
 function M.sky(v, A, eye)
   local n = 0
   for _, s in ipairs(M.SKY) do
     local tex = A.tex[s.tex]
     if tex then
       v:billboard(tex, { eye[1] + s.at[1], eye[2] + s.at[2], eye[3] + s.at[3] }, s.size,
-                  { palette = A.pal[s.pal] or A.pal.base, tint = s.tint })
+                  { palette = A.pal[s.pal] or A.pal.base, tint = s.tint, sky = true })
       n = n + 1
     end
   end

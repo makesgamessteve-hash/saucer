@@ -56,6 +56,7 @@ typedef struct sx_draw_billboard {
   float size[2];
   float tint[4];
   int yaxis; /* 1: rotate around Y only (items), 0: face camera (particles) */
+  int sky;   /* add-alien-cities-2: a backdrop sprite, drawn with the sky behind everything */
 } sx_draw_billboard;
 
 typedef struct sx_draw_ui {

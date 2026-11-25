@@ -1602,7 +1602,7 @@ static int l_v_mesh(lua_State *L) {
   return 0;
 }
 
-/* view:billboard(tex, pos, size, {palette=, tint=, yaxis=true}) */
+/* view:billboard(tex, pos, size, {palette=, tint=, yaxis=true, sky=false}) */
 static int l_v_billboard(lua_State *L) {
   sx_viewport *v = check_view(L);
   sx_draw_billboard b;
@@ -1621,6 +1621,9 @@ static int l_v_billboard(lua_State *L) {
     b.palette = (int)field_num(L, o, "palette", 0);
     lua_getfield(L, o, "yaxis");
     if (!lua_isnil(L, -1)) b.yaxis = lua_toboolean(L, -1);
+    lua_pop(L, 1);
+    lua_getfield(L, o, "sky");
+    b.sky = lua_toboolean(L, -1);
     lua_pop(L, 1);
     b.size[1] = field_num(L, o, "height", b.size[0]);
   }
