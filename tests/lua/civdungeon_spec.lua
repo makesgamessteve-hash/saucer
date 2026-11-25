@@ -75,3 +75,47 @@ describe("civ dungeons", function()
     expect(gen.generate(3, kit(), c, ORIGIN).hash).to_be(gen.generate(3, kit(), c, ORIGIN).hash)
   end)
 end)
+
+describe("heart machines", function()
+  local relicv = require("view.relic")
+  it("turn three tilted hoops for the Vyrr and the civ's own machine for others", function()
+    local v = relicv.machine(relic.civ())
+    expect(v.hoops).to_be(3)
+    expect(v.speed).to_be(1)
+    expect(v.stack).to_be(false)
+    expect(relicv.machine(nil).hoops).to_be(3)
+    local seen = {}
+    for s = 1, 30 do
+      for i = 3, #civs.universe(s) do
+        local c = civs.universe(s)[i]
+        local m = relicv.machine(c)
+        expect(m.hoops >= 2 and m.hoops <= relicv.MAX_HOOPS).to_be(true)
+        if c.language.symmetry.mode == "radial" then expect(m.hoops).to_be(c.language.symmetry.n) end
+        expect(m.stack).to_be(c.massing == "spine" or c.massing == "helix")
+        expect(m.glow).to_be(c.language.lamp_colors[1])
+        seen[m.hoops] = true
+      end
+    end
+    local n = 0
+    for _ in pairs(seen) do n = n + 1 end
+    expect(n >= 3).to_be(true)
+  end)
+
+  it("draws the machine's hoops about the spindle (stacked for spines and helices)", function()
+    local r = gen.generate(42, kit(), relic.civ(), ORIGIN)
+    local calls = {}
+    local fake = { mesh = function(_, _, o) calls[#calls + 1] = o end, billboard = function() end }
+    local A = { tex = { glow = 1 } }
+    expect(relicv.engine(fake, A, r, 10, {})).to_be(true)
+    expect(#calls).to_be(3)
+    local c = setmetatable({ id = "stacker", massing = "spine" }, { __index = civs.universe(42)[3] })
+    relicv.set_style(c)
+    calls = {}
+    relicv.engine(fake, A, r, 10, {})
+    relicv.set_style(nil)
+    local m = relicv.machine(c)
+    expect(#calls).to_be(m.hoops)
+    for _, o in ipairs(calls) do expect(o.pitch).to_be(0) end
+    expect(relicv.engine(fake, A, { solids = {} }, 1, {})).to_be(false)
+  end)
+end)

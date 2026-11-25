@@ -18,10 +18,12 @@ should change with the builder, not just the skin (design civs-and-relics §3.2,
 - **The slice is unchanged**: the Vyrr pin `layout = "warren"`, so its relic, goldens and replays stay the same.
   Relics of other civs only appear once relics enter normal play (plan phase 8), so no state or replay changes.
 - `tools/maps/`: top-down maps of a relic in every archetype.
-- Not in this change (later, same id): per-civ heart machines, landmarks per big hall, radar outlines of visited rooms.
+- **Heart machines**: the heart's engine turns 2-7 hoops by the civ's symmetry, at its tempo, tilted by its organic
+  warp, stacked up the spindle for spine and helix builders, glowing in its key colour (render only).
+- Not in this change (later, same id): landmarks per big hall, radar outlines of visited rooms.
 
 ## Impact
 
 - Specs: `relic-stations` (ADDED: civ room grammars)
-- Code: `civs/dungeons.lua`, `sim/relicgen.lua`, `civs/relic_slice.lua`, `tools/maps/`; tests
+- Code: `civs/dungeons.lua`, `sim/relicgen.lua`, `view/relic.lua`, `civs/relic_slice.lua`, `tools/maps/`; tests
   `tests/lua/civdungeon_spec.lua`

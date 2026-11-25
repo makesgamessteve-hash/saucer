@@ -8,5 +8,6 @@
   way, measurable differences, body scale, determinism
 
 ## 3. Later (same change id)
-- [ ] 3.1 Per-civ heart machines (render-only motion outside the flight space)
+- [x] 3.1 Per-civ heart machines: hoops from the symmetry, speed from the tempo, tilt from the organic warp, stacked
+  for spine and helix builders, the glow in the civ's key colour (render only; the Vyrr keep their three hoops)
 - [ ] 3.2 A landmark per big hall; radar outlines of visited rooms
