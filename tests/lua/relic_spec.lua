@@ -290,7 +290,9 @@ describe("the warren relic's layout", function()
     local t0 = os.clock()
     local x = gen.try(a.seed, kit(), relic.civ(), ORIGIN)
     local y = gen.try(a.seed, kit(), relic.civ(), ORIGIN)
-    expect(os.clock() - t0 < 2.0).to_be(true)
+    -- the time gate holds natively; under luacov's line hook (CI's coverage run) every line is many times slower
+    local limit = package.loaded["luacov.runner"] and 60.0 or 2.0
+    expect(os.clock() - t0 < limit).to_be(true)
     expect(x.hash).to_be(y.hash)
     expect(#x.rooms).to_be(#y.rooms)
     for i, ph in ipairs(x.relic.phenomena) do
