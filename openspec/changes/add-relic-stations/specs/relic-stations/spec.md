@@ -84,3 +84,18 @@ Relic skins (cushions, ribs, bands, door frames) SHALL lie on or outside every f
 #### Scenario: Only with the flag
 - **WHEN** `tests/lua/relic_spec.lua` runs "adds the Vyrr relic only with the debug entry, and only once"
 - **THEN** it passes and every replay still matches its recorded hashes
+
+### Requirement: Grown exterior
+A relic's outside SHALL read as a grown body: swollen hide lobes over every door-less side, roof and end of its big spaces, PIERCE spines through them, and a valve of eight membrane petals round the maw, all outside every flyable box.
+
+#### Scenario: Lobes and petals
+- **WHEN** `tests/lua/relic_spec.lua` runs "swell the outside into lobes over every door-less side and roof, and ring the maw with eight petals"
+- **THEN** it passes
+
+### Requirement: Relic triangle budget
+A relic's meshes together SHALL stay within the web's cap of 180,000 triangles.
+
+#### Scenario: Whole relic under the cap
+- **WHEN** `tests/lua/relic_spec.lua` runs "build meshes once per layout and draw what the eye can see"
+- **THEN** the relic's mesh set has at most 180,000 triangles
+

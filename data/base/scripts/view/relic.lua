@@ -24,7 +24,7 @@ M.HIDE = 3.0          -- m: the outside hide swells this far out from the wall's
 M.RIB_OUT = 1.9       -- m: a rib stands this far out from the wall's inner face (it hides the cushion seams)
 M.SPINE = 7.0         -- m: a PIERCE spine's length outside the hide
 M.NEAR = 700          -- m: rooms nearer than this draw their own mesh; the rest of the relic is one silhouette
-M.SEG = 6             -- cushion quads per side
+M.SEG = 4             -- cushion quads per side (inside cushions; 4 keeps the relic inside the web triangle cap)
 M.SHOW_GHOST = true   -- the ghost Villa for a Seat in a Villa-class space (shot scripts may hide it)
 
 local cache = {}
@@ -88,6 +88,43 @@ local function face_of(b, mn, mx, t)
   return nil
 end
 
+-- outside lobes over one face of a big space: the face's corner c0, its long axis A (unit, length la) and its
+-- other axis B (length lb), its outward normal `out`; `inner(pa, pb)` is the matching point on the inside cushion
+-- (where a spine's stub and wound sit). Each lobe bulges M.LOBE x its short side (at most M.LOBE_MAX) and carries
+-- one to three PIERCE spines; `h` seeds the variation.
+M.LOBE = 0.26
+M.LOBE_MAX = 16
+M.LOBE_SEG = 8
+local function cross(a, b) return { a[2] * b[3] - a[3] * b[2], a[3] * b[1] - a[1] * b[3], a[1] * b[2] - a[2] * b[1] } end
+local function lobes(ext, c0, A, la, B, lb, out, dir, inner, h, cc)
+  local nb = math.max(1, math.floor(lb / 64 + 0.5))
+  local sb = lb / nb
+  local na = math.max(1, math.floor(la / (sb * 1.15) + 0.5))
+  local sa = la / na
+  local swap = vec.dot(cross(A, B), out) < 0
+  local n = 0
+  for i = 1, na do
+    for j = 1, nb do
+      n = n + 1
+      local hh = (h * 7919 + n * 104729) % 1000 / 1000
+      local bulge = math.min(M.LOBE_MAX, math.min(sa, sb) * M.LOBE) * (0.75 + 0.5 * hh)
+      local pa, pb = sa * (i - 1), sb * (j - 1)
+      local c = vec.add(c0, vec.add(vec.scale(A, pa), vec.scale(B, pb)))
+      local u, v = vec.scale(A, sa), vec.scale(B, sb)
+      if swap then u, v = v, u end
+      skin(patch(ext, c, u, v, bulge, cc.membrane, S.dominant, M.LOBE_SEG)).lobe = true
+      for k = 1, 1 + (n + h) % 3 do
+        local fa = 0.25 + 0.5 * ((hh * 3 + k * 0.37) % 1)
+        local fb = 0.25 + 0.5 * ((hh * 5 + k * 0.61) % 1)
+        local rise = bulge * sm.sin(math.pi * fa) * sm.sin(math.pi * fb) * 0.7
+        local o = vec.add(c0, vec.add(vec.scale(A, pa + fa * sa), vec.scale(B, pb + fb * sb)))
+        pierce(ext, vec.add(o, vec.scale(out, rise)), dir, inner(pa + fa * sa, pb + fb * sb), cc)
+      end
+    end
+  end
+  return n
+end
+
 -- the skin of one big space: cushions on hole-less side walls and the ceiling, ribs, spines; flat membrane
 -- (with chrome door frames) on faces with doors; chitin floors
 local function big_room(parts, ext, ruin, r, kit, origin, walls, cc, skin_mat, skin_col)
@@ -118,12 +155,6 @@ local function big_room(parts, ext, ruin, r, kit, origin, walls, cc, skin_mat, s
           local u, v = { 0, 0, z1 - z0 }, { 0, y1 - y0, 0 }
           if side < 0 then u, v = v, u end
           skin(patch(parts, { x_in, y0, z0 }, u, v, -M.DISH, skin_col, skin_mat))
-          -- outside: normal out, swollen
-          skin(patch(ext, { x_out, y0, z0 }, v, u, M.HIDE, cc.membrane, S.dominant))
-          if (k + j) % 2 == 0 then
-            local zc, yc = (z0 + z1) / 2, (y0 + y1) / 2
-            pierce(ext, { x_out + side * M.HIDE * 0.5, yc, zc }, f, { x_in + side * M.DISH, yc, zc }, cc)
-          end
         end
         -- the horizontal chrome bands between rows
         for j = 1, rows - 1 do
@@ -146,11 +177,6 @@ local function big_room(parts, ext, ruin, r, kit, origin, walls, cc, skin_mat, s
     for j = 1, cols do
       local x0, x1 = imn[1] + w * (j - 1) / cols, imn[1] + w * j / cols
       skin(patch(parts, { x0, imx[2], z0 }, { x1 - x0, 0, 0 }, { 0, 0, z1 - z0 }, -M.DISH, skin_col, skin_mat))
-      skin(patch(ext, { x0, mx[2], z0 }, { 0, 0, z1 - z0 }, { x1 - x0, 0, 0 }, M.HIDE, cc.membrane, S.dominant))
-      if (k + j) % 3 == 0 then
-        local xc, zc = (x0 + x1) / 2, (z0 + z1) / 2
-        pierce(ext, { xc, mx[2] + M.HIDE * 0.5, zc }, "+y", { xc, imx[2] + M.DISH, zc }, cc)
-      end
     end
     for j = 1, cols - 1 do
       local x = imn[1] + w * j / cols
@@ -160,6 +186,49 @@ local function big_room(parts, ext, ruin, r, kit, origin, walls, cc, skin_mat, s
   for _, z in ipairs(zs) do
     skin(box(ext, { imn[1] - M.RIB_OUT, imx[2], z - 0.6 }, { imx[1] + M.RIB_OUT, imx[2] + M.RIB_OUT, z + 0.6 }, cc.chrome,
       S.accent))
+  end
+  -- outside: the hide swells into organ-like lobes over every door-less side and the roof (the silhouette reads
+  -- as a grown body, not a box), with PIERCE spines through the lobes
+  for _, side in ipairs({ -1, 1 }) do
+    local f = side < 0 and "-x" or "+x"
+    if not r.faces[f] then
+      local xo, xi = side < 0 and mn[1] or mx[1], (side < 0 and imn[1] or imx[1]) + side * M.DISH
+      lobes(ext, { xo, mn[2], mn[3] }, { 0, 0, 1 }, mx[3] - mn[3], { 0, 1, 0 }, mx[2] - mn[2], { side, 0, 0 }, f,
+        function(pa, pb) return { xi, mn[2] + pb, mn[3] + pa } end, r.id * 13 + side + 2, cc)
+    end
+  end
+  if not r.faces["+y"] then
+    lobes(ext, { mn[1], mx[2], mn[3] }, { 0, 0, 1 }, mx[3] - mn[3], { 1, 0, 0 }, mx[1] - mn[1], { 0, 1, 0 }, "+y",
+      function(pa, pb) return { mn[1] + pb, imx[2] + M.DISH, mn[3] + pa } end, r.id * 13 + 7, cc)
+  end
+  -- the ends: lobes round the neighbour that joins on (a shoulder of swollen hide either side and above it), or a
+  -- whole-face lobe on a closed end (never on the maw's mouth)
+  for _, sz in ipairs({ -1, 1 }) do
+    local zf = sz < 0 and mn[3] or mx[3]
+    local zi = (sz < 0 and imn[3] or imx[3]) + sz * M.DISH
+    if not (r.kind == "entrance" and sz < 0) then
+      local nb
+      for _, o in ipairs(ruin.rooms) do
+        if o ~= r and o.class >= 4 then
+          local omn, omx = ruinm.room_box(o, kit, origin)
+          if math.abs((sz < 0 and omx[3] or omn[3]) - zf) < 0.01 then nb = { omn, omx } end
+        end
+      end
+      local function strip(x0, x1, y0, y1, hseed)
+        if x1 - x0 < 8 or y1 - y0 < 8 then return end
+        lobes(ext, { x0, y0, zf }, { 1, 0, 0 }, x1 - x0, { 0, 1, 0 }, y1 - y0, { 0, 0, sz }, sz < 0 and "-z" or "+z",
+          function(pa, pb) return { x0 + pa, y0 + pb, zi } end, hseed, cc)
+      end
+      local hs = r.id * 13 + (sz < 0 and 3 or 5)
+      if nb then
+        local gap = 4
+        strip(mn[1], nb[1][1] - gap, mn[2], mx[2], hs)
+        strip(nb[2][1] + gap, mx[1], mn[2], mx[2], hs + 1)
+        strip(math.max(mn[1], nb[1][1] - gap), math.min(mx[1], nb[2][1] + gap), nb[2][2] + gap, mx[2], hs + 2)
+      elseif not r.faces[sz < 0 and "-z" or "+z"] then
+        strip(mn[1], mx[1], mn[2], mx[2], hs)
+      end
+    end
   end
   -- the walls the boxes keep: floors (chitin), faces with doors (membrane, flat), the hole-less ends
   for _, b in ipairs(walls) do
@@ -308,6 +377,15 @@ local function maw(ext, ruin, r, kit, origin, cc)
   patch(ext, { rr, mn[2] - 3, z }, { 0, mx[2] - mn[2] + 6, 0 }, { mx[1] - rr + 4, 0, 0 }, 8.0, cc.membrane, S.dominant, 10)
   patch(ext, { l, top, z }, { 0, mx[2] - top + 3, 0 }, { rr - l, 0, 0 }, 6.0, cc.membrane, S.dominant, 10)
   patch(ext, { l, mn[2] - 3, z }, { 0, y0 - mn[2] + 3, 0 }, { rr - l, 0, 0 }, 3.0, cc.membrane, S.dominant, 10)
+  -- the valve: eight swollen membrane petals round the opening, bulging out of the face like a sphincter's lips
+  local yc, rx, ry = y0 + dh / 2, dw / 2 + 1.5, dh / 2 + 1.5
+  for k = 0, 7 do
+    local a = k / 8 * sm.tau + 0.2
+    local ca, sa = sm.cos(a), sm.sin(a)
+    local base = { cx + ca * rx, yc + sa * ry, z - 0.2 }
+    local tang, rad = { -sa * 13, ca * 13, 0 }, { ca * 15, sa * 15, 0 }
+    skin(patch(ext, vec.sub(base, vec.scale(tang, 0.5)), tang, rad, 7.0 + (k % 3), cc.membrane, S.dominant, 6)).petal = true
+  end
   -- teeth: chrome cones on the rim, pointing out of the maw, each in its wound
   local function tooth(x, y, len)
     oriented(ext, { kind = "cone", c = { 0, 0, 0 }, r = 1.1, r1 = 0.05, h = len, seg = 6, color = cc.chrome, mat = S.accent },
@@ -347,7 +425,7 @@ function M.parts(ruin, origin)
       if r.id == lung then mat = S.lung elseif r.id == plague then mat, c = S.decay, cc.necrotic end
       out.cushions = out.cushions + big_room(parts, ext, ruin, r, kit, origin, by_room[r.id] or {}, cc, mat, c)
       if r.kind == "core" then core_room(parts, r, kit, origin, idol, cc) end
-      if r.kind == "maw" then maw(ext, ruin, r, kit, origin, cc) end
+      if r.kind == "entrance" then maw(ext, ruin, r, kit, origin, cc) end
     else
       small_room(parts, ruin, r, kit, origin, by_room[r.id] or {}, cc)
     end
@@ -458,7 +536,7 @@ function M.lamps(ruin, origin, site)
         add({ cx + q[1] * 40, f + 14, cz + q[2] * 40 }, pal[(q[1] + q[2]) % 3 + 2] or pal[1], 56)
       end
       add({ cx, f + 14, cz + 16 }, { 0.85, 0.55, 1.0 }, 40, 1.4)
-    elseif r.kind == "maw" then
+    elseif r.kind == "entrance" then
       add({ cx, f + 10, cz }, pal[2], 40)
     elseif r.kind == "reliquary" then
       add({ cx, mx[2] - kit.wall - 0.6, cz }, pal[1], 12, 1.3, true)

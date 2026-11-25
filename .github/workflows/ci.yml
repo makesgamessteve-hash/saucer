@@ -106,6 +106,31 @@ jobs:
             build/web/saucer.wasm
             build/web/data
 
+  golden:
+    name: golden shots (materials full/off and the legacy scene, Xvfb + Mesa)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y $SDL_LINUX_DEPS xvfb mesa-utils
+      - name: Build game (SDL3 fetched)
+        run: |
+          cmake -S . -B build/game -G Ninja -DCMAKE_BUILD_TYPE=Release -DSAUCER_BUILD_TESTS=OFF
+          cmake --build build/game
+      - name: Golden shots (tools/shots/materials.sh; Mesa versions differ, so the legacy scene gets the shot tolerance)
+        timeout-minutes: 20
+        env:
+          LEGACY_TOL: "2.0 0.02"
+        run: tools/shots/materials.sh "$PWD/build/game/saucer" "$PWD" "$PWD/build/golden"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: golden-shots
+          path: build/golden/shots_materials
+
   lint:
     name: lint (OpenSpec, asset licenses and prompts)
     runs-on: ubuntu-24.04

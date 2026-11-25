@@ -365,6 +365,23 @@ describe("relic skins", function()
     expect(all.cushions > 100).to_be(true)
   end)
 
+  it("swell the outside into lobes over every door-less side and roof, and ring the maw with eight petals", function()
+    local r = gen42()
+    local all = relicv.parts(r, ORIGIN)
+    local lobes, petals, big = 0, 0, 0
+    for _, part in ipairs(all.ext) do
+      if part.lobe then
+        lobes = lobes + 1
+        if part.h >= 8 then big = big + 1 end
+        expect(part.h <= relicv.LOBE_MAX * 1.25 + 1e-6).to_be(true)
+      end
+      if part.petal then petals = petals + 1 end
+    end
+    expect(lobes >= 20).to_be(true)
+    expect(big >= 10).to_be(true)
+    expect(petals).to_be(8)
+  end)
+
   it("ring every PIERCE spine with a wound, breathe the lung hall and rot the plague hall", function()
     local r = gen42()
     local all = relicv.parts(r, ORIGIN)
@@ -409,6 +426,8 @@ describe("relic skins", function()
     local set = relicv.meshes(r, site.pos)
     expect(relicv.meshes(r, site.pos)).to_be(set)
     expect(set.triangles > 0).to_be(true)
+    -- the web's cap (design §2.3.5: 180k visible triangles) holds even with the whole relic in view
+    expect(set.triangles <= 180000).to_be(true)
     local calls = { mesh = 0, billboard = 0 }
     local v = { player = 1 }
     function v:materials(t) calls.mats = t return 7 end

@@ -16,3 +16,10 @@
 - [x] 3.4 Golden shots: `tools/shots/materials.sh` (relic scene full/off; legacy scene off is pixel-identical to
       main 2d5d372)
 - [x] 3.5 Budget: `tools/shots/relic_perf.sh` (full/off p95 ratio)
+
+## 4. Polish (plan phase 1)
+- [x] 4.1 Stronger full look: chrome glints and rim in dim light, brighter crystal glow, deeper subsurface and veins
+      (veins stay dark where the pulse is off: plague halls)
+- [x] 4.2 Goldens re-rendered; `golden_compare.py --differ`: full differs from off by at least 9.5 (was 7.4 / 8.1)
+- [x] 4.3 CI job `golden`: builds the game, runs `tools/shots/materials.sh` under Xvfb (legacy tolerance via
+      `LEGACY_TOL` for another Mesa), uploads the shots

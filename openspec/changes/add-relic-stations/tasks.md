@@ -17,3 +17,9 @@
 - [x] 4.1 `tests/lua/relic_spec.lua`
 - [x] 4.2 `tests/game/relic.lua` (CTest `game_relic`, `game_relic_seed7`; in the coverage runs)
 - [x] 4.3 `tools/shots/relic_slice.lua` tour and Reel frames
+
+## 5. Polish (plan phase 1)
+- [x] 5.1 Outside: hide lobes over door-less sides, roofs and ends; spines through them; the maw's eight-petal valve
+      (the maw room is kind `entrance`: its lip, teeth and lamp now draw)
+- [x] 5.2 Inside cushions at 4 x 4 quads: the whole relic 76,900 triangles (was about 181,000), under the web cap
+- [x] 5.3 `tests/lua/relic_spec.lua`: lobes and petals; the 180k triangle cap
