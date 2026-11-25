@@ -92,6 +92,8 @@ function M.rebuild(state)
   for i, site in ipairs(state.sector.sites) do
     local r = ruinm.generate(site.seed, site.kit, civ_of(site), site.pos, nil, site.first)
     if site.relic then require("sim.relicloot").apply(site, r) end   -- add-relic-stations: the warrens' share
+    -- add-relic-locks: the relic's foot pockets, its sealed chambers and their locks (a derived copy of the ruin)
+    if r and r.relic then r = require("sim.relicfoot").derive(site, r, civ_of(site), state.seed) end
     rt.ruins[i] = r
     rt.sentries[i] = sentry.layout(site, r, civ_of(site))
     -- add-strategic-sentries: cover pillars and a guarded find in every Watcher hall (once per ruin)

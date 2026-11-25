@@ -74,6 +74,11 @@ function M.area(state, p)
   local f = M.foot(game().ruin(ex.site))
   if not f then return "hall" end
   local c = M.center(ex.body)
+  -- add-relic-locks: a relic's pockets list every crawlspace and room
+  if f.areas then
+    for _, a in ipairs(f.areas) do if in_box(a.box, c) then return a.kind end end
+    return "hall"
+  end
   if in_box(f.crawl, c) then return "crawl" end
   if in_box(f.chamber, c) then return "chamber" end
   if in_box(f.strong, c) then return "strong" end
@@ -84,6 +89,7 @@ M.AREA_MSG = {
   crawl = "A crawlspace: too tight for any saucer. You crouch and crawl.",
   chamber = "A chamber behind the crawlspace. A coupling and a console glow on the walls.",
   strong = "The strongroom.",
+  pocket = "A pocket room past the crawlspace: built for hands, not hulls.",
 }
 
 -- where the person stands when they step out (feet), or nil, why
@@ -554,6 +560,7 @@ function M.reach(state, p)
     for _, c in ipairs(f.consoles) do
       if not M.grid_down(state, ex.site) then consider({ kind = "console", def = c }, vec.dist(eye, c.pos)) end
     end
+    for _, n in ipairs(f.niches or {}) do consider({ kind = "lore", def = n }, vec.dist(eye, n.pos)) end
   end
   for _, c in ipairs(M.candidates(state, p)) do consider({ kind = "item", cand = c }, vec.dist(eye, c.pos) - 0.3) end
   return best
@@ -630,6 +637,12 @@ function M.use(state, p, ctx)
     return false
   end
   if t.kind == "item" then return M.grab(state, p, t.cand, ctx) > 0 end
+  if t.kind == "lore" then
+    ctx.msg(state, p, t.def.text)
+    ctx.fx(state, p, "scan")
+    p.lore_read = (p.lore_read or 0) + 1
+    return true
+  end
   start_work(state, p, t, ctx)
   return true
 end
@@ -639,7 +652,8 @@ function M.open_lock(state, p, site, id, ctx)
   state.locks = state.locks or {}
   state.locks[key(site, id)] = state.tick
   game().open_shutter(site, id)
-  ctx.msg(state, p, "The coupling locks home. Out in the hall a shutter grinds open: the strongroom is clear for the Seat.")
+  ctx.msg(state, p, game().ruin(site).relic and "The coupling locks home. Somewhere in the relic a sealed chamber grinds open for the Seat."
+    or "The coupling locks home. Out in the hall a shutter grinds open: the strongroom is clear for the Seat.")
   ctx.fx(state, p, "door")
 end
 
@@ -905,7 +919,7 @@ end
 -- the HUD's line: where you are and what Use does
 function M.status(state, p)
   local ex = p.excursion
-  local names = { crawl = "CRAWLSPACE", chamber = "CHAMBER", strong = "STRONGROOM", hall = "HALL" }
+  local names = { crawl = "CRAWLSPACE", chamber = "CHAMBER", strong = "STRONGROOM", hall = "HALL", pocket = "POCKET" }
   local where = ex.site == 0 and (require("sim.dock").inside(state, ex.body.pos) and "ON FOOT: STATION BAY" or "ON FOOT: OPEN SPACE") or string.format("ON FOOT: DERELICT %d %s", ex.site, names[ex.area] or "HALL")
   if ex.coin == "fold" then return where, "THE SAUCER IS FOLDING INTO YOUR HAND" end
   if ex.coin == "grow" then return where, "STAND BACK: THE SEAT IS UNFOLDING" end
@@ -916,6 +930,7 @@ function M.status(state, p)
   if t then
     if t.kind == "lock" then return where, "USE: TURN THE HAND-LOCK" end
     if t.kind == "console" then return where, "USE: SHUT THE SENTRY GRID DOWN" end
+    if t.kind == "lore" then return where, "USE: READ THE GLYPHS" end
     if #p.hands >= M.tune().hands and t.cand.kind ~= "cache" then return where, "HANDS FULL: E DEPLOYS THE SEAT" end
     return where, "USE: TAKE " .. (t.cand.kind == "cache" and "YOUR CACHE" or items.label(t.cand.item):upper())
   end

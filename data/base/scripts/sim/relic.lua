@@ -101,7 +101,7 @@ function M.lock_step(state, p, cmd, dt, ctx)
   state.relic_locks[key(site, l.id)] = true
   game().open_relic_lock(site, l.id)
   if ctx then
-    ctx.msg(state, p, "The Seat-lock turns: the reliquary opens")
+    ctx.msg(state, p, l.chamber and "The Seat-lock turns: the sealed chamber opens" or "The Seat-lock turns: the reliquary opens")
     ctx.fx(state, p, "door")
   end
   return true
