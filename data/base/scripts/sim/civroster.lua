@@ -267,7 +267,7 @@ local function span(rng, c)
   local E = traits().era_kyr[c.axes.era]
   local L = M.history_data().span_kyr
   local a = rng:int(E[2], E[1])
-  return { a, math.max(0, a - rng:int(L[1], L[2])) } -- from, to (kyr before now); a > to
+  return { a, math.max(1, math.min(a - 1, a - rng:int(L[1], L[2]))) } -- from, to (kyr ago); a > to >= 1 (all gone)
 end
 
 local function overlap(x, y) return x.span[1] > y.span[2] and y.span[1] > x.span[2] end
