@@ -1183,7 +1183,8 @@ function M.draw_ruins(v, A, state, cam, xr)
     local r = site.city and game.ruin(i)
     if r and r.city and game.mega_city_at(state, cam.pos, megav.ZONE) == i then
       local p = game.mega_plan(state, i)
-      st.mega = megav.draw(v, A, p, cam, assets.kit_texture(A, p.frame.kit), function(c, rr) return M.in_view(cam, c, rr, xr) end)
+      st.mega = megav.draw(v, A, p, cam, assets.kit_texture(A, p.frame.kit), function(c, rr) return M.in_view(cam, c, rr, xr) end, nil,
+                           (state.tick + (M.alpha or 0)) / 60)
     end
   end
   M.stats = st

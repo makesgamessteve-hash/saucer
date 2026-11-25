@@ -1,7 +1,8 @@
 -- SPDX-License-Identifier: MIT
 -- The megacity round a city's core end to end (OpenSpec add-alien-cities-2): fold into the planet city's sector,
 -- fly out over the outer districts, see the near ones turn solid (a megaform stops the saucer), fly off and see them
--- go, and check that flights through the streaming ring end in one state with and without a restore half way.
+-- go, and check that flights through the streaming ring end in one state with and without a restore half way;
+-- fly into an organ's hall and beam up a find.
 -- Then the moon and asteroid cities: each ringed by its outer districts.
 local T = saucer.test
 local game = require("sim.game")
@@ -60,7 +61,52 @@ stage({ p.frame.cx, p.frame.y + 500, p.frame.cz })
 T.assert(count(mega.live(site)) == 0, "nothing of the ring is solid over the core")
 T.assert(saucer.physics.count() < n, "the boxes went (" .. n .. " -> " .. saucer.physics.count() .. ")")
 
--- 5. the moon and the asteroid cities
+-- 5. an organ: fly in through its mouth, beam a find up from the console; a restore keeps it taken
+local od
+for _, x in ipairs(p.districts) do if x.organ and not od then od = x end end
+T.assert(od ~= nil, "an outer district with an organ")
+local og = od.organ
+local h = og.hall
+local W = mega.WALL
+local out_pt, in_pt
+local cy = p.frame.y + 14
+if og.side <= 2 then
+  local fx = og.side == 1 and h[1] - W or h[4] + W
+  local dir = og.side == 1 and -1 or 1
+  out_pt, in_pt = { fx + dir * 60, cy, (h[3] + h[6]) / 2 }, { fx - dir * 50, cy, (h[3] + h[6]) / 2 }
+else
+  local fz = og.side == 3 and h[3] - W or h[6] + W
+  local dir = og.side == 3 and -1 or 1
+  out_pt, in_pt = { (h[1] + h[4]) / 2, cy, fz + dir * 60 }, { (h[1] + h[4]) / 2, cy, fz - dir * 50 }
+end
+local yaw = math.atan(in_pt[1] - out_pt[1], in_pt[3] - out_pt[3])
+stage(out_pt, yaw)
+T.assert(ap.fly(T, 1, get, in_pt, 3, 900), "flew in through the organ's mouth")
+T.assert(mega.in_hall(od, get().ship.pos) == og, "inside the organ's hall")
+local tractor = require("sim.tractor")
+local cand
+for _, c in ipairs(tractor.candidates(st, get(), 0, nil)) do
+  if c.organ == od.id and (not cand or math.abs(c.pos[1] - in_pt[1]) + math.abs(c.pos[3] - in_pt[3]) < math.abs(cand.pos[1] - in_pt[1]) + math.abs(cand.pos[3] - in_pt[3])) then cand = c end
+end
+if not cand then
+  -- (no find within beam sense of the mouth: go to the first one)
+  local f = og.finds[1].pos
+  T.assert(ap.fly(T, 1, get, { f[1], cy, f[3] }, 3, 1800), "flew to a find")
+  for _, c in ipairs(tractor.candidates(st, get(), 0, nil)) do if c.organ == od.id and not cand then cand = c end end
+end
+T.assert(cand ~= nil, "a find in the hall")
+T.assert(ap.fly(T, 1, get, ap.beam_spot(cand.pos, get().ship.size), 0.5, 1800), "over the find")
+T.assert(ap.to_console(T, 1, get), "at the beam console")
+local hold = #get().hold
+T.assert(ap.beam_up(T, 1, get, cand), "beamed the find up")
+T.assert(#get().hold == hold + 1 and get().looted[cand.key], "the find is in the hold and taken")
+local snap = T.snapshot()
+T.restore(snap)
+T.assert(get().looted[cand.key], "still taken after a restore")
+T.assert(ap.back_to_helm(T, 1, get), "back at the helm")
+T.screenshot("megacity_organ.png")
+
+-- 6. the moon and the asteroid cities
 for _, sid in ipairs({ 4, 2 }) do
   game.enter_sector(st, sid)
   local i = city_site(st)
