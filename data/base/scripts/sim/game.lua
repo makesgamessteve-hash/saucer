@@ -38,6 +38,7 @@ local excursion = require("sim.excursion")
 local civs = require("sim.civs")
 local galaxy = require("sim.galaxy")
 local archive = require("sim.archive")
+local megacity = require("sim.citymega") -- add-alien-cities-2
 local requests = require("sim.requests")
 local coop = require("sim.coop")
 local adv = require("sim.advsentry")
@@ -137,6 +138,9 @@ function M.rebuild(state)
       end
     end
   end
+  -- add-alien-cities-2: the outer districts near a player are solid again (the physics world was just cleared)
+  megacity.reset()
+  M.mega_sync(state)
   -- add-wider-dark: doors a Lockdown node holds sealed right now
   for i, list in pairs(state.sentries or {}) do
     for k, dyn in ipairs(list) do
@@ -148,6 +152,32 @@ function M.rebuild(state)
       end
     end
   end
+end
+
+-- add-alien-cities-2: every city's outer districts within reach of a ship are solid (sim/citymega.lua)
+local function station_ball(state)
+  return function(idx)
+    local c, rr = require("sim.stationhull").bounds(state, idx)
+    return c, rr
+  end
+end
+function M.mega_sync(state) megacity.sync(state, M.ruin, station_ball(state)) end
+-- the outer-district plan of city site i (nil for any other site)
+function M.mega_plan(state, i)
+  local site = state.sector.sites[i]
+  if not (site and site.city) then return nil end
+  return megacity.get_plan(rt.ruins[i], state.sector, i, station_ball(state))
+end
+-- the city whose megacity footprint (plus pad m) holds pos -> site index, ruin, plan
+function M.mega_city_at(state, pos, pad)
+  for i, site in ipairs(state.sector.sites) do
+    local p = site.city and M.mega_plan(state, i)
+    if p then
+      local h = p.span / 2 + (pad or 0)
+      if math.abs(pos[1] - p.frame.cx) <= h and math.abs(pos[3] - p.frame.cz) <= h then return i, rt.ruins[i], p end
+    end
+  end
+  return nil
 end
 
 -- add-wider-dark: a Lockdown node seals (on) or opens its hall's big doors.
@@ -1483,6 +1513,7 @@ function M.step(state, cmds, dt)
     if cmds[i] and coop.wants_join(cmds[i]) then coop.join(state, i, ctx_fns) else break end
   end
   claims.resolve(state, dt, ctx_fns)
+  M.mega_sync(state)
   for i = 1, #state.players do
     local p = state.players[i]
     if p and cmds[i] then M.step_player(state, p, cmds[i], dt) end

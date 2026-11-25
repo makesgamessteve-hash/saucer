@@ -15,6 +15,7 @@ local fold = require("sim.fold")
 local panelm = require("sim.panel")
 local sm = saucer.math
 local ruinm = require("sim.ruin")
+local megav = require("view.citymega") -- add-alien-cities-2
 local cities = require("sim.cities")
 local M = {}
 
@@ -938,9 +939,14 @@ M.stats = { chunks = 0, culled = 0, lod = 0 }
 
 -- is a sphere (centre c, radius r) possibly visible from camera cam?
 function M.visible(cam, c, r, xr)
+  local dist = vec.len(vec.sub(c, cam.pos))
+  if dist - r > M.CULL_DIST then return false end
+  return M.in_view(cam, c, r, xr)
+end
+-- add-alien-cities-2: inside the view cone, at any distance
+function M.in_view(cam, c, r, xr)
   local d = vec.sub(c, cam.pos)
   local dist = vec.len(d)
-  if dist - r > M.CULL_DIST then return false end
   if xr or dist <= r then return true end
   local f = vec.aim(cam.yaw, cam.pitch)
   local cosang = vec.dot(d, f) / dist
@@ -964,8 +970,13 @@ function M.flash(state, sk)
 end
 
 function M.city_env(state, p)
-  if not p or p.site == 0 then return nil end
-  local r = game.ruin(p.site)
+  if not p then return nil end
+  local r = p.site ~= 0 and game.ruin(p.site) or nil
+  -- add-alien-cities-2: over an outer district the city's air and light hold too
+  if p.site == 0 then
+    local _, mr, mp = game.mega_city_at(state, p.ship.pos, 0)
+    if mp and require("sim.citymega").near_district(mp, p.ship.pos, megav.AIR) then r = mr end
+  end
   if not (r and r.city) then return nil end
   local e = ruinm.kit_of(r.kit).city.env
   if not e then return nil end
@@ -1064,7 +1075,8 @@ function M.draw_ruins(v, A, state, cam, xr)
       local tex = assets.kit_texture(A, set.kit)
       local ftex = assets.floor_texture(A, set.kit)
       local lod = set.lod
-      if set.horizon then v:mesh(set.horizon.mesh, { tex = tex, palette = A.pal.base }) end
+      -- (a city's far skyline is now its megacity: view/citymega.lua)
+      if set.horizon and not r.city then v:mesh(set.horizon.mesh, { tex = tex, palette = A.pal.base }) end
       local far = vec.dist(lod.center, cam.pos) - lod.radius > M.LOD_DIST
       if far then
         if M.visible(cam, lod.center, lod.radius, xr) then
@@ -1165,6 +1177,14 @@ function M.draw_ruins(v, A, state, cam, xr)
       end
     end
   end
+  -- add-alien-cities-2: the megacity round every city the eye is over (view/citymega.lua)
+  for i, site in ipairs(state.sector.sites) do
+    local r = site.city and game.ruin(i)
+    if r and r.city and game.mega_city_at(state, cam.pos, megav.ZONE) == i then
+      local p = game.mega_plan(state, i)
+      st.mega = megav.draw(v, A, p, cam, assets.kit_texture(A, p.frame.kit), function(c, rr) return M.in_view(cam, c, rr, xr) end)
+    end
+  end
   M.stats = st
   return st
 end
@@ -1196,6 +1216,8 @@ function M.render(v, state, alpha)
   end
   -- add-fun-fixes: hitstop and camera trauma on a hit (view only, none in XR)
   local cam = xrv.adjust(v, require("view.juice").camera(M.camera(p, v.xr), p, state.tick, v.xr))
+  -- add-alien-cities-2: over a megacity the far plane reaches its horizon band
+  megav.far_plane(cam, function(pos) return game.mega_city_at(state, pos, megav.ZONE) end)
   v:camera(cam)
   local cenv = M.city_env(state, p)
   v:fog(cenv or { color = { 0.02, 0.02, 0.06 }, density = M.FOG, clear = { 0.0, 0.0, 0.025 }, light = { 0.35, 0.8, 0.45 },
