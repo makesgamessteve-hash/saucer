@@ -337,3 +337,87 @@ describe("drawing the stations", function()
     expect(vhull.stats.draws).to_be_truthy()
   end)
 end)
+
+-- fix-station-hull: the spinning layer collides, turned by the tick like the view draws it
+describe("the spinning layer's collision", function()
+  it("records spheres, capsules, annuli and tori for every family, in the layout pass too", function()
+    local kinds = {}
+    for _, f in ipairs(sh.families()) do
+      local L = sh.generate(4321, "port", 3, false, f.id)
+      local M2 = sh.generate(4321, "port", 3, true, f.id)
+      expect(#L.spin > 0).to_be(true)
+      expect(#M2.spin).to_be(#L.spin)
+      expect(L.hash).to_be(M2.hash)
+      for _, s in ipairs(L.spin) do kinds[s.kind] = true end
+      expect(sh.spin_reach(L) > 0 and sh.spin_reach(L) <= L.ring_r * 1.6).to_be(true)
+    end
+    for _, k in ipairs({ "sphere", "capsule", "annulus", "torus" }) do expect(kinds[k]).to_be(true) end
+  end)
+
+  it("finds the nearest point of each shape", function()
+    local p, th = sh.spin_nearest({ kind = "sphere", c = { 1, 2, 3 }, r = 4 }, { 0, 0, 0 })
+    expect(p[1]).to_be(1) expect(th).to_be(4)
+    p = sh.spin_nearest({ kind = "capsule", a = { 0, 0, 0 }, b = { 10, 0, 0 }, r = 1 }, { 5, 3, 0 })
+    expect(p[1]).to_be(5) expect(p[2]).to_be(0)
+    p = sh.spin_nearest({ kind = "capsule", a = { 0, 0, 0 }, b = { 0, 0, 0 }, r = 1 }, { 5, 3, 0 })
+    expect(p[1]).to_be(0)
+    p = sh.spin_nearest({ kind = "capsule", a = { 0, 0, 0 }, b = { 10, 0, 0 }, r = 1 }, { -5, 0, 0 })
+    expect(p[1]).to_be(0)
+    p, th = sh.spin_nearest({ kind = "torus", n = { 1, 0, 0 }, R = 10, r = 1 }, { 2, 0, 5 })
+    expect(math.abs(p[3] - 10) < 1e-9 and p[1] == 0).to_be(true)
+    expect(sh.spin_nearest({ kind = "torus", n = { 1, 0, 0 }, R = 10, r = 1 }, { 3, 0, 0 })).to_be(nil)
+    p, th = sh.spin_nearest({ kind = "annulus", x0 = -1, x1 = 1, rin = 5, rout = 6 }, { 4, 0, 2 })
+    expect(p[1]).to_be(1) expect(p[3]).to_be(5) expect(th).to_be(0)
+    p = sh.spin_nearest({ kind = "annulus", x0 = -1, x1 = 1, rin = 5, rout = 6 }, { 0, 0, 0 })
+    expect(p[2]).to_be(5)
+  end)
+
+  it("pushes a hull out of the layer where it is at this tick, and leaves it alone elsewhere", function()
+    local st = new_state(42)
+    st.tick = 1700 -- the layer has turned about two radians
+    local L, tr = sh.for_trader(st, 1)
+    local sp = L.spin_pos
+    local ang = st.tick * sh.kit().spin
+    -- a point on the first shape, turned into the world the way the view turns the layer (pitch about x)
+    local s1
+    for _, s in ipairs(L.spin) do if not s1 and (s.c or s.a) then s1 = s end end
+    local q = s1.c or s1.a
+    -- (the view's model pitch: y' = y cos + z sin, z' = z cos - y sin)
+    local w = { q[1], q[2] * sm.cos(ang) + q[3] * sm.sin(ang), -q[2] * sm.sin(ang) + q[3] * sm.cos(ang) }
+    local pos = { tr.pos[1] + sp[1] + w[1], tr.pos[2] + sp[2] + w[2], tr.pos[3] + sp[3] + w[3] }
+    local out, hits = sh.spin_push(st, pos, 3)
+    expect(hits >= 1).to_be(true)
+    expect(vec.dist(out, pos) > 0).to_be(true)
+    -- pushed out, it is clear of that shape now
+    local _, again = sh.spin_push(st, out, 2.9)
+    expect(again <= hits).to_be(true)
+    -- far from every station nothing happens
+    local far = { tr.pos[1] + 50000, tr.pos[2], tr.pos[3] }
+    local same, none = sh.spin_push(st, far, 3)
+    expect(none).to_be(0)
+    expect(same).to_be(far)
+    -- a point dead on a shape's core still gets out
+    local _, h2 = sh.spin_push(st, pos, 3)
+    expect(h2 >= 1).to_be(true)
+  end)
+
+  it("stops a saucer flown into the spinning layer", function()
+    local st = new_state(42)
+    local p = st.players[1]
+    local L, tr = sh.for_trader(st, 1)
+    local s1
+    for _, s in ipairs(L.spin) do if not s1 and (s.c or s.a) then s1 = s end end
+    local q = s1.c or s1.a
+    st.tick = 900
+    local ang = st.tick * sh.kit().spin
+    local w = { q[1], q[2] * sm.cos(ang) + q[3] * sm.sin(ang), -q[2] * sm.sin(ang) + q[3] * sm.cos(ang) }
+    -- not where it was at tick 0 (the layer has moved on)
+    local w0 = q
+    expect(vec.dist(w, w0) > 1).to_be(true)
+    local target = { tr.pos[1] + L.spin_pos[1] + w[1], tr.pos[2] + L.spin_pos[2] + w[2], tr.pos[3] + L.spin_pos[3] + w[3] }
+    p.ship.pos = vec.copy(target)
+    local np, blocked = game.move_for_test(st, p, { 0.01, 0, 0 })
+    expect(blocked >= 1).to_be(true)
+    expect(vec.dist(np, target) > 0.5).to_be(true)
+  end)
+end)
