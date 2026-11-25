@@ -665,4 +665,15 @@ function M.ex_work(t, pl, get, cond, max_ticks)
   return M.wait_until(t, pl, cond, max_ticks or 400)
 end
 
+-- tune-sentry-economy: game tests about the beam, trade or story (not the sentries) put the tutorial derelict's light
+-- Watcher back to its old, gentle bite: no beam shaken loose, no faster fire with the alarm, 4-damage bolts
+-- -> a function that puts the tuning back
+function M.gentle_tutorial()
+  local t = require("sim.sentry").tune()
+  local S, L = t.stealth, t.watcher.light
+  local was = { S.light_drops, S.light_fire, L.bolt_damage }
+  S.light_drops, S.light_fire, L.bolt_damage = false, 0, 4
+  return function() S.light_drops, S.light_fire, L.bolt_damage = was[1], was[2], was[3] end
+end
+
 return M

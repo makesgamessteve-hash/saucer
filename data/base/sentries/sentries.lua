@@ -3,8 +3,7 @@
 -- drain shields then hull; Snatchers steal one hot item from a Seat.
 -- Mods may override this file.
 return {
-  -- tune-sentry-economy: a longer Alert window, so a careful pilot slips out of more Alerts (near-misses)
-  alert_time = 1.0,       -- at least this long in Alert before Locked
+  alert_time = 0.75,      -- at least this long in Alert before Locked
   lose_time = 1.0,        -- out of sight this long: back to Dormant
   disabled_time = 12.0,   -- Jammer reboot
   watcher = {

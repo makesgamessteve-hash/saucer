@@ -12,9 +12,9 @@ shook the beam loose.
 - Its alarm can reach 2 (it has no Snatchers or Lockdowns to wake), and its light Watcher fires faster with the
   alarm by half as much as a full one (`light_fire`).
 - A light bolt shakes a beam pull loose too (`light_drops`).
-- Every Watcher stays in Alert at least 1.0 s (was 0.75) before locking: more room to slip away (near-misses).
 
 ## Impact
-- Specs: sentries-and-tools (MODIFIED: state machine, light sentry, hit shakes the beam, site alarm)
-- Code: data/base/sentries/sentries.lua, sim/stealth.lua, sim/sentry.lua; tests/lua/strategic_spec.lua
+- Specs: sentries-and-tools (MODIFIED: light sentry, hit shakes the beam, site alarm)
+- Code: data/base/sentries/sentries.lua, sim/stealth.lua, sim/sentry.lua, sim/autopilot.lua (`gentle_tutorial` for game tests about other things);
+  tests/lua/strategic_spec.lua, loop_spec.lua, tests/game slice/tractor/trade/story
 - Replays re-recorded (sentry timing changes the hash); no state version bump.

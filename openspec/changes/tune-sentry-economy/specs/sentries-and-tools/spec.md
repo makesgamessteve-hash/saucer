@@ -1,12 +1,5 @@
 ## MODIFIED Requirements
 
-### Requirement: Sentry state machine
-Every sentry SHALL follow Dormant → Alert → Locked → Disabled → Dormant with distinct light and sound telegraphs for each state, and SHALL stay leashed inside its ruin's bounding volume.
-
-#### Scenario: Telegraph before acting
-- **WHEN** a Watcher first detects the player
-- **THEN** it spends at least 1.0 s in Alert (yellow light, rising tone) before becoming Locked
-
 ### Requirement: Light sentry at the tutorial site
 The tutorial derelict (site 1 of the home sector) SHALL keep exactly one light Watcher in a big room on the way to the vault, preferring a hall to a shaft and never the entrance. A light Watcher SHALL see less far (70 m, a Seat within 18 m), fill its meter at 0.8 of the rate, lock after 1.2 s, and fire bolts of 6 damage.
 
