@@ -25,3 +25,10 @@ The heart's engine SHALL turn a machine drawn from its civ's language (hoop coun
 #### Scenario: Machines
 - **WHEN** `tests/lua/civdungeon_spec.lua` runs "turn three tilted hoops for the Vyrr and the civ's own machine for others"
 - **THEN** it passes
+
+### Requirement: Hall landmarks
+Every big hall of a relic (footprint at least three quarters of its largest hall's) SHALL hang one render-only landmark whose kind comes from the builder civ's primitives and whose parts move with the clock, staying clear of the walls, the floor and the ceiling lamp, without changing the generated layout.
+
+#### Scenario: Landmarks in every archetype
+- **WHEN** `tests/lua/civdungeon_spec.lua` runs "hangs one in every big hall of every archetype, clear of the walls, floor and ceiling lamp"
+- **THEN** it passes

@@ -48,6 +48,7 @@ function M.set_style(civ)
     end
   end
   require("view.lights").forget()
+  require("view.landmarks").forget()
 end
 local C = {}
 local function colors(civ)
@@ -1062,6 +1063,7 @@ function M.draw(v, A, state, cam, xr, time)
   local core = set.rooms[r.relic.core]
   if show[r.relic.core] and render.visible(cam, core.center, core.radius, xr) then M.engine(v, A, r, time, opts) end
   st.phenomena = require("view.phenomena").draw(v, A, r, show, cam, time, opts)
+  st.landmarks = require("view.landmarks").draw(v, r, civ, show, time, opts)
   -- Seat-locks: the shutter while closed, the socket's glow (brighter while the Seat turns it)
   local relic = require("sim.relic")
   local p = state.players[v.player or 1]

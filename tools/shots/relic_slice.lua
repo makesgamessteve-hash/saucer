@@ -197,6 +197,45 @@ if mode == "styles" then
   return
 end
 
+-- --script-arg landmarks: add-civ-dungeons: three hall landmarks of the Vyrr relic, then the same relic restyled by
+-- seed 42's Oquun (their landmarks and their heart machine)
+if mode == "landmarks" then
+  local lmk = require("view.landmarks")
+  local civs = require("sim.civs")
+  local oq
+  for _, c in ipairs(civs.universe(T.state().seed)) do if c.id == "oquun" then oq = c end end
+  local function view_of(lm, tag)
+    local _, mn = rbox(lm.room)
+    local from = { lm.pos[1] + lm.size * 3.2, lm.pos[2] - lm.size * 1.6, lm.pos[3] - lm.size * 3.6 }
+    park({ from[1], math.max(mn[2] + kit.wall + 2, from[2] - 6), from[3] }, 0)
+    look_at(from, lm.pos, 64)
+    T.wait(8)
+    saucer.log.info(string.format("landmarks: %s room=%d kind=%s size=%.1f", tag, lm.room, lm.kind, lm.size))
+    shot(tag)
+  end
+  for pass, civ in ipairs({ false, oq }) do
+    relicv.set_style(civ or nil)
+    local list = lmk.place(r, civ or relicv.civ_of(r))
+    local seen, n = {}, 0
+    for _, lm in ipairs(list) do
+      if not seen[lm.kind] and n < (pass == 1 and 3 or 2) then
+        seen[lm.kind], n = true, n + 1
+        view_of(lm, string.format("lm%d_%s_%s", pass, civ and civ.id or "vyrr", lm.kind))
+      end
+    end
+  end
+  local c, mn = centre(core)
+  local route = r.relic.route
+  local dc, dir = door_between(route[#route - 1], core)
+  park(add(dc, dir, 30), 0)
+  look_at(add({ dc[1], dc[2] + 30, dc[3] }, dir, 8), { c[1], mn[2] + 70, c[3] }, 84)
+  T.wait(10)
+  shot("lm3_oquun_heart_machine")
+  relicv.set_style(nil)
+  free = nil
+  return
+end
+
 -- 1. the maw from outside, the Villa in front of it for scale
 park({ door[1] + 14, door[2] - 2, door[3] - 70 }, sm.atan2(-0.2, 1))
 look_at({ door[1] + 46, door[2] + 9, door[3] - 84 }, { door[1] - 2, door[2] + 3, door[3] + 4 }, 66)

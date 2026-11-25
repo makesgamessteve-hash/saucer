@@ -20,10 +20,14 @@ should change with the builder, not just the skin (design civs-and-relics §3.2,
 - `tools/maps/`: top-down maps of a relic in every archetype.
 - **Heart machines**: the heart's engine turns 2-7 hoops by the civ's symmetry, at its tempo, tilted by its organic
   warp, stacked up the spindle for spine and helix builders, glowing in its key colour (render only).
-- Not in this change (later, same id): landmarks per big hall, radar outlines of visited rooms.
+- **Landmarks**: every big hall (footprint at least 3/4 of the largest) hangs a strange moving thing in its upper
+  middle, picked from the civ's primitives -- an orrery, a stack of turning slabs, a spinning spindle with sliding
+  hoops, a halo of rolling hoops, or a bloom of shards opening and closing -- in its materials. Render only (placed
+  from the rooms, no generator draws, so layouts and replays are unchanged); never collides.
+- Not in this change (later, same id): radar outlines of visited rooms.
 
 ## Impact
 
 - Specs: `relic-stations` (ADDED: civ room grammars)
-- Code: `civs/dungeons.lua`, `sim/relicgen.lua`, `view/relic.lua`, `civs/relic_slice.lua`, `tools/maps/`; tests
+- Code: `civs/dungeons.lua`, `sim/relicgen.lua`, `view/relic.lua`, `view/landmarks.lua`, `civs/relic_slice.lua`, `tools/maps/`; tests
   `tests/lua/civdungeon_spec.lua`
