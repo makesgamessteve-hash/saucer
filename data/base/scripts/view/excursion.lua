@@ -79,25 +79,33 @@ function M.site_props(v, A, state, p, site, f, tick)
       end
     end
   end
-  -- a lit frame round the crawlspace mouth (it is easy to miss in a great hall)
-  local m = f.route[1]
-  local ch = f.channel
-  local mouth = { m[1], m[2], m[3] }
-  mouth[ch.axis] = (ch.sign > 0 and f.crawl[1][ch.axis] or f.crawl[2][ch.axis]) - ch.sign * 0.05
-  local l = ch.axis == 1 and 3 or 1
-  for _, side in ipairs({ -1, 1 }) do
-    local q = { mouth[1], mouth[2] + ch.h / 2, mouth[3] }
-    q[l] = ch.mid + side * (ch.w / 2 + 0.08)
-    local sc = { 0.08, ch.h + 0.16, 0.08 }
-    v:mesh(A.unit, { pos = q, scale = sc, tint = { 0.95, 0.72, 0.12, 1 } })
+  -- a lit frame round each crawlspace mouth (it is easy to miss in a great hall); a relic has one per pocket
+  for _, pk in ipairs(f.pockets or { f }) do
+    local m = pk.route[1]
+    local ch = pk.channel
+    local mouth = { m[1], m[2], m[3] }
+    mouth[ch.axis] = (ch.sign > 0 and pk.crawl[1][ch.axis] or pk.crawl[2][ch.axis]) - ch.sign * 0.05
+    local l = ch.axis == 1 and 3 or 1
+    for _, side in ipairs({ -1, 1 }) do
+      local q = { mouth[1], mouth[2] + ch.h / 2, mouth[3] }
+      q[l] = ch.mid + side * (ch.w / 2 + 0.08)
+      local sc = { 0.08, ch.h + 0.16, 0.08 }
+      v:mesh(A.unit, { pos = q, scale = sc, tint = { 0.95, 0.72, 0.12, 1 } })
+      n = n + 1
+    end
+    local top = { mouth[1], mouth[2] + ch.h + 0.08, mouth[3] }
+    top[l] = ch.mid
+    local tsc = { 0.08, 0.08, 0.08 }
+    tsc[l] = ch.w + 0.32
+    v:mesh(A.unit, { pos = top, scale = tsc, tint = { 0.95, 0.72, 0.12, 1 } })
     n = n + 1
   end
-  local top = { mouth[1], mouth[2] + ch.h + 0.08, mouth[3] }
-  top[l] = ch.mid
-  local tsc = { 0.08, 0.08, 0.08 }
-  tsc[l] = ch.w + 0.32
-  v:mesh(A.unit, { pos = top, scale = tsc, tint = { 0.95, 0.72, 0.12, 1 } })
-  return n + 1
+  -- a relic's lore niches: a faint glyph glow on the wall
+  for _, ni in ipairs(f.niches or {}) do
+    v:billboard(A.tex.glow, ni.pos, 0.6, { palette = A.pal.base, tint = { 0.7, 0.85, 1, 0.35 + 0.15 * sm.sin(tick * 0.05) } })
+    n = n + 1
+  end
+  return n
 end
 
 -- every nearby site's props -> draws
@@ -106,7 +114,11 @@ function M.props(v, A, state, p, cam)
   for i in ipairs(state.sector.sites) do
     local r = game.ruin(i)
     local f = r and r.foot
-    if f and vec.dist(f.route[4], cam.pos) < M.NEAR then n = n + M.site_props(v, A, state, p, i, f, state.tick) end
+    local near = false
+    for _, pk in ipairs(f and (f.pockets or { f }) or {}) do
+      if vec.dist(pk.route[4], cam.pos) < M.NEAR then near = true end
+    end
+    if near then n = n + M.site_props(v, A, state, p, i, f, state.tick) end
   end
   return n
 end
