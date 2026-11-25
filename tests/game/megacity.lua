@@ -106,6 +106,31 @@ T.assert(get().looted[cand.key], "still taken after a restore")
 T.assert(ap.back_to_helm(T, 1, get), "back at the helm")
 T.screenshot("megacity_organ.png")
 
+-- 5b. the undercity: down the shaft at the back of the hall into the warren, along to the sanctum, beam a find there
+local w = od.warren
+if not w then
+  for _, x in ipairs(p.districts) do if x.warren and not w then od, w = x, x.warren end end
+end
+T.assert(w ~= nil, "an organ with a warren under it")
+local sh = w.shaft
+local sx, sz = (sh[1] + sh[3]) / 2, (sh[2] + sh[4]) / 2
+stage({ sx, od.y + 24, sz }, 0)
+T.assert(mega.in_hall(od, get().ship.pos) == od.organ, "over the shaft, in the hall")
+T.assert(ap.fly(T, 1, get, { sx, w.y0 + 18, sz }, 3, 1500), "flew down the shaft")
+T.assert(mega.in_warren(od, get().ship.pos) == w, "in the warren")
+local sc = w.sanctum
+T.assert(ap.fly(T, 1, get, { sc[1], w.y0 + 18, sc[3] }, 4, 3600), "flew along the corridor to the sanctum")
+local deep
+for _, c in ipairs(tractor.candidates(st, get(), 0, nil)) do if c.pos[2] < od.y and not deep then deep = c end end
+T.assert(deep ~= nil, "a find in the sanctum")
+T.assert(ap.fly(T, 1, get, ap.beam_spot(deep.pos, get().ship.size), 0.5, 1800), "over the sanctum's find")
+T.assert(ap.to_console(T, 1, get), "at the beam console in the warren")
+hold = #get().hold
+T.assert(ap.beam_up(T, 1, get, deep), "beamed the sanctum's find up")
+T.assert(#get().hold == hold + 1 and get().looted[deep.key], "the sanctum's find is in the hold and taken")
+T.assert(ap.back_to_helm(T, 1, get), "back at the helm in the warren")
+T.screenshot("megacity_warren.png")
+
 -- 6. the moon and the asteroid cities
 for _, sid in ipairs({ 4, 2 }) do
   game.enter_sector(st, sid)

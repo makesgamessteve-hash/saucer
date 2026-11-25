@@ -81,7 +81,7 @@ city's air and light SHALL hold over its whole footprint, and the sky's backdrop
 ### Requirement: Organ halls
 Every outer district whose ordinary megaforms allow it SHALL have an organ: its tallest ordinary megaform, hollow at the
 street, with a hall 60-110 m high behind a ship-sized mouth in the face nearest the avenue, nothing solid inside the hall,
-4-6 finds on its floor and a ring turning slowly in it. The finds SHALL be beamed like any other find and stay taken for
+4-6 finds on its floor and a machine turning slowly in it whose halo spans most of the hall, every ring inside it. The finds SHALL be beamed like any other find and stay taken for
 that player across a restore and a save.
 
 #### Scenario: Organs
@@ -95,3 +95,22 @@ south sides, turning and bobbing, render only, a function of the clock, never le
 #### Scenario: Drifters
 - **WHEN** `tests/lua/megacity_spec.lua` runs "an organ's finds are beamed like any other and stay taken for that player"
 - **THEN** it passes, the drifters staying inside the district's cell above the street
+
+### Requirement: Terrace fold bays
+An outer district SHALL have up to two fold bays on its tier tops at least 40 m above the street: a 44 x 44 m pad with
+30 m of open air over it and a cradle on it, collided as drawn. A Villa growing back from the Seat in a bay SHALL pay
+nothing, as in a relic's cradle bay.
+
+#### Scenario: Bays
+- **WHEN** `tests/lua/megacity_spec.lua` runs "the terraces hold fold bays with cradles, and growing back to the Villa in one is free"
+- **THEN** it passes
+
+### Requirement: The undercity
+Under every organ that has room, a shaft SHALL drop from the back of its hall through the foundation into a warren: a
+hub, two to four corridors out to chambers inside the district, walled and floored, the farthest chamber a sanctum
+where glowing stones circle a breathing heart. The warren's finds SHALL be sensed only from inside it and stay taken
+like the hall's.
+
+#### Scenario: Warrens
+- **WHEN** `tests/lua/megacity_spec.lua` runs "under each organ a shaft drops into a warren of corridors and chambers, its sanctum's finds beamed only from below", and `tests/game/megacity.lua` runs
+- **THEN** they pass

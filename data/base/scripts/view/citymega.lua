@@ -47,8 +47,9 @@ end
 function M.full_parts(p, d)
   local col, uv = M.stone(p, d), p.frame.kit.uv or 0.125
   local parts = {}
-  for n, b in ipairs(mega.solids(p, d)) do
-    parts[#parts + 1] = { kind = "box", min = b[1], max = b[2], color = n == 1 and shade(col, 0.6) or shade(col, 0.9 + (n % 3) * 0.06), uv = uv }
+  local sol = mega.solids(p, d)
+  for n, b in ipairs(sol) do
+    parts[#parts + 1] = { kind = "box", min = b[1], max = b[2], color = n <= (sol.found or 1) and shade(col, 0.6) or shade(col, 0.9 + (n % 3) * 0.06), uv = uv }
   end
   return parts
 end
@@ -57,8 +58,9 @@ end
 function M.light_parts(p, d)
   local win = p.style.window or { 1, 0.85, 0.5 }
   local parts = {}
-  for n, b in ipairs(mega.solids(p, d)) do
-    if n > 1 then
+  local sol = mega.solids(p, d)
+  for n, b in ipairs(sol) do
+    if n > (sol.found or 1) then
       local y = b[1][2] + 10
       while y + 3 < b[2][2] do
         parts[#parts + 1] = { kind = "box", min = { b[1][1] - 0.6, y, b[1][3] - 0.6 }, max = { b[2][1] + 0.6, y + 2.5, b[2][3] + 0.6 },
@@ -66,6 +68,16 @@ function M.light_parts(p, d)
         y = y + M.BAND_GAP
       end
     end
+  end
+  -- the fold bays: a lit rim round each pad and a glowing plate on its cradle
+  local acc = p.style.accent or { 0.8, 0.9, 1.0 }
+  for _, b in ipairs(mega.bays(p, d)) do
+    local x0, z0, x1, z1, y = b.lo[1], b.lo[3], b.hi[1], b.hi[3], b.lo[2]
+    for _, r in ipairs({ { x0, z0, x1, z0 + 1.5 }, { x0, z1 - 1.5, x1, z1 }, { x0, z0, x0 + 1.5, z1 }, { x1 - 1.5, z0, x1, z1 } }) do
+      parts[#parts + 1] = { kind = "box", min = { r[1], y, r[2] }, max = { r[3], y + 0.3, r[4] }, color = acc, emissive = 1 }
+    end
+    local c, cs = b.cradle, mega.CRADLE[1] / 2 - 2
+    parts[#parts + 1] = { kind = "box", min = { c[1] - cs, c[2], c[3] - cs }, max = { c[1] + cs, c[2] + 0.3, c[3] + cs }, color = win, emissive = 1 }
   end
   return parts
 end
@@ -121,27 +133,70 @@ local function now_ms() return saucer.time and saucer.time.wall_ms and saucer.ti
 
 -- one frame of plan p: build what the budget allows, free what is far, draw by level. visible(c, r) culls.
 -- -> stats { full, lights, sil, band, built, culled, freed }
-M.ORGAN_DRAW = 1500  -- m: an organ hall's machine is drawn this near
+M.ORGAN_DRAW = 2000  -- m: an organ hall's machine is drawn this near
 
--- an organ's machine: a ring turning slowly in its hall, tilting as it goes (a function of the clock) -> pose
+-- an organ's machine (a function of the clock) -> pose { pos, scale, yaw, rings = { {scale, yaw, pitch, roll}... },
+-- core = { pos, size }, glow }. A wide halo almost fills the hall and rocks gently; inside it a second ring stands up
+-- and rolls over, and a third spins fast round a pulsing, bobbing core. Every ring stays inside its hall.
+M.ORGAN_TILT = 0.18   -- rad, the halo's rocking
 function M.organ_pose(d, t)
   local og = d.organ
+  local h = og.hall
   local ph = (d.k * 0.73) % 6.283
-  return { pos = og.centre, scale = og.h * 0.32, yaw = t * 0.21 + ph, pitch = 0.6 * math.sin(t * 0.13 + ph), roll = 0 }
+  local half = og.h / 2 - 6
+  local side = math.min(h[4] - h[1], h[6] - h[3]) / 2 - 18
+  local r1 = math.max(8, math.min(side, half / math.sin(M.ORGAN_TILT)))
+  local r2 = math.min(r1 * 0.62, half)
+  local r3 = r2 * 0.45
+  local c = og.centre
+  local yaw = t * 0.21 + ph
+  local pulse = 0.5 + 0.5 * math.sin(t * 1.3 + ph)
+  local core = 6 + 4 * pulse
+  local bob = math.min(r3 * 0.3, half - core) * math.sin(t * 0.4 + ph)
+  return { pos = c, scale = r1, yaw = yaw,
+           rings = { { scale = r1, yaw = yaw, pitch = M.ORGAN_TILT * math.sin(t * 0.13 + ph), roll = 0 },
+                     { scale = r2, yaw = -yaw * 1.7, pitch = 1.2 + 0.3 * math.sin(t * 0.29 + ph), roll = t * 0.37 },
+                     { scale = r3, yaw = t * 1.1 + ph, pitch = 0.4 * math.sin(t * 0.7), roll = t * 0.9 } },
+           core = { pos = { c[1], c[2] + bob, c[3] }, size = core }, glow = r2 * (0.8 + 0.4 * pulse), pulse = pulse }
+end
+
+-- the sanctum at the far end of an organ's warren: a cluster of glowing stones circling a dim heart, swelling and
+-- shrinking as if breathing, never touching the floor or the ceiling (a function of the clock)
+-- -> { heart = {pos, size}, stones = { {pos, size, yaw} }, breath }
+M.STONES = 7
+function M.sanctum_pose(d, t)
+  local w = d.warren
+  local c = w.sanctum
+  local ph = (d.k * 1.31) % 6.283
+  local breath = 0.5 + 0.5 * math.sin(t * 0.45 + ph)
+  local R = c.size * (0.22 + 0.08 * breath)
+  local stones = {}
+  for i = 1, M.STONES do
+    local a = t * (0.12 + 0.02 * i) + i * 6.283 / M.STONES + ph
+    local y = c[2] + 9 * math.sin(t * 0.3 + i * 1.7)
+    stones[i] = { pos = { c[1] + math.sin(a) * R, y, c[3] + math.cos(a) * R }, size = 3 + 2 * breath + (i % 3), yaw = a * 2 }
+  end
+  return { heart = { pos = { c[1], c[2], c[3] }, size = 6 + 5 * breath }, stones = stones, breath = breath }
 end
 
 -- the drifters: tall glowing slabs that glide down the avenues on a district's east and south sides, turning and
--- bobbing, never touching anything (a function of the clock) -> pose { pos, size, yaw }
-M.DRIFT_DRAW = 2500
+-- bobbing, never touching anything, each with a halo and two small followers (a function of the clock)
+-- -> pose { pos, size, yaw, glow, trail = { {pos, size}... } }
+M.DRIFT_DRAW = 3500
 M.DRIFT_SPEED = 9     -- m/s
+M.DRIFT_SIZE = { 16, 84, 6 }
 function M.drift_pose(p, d, k, t)
   local c = d.cell
   local len = k == 1 and (c[4] - c[2]) or (c[3] - c[1])
-  local u = (t * M.DRIFT_SPEED + d.k * 397 + k * 911) % (2 * len)
-  if u > len then u = 2 * len - u end
-  local y = p.frame.y + 90 + 50 * math.sin(t * 0.17 + d.k + k)
-  local pos = k == 1 and { c[3], y, c[2] + u } or { c[1] + u, y, c[4] }
-  return { pos = pos, size = { 10, 46, 3 }, yaw = t * 0.11 + d.k * 0.5 + k }
+  local function at(tt)
+    local u = (tt * M.DRIFT_SPEED + d.k * 397 + k * 911) % (2 * len)
+    if u > len then u = 2 * len - u end
+    local y = p.frame.y + 110 + 50 * math.sin(tt * 0.17 + d.k + k)
+    return k == 1 and { c[3], y, c[2] + u } or { c[1] + u, y, c[4] }
+  end
+  local trail = {}
+  for i = 1, 2 do trail[i] = { pos = at(t - i * 4), size = 6 - i * 1.5 } end
+  return { pos = at(t), size = M.DRIFT_SIZE, yaw = t * 0.11 + d.k * 0.5 + k, glow = 70, trail = trail }
 end
 
 function M.draw(v, A, p, cam, tex, visible, budget, t)
@@ -194,20 +249,45 @@ function M.draw(v, A, p, cam, tex, visible, budget, t)
       end
       if dist <= M.DRIFT_DRAW then
         local win = p.style.window or { 1, 0.85, 0.5 }
+        local tint = { win[1], win[2], win[3], 1 }
+        local box = require("view.assets").unit_box(true)
         for kk = 1, 2 do
           local o = M.drift_pose(p, d, kk, t or 0)
-          v:mesh(require("view.assets").unit_box(true), { pos = o.pos, scale = o.size, yaw = o.yaw, palette = A.pal.base,
-                                                           tint = { win[1], win[2], win[3], 1 } })
+          v:mesh(box, { pos = o.pos, scale = o.size, yaw = o.yaw, palette = A.pal.base, tint = tint })
+          for _, f in ipairs(o.trail) do
+            v:mesh(box, { pos = f.pos, scale = { f.size, f.size, f.size }, yaw = -o.yaw, palette = A.pal.base, tint = tint })
+          end
+          if A.tex.glow then v:billboard(A.tex.glow, o.pos, o.glow, { palette = A.pal.base, tint = { win[1], win[2], win[3], 0.45 } }) end
           st.drifters = (st.drifters or 0) + 1
         end
       end
       if d.organ and dist <= M.ORGAN_DRAW then
         local o = M.organ_pose(d, t or 0)
         local acc = p.style.accent or { 0.8, 0.9, 1.0 }
-        v:mesh(require("view.cityphen").ring_mesh(), { pos = o.pos, scale = o.scale, yaw = o.yaw, pitch = o.pitch, roll = 0,
-                                                     palette = A.pal.base, tint = { acc[1], acc[2], acc[3], 1 } })
-        if A.tex.glow then v:billboard(A.tex.glow, o.pos, o.scale * 0.5, { palette = A.pal.base, tint = { acc[1], acc[2], acc[3], 0.5 } }) end
+        local win = p.style.window or acc
+        local ring = require("view.cityphen").ring_mesh()
+        for i, r in ipairs(o.rings) do
+          local col = i == 2 and win or acc
+          v:mesh(ring, { pos = o.pos, scale = r.scale, yaw = r.yaw, pitch = r.pitch, roll = r.roll,
+                         palette = A.pal.base, tint = { col[1], col[2], col[3], 1 } })
+        end
+        local cs = o.core.size
+        v:mesh(require("view.assets").unit_box(true), { pos = o.core.pos, scale = { cs, cs, cs }, yaw = o.yaw * 2, pitch = o.yaw,
+                                                        palette = A.pal.base, tint = { win[1], win[2], win[3], 1 } })
+        if A.tex.glow then v:billboard(A.tex.glow, o.core.pos, o.glow, { palette = A.pal.base, tint = { acc[1], acc[2], acc[3], 0.35 + 0.3 * o.pulse } }) end
         st.organs = (st.organs or 0) + 1
+        if d.warren then
+          local sp = M.sanctum_pose(d, t or 0)
+          local box = require("view.assets").unit_box(true)
+          for _, o2 in ipairs(sp.stones) do
+            local z = o2.size
+            v:mesh(box, { pos = o2.pos, scale = { z, z, z }, yaw = o2.yaw, palette = A.pal.base, tint = { acc[1], acc[2], acc[3], 1 } })
+          end
+          local hz = sp.heart.size
+          v:mesh(box, { pos = sp.heart.pos, scale = { hz, hz, hz }, yaw = -o.yaw, palette = A.pal.base, tint = { win[1] * 0.5, win[2] * 0.5, win[3] * 0.5, 1 } })
+          if A.tex.glow then v:billboard(A.tex.glow, sp.heart.pos, hz * 4, { palette = A.pal.base, tint = { win[1], win[2], win[3], 0.25 + 0.3 * sp.breath } }) end
+          st.sanctums = (st.sanctums or 0) + 1
+        end
       end
     elseif c.sil[k] then
       v:mesh(c.sil[k], { palette = A.pal.base })
