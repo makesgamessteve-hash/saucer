@@ -675,8 +675,10 @@ function M.step_bolts(state, dt)
           hull.damage(s, b.dmg or t.watcher.bolt_damage)
           p.hits = (p.hits or 0) + 1
           -- add-strategic-sentries: a hit shakes a pull in progress loose (game.lua lets go)
-          -- (a light Watcher's bolts at the tutorial derelict do not)
-          if p.tractor and t.stealth and t.stealth.hit_drops and not b.light then p.tractor.shaken = true end
+          -- (a light Watcher's bolts at the tutorial derelict only with light_drops)
+          if p.tractor and t.stealth and t.stealth.hit_drops and (not b.light or t.stealth.light_drops) then
+            p.tractor.shaken = true
+          end
           p.fx[#p.fx + 1] = { tick = state.tick, sound = "hit" }
           alive = false
         end

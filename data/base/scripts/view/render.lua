@@ -311,9 +311,9 @@ M.RADAR_HEIGHT = 0.20   -- stalks reach at most this far above/below the disc
 -- a contact's spot on the 3D radar (desk-local offsets from the disc centre):
 -- x/z by bearing and range, y by elevation, exaggerated x4 so a few hundred
 -- meters above or below you still reads at a glance
-function M.radar_point(ship, pos)
+function M.radar_point(ship, pos, range)
   local rel = avatar.rot(-ship.yaw, vec.sub(pos, ship.pos))
-  local k = M.RADAR_RADIUS / M.RADAR_RANGE
+  local k = M.RADAR_RADIUS / (range or M.RADAR_RANGE)
   local x, z = rel[1] * k, rel[3] * k
   local r = sm.sqrt(x * x + z * z)
   if r > M.RADAR_RADIUS then x, z = x * M.RADAR_RADIUS / r, z * M.RADAR_RADIUS / r end
@@ -529,8 +529,20 @@ function M.console(v, A, state, o, d)
     local a = k * sm.tau / 16
     blip(v, A, d, { cx + sm.sin(a) * (M.RADAR_RADIUS + 0.01), base, cz + sm.cos(a) * (M.RADAR_RADIUS + 0.01) }, { 0.012, 0.004, 0.012 }, { 0.3, 0.6, 0.8, 1 })
   end
+  -- add-civ-dungeons: inside a relic the radar closes in and outlines the rooms the saucer has been in
+  local relicmap = require("view.relicmap")
+  local ruin, here = relicmap.inside(state, o)
+  local range = ruin and relicmap.RANGE or nil
+  if ruin then
+    relicmap.note(ruin, here)
+    for _, dot in ipairs(relicmap.dots(ruin, here, ship.pos)) do
+      local q = M.radar_point(ship, dot.pos, range)
+      blip(v, A, d, { cx + q[1], base + q[2], cz + q[3] }, { 0.012, 0.006, 0.012 }, dot.color)
+      n = n + 1
+    end
+  end
   for _, tg in ipairs(M.radar_targets(state, o)) do
-    local q = M.radar_point(ship, tg.pos)
+    local q = M.radar_point(ship, tg.pos, range)
     blip(v, A, d, { cx + q[1], base + q[2], cz + q[3] }, { 0.07, 0.05, 0.07 }, tg.color)
     local h = math.abs(q[2])
     if h > 0.004 then

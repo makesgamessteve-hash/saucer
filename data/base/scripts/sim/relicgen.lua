@@ -61,11 +61,65 @@ local function overlaps(c1, s1, c2, s2, pad)
   return true
 end
 
+-- add-civ-dungeons: the relic kit restyled by its civ's room grammar (civs/dungeons.lua): a copy of the kit whose
+-- `dungeon` is the warren overridden by the civ's massing archetype and body scale. Civs without a language, or
+-- whose language pins `layout = "warren"` (the Vyrr), get the kit as it is.
+local data = require("lib.data")
+local styled_memo = {}
+function M.archetype(civ)
+  local lang = civ and civ.language
+  if not lang or lang.layout == "warren" then return nil end
+  local G = data.load("civs/dungeons.lua")
+  local m = civ.massing or "cluster"
+  return G.archetypes[m] and m or "cluster"
+end
+function M.styled(kit, civ)
+  local arch = M.archetype(civ)
+  if not arch then return kit end
+  local scale = civ.axes and civ.axes.body_scale or "human"
+  local key = kit.id .. "|" .. arch .. "|" .. scale
+  if styled_memo[key] then return styled_memo[key] end
+  local G = data.load("civs/dungeons.lua")
+  local A, S = G.archetypes[arch], G.scales[scale] or {}
+  local D = {}
+  for k, v in pairs(kit.dungeon) do D[k] = v end
+  for k, v in pairs(A) do D[k] = v end
+  D.archetype = arch
+  if S.hall_w then D.hall_w = S.hall_w end
+  if A.small then D.hall_w = { 14, 14, 18 } end
+  if A.square then D.hall_w = { D.hall_w[#D.hall_w], D.hall_w[#D.hall_w] } end
+  D.hall_h = G.hall_h
+  -- levels far enough apart that a shaft between the tallest halls is still 20 m (5 cells) long
+  local tallest = 0
+  for _, w in ipairs(D.hall_w) do tallest = math.max(tallest, G.hall_h[w]) end
+  D.level_h = math.max(D.level_h, tallest + 6)
+  if S.heart then D.heart = S.heart end
+  local mul = S.nodes_mul or 1
+  local cap = D.lattice[1] * D.lattice[2] * D.levels
+  if D.mask == "ring" then cap = cap - math.max(0, D.lattice[1] - 2) * math.max(0, D.lattice[2] - 2) * D.levels end
+  local n1 = math.max(6, math.min(cap, math.floor(D.nodes[1] * mul)))
+  D.nodes = { n1, math.max(n1, math.min(cap, math.floor(D.nodes[2] * mul))) }
+  D.chambers = S.chambers or A.chambers or D.chambers
+  if S.chambers_add then D.chambers = { D.chambers[1], D.chambers[2] + S.chambers_add } end
+  -- centre the lattice: node (0, 0) sits pitch/2 in from the grid's edge
+  D.origin = { D.pitch, D.origin[2], D.origin[3] }
+  local out = {}
+  for k, v in pairs(kit) do out[k] = v end
+  out.dungeon, out.grid = D, G.grid
+  styled_memo[key] = out
+  return out
+end
+
 -- the warren's lattice: which nodes hold a hall, and the tree + loop edges between them. The way from the maw's node
 -- to a lowest-level last-row node is carved first (a walk that never comes back up), then the rest grows off it.
 local function lattice(rng, D)
   local nx, nz, nl = D.lattice[1], D.lattice[2], D.levels
   local function key(i, j, l) return (l * nz + j) * nx + i end
+  -- add-civ-dungeons: a ring mask leaves the lattice's inside empty (the start row and the heart row stay whole)
+  local function open(i, j)
+    if D.mask ~= "ring" then return true end
+    return i == 0 or i == nx - 1 or j == 0 or j == nz - 1
+  end
   local filled, order, edges, linked = {}, {}, {}, {}
   local function fill(n)
     if not filled[key(n[1], n[2], n[3])] then
@@ -90,6 +144,15 @@ local function lattice(rng, D)
     if cur[3] > 0 then opts[#opts + 1] = { cur[1], cur[2], cur[3] - 1 } end
     if cur[1] > 0 and rng:int(1, 3) == 1 then opts[#opts + 1] = { cur[1] - 1, cur[2], cur[3] } end
     if cur[1] < nx - 1 and rng:int(1, 3) == 1 then opts[#opts + 1] = { cur[1] + 1, cur[2], cur[3] } end
+    if D.mask then
+      local ok = {}
+      for _, o in ipairs(opts) do if open(o[1], o[2]) then ok[#ok + 1] = o end end
+      if #ok == 0 then -- walled in by the mask: step across toward the nearer rim column
+        ok[1] = { cur[1] < nx / 2 and cur[1] - 1 or cur[1] + 1, cur[2], cur[3] }
+        if cur[1] == 0 or cur[1] == nx - 1 then ok[1] = { cur[1], cur[2], cur[3] - 1 } end
+      end
+      opts = ok
+    end
     local nxt = opts[rng:int(1, #opts)]
     if filled[key(nxt[1], nxt[2], nxt[3])] then nxt = opts[1] end
     fill(nxt)
@@ -101,7 +164,7 @@ local function lattice(rng, D)
     local out = {}
     for _, d in ipairs({ { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } }) do
       local m = { n[1] + d[1], n[2] + d[2], n[3] + d[3] }
-      if m[1] >= 0 and m[1] < nx and m[2] >= 0 and m[2] < nz and m[3] >= 0 and m[3] < nl then
+      if m[1] >= 0 and m[1] < nx and m[2] >= 0 and m[2] < nz and m[3] >= 0 and m[3] < nl and open(m[1], m[2]) then
         out[#out + 1] = { m, d[3] ~= 0 }
       end
     end
@@ -607,6 +670,7 @@ local function phenomena(rng, rooms, doors, L, kit, origin, civ)
 end
 
 function M.try(seed, kit, civ, origin)
+  kit = M.styled(kit, civ)
   local rng = saucer.rng.new(seed)
   local D = kit.dungeon
   local rooms, doors, L = layout(rng, kit)
@@ -775,7 +839,7 @@ function M.try(seed, kit, civ, origin)
   end
   local chamber_ids = {}
   for _, q in ipairs(chambers) do chamber_ids[#chamber_ids + 1] = q.id end
-  local relic = { archetype = "warren", civ_id = civ and civ.id or "vyrr", spaces = sp, bays = bays, branches = branches,
+  local relic = { archetype = D.archetype or "warren", civ_id = civ and civ.id or "vyrr", spaces = sp, bays = bays, branches = branches,
                   pockets = {}, locks = locks, lung = lung.id, plague = plague.id, core = L.core.id, heart = L.core.id,
                   halls = {}, trunks = {}, shafts = {}, chambers = chamber_ids, levels = nlev,
                   villa_share = villa / (villa + seat), length = 0, engine = 1 }
@@ -801,7 +865,8 @@ function M.generate(seed, kit, civ, origin)
   local key = string.format("%s|%s|%s|%g,%g,%g", tostring(seed), kit.id, civ and civ.id or "?", origin[1], origin[2], origin[3])
   if memo[key] then return memo[key] end
   local out, why
-  for i = 0, M.MAX_TRIES - 1 do
+  local tries = M.archetype(civ) and data.load("civs/dungeons.lua").tries or M.MAX_TRIES
+  for i = 0, tries - 1 do
     out, why = M.try(i == 0 and seed or saucer.seed_child(seed, "retry", i), kit, civ, origin)
     if out then
       out.attempts = i + 1

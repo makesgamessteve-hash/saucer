@@ -22,6 +22,7 @@ return {
     phenomena = { motes = 3, breath = 3, eye = 2, ripple = 2, chimes = 2, orbit = 1, procession = 2, shadow = 1 },
     lamp_colors = { { 0.78, 0.42, 1.0 }, { 1.0, 0.36, 0.46 }, { 0.45, 0.85, 1.0 } },
     core_color = { 0.85, 0.55, 1.0 },     -- the heart and the idol glow
+    layout = "warren",                    -- add-civ-dungeons: the slice keeps the kit's warren (no civ grammar)
   },
   materials = {
     dominant = { id = "membrane", share = { 0.55, 0.70 } },
