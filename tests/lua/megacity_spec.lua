@@ -258,4 +258,97 @@ describe("megacity", function()
     saucer.physics.remove(b)
     expect(saucer.physics.count()).to_be(n)
   end)
+
+  it("every outer district's organ is hollow at the street: a hall behind a mouth, its finds inside", function()
+    local st, i, r, p = in_city("planet")
+    local n = 0
+    for _, d in ipairs(p.districts) do
+      local og = d.organ
+      if og then
+        n = n + 1
+        local h = og.hall
+        expect(og.h >= mega.HALL_H[1] - mega.SNAP and og.h <= mega.HALL_H[2]).to_be(true)
+        expect(#og.finds >= mega.FINDS[1] and #og.finds <= mega.FINDS[2]).to_be(true)
+        -- nothing solid inside the hall, and its finds lie in it
+        local sol = mega.build(d)
+        for k, b in ipairs(sol) do
+          if k > 1 then
+            local inside = b[1][1] < h[4] and b[2][1] > h[1] and b[1][3] < h[6] and b[2][3] > h[3] and b[1][2] < h[5] and b[2][2] > h[2]
+            expect(inside).to_be(false)
+          end
+        end
+        for _, f in ipairs(og.finds) do expect(mega.in_hall(d, f.pos) == og).to_be(true) end
+        expect(mega.in_hall(d, og.centre)).to_be(og)
+        expect(mega.in_hall(d, { h[1] - 50, og.centre[2], og.centre[3] })).to_be(nil)
+        -- the mouth: a ship-sized gap in one face, from the street up
+        local o = d.organs[og.index]
+        local W = mega.WALL
+        local mx = og.side <= 2 and (og.side == 1 and h[1] - W / 2 or h[4] + W / 2) or (h[1] + h[4]) / 2
+        local mz = og.side >= 3 and (og.side == 3 and h[3] - W / 2 or h[6] + W / 2) or (h[3] + h[6]) / 2
+        local blocked = false
+        for k, b in ipairs(sol) do
+          if k > 1 and mx > b[1][1] and mx < b[2][1] and mz > b[1][3] and mz < b[2][3] and p.frame.y + 10 > b[1][2] and p.frame.y + 10 < b[2][2] then blocked = true end
+        end
+        expect(blocked).to_be(false)
+        expect(o.megaform).to_be(nil)
+      end
+    end
+    expect(n).to_be_greater(#p.districts // 2)
+    expect(mega.in_hall(nil, { 0, 0, 0 })).to_be(nil)
+    expect(mega.plan_organ(1, { organs = {}, k = 1, y = 0, box = { 0, 0, 1, 1 } })).to_be(nil)
+  end)
+
+  it("an organ's finds are beamed like any other and stay taken for that player", function()
+    local st, i, r, p = in_city("planet")
+    local pl = st.players[1]
+    local d
+    for _, x in ipairs(p.districts) do if x.organ and not d then d = x end end
+    pl.site = 0
+    local f1 = d.organ.finds[1].pos
+    pl.ship.pos = { f1[1], p.frame.y + 20, f1[3] }
+    local tractor = require("sim.tractor")
+    local cands = {}
+    for _, c in ipairs(tractor.candidates(st, pl, 0, nil)) do if c.organ then cands[#cands + 1] = c end end
+    local near = 0
+    for _, f in ipairs(d.organ.finds) do
+      if math.abs(f.pos[1] - pl.ship.pos[1]) <= mega.SENSE and math.abs(f.pos[3] - pl.ship.pos[3]) <= mega.SENSE then near = near + 1 end
+    end
+    expect(near >= 1).to_be(true)
+    expect(#cands).to_be(near)
+    local c = cands[1]
+    expect(c.kind).to_be("slot")
+    expect(c.item.civ ~= nil).to_be(true)
+    local before = #pl.hold
+    game.pick_up(st, pl, c, 0)
+    expect(#pl.hold).to_be(before + 1)
+    expect(pl.looted[c.key]).to_be(true)
+    local again = 0
+    for _, x in ipairs(tractor.candidates(st, pl, 0, nil)) do if x.organ then again = again + 1 end end
+    expect(again).to_be(near - 1)
+    -- inside a site, or far from any organ: none
+    pl.site = i
+    expect(#mega.candidates(st, pl)).to_be(0)
+    pl.site = 0
+    pl.ship.pos = { 1e6, 0, 1e6 }
+    expect(#mega.candidates(st, pl)).to_be(0)
+    -- the machine in the hall turns with the clock and stays in its hall
+    local a, b = megav.organ_pose(d, 0), megav.organ_pose(d, 10)
+    expect(a.yaw ~= b.yaw).to_be(true)
+    expect(mega.in_hall(d, a.pos)).to_be(d.organ)
+    expect(a.scale * 2 < d.organ.h).to_be(true)
+    local v = fake_view()
+    local s = megav.draw(v, A, p, { pos = d.organ.centre, yaw = 0, pitch = 0 }, 1, function() return true end, 1000, 3)
+    expect((s.organs or 0) >= 1).to_be(true)
+    expect((s.drifters or 0) >= 2).to_be(true)
+    -- the drifters glide down the avenue, back and forth, and never leave it
+    for kk = 1, 2 do
+      for _, tt in ipairs({ 0, 7.5, 300, 1e4 }) do
+        local o = megav.drift_pose(p, d, kk, tt)
+        local c = d.cell
+        expect(o.pos[1] >= c[1] - 1e-6 and o.pos[1] <= c[3] + 1e-6 and o.pos[3] >= c[2] - 1e-6 and o.pos[3] <= c[4] + 1e-6).to_be(true)
+        expect(o.pos[2] > p.frame.y + 30).to_be(true)
+      end
+      expect(megav.drift_pose(p, d, kk, 1).pos[kk == 1 and 3 or 1] ~= megav.drift_pose(p, d, kk, 2).pos[kk == 1 and 3 or 1]).to_be(true)
+    end
+  end)
 end)

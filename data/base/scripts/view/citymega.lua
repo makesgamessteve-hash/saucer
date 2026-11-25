@@ -121,7 +121,30 @@ local function now_ms() return saucer.time and saucer.time.wall_ms and saucer.ti
 
 -- one frame of plan p: build what the budget allows, free what is far, draw by level. visible(c, r) culls.
 -- -> stats { full, lights, sil, band, built, culled, freed }
-function M.draw(v, A, p, cam, tex, visible, budget)
+M.ORGAN_DRAW = 1500  -- m: an organ hall's machine is drawn this near
+
+-- an organ's machine: a ring turning slowly in its hall, tilting as it goes (a function of the clock) -> pose
+function M.organ_pose(d, t)
+  local og = d.organ
+  local ph = (d.k * 0.73) % 6.283
+  return { pos = og.centre, scale = og.h * 0.32, yaw = t * 0.21 + ph, pitch = 0.6 * math.sin(t * 0.13 + ph), roll = 0 }
+end
+
+-- the drifters: tall glowing slabs that glide down the avenues on a district's east and south sides, turning and
+-- bobbing, never touching anything (a function of the clock) -> pose { pos, size, yaw }
+M.DRIFT_DRAW = 2500
+M.DRIFT_SPEED = 9     -- m/s
+function M.drift_pose(p, d, k, t)
+  local c = d.cell
+  local len = k == 1 and (c[4] - c[2]) or (c[3] - c[1])
+  local u = (t * M.DRIFT_SPEED + d.k * 397 + k * 911) % (2 * len)
+  if u > len then u = 2 * len - u end
+  local y = p.frame.y + 90 + 50 * math.sin(t * 0.17 + d.k + k)
+  local pos = k == 1 and { c[3], y, c[2] + u } or { c[1] + u, y, c[4] }
+  return { pos = pos, size = { 10, 46, 3 }, yaw = t * 0.11 + d.k * 0.5 + k }
+end
+
+function M.draw(v, A, p, cam, tex, visible, budget, t)
   local c = cache(p)
   local st = { full = 0, lights = 0, sil = 0, band = 0, built = 0, culled = 0, freed = 0 }
   local t0, limit = now_ms(), budget or M.BUDGET_MS
@@ -168,6 +191,23 @@ function M.draw(v, A, p, cam, tex, visible, budget)
       if dist <= M.NEAR and c.lights[k] then
         v:mesh(c.lights[k], { palette = A.pal.base })
         st.lights = st.lights + 1
+      end
+      if dist <= M.DRIFT_DRAW then
+        local win = p.style.window or { 1, 0.85, 0.5 }
+        for kk = 1, 2 do
+          local o = M.drift_pose(p, d, kk, t or 0)
+          v:mesh(require("view.assets").unit_box(true), { pos = o.pos, scale = o.size, yaw = o.yaw, palette = A.pal.base,
+                                                           tint = { win[1], win[2], win[3], 1 } })
+          st.drifters = (st.drifters or 0) + 1
+        end
+      end
+      if d.organ and dist <= M.ORGAN_DRAW then
+        local o = M.organ_pose(d, t or 0)
+        local acc = p.style.accent or { 0.8, 0.9, 1.0 }
+        v:mesh(require("view.cityphen").ring_mesh(), { pos = o.pos, scale = o.scale, yaw = o.yaw, pitch = o.pitch, roll = 0,
+                                                     palette = A.pal.base, tint = { acc[1], acc[2], acc[3], 1 } })
+        if A.tex.glow then v:billboard(A.tex.glow, o.pos, o.scale * 0.5, { palette = A.pal.base, tint = { acc[1], acc[2], acc[3], 0.5 } }) end
+        st.organs = (st.organs or 0) + 1
       end
     elseif c.sil[k] then
       v:mesh(c.sil[k], { palette = A.pal.base })

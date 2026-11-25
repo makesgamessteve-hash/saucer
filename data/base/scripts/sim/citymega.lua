@@ -27,6 +27,14 @@ M.SNAP = 4                 -- m, the cell every tier is rounded to
 M.ACTIVE = 1500            -- m from a ship to a district's box: inside this the district is solid
 M.KEEP = 1750              -- m: an active district stays solid until the ship is this far
 M.PER_PLAYER = 9
+-- add-alien-cities-3: every outer district's organ, its tallest ordinary megaform, is hollow at the street: a hall
+-- behind a mouth in one face, holding finds and the organ's slow machine
+M.ORGAN_MIN = 120          -- m, the least footprint side of a megaform that can be an organ
+M.WALL = 8                 -- m, an organ's walls and roof
+M.HALL_H = { 60, 110 }     -- m, its hall's height
+M.MOUTH = { 48, 34 }       -- m, its mouth's width and height
+M.FINDS = { 4, 6 }
+M.SENSE = 160              -- m, finds this near the ship are rolled (like a city's)
 M.MAX_ACTIVE = 16
 
 local floor, max, min = math.floor, math.max, math.min
@@ -185,7 +193,93 @@ function M.plan_district(seed, k, c, fr, style)
       end
     end
   end
+  M.plan_organ(seed, d)
   return d
+end
+
+-- the district's organ: its tallest ordinary megaform wide enough, hollowed at the street (own rng, so the rest of
+-- the district is drawn exactly as before)
+function M.plan_organ(seed, d)
+  local s = M.SNAP
+  local function base(o)
+    local t = citygen.tiers(o.form, o.w // s, o.w2 // s, o.h // s)[1]
+    return { o.x0 + t.dx * s, o.z0 + t.dz * s, o.x0 + (t.dx + t.w) * s, o.z0 + (t.dz + t.w2) * s, (t.dy + t.h) * s }
+  end
+  local best, bb
+  for n, o in ipairs(d.organs) do
+    if not o.megaform then
+      local b = base(o)
+      if b[3] - b[1] >= M.ORGAN_MIN and b[4] - b[2] >= M.ORGAN_MIN and b[5] >= M.HALL_H[1] + M.WALL * 2
+          and (not best or o.h > d.organs[best].h) then best, bb = n, b end
+    end
+  end
+  d.organ = nil
+  if not best then return nil end
+  local o = d.organs[best]
+  local rng = saucer.rng.new(saucer.seed_child(seed, "organ", d.k))
+  local hh = floor(min(rng:int(M.HALL_H[1], M.HALL_H[2]), bb[5] - M.WALL * 2) / s) * s
+  rng:int(1, 4)
+  -- the mouth opens in the face nearest the district's edge (toward an avenue): 1 -x, 2 +x, 3 -z, 4 +z
+  local gaps = { bb[1] - d.box[1], d.box[3] - bb[3], bb[2] - d.box[2], d.box[4] - bb[4] }
+  local side = 1
+  for k = 2, 4 do if gaps[k] < gaps[side] then side = k end end
+  local x0, z0, x1, z1 = bb[1] + M.WALL, bb[2] + M.WALL, bb[3] - M.WALL, bb[4] - M.WALL
+  local finds = {}
+  local n = rng:int(M.FINDS[1], M.FINDS[2])
+  for f = 1, n do
+    local fx, fz = rng:int(floor(x0) + 10, floor(x1) - 10), rng:int(floor(z0) + 10, floor(z1) - 10)
+    finds[f] = { id = f, pos = { fx, d.y + 1.5, fz }, max_size = 3, tier = rng:int(2, 3),
+                 seed = saucer.seed_child(seed, "organfind", d.k * 16 + f) }
+  end
+  d.organ = { index = best, hall = { x0, d.y, z0, x1, d.y + hh, z1 }, h = hh, side = side, finds = finds,
+              centre = { (x0 + x1) / 2, d.y + hh / 2, (z0 + z1) / 2 } }
+  return d.organ
+end
+
+-- an organ's base: the walls round its hall (a mouth in one face), the roof, and the rest of its first tier above
+local function organ_boxes(d, o, t, s, out)
+  local og = d.organ
+  local y = d.y
+  local bx0, bz0 = o.x0 + t.dx * s, o.z0 + t.dz * s
+  local bx1, bz1, top = bx0 + t.w * s, bz0 + t.w2 * s, y + t.dy * s + t.h * s
+  local hy = y + og.h
+  local W = M.WALL
+  local mw, mh = M.MOUTH[1], M.MOUTH[2]
+  local function wall(a, b) out[#out + 1] = { a, b } end
+  -- the faces: x faces span z, z faces span x; the mouth face is split round the opening
+  local faces = {
+    { { bx0, y, bz0 }, { bx0 + W, hy, bz1 } }, { { bx1 - W, y, bz0 }, { bx1, hy, bz1 } },
+    { { bx0 + W, y, bz0 }, { bx1 - W, hy, bz0 + W } }, { { bx0 + W, y, bz1 - W }, { bx1 - W, hy, bz1 } },
+  }
+  for k, f in ipairs(faces) do
+    if k ~= og.side then wall(f[1], f[2])
+    else
+      local a, b = f[1], f[2]
+      local along = k <= 2 and 3 or 1
+      local mid = (a[along] + b[along]) / 2
+      local lo, hi = mid - mw / 2, mid + mw / 2
+      local p1, q1 = { a[1], a[2], a[3] }, { b[1], b[2], b[3] }
+      q1[along] = lo
+      wall(p1, q1)
+      local p2, q2 = { a[1], a[2], a[3] }, { b[1], b[2], b[3] }
+      p2[along] = hi
+      wall(p2, q2)
+      local p3, q3 = { a[1], y + mh, a[3] }, { b[1], b[2], b[3] }
+      p3[along], q3[along] = lo, hi
+      wall(p3, q3)
+    end
+  end
+  -- the roof and whatever of the tier stands over the hall
+  out[#out + 1] = { { bx0, hy, bz0 }, { bx1, max(top, hy + W), bz1 } }
+end
+
+-- a ship-sized point inside an organ's hall? -> the district's organ or nil
+function M.in_hall(d, pos)
+  local og = d and d.organ
+  if not og then return nil end
+  local h = og.hall
+  if pos[1] > h[1] and pos[1] < h[4] and pos[3] > h[3] and pos[3] < h[6] and pos[2] > h[2] and pos[2] < h[5] then return og end
+  return nil
 end
 
 -- the solids of one outer district (world { min, max } boxes): a foundation under its whole cell (the avenues' floor
@@ -197,11 +291,18 @@ function M.build(d)
   local slab = d.body == "asteroid" and 40 or 6
   out[1] = { { b[1], y - slab, b[2] }, { b[3], y, b[4] } }
   local s = M.SNAP
-  for _, o in ipairs(d.organs) do
+  for n, o in ipairs(d.organs) do
     local wc, w2c, hc = o.w // s, o.w2 // s, o.h // s
-    for _, t in ipairs(citygen.tiers(o.form, wc, w2c, hc)) do
-      local x0, z0, y0 = o.x0 + t.dx * s, o.z0 + t.dz * s, y + t.dy * s
-      out[#out + 1] = { { x0, y0, z0 }, { x0 + t.w * s, y0 + t.h * s, z0 + t.w2 * s } }
+    for ti, t in ipairs(citygen.tiers(o.form, wc, w2c, hc)) do
+      if ti == 1 and d.organ and d.organ.index == n then
+        organ_boxes(d, o, t, s, out)
+      else
+        local x0, z0, y0 = o.x0 + t.dx * s, o.z0 + t.dz * s, y + t.dy * s
+        local y1 = y0 + t.h * s
+        -- (an organ's other tiers stand on its roof: none reaches down into the hall)
+        if d.organ and d.organ.index == n then y0 = max(y0, y + d.organ.h + M.WALL) end
+        if y1 > y0 then out[#out + 1] = { { x0, y0, z0 }, { x0 + t.w * s, y1, z0 + t.w2 * s } } end
+      end
     end
   end
   for _, k in ipairs(d.decks) do out[#out + 1] = { { k[1], y + k[2], k[3] }, { k[4], y + k[5], k[6] } } end
@@ -322,6 +423,34 @@ function M.near_district(p, pos, pad)
     if rect_dist(d.box, pos[1], pos[3]) <= pad and pos[2] <= p.frame.y + d.top + pad then return d end
   end
   return nil
+end
+
+-- the finds in the organ halls near player p's ship (only outside every site: an outer district is no site).
+-- Taken finds are the player's own (p.looted, saved like every other find), keyed by city site and district.
+function M.candidates(state, p)
+  local out = {}
+  if p.site ~= 0 then return out end
+  local game = require("sim.game")
+  local i, _, plan = game.mega_city_at(state, p.ship.pos, 0)
+  if not plan then return out end
+  local loot = require("sim.loot")
+  local sp = p.ship.pos
+  local civ = game.civ_of(state.sector.sites[i])
+  for _, d in ipairs(plan.districts) do
+    local og = d.organ
+    if og and rect_dist(d.box, sp[1], sp[3]) <= M.SENSE then
+      for _, f in ipairs(og.finds) do
+        local key = "mega" .. i .. ":" .. d.id .. ":" .. f.id
+        local near = math.abs(f.pos[1] - sp[1]) <= M.SENSE and math.abs(f.pos[3] - sp[3]) <= M.SENSE and math.abs(f.pos[2] - sp[2]) <= M.SENSE
+        if near and not p.looted[key] then
+          local item = loot.roll(loot.instance_seed(f.seed, p.record_index), f.max_size, f.tier)
+          item.tier, item.civ = f.tier, civ and civ.id
+          out[#out + 1] = { key = key, kind = "slot", pos = f.pos, item = item, organ = d.id }
+        end
+      end
+    end
+  end
+  return out
 end
 
 -- the outer district that holds (x, z) at plan p, or nil

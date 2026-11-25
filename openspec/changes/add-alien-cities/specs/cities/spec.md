@@ -77,3 +77,21 @@ city's air and light SHALL hold over its whole footprint, and the sky's backdrop
 #### Scenario: Levels
 - **WHEN** `tests/lua/megacity_spec.lua` runs "the view draws full blocks and lit windows near, silhouettes far and a horizon band beyond" and "over an outer district the city's air and light hold, and the frame draws the megacity"
 - **THEN** both pass
+
+### Requirement: Organ halls
+Every outer district whose ordinary megaforms allow it SHALL have an organ: its tallest ordinary megaform, hollow at the
+street, with a hall 60-110 m high behind a ship-sized mouth in the face nearest the avenue, nothing solid inside the hall,
+4-6 finds on its floor and a ring turning slowly in it. The finds SHALL be beamed like any other find and stay taken for
+that player across a restore and a save.
+
+#### Scenario: Organs
+- **WHEN** `tests/lua/megacity_spec.lua` runs "every outer district's organ is hollow at the street: a hall behind a mouth, its finds inside" and "an organ's finds are beamed like any other and stay taken for that player", and `tests/game/megacity.lua` runs
+- **THEN** they pass
+
+### Requirement: Drifters
+The outer avenues SHALL carry drifters: glowing slabs gliding back and forth down the avenue on a district's east and
+south sides, turning and bobbing, render only, a function of the clock, never leaving the avenue.
+
+#### Scenario: Drifters
+- **WHEN** `tests/lua/megacity_spec.lua` runs "an organ's finds are beamed like any other and stay taken for that player"
+- **THEN** it passes, the drifters staying inside the district's cell above the street

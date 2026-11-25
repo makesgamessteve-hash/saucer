@@ -182,6 +182,10 @@ function M.candidates(state, p, site_idx, ruin)
       end
     end
   end
+  -- add-alien-cities-3: the finds in the megacity's organ halls (outside every site)
+  if site_idx == 0 then
+    for _, c in ipairs(require("sim.citymega").candidates(state, p)) do out[#out + 1] = c end
+  end
   for i, n in ipairs(state.nests or {}) do
     if n.site == site_idx and n.owner == p.record_index then
       out[#out + 1] = { key = "nest:" .. i, kind = "nest", index = i, pos = n.pos, item = n.item }
