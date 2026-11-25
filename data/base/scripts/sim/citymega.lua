@@ -115,7 +115,7 @@ function M.plan(r, sector, i, station_ball)
     cells = kept
   end
   local style = (r.city and r.city.style) or citygen.style_of(nil)
-  local out = { frame = fr, districts = {}, seed = r.seed, style = style, span = (2 * half + 1) * M.CELL }
+  local out = { frame = fr, districts = {}, seed = r.seed, style = style, span = (2 * half + 1) * M.CELL, heart = heart }
   local tallest, best = nil, -1
   for k, c in ipairs(cells) do
     local d = M.plan_district(r.seed, k, c, fr, style)
@@ -305,6 +305,15 @@ function M.sync(state, ruin_of, station_ball)
       end
     end
   end
+end
+
+-- is pos in the megacity's air: over its footprint, off the sector's heart (kept clear) and below AIR_TOP m
+M.AIR_TOP = 8000
+function M.in_air(p, pos)
+  local h = p.span / 2
+  if math.abs(pos[1] - p.frame.cx) > h or math.abs(pos[3] - p.frame.cz) > h then return false end
+  if pos[2] > p.frame.y + M.AIR_TOP then return false end
+  return saucer.math.sqrt(pos[1] * pos[1] + pos[3] * pos[3]) > p.heart
 end
 
 -- the outer district within pad m of pos (in the ground plane, up to its top plus pad), or nil

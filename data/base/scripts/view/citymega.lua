@@ -18,8 +18,7 @@ M.BAND = { 26000, 50000 }
 M.BAND_N = 240
 M.FAR_PLANE = 60000  -- the camera's far plane over a megacity (the downtown keeps the usual one)
 M.ZONE = 8000        -- m past the footprint where the megacity still owns the far plane and the air
-M.BUDGET_MS = 6
-M.AIR = 400          -- m off an outer district's block where the city's air and light still hold
+M.BUDGET_MS = (saucer.engine and saucer.engine.platform == "web") and 4 or 6   -- ms of mesh building a frame
 M.BAND_GAP = 24      -- m between two window bands
 M.SIL_GAP = 150      -- m between two lit bands of a silhouette
 M.SIL_GLOW = 0.18    -- a silhouette's own faint light (the far city never goes black)
@@ -171,12 +170,12 @@ function M.draw(v, A, p, cam, tex, visible, budget)
         st.lights = st.lights + 1
       end
     elseif c.sil[k] then
-      v:mesh(c.sil[k], { tex = tex, palette = A.pal.base })
+      v:mesh(c.sil[k], { palette = A.pal.base })
       st.sil = st.sil + 1
     end
   end
   if not c.band then c.band = saucer.mesh.build({ parts = M.band_parts(p) }) end
-  v:mesh(c.band, { tex = tex, palette = A.pal.base })
+  v:mesh(c.band, { palette = A.pal.base })
   st.band = 1
   return st
 end

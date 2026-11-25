@@ -976,7 +976,7 @@ function M.city_env(state, p)
   -- add-alien-cities-2: over an outer district the city's air and light hold too
   if p.site == 0 then
     local _, mr, mp = game.mega_city_at(state, p.ship.pos, 0)
-    if mp and require("sim.citymega").near_district(mp, p.ship.pos, megav.AIR) then r = mr end
+    if mp and require("sim.citymega").in_air(mp, p.ship.pos) then r = mr end
   end
   if not (r and r.city) then return nil end
   local e = ruinm.kit_of(r.kit).city.env
