@@ -3,7 +3,7 @@
 --   saucer --root REPO --seed 42 --windowed --width 1280 --height 720 --script REPO/tools/shots/megacity.lua
 --   [--script-arg planet|moon|asteroid]
 -- The ring from over the core, a canyon avenue, the city's megaform, the footprint from high up, a lit block close
--- by, an organ's hall and mouth, and drifters down an avenue. Staged: a free camera with the HUD and cockpit out of frame (the saucer waits just behind the camera).
+-- by, an organ's hall and mouth, a drifter down an avenue and a fold bay on a terrace. Staged: a free camera with the HUD and cockpit out of frame (the saucer waits just behind the camera).
 local T = saucer.test
 local game = require("sim.game")
 local galaxy = require("sim.galaxy")
@@ -124,9 +124,22 @@ if od then
   frame(out, { c[1], fr.y + og.h * 0.5, c[3] }, 75)
   shot("07_organ_mouth")
 end
--- 8. drifters down an avenue: along a district's east avenue
+-- 8. a drifter down an avenue: framed from 110 m along its avenue where it will be when the shot is taken
+local megav = require("view.citymega")
 local dd = p.districts[1]
-local cx = dd.cell[3]
-frame({ cx, fr.y + 120, dd.cell[2] - 150 }, { cx, fr.y + 110, dd.cell[4] }, 70)
+local tt = (T.state().tick + 2 + 40) / 60
+local o = megav.drift_pose(p, dd, 1, tt)
+frame({ o.pos[1] - 25, o.pos[2] + 10, o.pos[3] - 110 }, o.pos, 60)
 shot("08_drifters")
+-- 9. a fold bay on a terrace, its cradle lit, from above and to one side
+local mega = require("sim.citymega")
+local bay
+for _, d in ipairs(p.districts) do
+  if not bay and #mega.bays(p, d) > 0 then bay = mega.bays(p, d)[1] end
+end
+if bay then
+  local c = bay.cradle
+  frame({ c[1] + 70, c[2] + 55, c[3] + 70 }, c, 65)
+  shot("09_fold_bay")
+end
 print("megacity shots done")

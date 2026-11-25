@@ -48,7 +48,12 @@ end
 -- the cradle bay this player's saucer is in (any size), with its site, or nil
 function M.cradle_of(state, p)
   local site = p.site or 0
-  if site == 0 then return nil end
+  if site == 0 then
+    -- add-alien-cities-4: a megacity's terrace bays have cradles too
+    local i, _, plan = game().mega_city_at(state, p.ship.pos)
+    if not i then return nil end
+    return require("sim.citymega").bay_at(plan, p.ship.pos), i
+  end
   local r = game().ruin(site)
   local b = r and M.bay_at(r, p.ship.pos)
   return b, site

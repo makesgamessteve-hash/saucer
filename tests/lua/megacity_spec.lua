@@ -335,7 +335,18 @@ describe("megacity", function()
     local a, b = megav.organ_pose(d, 0), megav.organ_pose(d, 10)
     expect(a.yaw ~= b.yaw).to_be(true)
     expect(mega.in_hall(d, a.pos)).to_be(d.organ)
-    expect(a.scale * 2 < d.organ.h).to_be(true)
+    -- a big machine: its halo spans most of the hall, and no ring ever pokes out of it
+    local h = d.organ.hall
+    expect(a.scale * 2 > 0.5 * math.min(h[4] - h[1], h[6] - h[3])).to_be(true)
+    for _, tt in ipairs({ 0, 3.3, 77, 1e4 }) do
+      local o = megav.organ_pose(d, tt)
+      expect(#o.rings).to_be(3)
+      for _, r in ipairs(o.rings) do
+        expect(r.scale <= math.min(h[4] - h[1], h[6] - h[3]) / 2 - 8).to_be(true)
+        expect(r.scale * math.abs(math.sin(r.pitch)) <= d.organ.h / 2 - 4 or r.scale <= d.organ.h / 2 - 4).to_be(true)
+      end
+      expect(math.abs(o.core.pos[2] - d.organ.centre[2]) + o.core.size <= d.organ.h / 2).to_be(true)
+    end
     local v = fake_view()
     local s = megav.draw(v, A, p, { pos = d.organ.centre, yaw = 0, pitch = 0 }, 1, function() return true end, 1000, 3)
     expect((s.organs or 0) >= 1).to_be(true)
@@ -347,8 +358,59 @@ describe("megacity", function()
         local c = d.cell
         expect(o.pos[1] >= c[1] - 1e-6 and o.pos[1] <= c[3] + 1e-6 and o.pos[3] >= c[2] - 1e-6 and o.pos[3] <= c[4] + 1e-6).to_be(true)
         expect(o.pos[2] > p.frame.y + 30).to_be(true)
+        expect(#o.trail).to_be(2)
       end
       expect(megav.drift_pose(p, d, kk, 1).pos[kk == 1 and 3 or 1] ~= megav.drift_pose(p, d, kk, 2).pos[kk == 1 and 3 or 1]).to_be(true)
+    end
+  end)
+
+  it("the terraces hold fold bays with cradles, and growing back to the Villa in one is free", function()
+    local relic = require("sim.relic")
+    for _, body in ipairs({ "planet", "moon", "asteroid" }) do
+      local st, i, r, p = in_city(body)
+      local with = 0
+      for _, d in ipairs(p.districts) do
+        local sol = mega.solids(p, d)
+        local bays = mega.bays(p, d)
+        expect(#bays <= mega.BAYS).to_be(true)
+        if #bays > 0 then with = with + 1 end
+        for _, b in ipairs(bays) do
+          expect(b.hi[1] - b.lo[1]).to_be(mega.BAY)
+          expect(b.hi[3] - b.lo[3]).to_be(mega.BAY)
+          expect(b.hi[2] - b.lo[2] >= 20).to_be(true)
+          expect(b.lo[2] - d.y >= mega.BAY_MIN_Y).to_be(true)
+          -- standing on a terrace: some solid's top is the pad, and the pad's air is clear but for its own cradle
+          local on, cradle = false, false
+          for _, o in ipairs(sol) do
+            local over = o[1][1] < b.hi[1] and o[2][1] > b.lo[1] and o[1][3] < b.hi[3] and o[2][3] > b.lo[3]
+            if over and o[2][2] == b.lo[2] and o[1][1] <= b.lo[1] and o[2][1] >= b.hi[1] and o[1][3] <= b.lo[3] and o[2][3] >= b.hi[3] then on = true end
+            if o == b.cradle_box then cradle = true
+            elseif over then expect(o[1][2] < b.lo[2] + mega.BAY_CLEAR and o[2][2] > b.lo[2]).to_be(false) end
+          end
+          expect(on).to_be(true)
+          expect(cradle).to_be(true)
+          expect(select(1, mega.bay_at(p, b.marker))).to_be(b)
+        end
+      end
+      expect(with).to_be_greater(#p.districts // 3)
+      -- a Seat in a bay grows back for free; out of it, or in a site, it pays
+      local d, b
+      for _, x in ipairs(p.districts) do if not b and #mega.bays(p, x) > 0 then d, b = x, mega.bays(p, x)[1] end end
+      local pl = st.players[1]
+      pl.site = 0
+      pl.ship.size = 3
+      pl.ship.pos = { b.marker[1], b.marker[2], b.marker[3] }
+      expect(relic.cradle_of(st, pl)).to_be(b)
+      expect(relic.free_regrow(st, pl, 1)).to_be(true)
+      pl.ship.pos = { b.marker[1], b.marker[2] + 200, b.marker[3] }
+      expect(relic.free_regrow(st, pl, 1)).to_be(false)
+      pl.ship.pos = { 1e6, 0, 1e6 }
+      expect(relic.cradle_of(st, pl)).to_be(nil)
+      expect(mega.bay_at(p, { 1e6, 0, 1e6 })).to_be(nil)
+      -- the view lights each bay's rim and cradle
+      local n0 = 0
+      for _, q in ipairs(megav.light_parts(p, d)) do if q.max[2] - q.min[2] < 0.5 then n0 = n0 + 1 end end
+      expect(n0 >= 5 * #mega.bays(p, d)).to_be(true)
     end
   end)
 end)

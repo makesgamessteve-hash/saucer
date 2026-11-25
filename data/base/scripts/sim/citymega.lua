@@ -36,6 +36,13 @@ M.MOUTH = { 48, 34 }       -- m, its mouth's width and height
 M.FINDS = { 4, 6 }
 M.SENSE = 160              -- m, finds this near the ship are rolled (like a city's)
 M.MAX_ACTIVE = 16
+-- add-alien-cities-4: fold bays on the terraces: a 44 x 44 m pad with 20 m clear above and a cradle (a growing back
+-- to the Villa there is free, as in a relic's bays), on tier tops with open sky over them
+M.BAY = 44                 -- m, a bay's side
+M.BAY_CLEAR = 30           -- m kept clear above a bay (20 for the Villa, and room to hover)
+M.BAY_MIN_Y = 40           -- m above the street: a terrace, not the street
+M.BAYS = 2                 -- at most this many per district
+M.CRADLE = { 20, 1.5 }     -- m, the cradle's side and height
 
 local floor, max, min = math.floor, math.max, math.min
 
@@ -306,7 +313,54 @@ function M.build(d)
     end
   end
   for _, k in ipairs(d.decks) do out[#out + 1] = { { k[1], y + k[2], k[3] }, { k[4], y + k[5], k[6] } } end
-  return out
+  local bays = M.terrace_bays(d, out)
+  for _, bay in ipairs(bays) do out[#out + 1] = bay.cradle_box end
+  return out, bays
+end
+
+local function overlaps(a0, a1, b)
+  return a0[1] < b[2][1] and a1[1] > b[1][1] and a0[2] < b[2][2] and a1[2] > b[1][2] and a0[3] < b[2][3] and a1[3] > b[1][3]
+end
+
+-- the fold bays on district d's terraces, given its solids: tier tops at least BAY_MIN_Y up, a BAY pad inside the
+-- tier (a margin of 4 m) with BAY_CLEAR of open air over it, tried at the tier's centre, then its corners, tallest
+-- tiers last (low terraces first, nearer the avenues), at most BAYS -> { { id, lo, hi, marker, cradle, cradle_box } }
+function M.terrace_bays(d, solids)
+  local half, m = M.BAY / 2, 4
+  local tiers = {}
+  for n = 2, #solids do
+    local b = solids[n]
+    if b[2][2] - d.y >= M.BAY_MIN_Y and b[2][1] - b[1][1] >= M.BAY + 2 * m and b[2][3] - b[1][3] >= M.BAY + 2 * m then
+      tiers[#tiers + 1] = { n = n, b = b }
+    end
+  end
+  table.sort(tiers, function(a, c) if a.b[2][2] ~= c.b[2][2] then return a.b[2][2] < c.b[2][2] end return a.n < c.n end)
+  local bays = {}
+  for _, t in ipairs(tiers) do
+    if #bays >= M.BAYS then break end
+    local b = t.b
+    local top = b[2][2]
+    local xa, xb = b[1][1] + m + half, b[2][1] - m - half
+    local za, zb = b[1][3] + m + half, b[2][3] - m - half
+    for _, c in ipairs({ { (xa + xb) / 2, (za + zb) / 2 }, { xa, za }, { xb, za }, { xa, zb }, { xb, zb } }) do
+      local lo, hi = { c[1] - half, top, c[2] - half }, { c[1] + half, top + M.BAY_CLEAR, c[2] + half }
+      local free = true
+      for n2, o in ipairs(solids) do
+        if n2 ~= t.n and overlaps(lo, hi, o) then free = false break end
+      end
+      for _, q in ipairs(bays) do
+        if overlaps(lo, hi, { q.lo, { q.hi[1], q.hi[2] + M.BAY_CLEAR, q.hi[3] } }) then free = false end
+      end
+      if free then
+        local cs, ch = M.CRADLE[1] / 2, M.CRADLE[2]
+        bays[#bays + 1] = { id = #bays + 1, lo = lo, hi = { hi[1], top + 20, hi[3] }, marker = { c[1], top + ch + 6, c[2] },
+                            cradle = { c[1], top + ch, c[2] },
+                            cradle_box = { { c[1] - cs, top, c[2] - cs }, { c[1] + cs, top + ch, c[2] + cs } } }
+        break
+      end
+    end
+  end
+  return bays
 end
 
 -- ------------------------------------------------------------ the cache and the active set (derived, never saved)
@@ -326,15 +380,33 @@ function M.get_plan(r, sector, i, station_ball)
 end
 
 -- the solids of district d of plan p (built once, cached)
+local bays_of = {}                                -- seed .. ":" .. k -> fold bays
 function M.solids(p, d)
   local key = p.seed .. ":" .. d.k
   local s = built[key]
   if not s then
-    s = M.build(d)
+    s, bays_of[key] = M.build(d)
     built[key] = s
     M.stats.built = M.stats.built + 1
   end
   return s
+end
+-- the fold bays on district d's terraces (built with its solids)
+function M.bays(p, d)
+  M.solids(p, d)
+  return bays_of[p.seed .. ":" .. d.k]
+end
+-- the fold bay of the megacity at pos (in plan p) whose box holds it (a little above counts: the Villa hovers), or nil
+function M.bay_at(p, pos)
+  local d = M.district_at(p, pos[1], pos[3])
+  if not d then return nil end
+  for _, b in ipairs(M.bays(p, d)) do
+    if pos[1] >= b.lo[1] and pos[1] <= b.hi[1] and pos[3] >= b.lo[3] and pos[3] <= b.hi[3] and pos[2] >= b.lo[2] - 1
+        and pos[2] <= b.hi[2] + 10 then
+      return b, d
+    end
+  end
+  return nil
 end
 function M.is_built(p, d) return built[p.seed .. ":" .. d.k] ~= nil end
 
@@ -343,7 +415,7 @@ function M.reset()
   live = {}
 end
 function M.live(i) return live[i] or {} end
-function M.clear_cache() built = {} end
+function M.clear_cache() built, bays_of = {}, {} end
 
 -- the districts that should be solid at site i: per player its PER_PLAYER nearest within reach (an already live one
 -- within KEEP), then the MAX_ACTIVE nearest of those -> sorted list of district indices
