@@ -56,6 +56,10 @@ TEST(render_resources) {
   free(png);
   CHECK(id > 1 && r.textures[id].w == 3 && r.textures[id].index[0] == 5);
   CHECK(sx_render_find_texture(&r, "idx") == id && sx_render_find_texture(&r, "nope") == 0);
+  CHECK(sx_render_texture_soft(&r, id, 1) == 1 && r.textures[id].soft == 1);
+  CHECK(sx_render_texture_soft(&r, id, 0) == 1 && r.textures[id].soft == 0);
+  CHECK(sx_render_texture_soft(&r, 0, 1) == 0 && sx_render_texture_soft(&r, SX_MAX_TEXTURES, 1) == 0);
+  CHECK(sx_render_texture_soft(&r, SX_MAX_TEXTURES - 1, 1) == 0);
   CHECK(sx_render_texture_from_indices(&r, "bad", 0, 1, NULL) == 1);
   CHECK(sx_render_fallback_font(&r) > 1);
   CHECK(sx_render_palettes_from_png(&r, "x", NULL, 0) == -1);
