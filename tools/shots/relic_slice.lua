@@ -161,6 +161,26 @@ if mode == "glow" then
   return
 end
 
+-- --script-arg quartz: add-relic-stations (plan phase 8): the pale-crystal hall alone (seed 42's Ixalash), close and
+-- far, to check the quartz walls for white blotches
+if mode == "quartz" then
+  local civs = require("sim.civs")
+  local pick
+  for _, c in ipairs(civs.universe(T.state().seed)) do if c.id == "ixalash" then pick = c end end
+  relicv.set_style(pick)
+  local hc, hmn = centre(hall1)
+  park({ hc[1], floor_of(hall1) + 2, hmn[3] + 30 }, 0)
+  look_at({ hc[1] + 6, floor_of(hall1) + 9, hmn[3] + 4 }, { hc[1], floor_of(hall1) + 12, hc[3] }, 74)
+  T.wait(6)
+  shot("q_hall")
+  look_at({ hc[1] - 10, floor_of(hall1) + 4, hc[3] }, { hc[1] + 40, floor_of(hall1) + 30, hc[3] + 20 }, 70)
+  T.wait(6)
+  shot("q_wall")
+  relicv.set_style(nil)
+  free = nil
+  return
+end
+
 -- --script-arg styles: add-design-language: the same relic restyled by four civs (the Vyrr and three of seed 42's
 -- roster), from the same three viewpoints: a hall, the hull near the maw and the heart
 if mode == "styles" then

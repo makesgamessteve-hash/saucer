@@ -99,3 +99,42 @@ What a relic draws from any room SHALL stay within the web's cap of 180,000 tria
 - **WHEN** `tests/lua/relic_spec.lua` runs "build room meshes as the eye comes near, free them as it leaves, and keep what draws under the web cap"
 - **THEN** the rooms visible from any room have at most 180,000 triangles
 
+
+### Requirement: Relics in far sectors
+Far sectors SHALL hold relics as a site kind: the third sector always, farther sectors one time in about three, never the home sector or the Heart's, at most one a sector, its civ one of the sector's own. The relic site SHALL be appended after every other site with its own seed child, so a sector's other sites, city and station come out exactly as before, and its whole build box SHALL keep at least 120 m from every other site, the city and the trader station.
+
+#### Scenario: Placement over many seeds
+- **WHEN** `tests/lua/relicplay_spec.lua` runs "sector RELIC_FIRST always holds one; home and the Heart never do; others by chance"
+- **THEN** it passes
+
+#### Scenario: Margin and unchanged sites
+- **WHEN** `tests/lua/relicplay_spec.lua` runs "the relic's build box keeps RELIC_MARGIN from every other site and the station" and "a sector's other sites are as they were without the relic"
+- **THEN** both pass
+
+### Requirement: Relic sentries
+A relic found in normal play SHALL be guarded from its layout: Watchers in every third hall after the maw's (at most eight), Snatchers on the longest Seat branches with their nests in the chambers (at most four, never the locked reliquary's branch), Spotters on a square beat round the busiest junction halls without a Watcher (at most two). The maw's hall and the heart hall SHALL keep no sentry; the relic slice keeps none.
+
+#### Scenario: Sentries by room kind
+- **WHEN** `tests/lua/relicplay_spec.lua` runs "Watchers in halls, Snatchers on Seat branches, Spotters at junctions; the heart and the maw's hall calm"
+- **THEN** it passes
+
+### Requirement: Relic loot in normal play
+A relic found in normal play SHALL spread its finds so the halls hold most of the value: every hall but the maw's gets two finds clear of the floor's openings, a chamber keeps at most one, and chamber finds are dropped poorest first until the warrens (chambers and reliquary) hold 25-40% of the value outside the heart's idol, each warren find worth at least 1.5x a hall find on average. Slot ids SHALL be renumbered in order once per ruin, so looted keys stay a function of the seed.
+
+#### Scenario: Warren share
+- **WHEN** `tests/lua/relicplay_spec.lua` runs "the warrens hold a quarter to two fifths of the value, in richer finds"
+- **THEN** it passes
+
+### Requirement: Relic memory
+The state SHALL remember, per sector and relic site, every room a saucer has been in (`relic_rooms`), when the approach scan picked the relic up and when the heart hall was reached (`relics_found`), and the Seat-locks opened (`relic_locks`), and saves SHALL carry all three. The approach scan SHALL name the relic once, within 2.5 km: whose it is, its archetype and its halls. The helm radar's map SHALL draw the remembered rooms as well as this session's.
+
+#### Scenario: Scan, rooms and the heart through a save
+- **WHEN** `tests/lua/relicplay_spec.lua` runs "the approach scan names it once; rooms and the heart are kept, through a save"
+- **THEN** it passes
+
+### Requirement: Relic decay
+A relic SHALL look as dead as its builders: its civ's fate and era decide the share of dead lamps (none for ascension, up to 80%) and the heaps of fallen slabs and crusted shards against the walls of its halls and trunks, never in front of a door, over a floor opening or in a hall's middle. Decay SHALL be render only.
+
+#### Scenario: Lamps and heaps
+- **WHEN** `tests/lua/relicplay_spec.lua` runs "dead lamps by fate and era" and "heaps lie by the walls of halls and trunks, clear of doors and the middle"
+- **THEN** both pass

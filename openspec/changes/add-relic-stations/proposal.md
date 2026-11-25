@@ -34,6 +34,22 @@ branches off them. This change is the first, Reel-ready slice (§9): one relic, 
 ## Impact
 
 - Specs: `relic-stations` (new), `saucer-configurations` (MODIFIED: grow requires clearance, free in a cradle bay)
+- Code (phase 8): `sim/sector.lua`, `sim/relicsentry.lua`, `sim/relicloot.lua`, `sim/save.lua`, `view/relicdecay.lua`,
+  `view/relicmap.lua`
 - Code: `sim/relicgen.lua`, `sim/relic.lua`, `kits/relic.lua`, `sim/ruin.lua`, `sim/game.lua`, `sim/ship.lua`,
   `sim/tractor.lua`, `sim/sentry.lua`, `view/relic.lua`, `view/render.lua`, `view/lights.lua`
 - Out of the slice: other archetypes, generated rosters, relics in far sectors, sentries, foot pockets.
+
+## Plan phase 8: relics in normal play
+
+- **Placement** (`sim/sector.lua`): a relic site in the third sector of every universe and in about a third of
+  the farther ones (never home or the Heart's), its build box 120 m clear of every other site, the city and the
+  station; appended last on its own seed child, so nothing else in a sector moves.
+- **Sentries** (`sim/relicsentry.lua`): Watchers in every third hall, Snatchers nesting in the Seat chambers of the
+  longest branches, Spotters drifting round the busiest junctions; the maw's hall and the heart stay calm.
+- **Loot** (`sim/relicloot.lua`): two finds in every hall, one at most in a chamber, chamber finds thinned until the
+  warrens hold 25-40% of the value (they held 70-85%).
+- **Memory** (state v20): explored rooms, the approach scan and the heart, and the Seat-locks, all saved; the scan
+  names the relic once at 2.5 km; the radar map draws the remembered rooms.
+- **Decay** (`view/relicdecay.lua`): dead lamps and fallen heaps by the civ's fate and era, render only.
+- Not yet: design keys as cosmetic unlocks, the hall pulse with port pips (flagged for a later phase).
