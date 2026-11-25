@@ -98,3 +98,112 @@ describe("the Vyrr's materials", function()
     expect(got.time).to_be(3)
   end)
 end)
+
+describe("fate materials", function()
+  local civs = require("sim.civs")
+  local function as(fate)
+    local base = civs.universe(42)[3]
+    return setmetatable({ id = "fate_" .. fate, fate = fate }, { __index = base })
+  end
+  local S = matv.SLOT
+  it("leaves the plague's look to its decay slot and ages the others by their fate", function()
+    local base = civs.universe(42)[3]
+    local plain = matv.civ_slots(as("plague"))
+    local lib = matv.library()
+    -- war: every ramp darker, metals duller
+    local war = matv.civ_slots(as("war of silence"))
+    for i = 1, 7 do
+      expect(war[i].hi[1] <= plain[i].hi[1] + 1e-9).to_be(true)
+      if war[i].kind == "metal" then expect(war[i].reflect < plain[i].reflect).to_be(true) end
+    end
+    -- ascension: the rare crystal blazes, the skin's rim in its colour
+    local asc = matv.civ_slots(as("ascension"))
+    expect(asc[S.rare].emit >= (plain[S.rare].emit or 0)).to_be(true)
+    expect(asc[S.dominant].sss).to_be(asc[S.rare].hi)
+    -- sleep: everything stills
+    local sl = matv.civ_slots(as("sleep"))
+    for i = 1, 7 do
+      if plain[i].pulse and plain[i].pulse > 0 then expect(sl[i].pulse < plain[i].pulse).to_be(true) end
+      if plain[i].wobble then expect(sl[i].wobble[1] <= plain[i].wobble[1]).to_be(true) end
+    end
+    expect(sl[S.lung].breath).to_be(matv.BREATH * 0.5)
+    -- flight: the accent stripped, the rare dark
+    local fl = matv.civ_slots(as("flight"))
+    expect(fl[S.accent].reflect < plain[S.accent].reflect + 1e-9).to_be(true)
+    expect(fl[S.rare].emit).to_be(0)
+    -- schism: the breathing half takes the decay ramp
+    local sc = matv.civ_slots(as("schism"))
+    local d = lib[base.materials.decay and base.materials.decay[1] or "flesh_necrotic"]
+    expect(sc[S.lung].hi).to_be(d.hi)
+    for c = 1, 3 do expect(sc[S.dominant].hi[c]).to_be(plain[S.dominant].hi[c]) end
+    -- the library itself is never changed
+    expect(matv.library().chrome.reflect).to_be(0.92)
+  end)
+end)
+
+describe("sparkle, brushing and ripples", function()
+  it("carries a crystal's sparkle and a metal's brushing and ripple into its slot", function()
+    local lib = matv.library()
+    expect(matv.slot(lib.quartz).sparkle).to_be(lib.quartz.sparkle)
+    expect(matv.slot(lib.titanium_blue).brushed).to_be(lib.titanium_blue.brushed)
+    expect(matv.slot(lib.mercury).ripple).to_be(lib.mercury.ripple)
+    -- the slice's materials keep their look (no sparkle on amethyst, no brushing on chrome)
+    expect(matv.slot(lib.amethyst).sparkle).to_be(nil)
+    expect(matv.slot(lib.chrome).brushed).to_be(nil)
+    for id, rec in pairs(lib) do
+      if rec.sparkle then expect(rec.kind == "crystal" and rec.sparkle > 0 and rec.sparkle <= 1).to_be(true) end
+      if rec.brushed then expect(rec.kind == "metal" and rec.brushed > 0 and rec.brushed <= 1).to_be(true) end
+      if rec.ripple then expect(rec.kind == "metal" and rec.ripple > 0 and rec.ripple <= 0.3).to_be(true) end
+      expect(type(id)).to_be("string")
+    end
+  end)
+end)
+
+describe("headset comfort", function()
+  it("drops the sparkle, halves the wobble and slows the breathing to at least 4 s in a headset", function()
+    local civs = require("sim.civs")
+    local base = civs.universe(42)[3]
+    local c = setmetatable({ id = "xr_test", materials = { dominant = { id = "membrane" }, accent = { id = "silver" },
+                                                           rare = { id = "quartz" }, decay = { "flesh_necrotic" } } },
+                           { __index = base })
+    local slots = matv.civ_slots(c)
+    local x = matv.xr_slots(slots)
+    local S = matv.SLOT
+    expect(slots[S.rare].sparkle ~= nil).to_be(true)
+    expect(x[S.rare].sparkle).to_be(nil)
+    expect(x[S.dominant].wobble[1]).to_be(slots[S.dominant].wobble[1] * 0.5)
+    for _, s in pairs(x) do
+      if s.wobble then expect(s.wobble[2] * 3 >= matv.XR_BREATH - 1e-9).to_be(true) end
+    end
+    -- apply hands the headset its own slots (cached), the flat view the full ones
+    local got = {}
+    local v = { materials = function(_, t) got[#got + 1] = t return 7 end }
+    matv.apply(v, c, 1, true)
+    matv.apply(v, c, 1, true)
+    matv.apply(v, c, 1, false)
+    expect(got[1].slots).to_be(got[2].slots)
+    expect(got[1].slots[S.rare].sparkle).to_be(nil)
+    expect(got[3].slots[S.rare].sparkle).to_be(slots[S.rare].sparkle)
+  end)
+end)
+
+describe("sky reflections", function()
+  it("reflects the sector's sky outside a relic and the matcap inside", function()
+    local st = { seed = 42, sector_id = 3 }
+    local a, b = matv.sky(st), matv.sky(st)
+    expect(a.key).to_be(b.key)
+    expect(a.sun).to_be(require("view.lights").star(42, 3).dir)
+    local l = math.sqrt(a.band[1] ^ 2 + a.band[2] ^ 2 + a.band[3] ^ 2)
+    expect(math.abs(l - 1) < 1e-6).to_be(true)
+    expect(matv.sky({ seed = 42, sector_id = 4 }).key ~= a.key).to_be(true)
+    expect(matv.sky({}).key).to_be("sky:0:1")
+    local civs = require("sim.civs")
+    local got = {}
+    local v = { materials = function(_, t) got[#got + 1] = t return 7 end }
+    matv.apply(v, civs.vyrr(), 1, false, a)
+    matv.apply(v, civs.vyrr(), 1, false, nil)
+    expect(got[1].envmap).to_be(saucer.render.skymap ~= nil)
+    expect(got[2].envmap).to_be(false)
+    if saucer.render.skymap then expect(got[1].matcap > 0).to_be(true) end
+  end)
+end)

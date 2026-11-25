@@ -28,3 +28,38 @@ Every pull request SHALL render the material golden shots under Xvfb and Mesa an
 - **WHEN** the `golden` job of `.github/workflows/ci.yml` runs `tools/shots/materials.sh`
 - **THEN** every shot matches its golden within tolerance and full differs from off by at least 9.5
 
+### Requirement: Fate materials
+A civ's fate SHALL age its material slots (war of silence scorches every ramp and dulls metals, ascension makes the rare crystal blaze and tints the skin's rim, sleep stills glow, pulse, wobble and breathing, flight strips the accent metal and darkens the rare crystal, schism gives the breathing skin the decay ramp), while plague keeps its look and the material library is never changed.
+
+#### Scenario: Fates
+- **WHEN** `tests/lua/materials_spec.lua` runs "leaves the plague's look to its decay slot and ages the others by their fate"
+- **THEN** it passes
+
+### Requirement: Sparkle, brushing and ripples
+A crystal slot SHALL be able to sparkle (facet cells that twinkle with render time), a metal slot to stretch its highlight across a brushing and to ripple its normal like a liquid, packed as a sixth vec4 per slot; lite SHALL drop the sparkle and halve the ripple, and off SHALL pack every slot plain.
+
+#### Scenario: Packing
+- **WHEN** the C test `material_pack_modes` runs
+- **THEN** sparkle packs only for crystals in full, brushing and ripple only for metals, and lite halves the ripple
+
+#### Scenario: Library
+- **WHEN** `tests/lua/materials_spec.lua` runs "carries a crystal's sparkle and a metal's brushing and ripple into its slot"
+- **THEN** it passes
+
+### Requirement: Headset comfort
+In a headset view the material slots SHALL drop the crystal sparkle, halve the organic wobble and never breathe faster than one cycle in 4 seconds.
+
+#### Scenario: XR slots
+- **WHEN** `tests/lua/materials_spec.lua` runs "drops the sparkle, halves the wobble and slows the breathing to at least 4 s in a headset"
+- **THEN** it passes
+
+### Requirement: Sky reflections
+Outside a relic its metals and crystals SHALL reflect (or refract) a 128 x 64 equirectangular luminance map of the sector's sky (its star, the galaxy's band and stars from the seed), baked once per sector, still with one texture fetch per pixel; inside they SHALL keep the matcap.
+
+#### Scenario: Bake
+- **WHEN** the C test `skymap_bake` runs
+- **THEN** the map is deterministic, banded, brightest toward the star, and the band brightens its great circle
+
+#### Scenario: Choice
+- **WHEN** `tests/lua/materials_spec.lua` runs "reflects the sector's sky outside a relic and the matcap inside"
+- **THEN** it passes

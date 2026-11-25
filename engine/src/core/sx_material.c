@@ -21,6 +21,7 @@ void sx_materials_reset(sx_materials *ms) {
   ms->on = 0;
   ms->time = 0.0f;
   ms->matcap = 0;
+  ms->envmap = 0;
   for (i = 0; i < SX_MAT_SLOTS; i++) sx_material_default(&ms->slot[i]);
 }
 
@@ -71,6 +72,9 @@ int sx_materials_pack(const sx_materials *ms, int mode, float out[SX_MAT_SLOTS *
     o[11] = m->breath * (lite > 0.0f ? 0.5f : 1.0f);
     o[15] = m->pulse;
     o[19] = m->wrap;
+    o[20] = (kind == SX_MAT_CRYSTAL && lite == 0.0f) ? m->sparkle : 0.0f;
+    o[21] = kind == SX_MAT_METAL ? m->brushed : 0.0f;
+    o[22] = kind == SX_MAT_METAL ? m->ripple * (lite > 0.0f ? 0.5f : 1.0f) : 0.0f;
   }
   return n;
 }
@@ -122,6 +126,61 @@ void sx_matcap_bake(unsigned char *out, const float lights[][4], int nlights, fl
       l += 0.25f * (1.0f - nz) * (1.0f - nz) * (1.0f - nz);
       q = (int)(clamp01(l) * 15.0f + 0.5f); /* 16 bands */
       out[y * SX_MATCAP_SIZE + x] = (unsigned char)(1 + q * 254 / 15);
+    }
+  }
+}
+
+static float norm3(float v[3]) {
+  float l = (float)sx_sqrt((double)(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]));
+  if (l < 1e-6f) return 0.0f;
+  v[0] /= l;
+  v[1] /= l;
+  v[2] /= l;
+  return l;
+}
+
+void sx_skymap_bake(unsigned char *out, const float sun[3], float sun_k, const float band[4], unsigned seed, float ambient) {
+  const double PI = 3.141592653589793;
+  float s[3], b[3];
+  int x, y, has_sun, has_band;
+  s[0] = sun[0];
+  s[1] = sun[1];
+  s[2] = sun[2];
+  b[0] = band[0];
+  b[1] = band[1];
+  b[2] = band[2];
+  has_sun = norm3(s) > 0.0f;
+  has_band = norm3(b) > 0.0f;
+  for (y = 0; y < SX_SKYMAP_H; y++) {
+    double phi = ((double)y + 0.5) / SX_SKYMAP_H * PI;
+    float sp = (float)sx_sin(phi), cp = (float)sx_cos(phi);
+    for (x = 0; x < SX_SKYMAP_W; x++) {
+      double th = ((double)x + 0.5) / SX_SKYMAP_W * 2.0 * PI - PI;
+      float d[3], l = ambient;
+      unsigned h;
+      int q;
+      d[0] = sp * (float)sx_cos(th);
+      d[1] = cp;
+      d[2] = sp * (float)sx_sin(th);
+      if (has_sun) {
+        float c = d[0] * s[0] + d[1] * s[1] + d[2] * s[2];
+        if (c > 0.0f) {
+          float c2 = c * c, c4 = c2 * c2, c8 = c4 * c4, c16 = c8 * c8;
+          l += sun_k * (0.35f * c4 + 0.6f * c16 * c16 + (c > 0.9985f ? 1.0f : 0.0f));
+        }
+      }
+      if (has_band) {
+        float e = d[0] * b[0] + d[1] * b[1] + d[2] * b[2]; /* 0 on the band's great circle */
+        float w = 1.0f - e * e * 9.0f;
+        if (w > 0.0f) l += band[3] * w * w;
+      }
+      h = (seed ^ (unsigned)(y * SX_SKYMAP_W + x)) * 2654435761u;
+      h ^= h >> 15;
+      h *= 2246822519u;
+      h ^= h >> 13;
+      if ((h & 1023u) < 6u) l += 0.35f + 0.4f * (float)((h >> 10) & 7u) / 7.0f;
+      q = (int)(clamp01(l) * 15.0f + 0.5f);
+      out[y * SX_SKYMAP_W + x] = (unsigned char)(1 + q * 254 / 15);
     }
   }
 }

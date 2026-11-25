@@ -1027,9 +1027,10 @@ function M.draw(v, A, state, cam, xr, time)
   local i, r, site, set = M.near_relic(state, cam.pos)
   if not i then return st end
   local civ = M.STYLE or require("sim.civs").of(state, site)
-  matv.apply(v, civ, time)
-  local opts = { palette = A.pal.base }
   local here = room_index(set, cam.pos)
+  -- add-material-system 5.3: from outside, the relic's metals reflect the sector's sky (inside: the matcap)
+  matv.apply(v, civ, time, xr, not here and matv.sky(state) or nil)
+  local opts = { palette = A.pal.base }
   local show, keep
   if here then
     show, keep = M.visible(set, here), M.around(set, here, M.KEEP)

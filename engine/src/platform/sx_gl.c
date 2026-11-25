@@ -184,14 +184,14 @@ SX_GL_FUNCS(SX_GL_DECL)
 static const char *mesh_vs =
     "in vec3 a_pos; in vec3 a_nrm; in vec2 a_uv; in vec3 a_col; in float a_emi; in float a_mat;\n"
     "uniform mat4 u_mvp; uniform mat4 u_mv; uniform mat4 u_model; uniform vec2 u_snap; uniform int u_affine;\n"
-    "uniform vec4 u_mat[40]; uniform float u_mtime; uniform int u_mmode;\n"
+    "uniform vec4 u_mat[48]; uniform float u_mtime; uniform int u_mmode;\n"
     "out vec3 v_uv; out vec3 v_col; out float v_emi; out float v_dist; out vec3 v_nrm; out vec3 v_wpos;\n"
     "out vec3 v_vnrm; flat out int v_mat;\n"
     "void main() {\n"
     "  vec3 pos = a_pos;\n"
     "  int ms = u_mmode > 0 ? int(a_mat + 0.5) : 0;\n"
-    "  if (ms > 0 && ms < 8 && u_mat[ms * 5].x > 2.5) {\n"
-    "    vec4 p1 = u_mat[ms * 5 + 1]; float br = u_mat[ms * 5 + 2].w;\n"
+    "  if (ms > 0 && ms < 8 && u_mat[ms * 6].x > 2.5) {\n"
+    "    vec4 p1 = u_mat[ms * 6 + 1]; float br = u_mat[ms * 6 + 2].w;\n"
     "    vec3 w = (u_model * vec4(a_pos, 1.0)).xyz;\n"
     "    float ph = (w.x + w.y * 0.7 + w.z * 1.3) / p1.w;\n"
     "    pos += a_nrm * (p1.y * sin(6.2831853 * u_mtime / p1.z + ph) + br * sin(6.2831853 * u_mtime / (3.0 * p1.z)));\n"
@@ -218,7 +218,7 @@ static const char *mesh_vs =
 static const char *mesh_fs =
     "in vec3 v_uv; in vec3 v_col; in float v_emi; in float v_dist; in vec3 v_nrm; in vec3 v_wpos;\n"
     "in vec3 v_vnrm; flat in int v_mat;\n"
-    "uniform vec4 u_mat[40]; uniform float u_mtime; uniform int u_mmode; uniform sampler2D u_matcap;\n"
+    "uniform vec4 u_mat[48]; uniform float u_mtime; uniform int u_mmode; uniform sampler2D u_matcap; uniform int u_envmap;\n"
     "uniform sampler2D u_idx; uniform sampler2D u_pal; uniform int u_palrow; uniform int u_tex;\n"
     "uniform vec4 u_tint; uniform vec3 u_light; uniform float u_ambient; uniform int u_lit;\n"
     "uniform vec3 u_fogcol; uniform float u_fog; uniform int u_dither;\n"
@@ -325,10 +325,19 @@ static const char *mesh_fs =
     "    vec3 n = normalize(v_nrm);\n"
     "    vec3 acc = u_amb;\n"
     "    // add-material-system: the slot's kind (0 plain = the old path, bit for bit)\n"
-    "    int mk = v_mat > 0 ? int(u_mat[v_mat * 5].x + 0.5) : 0;\n"
-    "    vec4 m0 = u_mat[v_mat * 5], m1 = u_mat[v_mat * 5 + 1], m2 = u_mat[v_mat * 5 + 2];\n"
-    "    vec4 m3 = u_mat[v_mat * 5 + 3], m4 = u_mat[v_mat * 5 + 4];\n"
+    "    int mk = v_mat > 0 ? int(u_mat[v_mat * 6].x + 0.5) : 0;\n"
+    "    vec4 m0 = u_mat[v_mat * 6], m1 = u_mat[v_mat * 6 + 1], m2 = u_mat[v_mat * 6 + 2];\n"
+    "    vec4 m3 = u_mat[v_mat * 6 + 3], m4 = u_mat[v_mat * 6 + 4], m5 = u_mat[v_mat * 6 + 5];\n"
     "    vec3 V = normalize(u_eye - v_wpos); vec3 macc = vec3(0.0), sacc = vec3(0.0);\n"
+    "    // add-material-system 5.2: liquid metal ripples its normal; brushed metal stretches its highlight across\n"
+    "    // the brushing (a tangent round world up)\n"
+    "    vec3 rip = vec3(0.0);\n"
+    "    if (mk == 1 && m5.z > 0.0) {\n"
+    "      rip = m5.z * vec3(sin(v_wpos.z * 1.3 + u_mtime * 2.1) + 0.5 * sin(v_wpos.y * 2.3 - u_mtime * 1.3), 0.0,\n"
+    "                        cos(v_wpos.x * 1.1 - u_mtime * 1.7) + 0.5 * cos(v_wpos.y * 1.9 + u_mtime * 1.1));\n"
+    "      n = normalize(n + rip);\n"
+    "    }\n"
+    "    vec3 tb = cross(n, vec3(0.0, 1.0, 0.0)); tb = dot(tb, tb) > 1e-4 ? normalize(tb) : vec3(1.0, 0.0, 0.0);\n"
     "    for (int j = 0; j < 16; j++) {\n"
     "      if (j >= u_nl) break;\n"
     "      int i = u_lidx[j];\n"
@@ -351,16 +360,25 @@ static const char *mesh_fs =
     "      float sh = slot >= 0 ? shadow_of(slot, lp, lc, v_wpos, n) : 1.0;\n"
     "      acc += lc.rgb * (max(dif, 0.0) * att * sh);\n"
     "      if (mk > 0) {\n"
-    "        macc += lc.rgb * (att * sh * pow(max(dot(n, normalize(L + V)), 0.0), m0.z));\n"
+    "        vec3 H = normalize(L + V); float sp = pow(max(dot(n, H), 0.0), m0.z);\n"
+    "        if (m5.y > 0.0) { float th = dot(tb, H); sp = mix(sp, 0.7 * pow(sqrt(max(1.0 - th * th, 0.0)), m0.z * 0.5), m5.y); }\n"
+    "        macc += lc.rgb * (att * sh * sp);\n"
     "        if (mk == 3) sacc += lc.rgb * (att * sh * (max(0.0, 1.0 - abs(ndl) * 3.0) + max(0.0, -ndl) * 0.6));\n"
     "      }\n"
     "    }\n"
     "    lit = vec3(1.0) - exp(-c * acc * u_expo);\n"
     "    if (mk > 0) {\n"
     "      // one matcap fetch: metals look along the view normal (reflection), crystals through it (refraction)\n"
-    "      vec3 vn = normalize(v_vnrm);\n"
+    "      vec3 vn = normalize(v_vnrm + rip * 0.5);\n"
     "      vec2 mc = mk == 2 ? refract(vec3(0.0, 0.0, -1.0), vn, 0.66).xy : vn.xy;\n"
-    "      float env = texture(u_matcap, mc * 0.48 + 0.5).r;\n"
+    "      float env;\n"
+    "      if (u_envmap == 1) {\n"
+    "        // add-material-system 5.3: outside, the sector's sky (equirectangular, world directions), still one fetch\n"
+    "        vec3 R = mk == 2 ? refract(-V, n, 0.66) : reflect(-V, n);\n"
+    "        env = texture(u_matcap, vec2(atan(R.z, R.x) / 6.2831853 + 0.5, acos(clamp(R.y, -1.0, 1.0)) / 3.1415927)).r;\n"
+    "      } else {\n"
+    "        env = texture(u_matcap, mc * 0.48 + 0.5).r;\n"
+    "      }\n"
     "      float fres = m0.w + (1.0 - m0.w) * pow(1.0 - max(dot(n, V), 0.0), 5.0);\n"
     "      float lv = clamp(dot(acc, vec3(0.3, 0.5, 0.2)) * u_expo, 0.0, 1.5);\n"
     "      vec3 spec = vec3(1.0) - exp(-macc * u_expo * (0.6 + fres));\n"
@@ -375,6 +393,13 @@ static const char *mesh_fs =
     "        l = floor(l * 7.0 + 0.5) / 7.0;\n"
     "        float glow = m1.x * (0.7 + 0.3 * sin(6.2831853 * u_mtime * max(m3.w, 0.05)));\n"
     "        lit = mix(lit, mix(m2.rgb, m3.rgb, l), 0.6) + m4.rgb * (fres * 1.1) + m3.rgb * glow * (0.8 + 0.7 * env) + spec * 1.3;\n"
+    "        if (m5.x > 0.0) {\n"
+    "          // sparkle: a few facet cells catch the light and twinkle (render time only)\n"
+    "          vec3 cell = floor(v_wpos * 3.0);\n"
+    "          float hsh = fract(sin(dot(cell, vec3(12.9898, 78.233, 37.719))) * 43758.5453);\n"
+    "          float tw = max(0.0, sin(u_mtime * (2.0 + 3.0 * hsh) + hsh * 40.0));\n"
+    "          lit += m4.rgb * (step(0.93, hsh) * tw * tw * m5.x * (0.4 + lv) * 2.0);\n"
+    "        }\n"
     "      } else {\n"
     "        // organic: wrap light, the subsurface tint in the terminator and behind, wet sheen, vein pulse\n"
     "        float vein = 1.0 - smoothstep(0.0, 0.09, abs(sin(dot(v_wpos, vec3(0.21, 0.37, 0.27)) + 2.0 * sin(v_wpos.y * 0.11 + v_wpos.x * 0.07))));\n"
@@ -436,7 +461,7 @@ typedef struct prog {
   GLint mvp, mv, model, snap, affine, idx, pal, palrow, tex, tint, light, ambient, lit, fogcol, fog, dither, size, color;
   GLint mode, nl, amb, expo, lpos, lcol, ldir, lpar, shadow, shmat, shrect, shbias, ncasc, shtexel, lidx;
   GLint eye, nhz, hzsteps, sky, hzpos, hzcol, hzdir;
-  GLint mat, mtime, mmode, matcap; /* add-material-system */
+  GLint mat, mtime, mmode, matcap, envmap; /* add-material-system */
 } prog;
 
 static struct {
@@ -510,7 +535,7 @@ static int link_prog(prog *p, const char *vs, const char *fs, int ui) {
   U(mode); U(nl); U(amb); U(expo); U(lpos); U(lcol); U(ldir); U(lpar); U(shadow); U(shmat); U(shrect); U(shbias);
   U(ncasc); U(shtexel); U(lidx);
   U(eye); U(nhz); U(hzsteps); U(sky); U(hzpos); U(hzcol); U(hzdir);
-  U(mat); U(mtime); U(mmode); U(matcap);
+  U(mat); U(mtime); U(mmode); U(matcap); U(envmap);
 #undef U
   glUseProgram(p->id);
   glUniform1i(p->idx, 0);
@@ -961,6 +986,7 @@ static void set_materials(const sx_render *r, const sx_viewport *v) {
   glUniform4fv(G.mesh.mat, SX_MAT_SLOTS * SX_MAT_VEC4, packed);
   glUniform1f(G.mesh.mtime, ms->time);
   glUniform1i(G.mesh.mmode, n > 0 ? mode : 0);
+  glUniform1i(G.mesh.envmap, ms->envmap ? 1 : 0);
   glActiveTexture(GL_TEXTURE3);
   glBindTexture(GL_TEXTURE_2D, (ms->matcap > 0 && ms->matcap < SX_MAX_TEXTURES && r->textures[ms->matcap].used &&
                                 G.tex[ms->matcap]) ? G.tex[ms->matcap] : G.white_tex);
