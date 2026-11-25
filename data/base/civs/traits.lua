@@ -54,7 +54,7 @@ return {
     era = { primordial = 1, ancient = 2, old = 3, recent = 2 },
   },
   -- the era's span on the history's 1 Myr axis (thousands of years before now: from, to)
-  era_kyr = { primordial = { 1000, 600 }, ancient = { 700, 250 }, old = { 300, 40 }, recent = { 60, 1 } },
+  era_kyr = { primordial = { 1000, 600 }, ancient = { 700, 250 }, old = { 300, 40 }, recent = { 60, 2 } },
   -- diversity (design §1.1): at least this many massing archetypes and body scales per roster, at most this many shared
   -- axis values between two civs, and how many tries before the deterministic swap
   diversity = { massings = 3, scales = 2, shared = 3, tries = 16 },
