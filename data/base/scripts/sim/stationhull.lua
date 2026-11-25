@@ -1296,8 +1296,8 @@ function M.spin_push(state, pos, r)
     local cx, cy, cz = tr.pos[1] + sp[1], tr.pos[2] + sp[2], tr.pos[3] + sp[3]
     local dx, dy, dz = pos[1] - cx, pos[2] - cy, pos[3] - cz
     if L.spin and #L.spin > 0 and len3(dx, dy, dz) < (L.spin_reach or M.spin_reach(L)) + r then
-      -- into the layer's frame: undo its pitch (about x) by the tick's angle
-      local q = { dx, dy * ca + dz * sa, -dy * sa + dz * ca }
+      -- into the layer's frame: undo the view's model pitch (about x; sx_mat4_model_ypr: y' = y cos + z sin)
+      local q = { dx, dy * ca - dz * sa, dy * sa + dz * ca }
       for _, sh in ipairs(L.spin) do
         local np, th = nearest(sh, q)
         if np then
@@ -1313,7 +1313,7 @@ function M.spin_push(state, pos, r)
         end
       end
       if hits > 0 then
-        pos = { cx + q[1], cy + q[2] * ca - q[3] * sa, cz + q[2] * sa + q[3] * ca }
+        pos = { cx + q[1], cy + q[2] * ca + q[3] * sa, cz - q[2] * sa + q[3] * ca }
       end
     end
   end

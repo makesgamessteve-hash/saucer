@@ -496,6 +496,12 @@ local function mover(state, p)
   end
 end
 
+-- (specs move a ship through the same collision as flight)
+function M.move_for_test(state, p, delta)
+  p.ship.pos = vec.copy(p.ship.pos)
+  return mover(state, p)(p.ship, delta)
+end
+
 local function inside(b, pos)
   return pos[1] >= b[1][1] and pos[1] <= b[2][1] and pos[2] >= b[1][2] and pos[2] <= b[2][2]
     and pos[3] >= b[1][3] and pos[3] <= b[2][3]
