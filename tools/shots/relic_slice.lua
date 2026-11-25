@@ -161,6 +161,42 @@ if mode == "glow" then
   return
 end
 
+-- --script-arg styles: add-design-language: the same relic restyled by four civs (the Vyrr and three of seed 42's
+-- roster), from the same three viewpoints: a hall, the hull near the maw and the heart
+if mode == "styles" then
+  local civs = require("sim.civs")
+  local u = civs.universe(T.state().seed)
+  local picks = { false }
+  for _, id in ipairs({ "oquun", "ixalash", "neum" }) do
+    for _, c in ipairs(u) do if c.id == id then picks[#picks + 1] = c end end
+  end
+  for k = #picks + 1, 4 do picks[k] = u[k + 1] end
+  local hc, hmn = centre(hall1)
+  local c, mn = centre(core)
+  local route = r.relic.route
+  local dc, dir = door_between(route[#route - 1], core)
+  for k, civ in ipairs(picks) do
+    relicv.set_style(civ or nil)
+    local tag = string.format("s%d_%s", k, civ and civ.id or "vyrr")
+    saucer.log.info("styles: " .. tag .. " " .. (civ and (civ.materials.signature.rule .. " " .. civ.language.light.model) or "vyrr"))
+    park({ hc[1], floor_of(hall1) + 2, hmn[3] + 30 }, 0)
+    look_at({ hc[1] + 6, floor_of(hall1) + 9, hmn[3] + 4 }, { hc[1], floor_of(hall1) + 12, hc[3] }, 74)
+    T.wait(6)
+    shot(tag .. "_hall")
+    park({ door[1], door[2], door[3] - 400 }, 0)
+    look_at({ door[1] + 90, door[2] + 40, door[3] - 140 }, { door[1], door[2], door[3] + 40 }, 66)
+    T.wait(6)
+    shot(tag .. "_hull")
+    park(add(dc, dir, 30), 0)
+    look_at(add({ dc[1], dc[2] + 30, dc[3] }, dir, 8), { c[1], mn[2] + 70, c[3] }, 84)
+    T.wait(10)
+    shot(tag .. "_heart")
+  end
+  relicv.set_style(nil)
+  free = nil
+  return
+end
+
 -- 1. the maw from outside, the Villa in front of it for scale
 park({ door[1] + 14, door[2] - 2, door[3] - 70 }, sm.atan2(-0.2, 1))
 look_at({ door[1] + 46, door[2] + 9, door[3] - 84 }, { door[1] - 2, door[2] + 3, door[3] + 4 }, 66)

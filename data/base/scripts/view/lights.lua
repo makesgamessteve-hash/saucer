@@ -89,6 +89,8 @@ local function bucket_key(x, y, z) return floor(x / M.CELL) .. "," .. floor(y / 
 -- a derelict's (or a city's) lamps: per room one to three (a city: four) low pools along its long side,
 -- the reach a share of the room's length, the colour from the place's palette. Cached per ruin, bucketed.
 local lamps_of = setmetatable({}, { __mode = "k" })
+-- forget every cached lamp list (view/relic.set_style restyles the relics)
+function M.forget() lamps_of = setmetatable({}, { __mode = "k" }) end
 function M.room_lamps(ruin, origin, site)
   local c = lamps_of[ruin]
   if c then return c end
@@ -361,6 +363,23 @@ function M.sky(v, A, eye, star)
   return 2
 end
 
+-- add-design-language §2.5: a relic lamp's light model in motion (render only, a function of the clock):
+-- ripple (echo) sweeps along the lamps like sonar, orbit (tidal) circles its post, arc (field) flickers
+M.ORBIT = 6.0 -- m: an orbiting lamp's circle
+function M.animate(l, t, k)
+  local ph = l.phase or 0
+  if l.model == "ripple" then
+    local s = math.max(0, math.sin(t * 1.6 - ph * 0.7))
+    return k * (0.15 + 0.85 * s * s * s * s), l.pos
+  elseif l.model == "orbit" then
+    local a = t * 0.35 + ph
+    return k, { l.pos[1] + M.ORBIT * math.cos(a), l.pos[2] + 1.5 * math.sin(a * 0.5), l.pos[3] + M.ORBIT * math.sin(a) }
+  elseif l.model == "arc" then
+    return k * (((math.floor(t * 11) * 7 + ph * 13) % 5 == 0) and 0.35 or 1.0), l.pos
+  end
+  return k, l.pos
+end
+
 -- every site's lamps near the eye (a city's dark districts stay dark until their grid is back)
 M.GLOW_NEAR = 120 -- lamps nearer than this also show their glow (the light has a visible source)
 function M.site_lamps(v, A, state, eye)
@@ -376,7 +395,9 @@ function M.site_lamps(v, A, state, eye)
         if r.city and l.district then k = cities.light(state, i, r, l.district) end
         if k > 0 then
           local kk = r.city and (0.15 + 0.85 * k) or 1
-          add(v, { kind = "point", pos = l.pos, color = l.color, intensity = l.intensity * kk, range = l.range,
+          local pos = l.pos
+          if l.model and l.model ~= "chromatic" then kk, pos = M.animate(l, (state.tick or 0) / 60, kk) end
+          add(v, { kind = "point", pos = pos, color = l.color, intensity = l.intensity * kk, range = l.range,
                    shadow = not l.fixture })
           n = n + 1
           if glow and vec.dist(l.pos, eye) < M.GLOW_NEAR then
