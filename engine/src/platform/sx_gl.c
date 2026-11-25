@@ -310,6 +310,12 @@ static const char *mesh_fs =
     "    if (i == 0) discard;\n"
     "    base = texelFetch(u_pal, ivec2(i, u_palrow), 0);\n"
     "  }\n"
+    "  if (u_tex == 2) {\n"
+    "    // a soft glow: a smooth falloff in the tint's colour, no palette texels (they read as dark blocks)\n"
+    "    vec2 q = v_uv.xy / v_uv.z * 2.0 - 1.0; float r2 = dot(q, q);\n"
+    "    if (r2 >= 1.0) discard;\n"
+    "    float f = 1.0 - r2; base = vec4(1.0, 1.0, 1.0, f * f * (u_fog > 0.0 ? exp(-u_fog * v_dist) : 1.0));\n"
+    "  }\n"
     "  vec3 c = base.rgb * v_col * u_tint.rgb;\n"
     "  vec3 lit = c;\n"
     "  if (u_lit == 1 && u_mode == 0) {\n"
@@ -360,25 +366,25 @@ static const char *mesh_fs =
     "      vec3 spec = vec3(1.0) - exp(-macc * u_expo * (0.6 + fres));\n"
     "      if (mk == 1) {\n"
     "        // metal: the reflection's brightness indexes the ramp in 8 bands, plus specular\n"
-    "        float l = clamp(env * m0.y * (0.2 + 0.8 * lv) + (1.0 - m0.y) * lv * 0.5 + fres * 0.25 * lv, 0.0, 1.0);\n"
+    "        float l = clamp(env * m0.y * (0.35 + 0.65 * lv) + (1.0 - m0.y) * lv * 0.5 + fres * 0.4 * (0.3 + lv), 0.0, 1.0);\n"
     "        l = floor(l * 7.0 + 0.5) / 7.0;\n"
-    "        lit = mix(lit, mix(m2.rgb, m3.rgb, l), m0.y) + spec;\n"
+    "        lit = mix(lit, mix(m2.rgb, m3.rgb, l), m0.y) + spec * 1.6;\n"
     "      } else if (mk == 2) {\n"
     "        // crystal: faceted body through the ramp, the lamps seen through it, a rim and its own glow\n"
     "        float l = clamp(env * m0.y + lv * 0.5, 0.0, 1.0);\n"
     "        l = floor(l * 7.0 + 0.5) / 7.0;\n"
     "        float glow = m1.x * (0.7 + 0.3 * sin(6.2831853 * u_mtime * max(m3.w, 0.05)));\n"
-    "        lit = mix(lit, mix(m2.rgb, m3.rgb, l), 0.6) + m4.rgb * (fres * 0.8) + m3.rgb * glow * (0.5 + 0.5 * env) + spec;\n"
+    "        lit = mix(lit, mix(m2.rgb, m3.rgb, l), 0.6) + m4.rgb * (fres * 1.1) + m3.rgb * glow * (0.8 + 0.7 * env) + spec * 1.3;\n"
     "      } else {\n"
     "        // organic: wrap light, the subsurface tint in the terminator and behind, wet sheen, vein pulse\n"
     "        float vein = 1.0 - smoothstep(0.0, 0.09, abs(sin(dot(v_wpos, vec3(0.21, 0.37, 0.27)) + 2.0 * sin(v_wpos.y * 0.11 + v_wpos.x * 0.07))));\n"
     "        float pulse = m3.w > 0.0 ? 0.5 + 0.5 * sin(6.2831853 * m3.w * u_mtime) : 0.0;\n"
-    "        lit += (vec3(1.0) - exp(-m4.rgb * sacc * u_expo)) + spec * 0.35 * m0.y + m4.rgb * (vein * m1.x * pulse);\n"
+    "        lit += (vec3(1.0) - exp(-m4.rgb * sacc * u_expo * 1.6)) + spec * 0.6 * m0.y + m4.rgb * (vein * m1.x * (m3.w > 0.0 ? 0.25 + pulse : 0.0) * 1.6);\n"
     "      }\n"
     "    }\n"
     "  }\n"
     "  c = mix(lit, c * 1.25, clamp(v_emi, 0.0, 1.0));\n"
-    "  if (u_fog > 0.0) c = mix(u_fogcol, c, exp(-u_fog * v_dist));\n"
+    "  if (u_fog > 0.0 && u_tex != 2) c = mix(u_fogcol, c, exp(-u_fog * v_dist));\n"
     "  ivec2 p = ivec2(gl_FragCoord.xy) % 4;\n"
     "  float b = (bayer[p.y * 4 + p.x] + 0.5) / 16.0;\n"
     "  if (u_nhz > 0) c += vec3(1.0) - exp(-haze(v_wpos, b) * u_expo);\n"
@@ -386,6 +392,7 @@ static const char *mesh_fs =
     "    c = floor(clamp(c, 0.0, 1.0) * 31.0 + b) / 31.0;\n"
     "  }\n"
     "  float a = base.a * u_tint.a;\n"
+    "  if (u_tex == 2 && u_dither == 1) a = floor(a * 15.0 + b) / 15.0;\n"
     "  if (a < 0.01) discard;\n"
     "  o_col = vec4(c, a);\n"
     "}\n";
@@ -1066,7 +1073,10 @@ static void draw_billboards(const sx_render *r, const sx_viewport *v, const fram
     const sx_draw_billboard *b = &v->bills[i];
     float vtx[6][SX_VTX_FLOATS], rt[3], up[3];
     static const float corner[6][2] = {{-1, -1}, {1, -1}, {1, 1}, {-1, -1}, {1, 1}, {-1, 1}};
-    if (b->yaxis) {
+    int soft = b->tex > 0 && b->tex < SX_MAX_TEXTURES && r->textures[b->tex].used && r->textures[b->tex].soft;
+    /* a bright glow adds light (it can never darken what is behind it); a dark one (a shade) still blends */
+    int add = soft && b->tint[0] + b->tint[1] + b->tint[2] > 0.36f;
+    if (b->yaxis && !soft) {
       float l = (float)sx_sqrt((double)(fm->right[0] * fm->right[0] + fm->right[2] * fm->right[2]));
       rt[0] = l > 1e-6f ? fm->right[0] / l : 1;
       rt[1] = 0;
@@ -1095,9 +1105,18 @@ static void draw_billboards(const sx_render *r, const sx_viewport *v, const fram
     }
     glUniform4f(G.mesh.tint, b->tint[0], b->tint[1], b->tint[2], b->tint[3]);
     glUniform1i(G.mesh.palrow, pal_row(r, b->palette));
+    glUniform1i(G.mesh.tex, soft ? 2 : 1);
+    if (add) {
+      glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+      glDepthMask(GL_FALSE);
+    }
     bind_tex(r, b->tex);
     glBufferData(GL_ARRAY_BUFFER, sizeof vtx, vtx, GL_STREAM_DRAW);
     glDrawArrays(GL_TRIANGLES, 0, 6);
+    if (add) {
+      glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+      glDepthMask(GL_TRUE);
+    }
   }
 }
 

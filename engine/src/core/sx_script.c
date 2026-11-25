@@ -1192,6 +1192,11 @@ static int l_r_texture(lua_State *L) {
     id = sx_render_texture_from_png(&e->render, p, (const unsigned char *)d, (int)n);
     free(d);
   }
+  if (lua_istable(L, 2)) {
+    lua_getfield(L, 2, "soft");
+    if (!lua_isnil(L, -1)) sx_render_texture_soft(&e->render, id, lua_toboolean(L, -1));
+    lua_pop(L, 1);
+  }
   lua_pushinteger(L, id);
   return 1;
 }

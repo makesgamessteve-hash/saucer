@@ -20,3 +20,11 @@ The game SHALL offer materials full, lite and off (`--materials`, the settings t
 #### Scenario: Off matches legacy
 - **WHEN** `tools/shots/materials.sh` renders the seed 42 default view with materials off
 - **THEN** it is pixel-identical to the same view rendered before the material system
+
+### Requirement: Golden shots in CI
+Every pull request SHALL render the material golden shots under Xvfb and Mesa and compare them with `tests/golden/`, and the relic scene with materials full SHALL differ from off by a mean of at least 9.5 per channel.
+
+#### Scenario: CI golden job
+- **WHEN** the `golden` job of `.github/workflows/ci.yml` runs `tools/shots/materials.sh`
+- **THEN** every shot matches its golden within tolerance and full differs from off by at least 9.5
+
