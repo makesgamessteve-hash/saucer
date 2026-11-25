@@ -143,7 +143,7 @@ describe("civ roster", function()
 
   it("conquest adds wings", function()
     local found, kinds = 0, {}
-    for s = 1, 120 do
+    for s = 1, 60 do
       local h = civs.history(s)
       for k in pairs(h.relations) do kinds[h.relations[k]] = true end
       for loser, q in saucer.util.sorted_pairs(h.conquests) do

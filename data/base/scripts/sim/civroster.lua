@@ -143,7 +143,7 @@ local function valid(c)
 end
 M.valid = valid
 
-local function improve(roster, c)
+local function improve(roster, c, pairs_too)
   local A = traits().axes
   local best, choice = badness(roster), nil
   local save_axes, save_m = {}, c.massing
@@ -157,7 +157,7 @@ local function improve(roster, c)
       set(c, a, ca[1])
       local b = valid(c) and badness(roster) or math.huge
       if b < best then best, choice = b, { { a, ca[1] } } end
-      for j = i + 1, #M.AXES do
+      for j = i + 1, pairs_too and #M.AXES or 0 do
         local a2 = M.AXES[j]
         for _, cb in ipairs(M.candidates(a2, c)) do
           set(c, a2, cb[1])
@@ -181,11 +181,21 @@ local function improve(roster, c)
   end
 end
 
+-- offends(roster, c): c shares too much with another civ (or the roster lacks massings / scales, which any civ fixes)
+local function offends(roster, c)
+  local D = traits().diversity
+  if select(2, M.check(roster)) ~= "shared" then return true end
+  for _, d in ipairs(roster) do
+    if d ~= c and shared(c, d) > D.shared then return true end
+  end
+  return false
+end
+
 function M.swap(roster)
-  for _ = 1, 6 do
+  for pass = 1, 6 do
     if badness(roster) == 0 then break end
     for _, c in ipairs(roster) do
-      if c.generated and badness(roster) > 0 then improve(roster, c) end
+      if c.generated and badness(roster) > 0 and offends(roster, c) then improve(roster, c, pass > 1) end
     end
   end
   return roster
