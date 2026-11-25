@@ -114,3 +114,21 @@ like the hall's.
 #### Scenario: Warrens
 - **WHEN** `tests/lua/megacity_spec.lua` runs "under each organ a shaft drops into a warren of corridors and chambers, its sanctum's finds beamed only from below", and `tests/game/megacity.lua` runs
 - **THEN** they pass
+
+### Requirement: Lit warrens and a cheap ring
+A warren SHALL be lit when the eye is near and low: a lamp in every space (the sanctum's breathing) and lit strips on
+its ceilings and floors. The hall's finds SHALL keep at least 10 m off the shaft's mouth. Districts within 3 km of a
+ship SHALL be built ahead of need, one a step, without touching the game state.
+
+#### Scenario: Light and cost
+- **WHEN** `tests/lua/megacity_spec.lua` runs "the warren is lit, the hall's finds keep off the shaft, and districts near a ship are built ahead of need"
+- **THEN** it passes
+
+### Requirement: The ring's life
+Mag-trains SHALL run high over the outer avenues (render only, a function of the clock). A planet city's storm SHALL
+push a saucer about in the ring's open air but not in an organ's hall or a warren. Each sanctum SHALL keep an archive
+record, sensed only from the warren and read in place like the core's records.
+
+#### Scenario: Trains, storm and records
+- **WHEN** `tests/lua/megacity_spec.lua` runs "mag-trains run over the outer avenues, the storm blows over the ring, and each sanctum keeps an archive record", and `tests/game/megacity.lua` runs
+- **THEN** they pass

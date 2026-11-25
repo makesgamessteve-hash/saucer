@@ -121,13 +121,19 @@ T.assert(mega.in_warren(od, get().ship.pos) == w, "in the warren")
 local sc = w.sanctum
 T.assert(ap.fly(T, 1, get, { sc[1], w.y0 + 18, sc[3] }, 4, 3600), "flew along the corridor to the sanctum")
 local deep
-for _, c in ipairs(tractor.candidates(st, get(), 0, nil)) do if c.pos[2] < od.y and not deep then deep = c end end
+for _, c in ipairs(tractor.candidates(st, get(), 0, nil)) do if c.kind == "slot" and c.pos[2] < od.y and not deep then deep = c end end
 T.assert(deep ~= nil, "a find in the sanctum")
 T.assert(ap.fly(T, 1, get, ap.beam_spot(deep.pos, get().ship.size), 0.5, 1800), "over the sanctum's find")
 T.assert(ap.to_console(T, 1, get), "at the beam console in the warren")
 hold = #get().hold
 T.assert(ap.beam_up(T, 1, get, deep), "beamed the sanctum's find up")
 T.assert(#get().hold == hold + 1 and get().looted[deep.key], "the sanctum's find is in the hold and taken")
+-- the sanctum's archive record, read in place
+local rec
+for _, c in ipairs(tractor.candidates(st, get(), 0, nil)) do if c.kind == "clue" then rec = c end end
+T.assert(rec ~= nil, "the sanctum keeps an archive record")
+game.pick_up(st, get(), rec, 0)
+T.assert(get().looted[rec.key], "the record is read")
 T.assert(ap.back_to_helm(T, 1, get), "back at the helm in the warren")
 T.screenshot("megacity_warren.png")
 

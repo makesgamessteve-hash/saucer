@@ -71,3 +71,8 @@ phenomena. The megascale core, lazy district generation, LOD and mini-relic orga
 - The undercity: a shaft from each organ hall into a warren of corridors and chambers ending in a breathing sanctum,
   with deep finds. No new state: taken finds are `looted` keys, so no version bump and replays unchanged.
 - Transit and storm extras, mystery tie-ins and full relicgen interiors stay for later.
+
+## Part 5
+- The warren is lit; hall finds keep off the shaft; districts build in about a fifth of the time and ahead of need.
+- Mag-trains over the outer avenues, the storm over the ring, an archive record in each sanctum. No new state: the
+  record is a `looted` key, the wind a function of the tick. Full relicgen interiors stay for later.

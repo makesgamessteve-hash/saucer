@@ -33,4 +33,16 @@
       corridors to chambers) whose farthest chamber is a sanctum; deep finds sensed only from the warren
 - [x] 4.4 The sanctum: glowing stones circling a dim heart that breathes (render only)
 - [x] 4.5 Specs, game test (down the shaft, along to the sanctum, beam a find), shots 08 and 09
-- [ ] 4.6 (later) Transit and storm extras in the ring, mystery tie-ins, full relicgen interiors in the organs
+- [x] 4.6 Moved to part 5 (5.4-5.6); full relicgen interiors in the organs to 5.8
+
+## 5. Light, cost and the ring's life (part 5)
+- [x] 5.1 The warren is lit: a lamp under each space's ceiling (two down long ones, the sanctum's breathing), lit
+      ceiling strips, floor lines and a collar where the shaft comes down
+- [x] 5.2 The hall's finds keep at least 10 m off the shaft's mouth
+- [x] 5.3 Cost: warren walls from the cells round open ones only (same boxes, about a fifth of the time), bay checks
+      against what rises above the terraces only, and districts within 3 km of a ship built ahead, one a step
+- [x] 5.4 Mag-trains over the outer avenues (west and north lines of each district), render only
+- [x] 5.5 The storm blows over the ring's open air (not in an organ's hall or a warren)
+- [x] 5.6 Each sanctum keeps an archive record (the mystery's next lead), read in place from the warren
+- [x] 5.7 Specs, the game test reads the sanctum's record, shots 10-12
+- [ ] 5.8 (later) Full relicgen interiors in the organs

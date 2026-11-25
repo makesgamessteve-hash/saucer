@@ -3,7 +3,7 @@
 --   saucer --root REPO --seed 42 --windowed --width 1280 --height 720 --script REPO/tools/shots/megacity.lua
 --   [--script-arg planet|moon|asteroid]
 -- The ring from over the core, a canyon avenue, the city's megaform, the footprint from high up, a lit block close
--- by, an organ's hall and mouth, a drifter down an avenue, a fold bay on a terrace, and a warren and its sanctum under an organ. Staged: a free camera with the HUD and cockpit out of frame (the saucer waits just behind the camera).
+-- by, an organ's hall and mouth, a drifter down an avenue, a fold bay on a terrace, a warren and its sanctum under an organ, and a mag-train. Staged: a free camera with the HUD and cockpit out of frame (the saucer waits just behind the camera).
 local T = saucer.test
 local game = require("sim.game")
 local galaxy = require("sim.galaxy")
@@ -157,4 +157,9 @@ if wd then
   frame({ sc[1] - dx / l * (sc.size * 0.45), w.y0 + 14, sc[3] - dz / l * (sc.size * 0.45) }, { sc[1], sc[2], sc[3] }, 75)
   shot("11_sanctum")
 end
+-- 12. a mag-train high over an avenue, framed where it will be when the shot is taken
+local td = p.districts[(#p.districts + 1) // 2]
+local tp = megav.train_pose(p, td, 1, (T.state().tick + 2 + 40) / 60).cars[3].pos
+frame({ tp[1] + 70, tp[2] + 18, tp[3] - 90 }, tp, 60)
+shot("12_train")
 print("megacity shots done")

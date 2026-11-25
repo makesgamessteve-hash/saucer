@@ -36,6 +36,7 @@ M.MOUTH = { 48, 34 }       -- m, its mouth's width and height
 M.FINDS = { 4, 6 }
 M.SENSE = 160              -- m, finds this near the ship are rolled (like a city's)
 M.MAX_ACTIVE = 16
+M.PREBUILD = 3000          -- m: districts this near a ship are built ahead of need, one a step
 -- add-alien-cities-4: fold bays on the terraces: a 44 x 44 m pad with 20 m clear above and a cradle (a growing back
 -- to the Villa there is free, as in a relic's bays), on tier tops with open sky over them
 M.BAY = 44                 -- m, a bay's side
@@ -47,6 +48,7 @@ M.CRADLE = { 20, 1.5 }     -- m, the cradle's side and height
 -- into a warren: a hub, two to four corridors out to chambers, the farthest a sanctum where something breathes
 M.WG = 10                  -- m, the warren's grid
 M.SHAFT = 50               -- m, the shaft's side
+M.FIND_CLEAR = 10          -- m a hall find keeps from the shaft's edge
 M.WARREN_H = 40            -- m, its rooms' height under the foundation
 M.FLOOR = 6                -- m, its floor
 M.HUB = 80                 -- m, the hub's side
@@ -275,6 +277,19 @@ function M.plan_warren(seed, d)
   cx, cz = snap(cx), snap(cz)
   local S = M.SHAFT / 2
   local shaft = { cx - S, cz - S, cx + S, cz + S }
+  -- the hall's finds keep off the shaft's mouth: one over it (or within FIND_CLEAR of its edge) moves sideways, across
+  -- the hall's axis, to the nearer side beyond the shaft
+  local m = M.FIND_CLEAR
+  for _, f in ipairs(og.finds) do
+    local fp = f.pos
+    if fp[1] > shaft[1] - m and fp[1] < shaft[3] + m and fp[3] > shaft[2] - m and fp[3] < shaft[4] + m then
+      if og.side <= 2 then
+        fp[3] = fp[3] < cz and shaft[2] - m - 2 or shaft[4] + m + 2
+      else
+        fp[1] = fp[1] < cx and shaft[1] - m - 2 or shaft[3] + m + 2
+      end
+    end
+  end
   local y1 = d.y - slab_of(d)
   local y0 = y1 - M.WARREN_H
   local inset = { d.box[1] + 20, d.box[2] + 20, d.box[3] - 20, d.box[4] - 20 }
@@ -351,31 +366,52 @@ local function warren_boxes(d, out)
   local function is_open(ix, iz) return ix >= 0 and iz >= 0 and ix < nx and iz < nz and open[iz * nx + ix] end
   out[#out + 1] = { { bx0, w.y0 - M.FLOOR, bz0 }, { bx1, w.y0, bz1 } }
   -- wall cells: shut, next to an open cell (diagonals too); greedy rectangles: run along x, then grow along z
-  local wall, used = {}, {}
-  for iz = 0, nz - 1 do
-    for ix = 0, nx - 1 do
-      if not is_open(ix, iz) then
-        for dz = -1, 1 do for dx = -1, 1 do if is_open(ix + dx, iz + dz) then wall[iz * nx + ix] = true end end end
-      end
-    end
-  end
-  local function free(ix, iz) return wall[iz * nx + ix] and not used[iz * nx + ix] end
-  for iz = 0, nz - 1 do
-    for ix = 0, nx - 1 do
-      if free(ix, iz) then
-        local ex = ix
-        while ex + 1 < nx and free(ex + 1, iz) do ex = ex + 1 end
-        local ez = iz
-        local grow = true
-        while grow and ez + 1 < nz do
-          for x = ix, ex do if not free(x, ez + 1) then grow = false break end end
-          if grow then ez = ez + 1 end
+  -- (only the cells round open ones are visited, in row order, so the cost follows the warren, not its bounds)
+  local wall, used, keys = {}, {}, {}
+  for key in pairs(open) do
+    local iz = key // nx
+    local ix = key - iz * nx
+    for dz = -1, 1 do
+      for dx = -1, 1 do
+        local x, z = ix + dx, iz + dz
+        local k2 = z * nx + x
+        if x >= 0 and z >= 0 and x < nx and z < nz and not open[k2] and not wall[k2] then
+          wall[k2] = true
+          keys[#keys + 1] = k2
         end
-        for z = iz, ez do for x = ix, ex do used[z * nx + x] = true end end
-        out[#out + 1] = { { bx0 + ix * G, w.y0, bz0 + iz * G }, { bx0 + (ex + 1) * G, w.y1, bz0 + (ez + 1) * G } }
       end
     end
   end
+  table.sort(keys)
+  local function free(ix, iz) return wall[iz * nx + ix] and not used[iz * nx + ix] end
+  for _, key in ipairs(keys) do
+    local iz = key // nx
+    local ix = key - iz * nx
+    if not used[key] then
+      local ex = ix
+      while ex + 1 < nx and free(ex + 1, iz) do ex = ex + 1 end
+      local ez = iz
+      local grow = true
+      while grow and ez + 1 < nz do
+        for x = ix, ex do if not free(x, ez + 1) then grow = false break end end
+        if grow then ez = ez + 1 end
+      end
+      for z = iz, ez do for x = ix, ex do used[z * nx + x] = true end end
+      out[#out + 1] = { { bx0 + ix * G, w.y0, bz0 + iz * G }, { bx0 + (ex + 1) * G, w.y1, bz0 + (ez + 1) * G } }
+    end
+  end
+end
+
+-- where the sanctum's archive record lies: on the floor under its heart
+function M.clue_pos(d)
+  local c = d.warren.sanctum
+  return { c[1], d.warren.y0 + 1.5, c[3] }
+end
+
+-- is pos out of the wind in megacity p: in an organ's hall or a warren
+function M.sheltered(p, pos)
+  local d = M.district_at(p, pos[1], pos[3])
+  return d ~= nil and (M.in_hall(d, pos) ~= nil or M.in_warren(d, pos) ~= nil)
 end
 
 -- a ship-sized point inside district d's warren (or its shaft)? -> the warren or nil
@@ -499,6 +535,9 @@ function M.terrace_bays(d, solids)
     end
   end
   table.sort(tiers, function(a, c) if a.b[2][2] ~= c.b[2][2] then return a.b[2][2] < c.b[2][2] end return a.n < c.n end)
+  -- only what rises above the lowest terrace can stand in a bay's air
+  local high = {}
+  for n2, o in ipairs(solids) do if o[2][2] > d.y + M.BAY_MIN_Y then high[#high + 1] = { n = n2, b = o } end end
   local bays = {}
   for _, t in ipairs(tiers) do
     if #bays >= M.BAYS then break end
@@ -509,8 +548,8 @@ function M.terrace_bays(d, solids)
     for _, c in ipairs({ { (xa + xb) / 2, (za + zb) / 2 }, { xa, za }, { xb, za }, { xa, zb }, { xb, zb } }) do
       local lo, hi = { c[1] - half, top, c[2] - half }, { c[1] + half, top + M.BAY_CLEAR, c[2] + half }
       local free = true
-      for n2, o in ipairs(solids) do
-        if n2 ~= t.n and overlaps(lo, hi, o) then free = false break end
+      for _, e in ipairs(high) do
+        if e.n ~= t.n and overlaps(lo, hi, e.b) then free = false break end
       end
       for _, q in ipairs(bays) do
         if overlaps(lo, hi, { q.lo, { q.hi[1], q.hi[2] + M.BAY_CLEAR, q.hi[3] } }) then free = false end
@@ -640,6 +679,21 @@ function M.sync(state, ruin_of, station_ball)
           now[k] = ids
         end
       end
+      -- build ahead: the nearest unbuilt district within PREBUILD of a ship, one a step, so crossing into ACTIVE
+      -- range finds it ready (the cache is derived: nothing here touches the game state)
+      local best, bd
+      for k, d in ipairs(p.districts) do
+        if not M.is_built(p, d) then
+          for _, pos in ipairs(positions) do
+            local dd = rect_dist(d.box, pos[1], pos[3])
+            if dd <= M.PREBUILD and (not bd or dd < bd) then best, bd = d, dd end
+          end
+        end
+      end
+      if best then
+        M.solids(p, best)
+        M.stats.prebuilt = (M.stats.prebuilt or 0) + 1
+      end
     end
   end
 end
@@ -681,6 +735,16 @@ function M.candidates(state, p)
         list = {}
         for _, f in ipairs(og.finds) do list[#list + 1] = f end
         for _, f in ipairs(d.warren.finds) do list[#list + 1] = f end
+      end
+      -- add-alien-cities-5: the sanctum keeps an archive record, read in place (the mystery's next lead)
+      local w = d.warren
+      if w and below then
+        local key = "megaclue:" .. i .. ":" .. d.id
+        local cp = M.clue_pos(d)
+        if not p.looted[key] and math.abs(cp[1] - sp[1]) <= M.SENSE and math.abs(cp[3] - sp[3]) <= M.SENSE and math.abs(cp[2] - sp[2]) <= M.SENSE then
+          out[#out + 1] = { key = key, kind = "clue", pos = cp, district = d.id, organ = d.id,
+                            item = { name = "Archive record", type = "clue", size = 1, value = 0, ident = true } }
+        end
       end
       for _, f in ipairs(list) do
         local key = "mega" .. i .. ":" .. d.id .. ":" .. f.id

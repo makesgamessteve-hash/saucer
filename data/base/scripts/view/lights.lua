@@ -193,6 +193,9 @@ local function add(v, l)
   v:light(l)
 end
 
+-- a placed lamp from elsewhere in the view (add-alien-cities-5: the warrens' lamps)
+function M.lamp(v, l) add(v, l) end
+
 -- the bay's lamps: a 3 x 2 grid of warm-white ceiling floods and the pad's green and red beacons
 function M.bay_lamps(v, b, tick)
   local h = b.hi[2] - b.floor

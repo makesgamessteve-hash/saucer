@@ -1100,6 +1100,13 @@ local function world_step(state, p, dt)
   if cities.is_city(cr) and not hangar and not ship.morph and p.mode ~= "foot" and not p.berth then
     local wx, wz, wk = cities.wind(cr, state.tick)
     if wk > 0 and not cities.sheltered(cr, ship.pos) then ship.pos = mover(state, p)(ship, { wx * dt, 0, wz * dt }) end
+  elseif site == 0 and not ship.morph and p.mode ~= "foot" and not p.berth then
+    -- add-alien-cities-5: the storm blows over the outer ring too (not in an organ's hall or a warren)
+    local mi, mr, mp = M.mega_city_at(state, ship.pos)
+    if mi and mr and megacity.in_air(mp, ship.pos) then
+      local wx, wz, wk = cities.wind(mr, state.tick)
+      if wk > 0 and not megacity.sheltered(mp, ship.pos) then ship.pos = mover(state, p)(ship, { wx * dt, 0, wz * dt }) end
+    end
   end
   -- add-relic-stations: a Villa resting in a relic's cradle bay refills at half the open-space rate
   local regen = (site == 0 or hangar) and home.regen_factor(state, p) or (site ~= 0 and relic.cradle_regen(state, p))
