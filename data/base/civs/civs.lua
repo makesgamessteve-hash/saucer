@@ -8,10 +8,15 @@ return {
     domains = { "gravitics", "fold" }, fate = "flight", temperament = "mercantile",
     entrance = { { 3, 3 }, { 2, 2 } }, size_lock = 45,
     tint = { 1.0, 1.0, 1.0 }, kits = { "starship", "station", "city" },
-    music = { scale = "dorian", root = 2, tempo = 84, voice = "pluck" }, glyph = 11 },
+    music = { scale = "dorian", root = 2, tempo = 84, voice = "pluck" }, glyph = 11,
+    -- add-civ-roster: the authored trait axes (sim/civroster.lua)
+    axes = { body_scale = "human", biology = "bilateral", senses = "sight", social = "council", tech = "gravitics",
+             values = "craft", fate = "flight", era = "old" }, massing = "spine", exonym = "the Glass-Weight Folk" },
   { id = "oquun", name = "Oquun", body = "tiny", shape = "organic", palette = "oquun",
     domains = { "bio", "optics" }, fate = "plague", temperament = "reclusive",
     entrance = { { 3, 1 }, { 2, 3 } }, size_lock = 70,
     tint = { 0.92, 1.0, 0.9 }, kits = { "hive", "station", "starship" },
-    music = { scale = "pentatonic", root = 7, tempo = 66, voice = "bell" }, glyph = 29 },
+    music = { scale = "pentatonic", root = 7, tempo = 66, voice = "bell" }, glyph = 29,
+    axes = { body_scale = "tiny", biology = "colonial", senses = "chemical", social = "hive", tech = "bio",
+             values = "kinship", fate = "plague", era = "ancient" }, massing = "hive", exonym = "the Scent-Grown Mites" },
 }

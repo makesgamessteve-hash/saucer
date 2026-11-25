@@ -7,4 +7,7 @@
 - [x] 2.2 `tests/lua/relic_spec.lua` "adds the Vyrr relic only with the debug entry, and only once"
 
 ## 3. Later (same change id, after the slice)
-- [ ] 3.1 Roster size, trait axes, diversity, generated history, palimpsest wings (design §8.1)
+- [x] 3.1 Roster size, trait axes, diversity, generated history, palimpsest wings (design §8.1)
+- [x] 3.2 Names (endonym, exonym, station names) and scanner lore lines (design §1.4)
+- [x] 3.3 `tests/lua/civroster_spec.lua`: default roster, legacy fields derive, 200-seed diversity, same seed same
+  history, conquest adds wings
