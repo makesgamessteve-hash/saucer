@@ -169,7 +169,7 @@ function M.signature(state, site)
   local name = civ and (civ.exonym or civ.name) or "unknown builders"
   local R = r and r.relic
   local halls = R and #R.halls or 0
-  return string.format("Relic signature: %s, a %s relic - %d halls round a heart engine", name, R and R.archetype or "warren", halls)
+  return string.format("Relic signature: %s, %s, %d halls", name, R and R.archetype or "warren", halls)
 end
 
 function M.play_step(state, p, ctx)
