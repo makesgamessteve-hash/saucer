@@ -17,7 +17,7 @@ local matv = require("view.materials")
 local M = {}
 
 local S = matv.SLOT
-M.RIB = 12            -- m between the chrome ribs along a big space
+M.RIB = 12            -- m between the chrome ribs along a big space (a ribbed language; panelled: M.RIB_PANEL)
 M.BAND = 14           -- m: side-wall cushions are split into rows about this tall, ceilings into this wide
 M.DISH = 2.4          -- m: an inside cushion dishes this far outward (always less than wall + HIDE)
 M.HIDE = 3.0          -- m: the outside hide swells this far out from the wall's outer face
@@ -30,13 +30,42 @@ M.SHOW_GHOST = true   -- the ghost Villa for a Seat in a Villa-class space (shot
 local cache = {}
 
 local function col(id) return matv.base_color(id) end
-local C = {}
-local function colors()
-  if C.membrane then return C end
-  C.membrane, C.chrome, C.amethyst = col("membrane"), col("chrome"), col("amethyst")
-  C.wound, C.necrotic, C.chitin = col("wound"), col("flesh_necrotic"), col("chitin")
-  return C
+-- add-design-language: the parts take their colours from the civ that built the relic (the slice: the Vyrr), and the
+-- civ's signature rule decides what grows where a Vyrr spine grows (PIERCE, CRUST, PLATE, INLAY, ENCASE, FLOW)
+M.STYLE = nil         -- a civ record that overrides every relic's builder (render only: shot scripts, the style row)
+function M.civ_of(ruin)
+  if M.STYLE then return M.STYLE end
+  local civs = require("sim.civs")
+  return (ruin and ruin.relic and civs.by_id(nil, ruin.relic.civ_id)) or civs.vyrr()
 end
+-- set_style(civ or nil): restyle every relic (frees the cached meshes and lamps)
+function M.set_style(civ)
+  M.STYLE = civ
+  for k, set in pairs(cache) do
+    if type(set) == "table" and set.rooms and set.ruin then
+      for i in ipairs(set.rooms) do M.release(set, i) end
+      cache[k] = nil
+    end
+  end
+  require("view.lights").forget()
+end
+local C = {}
+local function colors(civ)
+  civ = civ or require("sim.civs").vyrr()
+  if C[civ.id] then return C[civ.id] end
+  local m = civ.materials
+  local lang = civ.language or {}
+  local c = {}
+  c.membrane, c.chrome, c.amethyst = col(m.dominant.id), col(m.accent.id), col(m.rare.id)
+  c.wound = col(m.signature and m.signature.ring or "wound")
+  c.necrotic, c.chitin = col(m.decay and m.decay[1] or "flesh_necrotic"), col("chitin")
+  c.rule = m.signature and m.signature.rule or "PIERCE"
+  c.rib = (lang.rhythm == "panelled") and M.RIB_PANEL or M.RIB
+  C[civ.id] = c
+  return c
+end
+M.colors = colors
+M.RIB_PANEL = 20      -- m between ribs for a panelled (not ribbed) language
 
 local function box(list, mn, mx, color, mat, emissive)
   list[#list + 1] = { kind = "box", min = mn, max = mx, color = color, mat = mat, emissive = emissive }
@@ -69,13 +98,35 @@ end
 -- PIERCE: a chrome spine through the cushion at `at` along `dir` (outward), its wound ring on the skin, a stub
 -- inside that stops short of the wall's inner face
 local function pierce(list, at, dir, inner_at, cc)
-  oriented(list, { kind = "cone", c = { 0, 0, 0 }, r = 0.9, r1 = 0.05, h = M.SPINE + M.HIDE + 1, seg = 6, color = cc.chrome,
-                   mat = S.accent }, dir, at)
+  local rule = cc.rule or "PIERCE"
+  -- the ring where guest meets host, on the inside cushion (every rule has one)
   oriented(list, { kind = "ring", c = { 0, -0.15, 0 }, rin = 0.85, r = 1.9, h = 0.3, seg = 8, color = cc.wound,
                    mat = S.ring }, dir, inner_at)
-  local back = dir:sub(1, 1) == "+" and "-" .. dir:sub(2) or "+" .. dir:sub(2)
-  oriented(list, { kind = "cone", c = { 0, 0, 0 }, r = 0.7, r1 = 0.1, h = M.DISH - 0.3, seg = 6, color = cc.chrome, mat = S.accent },
-    back, inner_at)
+  if rule == "PIERCE" then
+    oriented(list, { kind = "cone", c = { 0, 0, 0 }, r = 0.9, r1 = 0.05, h = M.SPINE + M.HIDE + 1, seg = 6, color = cc.chrome,
+                     mat = S.accent }, dir, at)
+    local back = dir:sub(1, 1) == "+" and "-" .. dir:sub(2) or "+" .. dir:sub(2)
+    oriented(list, { kind = "cone", c = { 0, 0, 0 }, r = 0.7, r1 = 0.1, h = M.DISH - 0.3, seg = 6, color = cc.chrome,
+                     mat = S.accent }, back, inner_at)
+  elseif rule == "CRUST" then -- a bloom of guest crystals on the hide
+    for k = 0, 2 do
+      oriented(list, { kind = "cone", c = { (k - 1) * 1.3, 0, (k % 2) * 1.1 - 0.5 }, r = 1.1 - k * 0.2, r1 = 0.05,
+                       h = 3.2 + k * 1.4, seg = 5, roll = (k - 1) * 0.35, color = cc.chrome, mat = S.accent }, dir, at)
+    end
+  elseif rule == "PLATE" then -- a guest plate lying on the hide, a hexagon riding the skin
+    oriented(list, { kind = "cylinder", c = { 0, -0.2, 0 }, r = 3.4, h = 0.7, seg = 6, color = cc.chrome, mat = S.accent },
+      dir, at)
+  elseif rule == "ENCASE" then -- a guest knot sealed in a dome of the host's crystal
+    oriented(list, { kind = "sphere", c = { 0, 1.4, 0 }, r = 2.2, h = 2.2, seg = 8, rings = 5, color = cc.amethyst,
+                     mat = S.rare, emissive = 0.15 }, dir, at)
+    oriented(list, { kind = "cone", c = { 0, 0, 0 }, r = 0.8, r1 = 0.2, h = 2.0, seg = 5, color = cc.chrome, mat = S.accent },
+      dir, at)
+  else -- INLAY and FLOW: a flat guest disc set into the hide, a vein ring round it
+    oriented(list, { kind = "ring", c = { 0, 0.05, 0 }, rin = 0.0, r = rule == "FLOW" and 4.2 or 2.8, h = 0.25, seg = 10,
+                     color = cc.chrome, mat = S.accent }, dir, at)
+    oriented(list, { kind = "ring", c = { 0, 0.12, 0 }, rin = 2.9, r = 3.4, h = 0.2, seg = 10, color = cc.wound,
+                     mat = S.ring }, dir, at)
+  end
 end
 
 local function face_of(b, mn, mx, t)
@@ -219,7 +270,7 @@ local function big_room(parts, ext, ruin, r, kit, origin, walls, cc, skin_mat, s
   local n = 0
   -- the rib stations along the long axis (both ends too)
   local len = imx[a] - imn[a]
-  local rib = math.max(M.RIB, len / 24)
+  local rib = math.max(cc.rib or M.RIB, len / 24)
   local nr = math.max(1, math.floor(len / rib + 0.5))
   local stations = {}
   for k = 0, nr do stations[#stations + 1] = imn[a] + len * k / nr end
@@ -249,7 +300,7 @@ local function big_room(parts, ext, ruin, r, kit, origin, walls, cc, skin_mat, s
     local cuts = {}
     if hz == a then cuts = stations else
       local w = imx[hz] - imn[hz]
-      local nc = math.max(1, math.floor(w / math.max(M.RIB, w / 24) + 0.5))
+      local nc = math.max(1, math.floor(w / math.max(cc.rib or M.RIB, w / 24) + 0.5))
       for k = 0, nc do cuts[#cuts + 1] = imn[hz] + w * k / nc end
     end
     local inward = { 0, 0, 0 }
@@ -641,7 +692,7 @@ end
 
 function M.blob(rm)
   if rm.far then return rm.far end
-  local cc = colors()
+  local cc = colors(M.civ_of(nil))
   local parts = {}
   for _, b in ipairs(M.blobs(rm)) do
     parts[#parts + 1] = { kind = "sphere", c = b.c, r = b.r, h = b.h, seg = M.BLOB_SEG, rings = 6, color = cc.membrane,
@@ -674,7 +725,7 @@ local function room_parts(ruin, origin, r, ctx)
   return parts, ext, n
 end
 
-local function context(ruin)
+local function context(ruin, civ)
   local kit = ruinm.kit_of(ruin.kit)
   local by_room = {}
   for _, b in ipairs(ruin.walls) do
@@ -684,13 +735,13 @@ local function context(ruin)
   end
   local idol
   for _, s in ipairs(ruin.slots) do if s.idol then idol = s end end
-  return { kit = kit, cc = colors(), by_room = by_room, idol = idol }
+  return { kit = kit, cc = colors(civ or M.civ_of(ruin)), by_room = by_room, idol = idol }
 end
 
 -- the parts of one relic (before they become meshes): { rooms = { { room =, parts =, ext = }, ... }, ext = every
 -- room's outside skins, cushions }
-function M.parts(ruin, origin)
-  local ctx = context(ruin)
+function M.parts(ruin, origin, civ)
+  local ctx = context(ruin, civ)
   local out = { rooms = {}, ext = {}, cushions = 0 }
   for _, r in ipairs(ruin.rooms) do
     local parts, ext, n = room_parts(ruin, origin, r, ctx)
@@ -709,10 +760,12 @@ M.HOPS = 2            -- doors from the eye's room to the rooms drawn (the heart
 M.KEEP = 3            -- doors from the eye's room within which built room meshes are kept
 M.BUILDS = 4          -- room meshes built per frame at most (nearest first; the rest follow on the next frames)
 function M.meshes(ruin, origin)
-  local hit = cache[ruin.hash]
+  local civ = M.civ_of(ruin)
+  local ck = tostring(ruin.hash) .. ":" .. civ.id
+  local hit = cache[ck]
   if hit then return hit end
   local kit = ruinm.kit_of(ruin.kit)
-  local set = { rooms = {}, links = {}, built = 0, triangles = 0, ruin = ruin, origin = origin }
+  local set = { rooms = {}, links = {}, built = 0, triangles = 0, ruin = ruin, origin = origin, civ = civ }
   for i, r in ipairs(ruin.rooms) do
     local mn, mx = ruinm.room_box(r, kit, origin)
     set.rooms[i] = { id = r.id, center = vec.scale(vec.add(mn, mx), 0.5), radius = vec.dist(mn, mx) / 2 + 22, kind = r.kind,
@@ -728,7 +781,7 @@ function M.meshes(ruin, origin)
   local lo, hi = ruinm.bounds(ruin, origin, 0)
   set.center = vec.scale(vec.add(lo, hi), 0.5)
   set.radius = vec.dist(lo, hi) / 2 + 20
-  cache[ruin.hash] = set
+  cache[ck] = set
   return set
 end
 
@@ -736,7 +789,7 @@ end
 function M.ensure(set, i)
   local rm = set.rooms[i]
   if rm.mesh then return rm.tris end
-  set.ctx = set.ctx or context(set.ruin)
+  set.ctx = set.ctx or context(set.ruin, set.civ)
   local parts, ext = room_parts(set.ruin, set.origin, set.ruin.rooms[i], set.ctx)
   for _, e in ipairs(ext) do parts[#parts + 1] = e end
   rm.mesh = saucer.mesh.build({ parts = parts })
@@ -849,12 +902,18 @@ end
 -- engine, a glow in every Seat chamber
 function M.lamps(ruin, origin, site)
   local kit = ruinm.kit_of(ruin.kit)
-  local civ = require("sim.civs").by_id(nil, ruin.relic.civ_id) or require("sim.relic").civ()
+  local civ = M.civ_of(ruin)
   local pal = civ.language.lamp_colors
   local lux = require("view.lights").POOL_LUX
-  local out = {}
-  local function add(pos, color, reach, k, fixture)
-    out[#out + 1] = { pos = pos, color = color, range = reach, intensity = lux * reach * reach * (k or 1), fixture = fixture }
+  -- add-design-language §2.5: the civ's light model (from its senses) thins and dims the lamps; the Core always
+  -- keeps its glow, and an echo civ's lamps ripple (view/lights reads `ripple`), a tidal civ's orbit
+  local lm = civ.language.light or { model = "chromatic", lamps = 1, k = 1 }
+  local out, n = {}, 0
+  local function add(pos, color, reach, k, fixture, keep)
+    n = n + 1
+    if not keep and (n * 61) % 100 >= math.floor((lm.lamps or 1) * 100 + 0.5) then return end
+    out[#out + 1] = { pos = pos, color = color, range = reach, intensity = lux * reach * reach * (k or 1) * (lm.k or 1),
+                      fixture = fixture, model = lm.model, phase = n }
   end
   for i, r in ipairs(ruin.rooms) do
     local mn, mx = ruinm.room_box(r, kit, origin)
@@ -882,9 +941,9 @@ function M.lamps(ruin, origin, site)
       for _, q in ipairs({ { -1, -1 }, { 1, -1 }, { -1, 1 }, { 1, 1 } }) do
         add({ cx + q[1] * qx, f + 14, cz + q[2] * qz }, pal[(q[1] + q[2]) % 3 + 2] or pal[1], 110)
       end
-      add({ cx, f + (mx[2] - mn[2]) * 0.42, cz }, { 0.85, 0.55, 1.0 }, 160, 1.6)
+      add({ cx, f + (mx[2] - mn[2]) * 0.42, cz }, civ.language.core_color or pal[1], 160, 1.6, nil, true)
       for _, s in ipairs(ruin.slots) do
-        if s.idol then add({ s.pos[1], s.pos[2] + 10, s.pos[3] }, { 0.85, 0.55, 1.0 }, 40, 1.4) end
+        if s.idol then add({ s.pos[1], s.pos[2] + 10, s.pos[3] }, civ.language.core_color or pal[1], 40, 1.4, nil, true) end
       end
     elseif r.kind == "entrance" then
       add({ cx, f + 10, cz }, pal[2], 40)

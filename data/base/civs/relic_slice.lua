@@ -9,6 +9,11 @@ return {
   entrance = { { 3, 3 }, { 2, 2 } }, size_lock = 60,
   tint = { 1.0, 0.9, 0.95 }, kits = { "relic" },
   music = { scale = "phrygian", root = 4, tempo = 58, voice = "pad" }, glyph = 613,
+  -- add-design-language: the Vyrr's trait axes; sim/language.lua generates the rest of its language from them and
+  -- the fields below are pins (the slice's look: the spine massing, ribs, the lamp colours, the material table)
+  index = 0, massing = "spine",
+  axes = { body_scale = "large", biology = "serpentine", senses = "sight", social = "nomad", tech = "bio",
+           values = "kinship", fate = "plague", era = "ancient" },
   language = {
     massing = { warren = 1.0 },           -- the slice builds the warren archetype (a dungeon of halls on levels)
     edges = "round", rhythm = "ribbed",   -- ribs every hall: the chrome spines and their wound rings sit on them
@@ -16,6 +21,7 @@ return {
     -- what goes on in their dead halls (view/phenomena.lua): spores, breathing sacs and watching eyes most of all
     phenomena = { motes = 3, breath = 3, eye = 2, ripple = 2, chimes = 2, orbit = 1, procession = 2, shadow = 1 },
     lamp_colors = { { 0.78, 0.42, 1.0 }, { 1.0, 0.36, 0.46 }, { 0.45, 0.85, 1.0 } },
+    core_color = { 0.85, 0.55, 1.0 },     -- the heart and the idol glow
   },
   materials = {
     dominant = { id = "membrane", share = { 0.55, 0.70 } },

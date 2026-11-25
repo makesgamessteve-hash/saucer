@@ -5,6 +5,7 @@
 -- seed. Nothing here is saved: the list is a pure function of the seed.
 local data = require("lib.data")
 local roster = require("sim.civroster")
+local language = require("sim.language")
 local M = {}
 
 function M.traits() return data.load("civs/traits.lua") end
@@ -65,7 +66,10 @@ function M.universe(seed)
   end
   -- add-civ-roster: trait axes (diversity-guarded), names, the generated history and the roster hash
   roster.apply(seed, out)
-  for _, c in ipairs(out) do roster.name(seed, c) end
+  for _, c in ipairs(out) do
+    roster.name(seed, c)
+    language.dress(seed, c) -- add-design-language: every civ's design language (render only)
+  end
   memo[key] = out
   hist[key] = roster.history(seed, out)
   hashes[key] = roster.hash(out, hist[key])
@@ -92,16 +96,19 @@ function M.get(seed, i) return M.universe(seed)[i] end
 
 function M.by_id(seed, id)
   -- add-relic-stations: the slice's hard-seeded Vyrr are not in the generated roster
-  if id == "vyrr" then return data.load("civs/relic_slice.lua") end
+  if id == "vyrr" then return M.vyrr() end
   for _, c in ipairs(M.universe(seed or current or 0)) do
     if c.id == id then return c end
   end
   return nil
 end
 
+-- the slice's Vyrr, dressed by the general design language (add-design-language: its authored fields are pins)
+function M.vyrr() return language.dress(0, data.load("civs/relic_slice.lua")) end
+
 -- the civ of a site (sites keep an index into the universe list)
 function M.of(state, site)
-  if site and site.relic_civ then return data.load("civs/relic_slice.lua") end
+  if site and site.relic_civ then return M.vyrr() end
   return site and M.universe(state.seed)[site.civ] or nil
 end
 

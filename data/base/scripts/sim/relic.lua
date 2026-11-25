@@ -19,7 +19,7 @@ M.CRADLE_REGEN = 0.5    -- x the open-space Charge rate (2/s): 1 Charge a second
 M.WARREN_VALUE = 2.0    -- reliquary finds pay this much more than a hall find of the same roll
 M.SLICE_OFFSET = { 0, -4000, 0 } -- the slice's relic sits far below the sector's plane, clear of every site
 
-function M.civ() return data.load("civs/relic_slice.lua") end
+function M.civ() return require("sim.civs").vyrr() end
 function M.materials() return data.load("civs/materials.lua") end
 function M.is_relic(ruin) return ruin ~= nil and ruin.relic ~= nil end
 
