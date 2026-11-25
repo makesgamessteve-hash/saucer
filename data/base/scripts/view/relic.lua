@@ -1002,7 +1002,7 @@ function M.draw(v, A, state, cam, xr, time)
   local st = { rooms = 0, culled = 0, built = 0, tris = 0 }
   local i, r, site, set = M.near_relic(state, cam.pos)
   if not i then return st end
-  local civ = require("sim.civs").of(state, site)
+  local civ = M.STYLE or require("sim.civs").of(state, site)
   matv.apply(v, civ, time)
   local opts = { palette = A.pal.base }
   local here = room_index(set, cam.pos)
