@@ -454,6 +454,32 @@ TEST(matcap_bake) {
   CHECK(b[32 * SX_MATCAP_SIZE + 32] == 1 && b[0] > 1);
 }
 
+TEST(skymap_bake) {
+  static unsigned char a[SX_SKYMAP_W * SX_SKYMAP_H], b[SX_SKYMAP_W * SX_SKYMAP_H];
+  float sun[3] = {2.0f, 0.0f, 0.0f}, none[3] = {0, 0, 0}, band[4] = {0.0f, 1.0f, 0.0f, 0.5f}, flat[4] = {0, 0, 0, 0};
+  int i, lo = 255, hi = 0, n = 0, seen[256] = {0}, diff = 0;
+  const int W = SX_SKYMAP_W, H = SX_SKYMAP_H;
+  sx_skymap_bake(a, sun, 1.0f, flat, 7u, 0.02f);
+  sx_skymap_bake(b, sun, 1.0f, flat, 7u, 0.02f);
+  CHECK(memcmp(a, b, sizeof a) == 0); /* deterministic */
+  for (i = 0; i < W * H; i++) {
+    if (a[i] < lo) lo = a[i];
+    if (a[i] > hi) hi = a[i];
+    if (!seen[a[i]]) n++;
+    seen[a[i]] = 1;
+  }
+  CHECK(lo >= 1 && hi == 255 && n <= 16 && n >= 3);
+  /* the star (+x) sits at longitude 0, the middle column, on the equator; the far side is dark */
+  CHECK(a[(H / 2) * W + W / 2] == 255 && a[(H / 2) * W + W / 2] > a[(H / 2) * W + 2]);
+  /* another seed moves only the stars */
+  sx_skymap_bake(b, sun, 1.0f, flat, 99u, 0.02f);
+  for (i = 0; i < W * H; i++) diff += a[i] != b[i];
+  CHECK(diff > 0 && diff < W * H / 20);
+  /* no star: the band (normal +y) brightens the equator over the poles */
+  sx_skymap_bake(b, none, 1.0f, band, 0u, 0.0f);
+  CHECK(b[(H / 2) * W + 5] > b[0 * W + 5] && b[(H / 2) * W + 40] > b[(H - 1) * W + 40]);
+}
+
 TEST(material_wobble_bound) {
   sx_material m;
   float p[3] = {3, 4, 5}, t;

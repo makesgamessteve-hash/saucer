@@ -218,7 +218,7 @@ static const char *mesh_vs =
 static const char *mesh_fs =
     "in vec3 v_uv; in vec3 v_col; in float v_emi; in float v_dist; in vec3 v_nrm; in vec3 v_wpos;\n"
     "in vec3 v_vnrm; flat in int v_mat;\n"
-    "uniform vec4 u_mat[48]; uniform float u_mtime; uniform int u_mmode; uniform sampler2D u_matcap;\n"
+    "uniform vec4 u_mat[48]; uniform float u_mtime; uniform int u_mmode; uniform sampler2D u_matcap; uniform int u_envmap;\n"
     "uniform sampler2D u_idx; uniform sampler2D u_pal; uniform int u_palrow; uniform int u_tex;\n"
     "uniform vec4 u_tint; uniform vec3 u_light; uniform float u_ambient; uniform int u_lit;\n"
     "uniform vec3 u_fogcol; uniform float u_fog; uniform int u_dither;\n"
@@ -371,7 +371,14 @@ static const char *mesh_fs =
     "      // one matcap fetch: metals look along the view normal (reflection), crystals through it (refraction)\n"
     "      vec3 vn = normalize(v_vnrm + rip * 0.5);\n"
     "      vec2 mc = mk == 2 ? refract(vec3(0.0, 0.0, -1.0), vn, 0.66).xy : vn.xy;\n"
-    "      float env = texture(u_matcap, mc * 0.48 + 0.5).r;\n"
+    "      float env;\n"
+    "      if (u_envmap == 1) {\n"
+    "        // add-material-system 5.3: outside, the sector's sky (equirectangular, world directions), still one fetch\n"
+    "        vec3 R = mk == 2 ? refract(-V, n, 0.66) : reflect(-V, n);\n"
+    "        env = texture(u_matcap, vec2(atan(R.z, R.x) / 6.2831853 + 0.5, acos(clamp(R.y, -1.0, 1.0)) / 3.1415927)).r;\n"
+    "      } else {\n"
+    "        env = texture(u_matcap, mc * 0.48 + 0.5).r;\n"
+    "      }\n"
     "      float fres = m0.w + (1.0 - m0.w) * pow(1.0 - max(dot(n, V), 0.0), 5.0);\n"
     "      float lv = clamp(dot(acc, vec3(0.3, 0.5, 0.2)) * u_expo, 0.0, 1.5);\n"
     "      vec3 spec = vec3(1.0) - exp(-macc * u_expo * (0.6 + fres));\n"
@@ -454,7 +461,7 @@ typedef struct prog {
   GLint mvp, mv, model, snap, affine, idx, pal, palrow, tex, tint, light, ambient, lit, fogcol, fog, dither, size, color;
   GLint mode, nl, amb, expo, lpos, lcol, ldir, lpar, shadow, shmat, shrect, shbias, ncasc, shtexel, lidx;
   GLint eye, nhz, hzsteps, sky, hzpos, hzcol, hzdir;
-  GLint mat, mtime, mmode, matcap; /* add-material-system */
+  GLint mat, mtime, mmode, matcap, envmap; /* add-material-system */
 } prog;
 
 static struct {
@@ -528,7 +535,7 @@ static int link_prog(prog *p, const char *vs, const char *fs, int ui) {
   U(mode); U(nl); U(amb); U(expo); U(lpos); U(lcol); U(ldir); U(lpar); U(shadow); U(shmat); U(shrect); U(shbias);
   U(ncasc); U(shtexel); U(lidx);
   U(eye); U(nhz); U(hzsteps); U(sky); U(hzpos); U(hzcol); U(hzdir);
-  U(mat); U(mtime); U(mmode); U(matcap);
+  U(mat); U(mtime); U(mmode); U(matcap); U(envmap);
 #undef U
   glUseProgram(p->id);
   glUniform1i(p->idx, 0);
@@ -979,6 +986,7 @@ static void set_materials(const sx_render *r, const sx_viewport *v) {
   glUniform4fv(G.mesh.mat, SX_MAT_SLOTS * SX_MAT_VEC4, packed);
   glUniform1f(G.mesh.mtime, ms->time);
   glUniform1i(G.mesh.mmode, n > 0 ? mode : 0);
+  glUniform1i(G.mesh.envmap, ms->envmap ? 1 : 0);
   glActiveTexture(GL_TEXTURE3);
   glBindTexture(GL_TEXTURE_2D, (ms->matcap > 0 && ms->matcap < SX_MAX_TEXTURES && r->textures[ms->matcap].used &&
                                 G.tex[ms->matcap]) ? G.tex[ms->matcap] : G.white_tex);

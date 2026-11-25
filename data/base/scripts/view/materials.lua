@@ -124,10 +124,22 @@ function M.xr_slots(slots)
   return out
 end
 
+-- add-material-system 5.3: the sector's sky as a metal outside sees it -> { key, sun, band, seed } (the star from
+-- view/lights.lua, the galaxy's band tilted by the sector, stars from the seed)
+M.BAND = 0.35
+function M.sky(state)
+  local seed, sid = math.floor(state.seed or 0) & 0x7fffffff, math.floor(state.sector_id or 1)
+  local star = require("view.lights").star(seed, sid)
+  local a = ((seed * 31 + sid * 7919) % 3600) / 3600 * math.pi * 2
+  local tilt = 0.3 + ((seed + sid * 104729) % 1000) / 1000 * 0.9
+  local band = { math.sin(tilt) * math.cos(a), math.cos(tilt), math.sin(tilt) * math.sin(a), M.BAND }
+  return { key = "sky:" .. seed .. ":" .. sid, sun = star.dir, band = band, seed = (seed * 131 + sid) % 1000003 }
+end
+
 local slot_cache = setmetatable({}, { __mode = "k" })
 local xr_cache = setmetatable({}, { __mode = "k" })
 -- set a civ's slots and matcap on this view; `time` is render seconds (breathing, glow, pulse); `xr` a headset view
-function M.apply(v, civ, time, xr)
+function M.apply(v, civ, time, xr, sky)
   local slots = slot_cache[civ]
   if not slots then
     slots = M.civ_slots(civ)
@@ -141,8 +153,12 @@ function M.apply(v, civ, time, xr)
     end
     slots = x
   end
+  if sky and saucer.render.skymap then
+    local id = saucer.render.skymap(sky.key, { sun = sky.sun, band = sky.band, seed = sky.seed, ambient = 0.04 })
+    return v:materials({ time = time, matcap = id, envmap = true, slots = slots })
+  end
   local mc = saucer.render.matcap and saucer.render.matcap("matcap:" .. civ.id, civ.matcap or {}, M.AMBIENT) or 0
-  return v:materials({ time = time, matcap = mc, slots = slots })
+  return v:materials({ time = time, matcap = mc, envmap = false, slots = slots })
 end
 
 return M

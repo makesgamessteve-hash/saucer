@@ -13,6 +13,8 @@
 #define SX_MAT_VEC4 6    /* vec4s per slot in the shader's u_mat array */
 #define SX_MATCAP_SIZE 64
 #define SX_MATCAP_LIGHTS 4
+#define SX_SKYMAP_W 128  /* add-material-system 5.3: the sector-sky reflection map (equirectangular) */
+#define SX_SKYMAP_H 64
 
 enum { SX_MAT_PLAIN = 0, SX_MAT_METAL = 1, SX_MAT_CRYSTAL = 2, SX_MAT_ORGANIC = 3 };
 enum { SX_MATERIALS_OFF = 0, SX_MATERIALS_LITE = 1, SX_MATERIALS_FULL = 2 };
@@ -39,6 +41,7 @@ typedef struct sx_materials {
   int on;                       /* a view submitted slots this frame */
   float time;                   /* render-only seconds (never the sim's) */
   int matcap;                   /* texture id of the luminance matcap (0 none) */
+  int envmap;                   /* 1: matcap is a sky map (SX_SKYMAP_W x H, equirectangular, world directions) */
   sx_material slot[SX_MAT_SLOTS];
 } sx_materials;
 
@@ -60,6 +63,12 @@ int sx_materials_pack(const sx_materials *ms, int mode, float out[SX_MAT_SLOTS *
  * +z toward the viewer), a dim ambient and a soft Blinn highlight per light, quantized to 16 steps so the ramp
  * lookup stays banded like a palette. Outside the disc the rim value is repeated. */
 void sx_matcap_bake(unsigned char *out, const float lights[][4], int nlights, float ambient);
+/* Bakes the 128 x 64 luminance sky map a metal outside reflects (index values 1-255, 16 bands like the matcap):
+ * the star (a disc and its glow, toward `sun`, scaled by sun_k), the galaxy's band (a soft great circle round the
+ * normal band[0..2], strength band[3]), a dim ambient and sparse stars from `seed`. Pixel (x, y) is the world
+ * direction at longitude (x + 0.5) / W * 2 pi - pi (atan2(z, x)) and colatitude (y + 0.5) / H * pi (acos(y)), the
+ * shader's lookup. Deterministic: no libm (sx_math only). */
+void sx_skymap_bake(unsigned char *out, const float sun[3], float sun_k, const float band[4], unsigned seed, float ambient);
 /* The wobble the vertex shader applies along the normal at world point p and time t (for tests and the
  * clearance check): amp * sin(2 pi t / period + (p.x + p.y * 0.7 + p.z * 1.3) / scale) + breath * sin(2 pi t /
  * (3 period)). Its magnitude never exceeds amp + breath. */

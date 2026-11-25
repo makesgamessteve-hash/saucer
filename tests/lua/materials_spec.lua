@@ -186,3 +186,24 @@ describe("headset comfort", function()
     expect(got[3].slots[S.rare].sparkle).to_be(slots[S.rare].sparkle)
   end)
 end)
+
+describe("sky reflections", function()
+  it("reflects the sector's sky outside a relic and the matcap inside", function()
+    local st = { seed = 42, sector_id = 3 }
+    local a, b = matv.sky(st), matv.sky(st)
+    expect(a.key).to_be(b.key)
+    expect(a.sun).to_be(require("view.lights").star(42, 3).dir)
+    local l = math.sqrt(a.band[1] ^ 2 + a.band[2] ^ 2 + a.band[3] ^ 2)
+    expect(math.abs(l - 1) < 1e-6).to_be(true)
+    expect(matv.sky({ seed = 42, sector_id = 4 }).key ~= a.key).to_be(true)
+    expect(matv.sky({}).key).to_be("sky:0:1")
+    local civs = require("sim.civs")
+    local got = {}
+    local v = { materials = function(_, t) got[#got + 1] = t return 7 end }
+    matv.apply(v, civs.vyrr(), 1, false, a)
+    matv.apply(v, civs.vyrr(), 1, false, nil)
+    expect(got[1].envmap).to_be(saucer.render.skymap ~= nil)
+    expect(got[2].envmap).to_be(false)
+    if saucer.render.skymap then expect(got[1].matcap > 0).to_be(true) end
+  end)
+end)

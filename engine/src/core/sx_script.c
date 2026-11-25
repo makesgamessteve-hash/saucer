@@ -1317,6 +1317,9 @@ static int l_v_materials(lua_State *L) {
   v->materials.on = 1;
   v->materials.time = field_num(L, 2, "time", v->materials.time);
   v->materials.matcap = (int)field_num(L, 2, "matcap", (float)v->materials.matcap);
+  lua_getfield(L, 2, "envmap");
+  v->materials.envmap = lua_toboolean(L, -1);
+  lua_pop(L, 1);
   lua_getfield(L, 2, "slots");
   if (lua_istable(L, -1)) {
     int t = lua_gettop(L);
@@ -1383,6 +1386,28 @@ static int l_r_matcap(lua_State *L) {
   }
   sx_matcap_bake(px, (const float(*)[4])lights, n, (float)luaL_optnumber(L, 3, 0.08));
   id = sx_render_texture_from_indices(&e->render, name, SX_MATCAP_SIZE, SX_MATCAP_SIZE, px);
+  lua_pushinteger(L, id);
+  return 1;
+}
+
+/* saucer.render.skymap(name, { sun = {x, y, z}, sun_k = 1, band = {nx, ny, nz, strength}, seed = 0, ambient = 0.04 })
+ * -> texture id: the 128 x 64 sector-sky reflection map (sx_skymap_bake), baked once and kept under its name */
+static int l_r_skymap(lua_State *L) {
+  sx_engine *e = get_engine(L);
+  const char *name = luaL_checkstring(L, 1);
+  float sun[3] = {0.0f, 1.0f, 0.0f}, band[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+  static unsigned char px[SX_SKYMAP_W * SX_SKYMAP_H];
+  int id = sx_render_find_texture(&e->render, name);
+  if (id > 0) {
+    lua_pushinteger(L, id);
+    return 1;
+  }
+  luaL_checktype(L, 2, LUA_TTABLE);
+  field_vec(L, 2, "sun", sun, 3);
+  field_vec(L, 2, "band", band, 4);
+  sx_skymap_bake(px, sun, field_num(L, 2, "sun_k", 1.0f), band, (unsigned)field_num(L, 2, "seed", 0.0f),
+                 field_num(L, 2, "ambient", 0.04f));
+  id = sx_render_texture_from_indices(&e->render, name, SX_SKYMAP_W, SX_SKYMAP_H, px);
   lua_pushinteger(L, id);
   return 1;
 }
@@ -2431,7 +2456,7 @@ static void build_saucer_api(lua_State *L, sx_engine *e) {
   static const luaL_Reg mesh_f[] = {{"build", l_mesh_build}, {"info", l_mesh_info}, {"free", l_mesh_free}, {NULL, NULL}};
   static const luaL_Reg render_f[] = {
       {"texture", l_r_texture}, {"palette", l_r_palette}, {"settings", l_r_settings}, {"stats", l_r_stats}, {"lights", l_r_lights},
-      {"matcap", l_r_matcap}, {NULL, NULL}};
+      {"matcap", l_r_matcap}, {"skymap", l_r_skymap}, {NULL, NULL}};
   static const luaL_Reg xr_f[] = {
       {"available", l_xr_available}, {"session", l_xr_session}, {"comfort", l_xr_comfort}, {"haptic", l_xr_haptic},
       {"set_comfort", l_xr_set_comfort}, {"save_comfort", l_xr_save_comfort}, {"head", l_xr_head},
