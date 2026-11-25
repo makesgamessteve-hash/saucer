@@ -196,3 +196,71 @@ describe("hall landmarks", function()
     lmk.forget()
   end)
 end)
+
+describe("relic radar outlines", function()
+  local game = require("sim.game")
+  local render = require("view.render")
+  local relicmap = require("view.relicmap")
+  it("closes the helm radar in inside a relic and outlines the rooms the saucer has been in", function()
+    relicmap.forget()
+    local st = {}
+    game.init(st, { seed = 42, players = 1, relic_slice = true })
+    local p = st.players[1]
+    local i = relic.site_index(st)
+    local site = st.sector.sites[i]
+    local r = game.ruin(i)
+    local h1, h2 = r.relic.halls[1], r.relic.halls[2]
+    local function centre(id)
+      local mn, mx = ruinm.room_box(r.rooms[id], kit(), site.pos)
+      return { (mn[1] + mx[1]) / 2, mn[2] + 10, (mn[3] + mx[3]) / 2 }
+    end
+    -- outside: no relic, the radar keeps its range
+    p.ship.pos = { 1e5, 0, 1e5 }
+    expect(relicmap.inside(st, p)).to_be(nil)
+    expect(relicmap.inside(st, nil)).to_be(nil)
+    expect(#relicmap.visited(r)).to_be(0)
+    p.ship.pos = centre(h1)
+    local rr, here = relicmap.inside(st, p)
+    expect(rr).to_be(r)
+    expect(here).to_be(h1)
+    relicmap.note(r, here)
+    relicmap.note(r, nil)
+    relicmap.note(r, r.relic.core)
+    local dots = relicmap.dots(r, h1, p.ship.pos)
+    expect(#dots >= 8).to_be(true)
+    local bright, violet = 0, 0
+    local mn, mx = ruinm.room_box(r.rooms[h1], kit(), site.pos)
+    for _, d in ipairs(dots) do
+      if d.color == relicmap.HERE then
+        bright = bright + 1
+        expect(d.pos[1] >= mn[1] and d.pos[1] <= mx[1] and d.pos[3] >= mn[3] and d.pos[3] <= mx[3]).to_be(true)
+      end
+      if d.color == relicmap.HEART then violet = violet + 1 end
+    end
+    expect(bright >= 4 and violet >= 4).to_be(true)
+    -- nearest rooms first, capped
+    local cap = relicmap.MAX_DOTS
+    relicmap.MAX_DOTS = 6
+    local few = relicmap.dots(r, h1, p.ship.pos)
+    relicmap.MAX_DOTS = cap
+    expect(#few).to_be(6)
+    expect(few[1].color).to_be(relicmap.HERE)
+    -- the radar's scale closes in
+    local far = { p.ship.pos[1] + 400, p.ship.pos[2], p.ship.pos[3] }
+    local q1 = render.radar_point(p.ship, far)
+    local q2 = render.radar_point(p.ship, far, relicmap.RANGE)
+    expect(math.abs(q2[1]) + math.abs(q2[3]) > math.abs(q1[1]) + math.abs(q1[3])).to_be(true)
+    -- the helm console draws the outlines and notes the room it is in
+    p.ship.pos = centre(h2)
+    local n = 0
+    local v = { mesh = function() n = n + 1 end, billboard = function() end }
+    local A = { unit = 1, pal = {}, tex = {} }
+    render.console(v, A, st, p, { pos = { 0, 0, 0 }, yaw = 0, roll = 0, scale = 1 })
+    local seen = {}
+    for _, id in ipairs(relicmap.visited(r)) do seen[id] = true end
+    expect(seen[h2] and seen[h1] and seen[r.relic.core]).to_be(true)
+    expect(n > #relicmap.dots(r, h2, p.ship.pos)).to_be(true)
+    relicmap.forget()
+    expect(#relicmap.visited(r)).to_be(0)
+  end)
+end)

@@ -32,3 +32,10 @@ Every big hall of a relic (footprint at least three quarters of its largest hall
 #### Scenario: Landmarks in every archetype
 - **WHEN** `tests/lua/civdungeon_spec.lua` runs "hangs one in every big hall of every archetype, clear of the walls, floor and ceiling lamp"
 - **THEN** it passes
+
+### Requirement: Relic radar outlines
+Inside a relic the helm radar SHALL close in and outline every room the saucer has been in, nearest first and capped, as a view-side memory that never enters the state.
+
+#### Scenario: Outlines
+- **WHEN** `tests/lua/civdungeon_spec.lua` runs "closes the helm radar in inside a relic and outlines the rooms the saucer has been in"
+- **THEN** it passes

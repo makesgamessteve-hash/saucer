@@ -1067,6 +1067,7 @@ function M.draw(v, A, state, cam, xr, time)
   -- Seat-locks: the shutter while closed, the socket's glow (brighter while the Seat turns it)
   local relic = require("sim.relic")
   local p = state.players[v.player or 1]
+  if p and p.ship and p.ship.pos then require("view.relicmap").note(r, room_index(set, p.ship.pos)) end
   for _, l in ipairs(r.relic.locks) do
     if not relic.lock_open(state, i, l.id) then
       local b = l.box

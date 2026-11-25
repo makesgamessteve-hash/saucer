@@ -24,10 +24,12 @@ should change with the builder, not just the skin (design civs-and-relics §3.2,
   middle, picked from the civ's primitives -- an orrery, a stack of turning slabs, a spinning spindle with sliding
   hoops, a halo of rolling hoops, or a bloom of shards opening and closing -- in its materials. Render only (placed
   from the rooms, no generator draws, so layouts and replays are unchanged); never collides.
-- Not in this change (later, same id): radar outlines of visited rooms.
+- **Radar outlines**: inside a relic the helm radar closes in to 500 m and draws a dotted outline of every room the
+  saucer has been in (the current room bright, the heart violet). A view-side memory for the session, never in the
+  state, so replays, saves and the state hash are unchanged.
 
 ## Impact
 
 - Specs: `relic-stations` (ADDED: civ room grammars)
-- Code: `civs/dungeons.lua`, `sim/relicgen.lua`, `view/relic.lua`, `view/landmarks.lua`, `civs/relic_slice.lua`, `tools/maps/`; tests
+- Code: `civs/dungeons.lua`, `sim/relicgen.lua`, `view/relic.lua`, `view/landmarks.lua`, `view/relicmap.lua`, `view/render.lua`, `civs/relic_slice.lua`, `tools/maps/`; tests
   `tests/lua/civdungeon_spec.lua`

@@ -12,4 +12,5 @@
   for spine and helix builders, the glow in the civ's key colour (render only; the Vyrr keep their three hoops)
 - [x] 3.2 `view/landmarks.lua`: a landmark in every big hall (orrery, stack, spindle, halo or bloom by the civ's
   primitives), moving, render only, clear of the walls, floor and ceiling lamp
-- [ ] 3.3 Radar outlines of visited rooms
+- [x] 3.3 `view/relicmap.lua`: inside a relic the helm radar closes in to 500 m and outlines the rooms the saucer has
+  been in (view-side memory, never in the state)
