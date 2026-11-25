@@ -23,8 +23,14 @@ for n in relic_trunk_full relic_trunk_off relic_core_full relic_core_off; do
   python3 "$HERE/golden_compare.py" "$GOLD/$n.png" "shots_materials/$n.png" || fail=1
 done
 # full must look clearly different from off (add-relic-stations polish: the material look is not subtle)
-for n in relic_trunk relic_core; do
-  python3 "$HERE/golden_compare.py" --differ 9.5 "shots_materials/${n}_full.png" "shots_materials/${n}_off.png" || fail=1
+# (the core shot is the idol in the warren's heart: a 120 m hall in bright haze, so its floor and air dominate the frame)
+for nd in relic_trunk:9.5 relic_core:6.0; do
+  n=${nd%%:*}
+  python3 "$HERE/golden_compare.py" --differ "${nd##*:}" "shots_materials/${n}_full.png" "shots_materials/${n}_off.png" || fail=1
+done
+# fix-glow: glow sprites add light, never darken (the dark blocky balls round the relic's lamps, idol and engine)
+for n in heart idol; do
+  python3 "$HERE/golden_compare.py" --brighter "shots_materials/glow_${n}_on.png" "shots_materials/glow_${n}_off.png" || fail=1
 done
 # the legacy scene must match bit for bit on the box that rendered the golden; CI (another Mesa) sets LEGACY_TOL
 python3 "$HERE/golden_compare.py" "$LEG" shots_materials/legacy_off.png ${LEGACY_TOL:-0.0 0.0} || fail=1

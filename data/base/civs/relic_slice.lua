@@ -10,9 +10,11 @@ return {
   tint = { 1.0, 0.9, 0.95 }, kits = { "relic" },
   music = { scale = "phrygian", root = 4, tempo = 58, voice = "pad" }, glyph = 613,
   language = {
-    massing = { spine = 1.0 },            -- the slice builds only the spine archetype
+    massing = { warren = 1.0 },           -- the slice builds the warren archetype (a dungeon of halls on levels)
     edges = "round", rhythm = "ribbed",   -- ribs every hall: the chrome spines and their wound rings sit on them
     senses = "sight",                     -- lit by vein pulse and amethyst glow, dimly
+    -- what goes on in their dead halls (view/phenomena.lua): spores, breathing sacs and watching eyes most of all
+    phenomena = { motes = 3, breath = 3, eye = 2, ripple = 2, chimes = 2, orbit = 1, procession = 2, shadow = 1 },
     lamp_colors = { { 0.78, 0.42, 1.0 }, { 1.0, 0.36, 0.46 }, { 0.45, 0.85, 1.0 } },
   },
   materials = {

@@ -1,7 +1,8 @@
 -- SPDX-License-Identifier: MIT
 -- add-material-system golden shots. Run from the folder that should receive shots_materials/:
 --   with --relic-slice: the reference scene (a Vyrr trunk, its ribs, cushions and spines, and the Core's idol),
---     once with materials full and once off -> shots_materials/relic_trunk_{full,off}.png, relic_core_{full,off}.png
+--     once with materials full and once off -> shots_materials/relic_trunk_{full,off}.png, relic_core_{full,off}.png;
+--     then the heart and the idol with and without glow sprites -> shots_materials/glow_{heart,idol}_{on,off}.png
 --   without it: the legacy scene (seed 42 at tick 120, the default view) -> shots_materials/legacy.png; run the
 --     same script with a build from before the material system to get the reference (it needs no new API)
 -- tools/shots/golden_compare.py compares them with tests/golden/ (tools/shots/materials.sh runs it all).
@@ -56,3 +57,35 @@ for _, sl in ipairs(r.slots) do if sl.idol then idol = sl end end
 look_at({ idol.pos[1] + 16, idol.pos[2] + 5, idol.pos[3] - 18 }, { idol.pos[1] - 4, idol.pos[2] + 1, idol.pos[3] + 6 }, 74)
 pair("relic_core")
 saucer.render.settings({ materials = "full" })
+-- fix-glow: the glow sprites only ever add light (they once drew as dark blocky balls round the lamps, the idol and
+-- the engine). The heart and the idol with and without them, at one frozen render time, so only the sprites differ
+-- -> shots_materials/glow_{heart,idol}_{on,off}.png; golden_compare.py --brighter checks them
+local relicv = require("view.relic")
+local A = require("view.assets").init()
+local draw0, noglow, patched = relicv.draw, false, false
+relicv.draw = function(v, a, state, cam, xr)
+  if not patched then
+    local m = getmetatable(v).methods
+    local bb = m.billboard
+    m.billboard = function(self, tex, ...) if noglow and tex == A.tex.glow then return end return bb(self, tex, ...) end
+    patched = true
+  end
+  return draw0(v, a, state, cam, xr, 10.0)
+end
+local function glow_pair(name)
+  for _, g in ipairs({ "on", "off" }) do
+    noglow = g == "off"
+    T.wait(3)
+    T.screenshot(D .. "glow_" .. name .. "_" .. g .. ".png")
+    T.wait(1)
+  end
+  noglow = false
+end
+local core = r.rooms[r.relic.core]
+local cmn, cmx = ruinm.room_box(core, kit, site.pos)
+local cc = { (cmn[1] + cmx[1]) / 2, cmn[2] + kit.wall, (cmn[3] + cmx[3]) / 2 }
+look_at({ cc[1] - 40, cc[2] + 30, cmn[3] + 8 }, { cc[1], cc[2] + 40, cc[3] }, 84)
+glow_pair("heart")
+look_at({ idol.pos[1] + 16, idol.pos[2] + 5, idol.pos[3] - 18 }, { idol.pos[1] - 4, idol.pos[2] + 1, idol.pos[3] + 6 }, 74)
+glow_pair("idol")
+relicv.draw = draw0

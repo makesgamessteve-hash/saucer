@@ -310,6 +310,12 @@ static const char *mesh_fs =
     "    if (i == 0) discard;\n"
     "    base = texelFetch(u_pal, ivec2(i, u_palrow), 0);\n"
     "  }\n"
+    "  if (u_tex == 2) {\n"
+    "    // a soft glow: a smooth falloff in the tint's colour, no palette texels (they read as dark blocks)\n"
+    "    vec2 q = v_uv.xy / v_uv.z * 2.0 - 1.0; float r2 = dot(q, q);\n"
+    "    if (r2 >= 1.0) discard;\n"
+    "    float f = 1.0 - r2; base = vec4(1.0, 1.0, 1.0, f * f * (u_fog > 0.0 ? exp(-u_fog * v_dist) : 1.0));\n"
+    "  }\n"
     "  vec3 c = base.rgb * v_col * u_tint.rgb;\n"
     "  vec3 lit = c;\n"
     "  if (u_lit == 1 && u_mode == 0) {\n"
@@ -378,7 +384,7 @@ static const char *mesh_fs =
     "    }\n"
     "  }\n"
     "  c = mix(lit, c * 1.25, clamp(v_emi, 0.0, 1.0));\n"
-    "  if (u_fog > 0.0) c = mix(u_fogcol, c, exp(-u_fog * v_dist));\n"
+    "  if (u_fog > 0.0 && u_tex != 2) c = mix(u_fogcol, c, exp(-u_fog * v_dist));\n"
     "  ivec2 p = ivec2(gl_FragCoord.xy) % 4;\n"
     "  float b = (bayer[p.y * 4 + p.x] + 0.5) / 16.0;\n"
     "  if (u_nhz > 0) c += vec3(1.0) - exp(-haze(v_wpos, b) * u_expo);\n"
@@ -386,6 +392,7 @@ static const char *mesh_fs =
     "    c = floor(clamp(c, 0.0, 1.0) * 31.0 + b) / 31.0;\n"
     "  }\n"
     "  float a = base.a * u_tint.a;\n"
+    "  if (u_tex == 2 && u_dither == 1) a = floor(a * 15.0 + b) / 15.0;\n"
     "  if (a < 0.01) discard;\n"
     "  o_col = vec4(c, a);\n"
     "}\n";
@@ -1066,7 +1073,10 @@ static void draw_billboards(const sx_render *r, const sx_viewport *v, const fram
     const sx_draw_billboard *b = &v->bills[i];
     float vtx[6][SX_VTX_FLOATS], rt[3], up[3];
     static const float corner[6][2] = {{-1, -1}, {1, -1}, {1, 1}, {-1, -1}, {1, 1}, {-1, 1}};
-    if (b->yaxis) {
+    int soft = b->tex > 0 && b->tex < SX_MAX_TEXTURES && r->textures[b->tex].used && r->textures[b->tex].soft;
+    /* a bright glow adds light (it can never darken what is behind it); a dark one (a shade) still blends */
+    int add = soft && b->tint[0] + b->tint[1] + b->tint[2] > 0.36f;
+    if (b->yaxis && !soft) {
       float l = (float)sx_sqrt((double)(fm->right[0] * fm->right[0] + fm->right[2] * fm->right[2]));
       rt[0] = l > 1e-6f ? fm->right[0] / l : 1;
       rt[1] = 0;
@@ -1095,9 +1105,18 @@ static void draw_billboards(const sx_render *r, const sx_viewport *v, const fram
     }
     glUniform4f(G.mesh.tint, b->tint[0], b->tint[1], b->tint[2], b->tint[3]);
     glUniform1i(G.mesh.palrow, pal_row(r, b->palette));
+    glUniform1i(G.mesh.tex, soft ? 2 : 1);
+    if (add) {
+      glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+      glDepthMask(GL_FALSE);
+    }
     bind_tex(r, b->tex);
     glBufferData(GL_ARRAY_BUFFER, sizeof vtx, vtx, GL_STREAM_DRAW);
     glDrawArrays(GL_TRIANGLES, 0, 6);
+    if (add) {
+      glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+      glDepthMask(GL_TRUE);
+    }
   }
 }
 

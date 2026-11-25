@@ -4,6 +4,9 @@
 # Usage: golden_compare.py GOLDEN SHOT [MEAN_TOL] [BAD_TOL]
 #        golden_compare.py --differ MIN_MEAN A B   (passes when the images differ by at least MIN_MEAN: the material
 #        look must stay clearly visible, full against off)
+#        golden_compare.py --brighter ON OFF   (fix-glow: ON is a scene with its glow sprites, OFF the same without;
+#        passes when at most 0.2% of the pixels are darker in ON by more than 16 of luma, and at least 0.2% are
+#        brighter: the sprites add light and never darken)
 #   passes when the mean absolute channel difference is <= MEAN_TOL (default 2.0 of 255) and the share of pixels
 #   that differ by more than 24 in any channel is <= BAD_TOL (default 0.02); prints the numbers either way.
 import struct, sys, zlib
@@ -57,7 +60,27 @@ def mean_diff(a, b):
             total += abs(p1[i * b1 + k] - p2[i * b2 + k])
     return total / (w1 * h1 * 3)
 
+def luma_shift(a, b, tol=16):
+    w1, h1, b1, p1 = load(a)
+    w2, h2, b2, p2 = load(b)
+    if (w1, h1) != (w2, h2):
+        return None
+    darker = brighter = 0
+    for i in range(w1 * h1):
+        la = 0.299 * p1[i * b1] + 0.587 * p1[i * b1 + 1] + 0.114 * p1[i * b1 + 2]
+        lb = 0.299 * p2[i * b2] + 0.587 * p2[i * b2 + 1] + 0.114 * p2[i * b2 + 2]
+        if la < lb - tol: darker += 1
+        elif la > lb + tol: brighter += 1
+    n = float(w1 * h1)
+    return darker / n, brighter / n
+
 def main():
+    if len(sys.argv) == 4 and sys.argv[1] == "--brighter":
+        r = luma_shift(sys.argv[2], sys.argv[3])
+        ok = r is not None and r[0] <= 0.002 and r[1] >= 0.002
+        print("%s vs %s: %s -> %s" % (sys.argv[2], sys.argv[3], "size differs" if r is None else
+              "darker %.4f (at most 0.0020), brighter %.4f (at least 0.0020)" % r, "ok" if ok else "FAIL"))
+        return 0 if ok else 1
     if len(sys.argv) == 5 and sys.argv[1] == "--differ":
         need = float(sys.argv[2])
         m = mean_diff(sys.argv[3], sys.argv[4])

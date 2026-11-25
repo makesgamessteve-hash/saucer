@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: MIT
--- add-relic-stations, first slice (run with --relic-slice): the Vyrr spine relic is added to the sector and the
--- party starts at its maw. Fold bays: regrowing from the Seat in a cradle bay is free at any yaw, a Villa resting
+-- add-relic-stations, add-relic-dungeons (run with --relic-slice): the Vyrr warren relic is added to the sector and
+-- the party starts at its maw. Fold bays: regrowing from the Seat in a cradle bay is free at any yaw, a Villa resting
 -- in one refills 1 Charge a second; the Seat-lock opens for the Seat only and stays open across a restore; the
 -- reliquary's finds pay double and the Core's XL idol needs the Villa's beam; no sentries; the materials setting
 -- never changes the state hash.
@@ -21,9 +21,11 @@ T.assert(i ~= nil, "the relic site is in the sector")
 local site = state.sector.sites[i]
 T.assert(site.kit == "relic" and site.relic_civ == "vyrr", "a Vyrr relic")
 local r = game.ruin(i)
-T.assert(r and r.relic and r.relic.archetype == "spine", "a spine relic")
+T.assert(r and r.relic and r.relic.archetype == "warren", "a warren relic")
 T.assert(#game.sentries(i) == 0, "no sentries in the slice")
-T.assert(r.relic.length >= 850 and r.relic.length <= 1000, "about 900 m long: " .. r.relic.length)
+T.assert(r.relic.length >= 1000, "over a kilometre deep: " .. r.relic.length)
+T.assert(#r.relic.chambers >= 15 and r.relic.levels >= 3, "Seat chambers on three or more levels")
+T.assert(r.relic.route_m >= 1000, "the heart is at least 1 km of route from the maw: " .. r.relic.route_m)
 -- the party starts outside the maw
 local door = ruinm.entrance(r, site.pos)
 T.assert(math.abs(get().ship.pos[3] - (door[3] - 90)) < 1, "the saucer waits outside the maw")
@@ -40,8 +42,9 @@ end
 local function settle() for _ = 1, 400 do T.wait(1) if not get().ship.morph then return end end end
 
 -- 1. a lung bay: regrow from the Seat at eight yaws, never paying
-local bay = r.relic.bays[2]
-T.assert(bay.room == r.relic.lung, "bay 2 is in the breathing hall")
+local bay
+for _, b in ipairs(r.relic.bays) do if not bay and b.room == r.relic.lung and b.quadrant then bay = b end end
+T.assert(bay ~= nil, "a bay in the breathing hall")
 for k = 0, 7 do
   local yaw = k * math.pi / 4
   park({ bay.marker[1], bay.cradle[2] + 7, bay.marker[3] }, yaw, 1)
@@ -101,7 +104,13 @@ get().ship.charge = 100
 T.press(1, "shrink")
 settle()
 local s = get().ship
-park(shipm.center_for_eye({ lock.socket[1], lock.socket[2], lock.socket[3] - 1.5 }, 0, 2), 0)
+-- nose the Seat up to the socket along the lock's passage (the socket is 2 m short of the shutter)
+local ld = r.doors[lock.door]
+local dir = { 0, 0, 0 }
+dir[ld.axis] = ld.sign
+local lyaw = saucer.math.atan2(dir[1], dir[3])
+local leye = { lock.socket[1] - dir[1] * 1.5, lock.socket[2], lock.socket[3] - dir[3] * 1.5 }
+park(shipm.center_for_eye(leye, lyaw, 2), lyaw)
 T.assert(relic.socket_near(T.state(), get()) == lock, "the Seat's nose is at the socket")
 T.press(1, "use", 30)
 T.assert(game.relic_lock_closed(i, lock.id), "a short press is not enough")
@@ -114,7 +123,8 @@ local snap = T.snapshot()
 T.restore(snap)
 T.assert(not game.relic_lock_closed(i, lock.id), "the lock stays open across a restore")
 
--- 5. loot: three reliquary finds (class 1, paid double), two finds a hall, the XL idol for the Villa's beam
+-- 5. loot: three reliquary finds and the chambers' (class 1, paid double), the hall finds, the XL idol for the Villa's
+-- beam
 local cands = tractor.candidates(T.state(), get(), i, r)
 local warren, hall, idol = 0, 0, nil
 for _, c in ipairs(cands) do
@@ -126,8 +136,12 @@ for _, c in ipairs(cands) do
     T.assert(c.item.size == 1, "a reliquary find fits the Seat's beam")
   else hall = hall + 1 end
 end
-T.assert(warren == 3, "three reliquary finds: " .. warren)
-T.assert(hall == 6, "six hall finds: " .. hall)
+local want_w, want_h = 0, 0
+for _, sl in ipairs(r.slots) do
+  if sl.warren then want_w = want_w + 1 elseif not sl.idol then want_h = want_h + 1 end
+end
+T.assert(warren == want_w and warren >= 3 + 15, "every reliquary and chamber find: " .. warren)
+T.assert(hall == want_h and hall >= 3, "the hall finds: " .. hall)
 T.assert(idol and idol.item.size == 4 and idol.item.value >= 1800, "the Core's XL idol")
 T.assert(idol.item.size > tractor.beam_of(get().ship).class, "the Seat cannot lift the idol")
 T.assert(idol.item.size <= configs.get(1).tractor_class, "the Villa's beam can")
@@ -149,5 +163,20 @@ local s_lite = run("lite")
 T.assert(s_full == s_off and s_off == s_lite, "materials full, lite and off end in one state")
 T.assert(saucer.render.settings().materials == "lite", "the setting took")
 saucer.render.settings({ materials = "full" })
-saucer.log.info(string.format("relic: length=%.0f villa_share=%.2f bays=%d gained=%.2f paid=%.1f snapshot=%d bytes",
-  r.relic.length, r.relic.villa_share, #r.relic.bays, gained, paid, #s_full))
+-- 7. the heart is reachable: the Villa flies in at the maw and through the warren (its doors, trunks and shafts) to
+-- the heart, never folding
+relic.to_maw(T.state(), i)
+get().ship.size = 1
+T.wait(2)
+local t0 = T.state().tick
+-- (the heart's centre is its engine column: the last waypoint is just inside its door instead)
+local route = ap.route(r, site.pos, r.relic.core)
+route[#route] = nil
+T.assert(ap.travel(T, 1, get, route[1].pos, 3), "at the maw")
+local ok, at = ap.follow(T, 1, get, route, 1500)
+T.assert(ok, "flew from the maw to the heart (stuck at waypoint " .. tostring(at) .. ")")
+T.assert(ruinm.room_at(r, site.pos, get().ship.pos) == r.rooms[r.relic.core], "the Villa is in the heart")
+T.assert(get().ship.size == 1, "as the Villa all the way")
+local flown = (T.state().tick - t0) / 60
+saucer.log.info(string.format("relic: length=%.0f villa_share=%.2f bays=%d chambers=%d route=%.0fm flight=%.0fs (%d waypoints) gained=%.2f paid=%.1f snapshot=%d bytes",
+  r.relic.length, r.relic.villa_share, #r.relic.bays, #r.relic.chambers, r.relic.route_m, flown, #route, gained, paid, #s_full))

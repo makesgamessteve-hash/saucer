@@ -133,7 +133,7 @@ if(SAUCER_BUILD_TESTS)
   add_test(NAME game_tractor COMMAND ${HL} --seed 42 --script tests/game/tractor.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_city COMMAND ${HL} --seed 42 --script tests/game/city.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   # add-realistic-lighting: light switches, sun outside, lamps inside, shadow presets
-  # add-relic-stations: the first relic slice (the debug entry adds the Vyrr spine relic to the sector)
+  # add-relic-stations: the first relic slice (the debug entry adds the Vyrr warren relic to the sector)
   add_test(NAME game_relic COMMAND ${HL} --seed 42 --relic-slice --script tests/game/relic.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_relic_seed7 COMMAND ${HL} --seed 7 --relic-slice --script tests/game/relic.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_lighting COMMAND ${HL} --seed 42 --script tests/game/lighting.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})

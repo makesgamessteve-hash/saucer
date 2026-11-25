@@ -121,6 +121,12 @@ int sx_render_texture_from_png(sx_render *r, const char *path, const unsigned ch
   return id;
 }
 
+int sx_render_texture_soft(sx_render *r, int id, int soft) {
+  if (id <= 0 || id >= SX_MAX_TEXTURES || !r->textures[id].used) return 0;
+  r->textures[id].soft = soft ? 1 : 0;
+  return 1;
+}
+
 int sx_render_find_palette(const sx_render *r, const char *name) {
   int i;
   for (i = 0; i < r->npalettes; i++)
