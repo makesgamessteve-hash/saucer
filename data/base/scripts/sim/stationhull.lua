@@ -71,7 +71,7 @@ local function new_ctx(seed, class, mesh, family)
     H = H, K = K, T = T, class = class, seed = seed, s = K.scale or 1,
     AY = T.floor_y + T.height / 2,
     parts = { core = {}, detail = {}, ring = {}, ringd = {}, far = {} },
-    solids = {}, lights = {}, mesh = mesh,
+    solids = {}, spin = {}, lights = {}, mesh = mesh,
     fam = M.family(family or M.family_of(seed)),
     rng = saucer.rng.new(saucer.seed_child(seed, "hull", 1)),
     drng = saucer.rng.new(saucer.seed_child(seed, "hull", 2)),
@@ -81,6 +81,13 @@ local function new_ctx(seed, class, mesh, family)
   c.pal_name = c.fam.palettes[c.rng:int(1, #c.fam.palettes)]
   c.pal = H.palettes[c.pal_name]
   return c
+end
+
+-- fix-station-hull: the spinning layer's collision shapes, in its own frame (x from the spin centre, y and z from
+-- the axis), recorded whether or not triangles are built: a sphere { c, r }, a capsule { a, b, r }, an annulus about
+-- the x axis { x0, x1, rin, rout } and a torus { n (unit axis), R, r } about the spin centre
+local function spin_shape(c, layer, shape)
+  if layer == "ring" then c.spin[#c.spin + 1] = shape end
 end
 
 local function add(c, layer, part)
@@ -109,6 +116,7 @@ end
 
 -- an annulus about the x axis, thick along x from x0 to x1
 local function xring(c, layer, x, w, rin, rout, seg, color, emi)
+  spin_shape(c, layer, { kind = "annulus", x0 = x - w / 2, x1 = x + w / 2, rin = rin, rout = rout })
   if not c.mesh then return end   -- layout only: the sim wants the solids, not the triangles
   local AY = (layer == "ring" or layer == "ringd") and 0 or c.AY
   return add(c, layer, { kind = "ring", c = { 0, -w / 2, 0 }, rin = rin, r = rout, h = w, seg = seg, color = color, emissive = emi,
@@ -348,6 +356,8 @@ local function lay_y(c, layer) return (layer == "ring" or layer == "ringd") and 
 
 -- a tapered limb from a to b: radius r0 at a, r1 at b (r1 = 0: a shard's point)
 local function limb(c, layer, a, b, r0, r1, color, seg, emi)
+  -- (a shard's point, r1 = 0, thins to nothing: its capsule keeps two thirds of the base)
+  spin_shape(c, layer, { kind = "capsule", a = { a[1], a[2], a[3] }, b = { b[1], b[2], b[3] }, r = math.max(r0, r1) * (r1 == 0 and 0.67 or 1) })
   if not c.mesh then return end
   local dx, dy, dz = b[1] - a[1], b[2] - a[2], b[3] - a[3]
   local hz = sm.sqrt(dx * dx + dz * dz)
@@ -361,6 +371,7 @@ end
 
 -- an ellipsoid (a sphere scaled per axis), optionally turned
 local function blob(c, layer, p, rx, ry, rz, color, emi, seg, yaw, pitch, roll)
+  spin_shape(c, layer, { kind = "sphere", c = { p[1], p[2], p[3] }, r = math.max(rx, ry, rz) * 0.9 })
   if not c.mesh then return end
   seg = seg or 10
   return add(c, layer, { kind = "sphere", c = { 0, 0, 0 }, r = 1, h = 1, seg = seg, rings = seg <= 6 and 2 or 3,
@@ -481,6 +492,7 @@ end
 
 -- a ring on the spinning layer, centred on the spin centre, its axis turned by roll then yaw
 local function add_ring(c, ri, w, roll, yaw, color)
+  spin_shape(c, "ring", { kind = "torus", n = turn({ 0, 1, 0 }, yaw, 0, roll), R = ri - 0.75 * w, r = w })
   if not c.mesh then return end
   return add(c, "ring", { kind = "ring", c = { 0, -w, 0 }, rin = ri - w * 1.5, r = ri, h = 2 * w, seg = 48, color = color,
                           roll = roll, yaw = yaw, pos = { 0, 0, 0 } })
@@ -745,7 +757,7 @@ function B.coral(c, F, far)
     local x = h * F.body * 0.22
     local rr = R * (0.72 + 0.08 * h)
     xring(c, "ring", x, 1.5 * s, rr - 0.6 * s, rr + 0.6 * s, 48, P.glow, 0.6)
-    for k = 0, (c.mesh and 27 or -1) do
+    for k = 0, 27 do -- (fix-station-hull: the layout pass too: the spores collide)
       local q = turn({ 0, rr, 0 }, 0, 0, k * TAU / 28)
       blob(c, "ring", { x + ((k % 3) - 1) * 6 * s, q[2], q[1] }, 7 * s, 7 * s, 7 * s, k % 4 == 0 and P.glow or P.plate, k % 4 == 0 and 0.8 or nil, 6)
     end
@@ -847,7 +859,7 @@ function B.crystal(c, F, far)
   for h = 0, 1 do
     local x = (h == 0 and -1 or 1) * half * 0.35
     local rr = R * (0.9 - 0.12 * h)
-    for k = 0, (c.mesh and 23 or -1) do
+    for k = 0, 23 do -- (fix-station-hull: the layout pass too: the splinters collide)
       local a = k * TAU / 24 + h * 0.13
       local q = turn({ 0, rr, 0 }, 0, 0, a)
       local t = turn({ 0, 1, 0 }, 0, 0, a + PI / 2)
@@ -1163,7 +1175,7 @@ function M.generate(seed, class, bay_no_in, mesh, family)
   info.length = F.hi[1] - F.lo[1]
   info.width = F.hi[3] - F.lo[3]
   info.height = F.hi[2] - F.lo[2]
-  local L = { seed = seed, class = class, info = info, parts = c.mesh and c.parts or nil, solids = c.solids, lights = c.lights, far_bay = info.far_bay,
+  local L = { seed = seed, class = class, info = info, parts = c.mesh and c.parts or nil, solids = c.solids, spin = c.spin, lights = c.lights, far_bay = info.far_bay,
               pal = P, spin_pos = { F.hx, c.AY, 0 }, bay = cell, ring_r = F.R, family = c.fam.id }
   L.counts = {}
   if c.mesh then for k, v in pairs(c.parts) do L.counts[k] = #v end end
@@ -1237,6 +1249,90 @@ function M.world_solids(state)
     end
   end
   return out
+end
+
+-- fix-station-hull: the nearest point of a spin shape to q (in the spin frame) -> that point, the shape's
+-- thickness there (0 for an annulus, whose point is on its surface)
+local function nearest(sh, q)
+  if sh.kind == "sphere" then return sh.c, sh.r end
+  if sh.kind == "capsule" then
+    local a, b = sh.a, sh.b
+    local ab = { b[1] - a[1], b[2] - a[2], b[3] - a[3] }
+    local l2 = ab[1] * ab[1] + ab[2] * ab[2] + ab[3] * ab[3]
+    local t = l2 > 0 and ((q[1] - a[1]) * ab[1] + (q[2] - a[2]) * ab[2] + (q[3] - a[3]) * ab[3]) / l2 or 0
+    t = math.max(0, math.min(1, t))
+    return { a[1] + ab[1] * t, a[2] + ab[2] * t, a[3] + ab[3] * t }, sh.r
+  end
+  if sh.kind == "torus" then
+    local n = sh.n
+    local d = q[1] * n[1] + q[2] * n[2] + q[3] * n[3]
+    local pl = { q[1] - n[1] * d, q[2] - n[2] * d, q[3] - n[3] * d }
+    local l = len3(pl[1], pl[2], pl[3])
+    if l < 1e-6 then return nil end
+    return { pl[1] * sh.R / l, pl[2] * sh.R / l, pl[3] * sh.R / l }, sh.r
+  end
+  -- annulus about the x axis: clamp x to its thickness and the radius to rin..rout
+  local rr = sm.sqrt(q[2] * q[2] + q[3] * q[3])
+  local x = math.max(sh.x0, math.min(sh.x1, q[1]))
+  local k = math.max(sh.rin, math.min(sh.rout, rr))
+  if rr < 1e-6 then return { x, k, 0 }, 0 end
+  return { x, q[2] * k / rr, q[3] * k / rr }, 0
+end
+M.spin_nearest = nearest
+
+M.SPIN_NEAR = 6000   -- m from a trader's anchor: nearer than this its spinning layer is checked
+-- a hull (a sphere of radius r about pos, world meters) against every trader's spinning layer at this tick ->
+-- pos pushed out of what it overlaps (a new table), and the number of shapes it was pushed from. The layer's turn
+-- comes from the tick (the same as the view's), so every peer and every replay sees the same push.
+function M.spin_push(state, pos, r)
+  local list = state.sector.traders or { state.sector.trader }
+  local hits = 0
+  local ang = (state.tick or 0) * M.kit().spin
+  local ca, sa = sm.cos(ang), sm.sin(ang)
+  for idx, tr in ipairs(list) do
+    local ex, ey, ez = pos[1] - tr.pos[1], pos[2] - tr.pos[2], pos[3] - tr.pos[3]
+    local L = (ex * ex + ey * ey + ez * ez < M.SPIN_NEAR * M.SPIN_NEAR) and M.for_trader(state, idx) or {}
+    local sp = L.spin_pos or { 0, 0, 0 }
+    local cx, cy, cz = tr.pos[1] + sp[1], tr.pos[2] + sp[2], tr.pos[3] + sp[3]
+    local dx, dy, dz = pos[1] - cx, pos[2] - cy, pos[3] - cz
+    if L.spin and #L.spin > 0 and len3(dx, dy, dz) < (L.spin_reach or M.spin_reach(L)) + r then
+      -- into the layer's frame: undo the view's model pitch (about x; sx_mat4_model_ypr: y' = y cos + z sin)
+      local q = { dx, dy * ca - dz * sa, dy * sa + dz * ca }
+      for _, sh in ipairs(L.spin) do
+        local np, th = nearest(sh, q)
+        if np then
+          local vx, vy, vz = q[1] - np[1], q[2] - np[2], q[3] - np[3]
+          local d = len3(vx, vy, vz)
+          local need = r + th
+          if d < need then
+            if d < 1e-6 then vx, vy, vz, d = 0, 1, 0, 1 end
+            local k = (need - d) / d
+            q = { q[1] + vx * k, q[2] + vy * k, q[3] + vz * k }
+            hits = hits + 1
+          end
+        end
+      end
+      if hits > 0 then
+        pos = { cx + q[1], cy + q[2] * ca + q[3] * sa, cz - q[2] * sa + q[3] * ca }
+      end
+    end
+  end
+  return pos, hits
+end
+
+-- how far from the spin centre the spinning layer's shapes reach (memoised on the layout)
+function M.spin_reach(L)
+  local m = 0
+  for _, sh in ipairs(L.spin or {}) do
+    local e
+    if sh.kind == "sphere" then e = len3(sh.c[1], sh.c[2], sh.c[3]) + sh.r
+    elseif sh.kind == "capsule" then e = math.max(len3(sh.a[1], sh.a[2], sh.a[3]), len3(sh.b[1], sh.b[2], sh.b[3])) + sh.r
+    elseif sh.kind == "torus" then e = sh.R + sh.r
+    else e = math.max(math.abs(sh.x0), math.abs(sh.x1)) + sh.rout end
+    if e > m then m = e end
+  end
+  L.spin_reach = m
+  return m
 end
 
 -- where the far hangar's space door opens: in front of a docking pod, in world meters

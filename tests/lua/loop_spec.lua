@@ -391,11 +391,16 @@ describe("autopilot drivers", function()
     local r, o = game.ruin(1), st.sector.sites[1].pos
     local hall
     for _, s in ipairs(r.slots) do if r.rooms[s.room].kind == "hall" then hall = s.room end end
+    -- tune-sentry-economy: the tutorial's light Watcher at its old bite while the drivers loot (put back after)
+    local undo = ap.gentle_tutorial()
+    expect(require("sim.sentry").tune().stealth.light_drops).to_be(false)
     local ok, route = ap.enter(t, 1, get, r, o, hall)
     expect(ok).to_be(true)
     local door = ap.door_center(ap.door_of(r, hall), r.rooms, require("sim.ruin").kit_of(r.kit), o)
     expect(ap.grab(t, 1, get, 1, r, hall, door)).to_be_greater(0)
     expect(ap.leave(t, 1, get, route)).to_be(true)
+    undo()
+    expect(require("sim.sentry").tune().stealth.light_drops).to_be(true)
     expect(get().site).to_be(0)
     expect(ap.wait_until(t, 1, function() return false end, 3)).to_be(false)
     expect(ap.door_of(r, 9999)).to_be(nil)
