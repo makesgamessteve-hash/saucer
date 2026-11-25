@@ -121,7 +121,7 @@ T.assert(mega.in_warren(od, get().ship.pos) == w, "in the warren")
 local sc = w.sanctum
 T.assert(ap.fly(T, 1, get, { sc[1], w.y0 + 18, sc[3] }, 4, 3600), "flew along the corridor to the sanctum")
 local deep
-for _, c in ipairs(tractor.candidates(st, get(), 0, nil)) do if c.pos[2] < od.y and not deep then deep = c end end
+for _, c in ipairs(tractor.candidates(st, get(), 0, nil)) do if c.kind == "slot" and c.pos[2] < od.y and not deep then deep = c end end
 T.assert(deep ~= nil, "a find in the sanctum")
 T.assert(ap.fly(T, 1, get, ap.beam_spot(deep.pos, get().ship.size), 0.5, 1800), "over the sanctum's find")
 T.assert(ap.to_console(T, 1, get), "at the beam console in the warren")
