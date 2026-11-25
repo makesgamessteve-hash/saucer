@@ -56,7 +56,10 @@ local function grab_room(room)
   end
   local got = ap.grab(T, 1, get, 1, ruin, room.id, door)
   if got < n then for _, m in ipairs(get().msgs) do print("msg", m.tick, m.text) end end
-  T.assert(got == n, "beamed up all " .. n .. " items in room " .. room.id .. " (got " .. got .. ")")
+  -- tune-sentry-economy: the tutorial's light Watcher's bolts can shake the beam loose; then the rest stays behind
+  local shaken = false
+  for _, m in ipairs(get().msgs) do if m.text:find("shook the beam loose", 1, true) then shaken = true end end
+  T.assert(got == n or (shaken and got >= 1), "beamed up all " .. n .. " items in room " .. room.id .. " (got " .. got .. ")")
   return got
 end
 
