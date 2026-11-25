@@ -122,24 +122,29 @@ function M.pose(ph, t, eye, room_min, room_max)
   return out
 end
 
+-- draw one phenomenon in the room mn..mx (add-alien-cities-6: the megacity's warrens use this too)
+function M.draw_one(v, A, ph, mn, mx, cam, t, palette)
+  local ms = meshes()
+  for _, o in ipairs(M.pose(ph, t, cam.pos, mn, mx)) do
+    if o.mesh then
+      v:mesh(ms[o.mesh], { pos = o.pos, scale = o.size, yaw = o.yaw or 0, pitch = o.pitch or 0, roll = o.roll or 0,
+                           palette = palette })
+    elseif o.dark then
+      v:billboard(A.tex.glow, o.pos, o.size, { palette = palette, tint = { 0.02, 0.0, 0.03, o.alpha } })
+    else
+      v:billboard(A.tex.glow, o.pos, o.size, { palette = palette, tint = { 0.8, 0.5, 1.0, o.alpha or 0.5 } })
+    end
+  end
+end
+
 -- draw the phenomena of the rooms in `show` -> how many drew
 function M.draw(v, A, ruin, show, cam, t, opts)
   local kit = require("sim.ruin").kit_of(ruin.kit)
-  local ms = meshes()
   local n = 0
   for _, ph in ipairs(ruin.relic.phenomena or {}) do
     if show[ph.room] then
       local mn, mx = require("sim.ruin").room_box(ruin.rooms[ph.room], kit, ruin.origin)
-      for _, o in ipairs(M.pose(ph, t, cam.pos, mn, mx)) do
-        if o.mesh then
-          v:mesh(ms[o.mesh], { pos = o.pos, scale = o.size, yaw = o.yaw or 0, pitch = o.pitch or 0, roll = o.roll or 0,
-                               palette = opts.palette })
-        elseif o.dark then
-          v:billboard(A.tex.glow, o.pos, o.size, { palette = opts.palette, tint = { 0.02, 0.0, 0.03, o.alpha } })
-        else
-          v:billboard(A.tex.glow, o.pos, o.size, { palette = opts.palette, tint = { 0.8, 0.5, 1.0, o.alpha or 0.5 } })
-        end
-      end
+      M.draw_one(v, A, ph, mn, mx, cam, t, opts.palette)
       n = n + 1
     end
   end

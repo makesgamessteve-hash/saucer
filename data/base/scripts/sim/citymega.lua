@@ -159,6 +159,12 @@ function M.plan(r, sector, i, station_ball)
     local far = mx * mx + mz * mz
     if far > best then tallest, best = d, far end
   end
+  -- add-alien-cities-6: the warrens' phenomena, from the builders' own list (as in their relics)
+  local site = sector and sector.sites and sector.sites[i]
+  local civ = site and require("sim.game").civ_of(site) or nil
+  local weights = civ and civ.language and civ.language.phenomena or require("sim.relicgen").PHENOMENA
+  out.phen_weights = weights
+  for _, d in ipairs(out.districts) do M.plan_phenomena(r.seed, d, weights) end
   if tallest then
     local drng = saucer.rng.new(saucer.seed_child(r.seed, "megaform", 0))
     local o = tallest.organs[(#tallest.organs + 1) // 2]
@@ -354,6 +360,52 @@ function M.plan_warren(seed, d)
   d.warren = { shaft = shaft, spaces = spaces, y0 = y0, y1 = y1, finds = finds,
                sanctum = { (sanctum[1] + sanctum[3]) / 2, y0 + M.WARREN_H / 2, (sanctum[2] + sanctum[4]) / 2, size = min(sanctum[3] - sanctum[1], sanctum[4] - sanctum[2]) } }
   return d.warren
+end
+
+-- the strange things going on in district d's warren (own rng; render only, view/phenomena.lua draws them): one in
+-- the hub, one in every chamber, a procession down some corridors, two in the sanctum; kinds weighted by the civ's
+-- list. Each: { id, kind, space (index), pos, long, size, phase, seed }
+function M.plan_phenomena(seed, d, weights)
+  local w = d.warren
+  if not w then return nil end
+  local rng = saucer.rng.new(saucer.seed_child(seed, "warrenph", d.k))
+  local kinds, total = {}, 0
+  for k, wt in pairs(weights) do kinds[#kinds + 1] = { k, wt } end
+  table.sort(kinds, function(a, b) return a[1] < b[1] end)
+  for _, k in ipairs(kinds) do total = total + k[2] end
+  local function pick()
+    local x = rng:float() * total
+    for _, k in ipairs(kinds) do
+      x = x - k[2]
+      if x <= 0 then return k[1] end
+    end
+    return kinds[#kinds][1]
+  end
+  local out = {}
+  local function place(si, r, kind, fx, fy, fz)
+    local pos = { r[1] + 6 + (r[3] - r[1] - 12) * fx, w.y0 + 4 + (M.WARREN_H - 8) * fy, r[2] + 6 + (r[4] - r[2] - 12) * fz }
+    local long = (r[3] - r[1]) > (r[4] - r[2]) and 1 or 3
+    if kind == "breath" then
+      -- on a wall the room's long sides
+      if long == 1 then pos[3] = r[2] + 0.5 else pos[1] = r[1] + 0.5 end
+    end
+    out[#out + 1] = { id = #out + 1, kind = kind, space = si, pos = pos, long = long,
+                      size = min(r[3] - r[1], r[4] - r[2]) * (0.12 + 0.1 * rng:float()), phase = rng:float() * 6.283,
+                      seed = rng:int(1, 1000000) }
+  end
+  for si, r in ipairs(w.spaces) do
+    local kind = r[5]
+    if kind == "corridor" then
+      if rng:float() < 0.5 then place(si, r, "procession", 0.5, 0.9, 0.5) end
+    elseif kind == "sanctum" then
+      place(si, r, pick(), 0.25, 0.3 + 0.3 * rng:float(), 0.25)
+      place(si, r, pick(), 0.75, 0.3 + 0.3 * rng:float(), 0.75)
+    else
+      place(si, r, pick(), 0.3 + 0.4 * rng:float(), 0.3 + 0.3 * rng:float(), 0.3 + 0.4 * rng:float())
+    end
+  end
+  w.phenomena = out
+  return out
 end
 
 -- the warren's solids: its floor, and walls round every open grid cell (rows of wall cells merged into boxes)

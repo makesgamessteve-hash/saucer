@@ -375,6 +375,14 @@ function M.draw(v, A, p, cam, tex, visible, budget, t)
         st.organs = (st.organs or 0) + 1
         if d.warren and cam.pos[2] < d.y + M.WARREN_LAMP_Y and dist <= M.WARREN_LAMPS then
           st.lamps = (st.lamps or 0) + M.warren_lamps(v, p, d, t or 0)
+          -- the strange things going on down there (as in the builders' relics)
+          local w = d.warren
+          local phv = require("view.phenomena")
+          for _, ph in ipairs(w.phenomena or {}) do
+            local r = w.spaces[ph.space]
+            phv.draw_one(v, A, ph, { r[1], w.y0, r[2] }, { r[3], w.y1, r[4] }, cam, t or 0, A.pal.base)
+            st.phenomena = (st.phenomena or 0) + 1
+          end
         end
         if d.warren then
           local sp = M.sanctum_pose(d, t or 0)

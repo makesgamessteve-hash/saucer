@@ -540,6 +540,30 @@ describe("megacity", function()
     end
     local s2 = megav.draw(fake_view(), A, p, { pos = { eye[1], d.y + 400, eye[3] }, yaw = 0, pitch = 0 }, 1, function() return true end, 1000, 2)
     expect(s2.lamps).to_be(nil)
+    expect(s2.phenomena).to_be(nil)
+    -- strange things going on down there, of the builders' own kinds: one in the hub and each chamber, two in the
+    -- sanctum, processions down some corridors, all inside their spaces
+    expect(s1.phenomena).to_be(#w.phenomena)
+    local per = {}
+    for _, ph in ipairs(w.phenomena) do
+      local sp = w.spaces[ph.space]
+      per[ph.space] = (per[ph.space] or 0) + 1
+      expect(p.phen_weights[ph.kind] ~= nil).to_be(true)
+      expect(ph.pos[1] >= sp[1] and ph.pos[1] <= sp[3] and ph.pos[3] >= sp[2] and ph.pos[3] <= sp[4]).to_be(true)
+      expect(ph.pos[2] > w.y0 and ph.pos[2] < w.y1).to_be(true)
+      if sp[5] == "corridor" then expect(ph.kind).to_be("procession") end
+    end
+    for si, sp in ipairs(w.spaces) do
+      if sp[5] == "sanctum" then expect(per[si]).to_be(2)
+      elseif sp[5] ~= "corridor" then expect(per[si]).to_be(1) end
+    end
+    expect(mega.plan_phenomena(1, { k = 1 }, {})).to_be(nil)
+    -- every kind can be posed in a warren space (the shared relic phenomena)
+    local phv = require("view.phenomena")
+    for kind in pairs(require("sim.relicgen").PHENOMENA) do
+      local ph = { kind = kind, pos = { eye[1], eye[2], eye[3] }, size = 20, phase = 1, seed = 7, long = 1, space = 1 }
+      phv.draw_one(v, A, ph, { hub[1], w.y0, hub[2] }, { hub[3], w.y1, hub[4] }, { pos = eye }, 3, 1)
+    end
     -- lit strips on every space's ceiling and floor
     local strips = 0
     for _, q in ipairs(megav.light_parts(p, d)) do if q.max[2] <= w.y1 and q.min[2] >= w.y0 - 1e-6 then strips = strips + 1 end end
