@@ -64,3 +64,10 @@ phenomena. The megascale core, lazy district generation, LOD and mini-relic orga
   state and no version bump.
 - **Drifters.** Glowing slabs glide down the outer avenues, turning and bobbing: harmless, render only.
 - Relicgen interiors, fold bays, the undercity warrens and the remaining add-cities extras stay for a later part.
+
+## Part 4
+- The organ's machine fills its hall; drifters are bigger and carry halos and followers.
+- Fold bays with cradles on the terraces: growing back to the Villa there is free.
+- The undercity: a shaft from each organ hall into a warren of corridors and chambers ending in a breathing sanctum,
+  with deep finds. No new state: taken finds are `looted` keys, so no version bump and replays unchanged.
+- Transit and storm extras, mystery tie-ins and full relicgen interiors stay for later.

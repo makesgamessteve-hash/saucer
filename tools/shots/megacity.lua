@@ -3,7 +3,7 @@
 --   saucer --root REPO --seed 42 --windowed --width 1280 --height 720 --script REPO/tools/shots/megacity.lua
 --   [--script-arg planet|moon|asteroid]
 -- The ring from over the core, a canyon avenue, the city's megaform, the footprint from high up, a lit block close
--- by, an organ's hall and mouth, a drifter down an avenue and a fold bay on a terrace. Staged: a free camera with the HUD and cockpit out of frame (the saucer waits just behind the camera).
+-- by, an organ's hall and mouth, a drifter down an avenue, a fold bay on a terrace, and a warren and its sanctum under an organ. Staged: a free camera with the HUD and cockpit out of frame (the saucer waits just behind the camera).
 local T = saucer.test
 local game = require("sim.game")
 local galaxy = require("sim.galaxy")
@@ -141,5 +141,20 @@ if bay then
   local c = bay.cradle
   frame({ c[1] + 70, c[2] + 55, c[3] + 70 }, c, 65)
   shot("09_fold_bay")
+end
+-- 10. the undercity: down a corridor of a warren toward its sanctum, the stones circling its heart
+local wd
+for _, d in ipairs(p.districts) do if d.warren and not wd then wd = d end end
+if wd then
+  local w = wd.warren
+  local hub = w.spaces[1]
+  local hx, hz = (hub[1] + hub[3]) / 2, (hub[2] + hub[4]) / 2
+  local sc = w.sanctum
+  frame({ hx, w.y0 + 22, hz }, { sc[1], sc[2], sc[3] }, 70)
+  shot("10_warren")
+  local dx, dz = sc[1] - hx, sc[3] - hz
+  local l = math.max(1, sm.sqrt(dx * dx + dz * dz))
+  frame({ sc[1] - dx / l * (sc.size * 0.45), w.y0 + 14, sc[3] - dz / l * (sc.size * 0.45) }, { sc[1], sc[2], sc[3] }, 75)
+  shot("11_sanctum")
 end
 print("megacity shots done")

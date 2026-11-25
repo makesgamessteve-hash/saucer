@@ -22,5 +22,15 @@
 - [x] 3.2 Drifters: glowing slabs gliding down the outer avenues, turning and bobbing, render only
 - [x] 3.3 Taken organ finds are per-player `looted` keys (`mega<site>:<district>:<find>`), saved with the rest: no new
       state, no version bump, replays unchanged
-- [ ] 3.4 (later) Relicgen interiors in the organs, fold bays on terraces, the undercity warrens, transit and storm
-      extras in the ring, mystery tie-ins
+- [x] 3.4 Moved to part 4 (4.2-4.4); transit and storm extras in the ring and mystery tie-ins to 4.6
+
+## 4. Bays, the undercity and sanctums (part 4)
+- [x] 4.1 The organ's machine fills its hall (a rocking halo, a rolling ring, a fast inner ring round a pulsing core);
+      drifters are bigger, with halos and two followers each
+- [x] 4.2 Fold bays on terraces: up to two 44 x 44 m pads per district on tier tops with 30 m of open air and a cradle;
+      growing back to the Villa in one is free (`relic.cradle_of` at site 0, `citymega.bay_at`)
+- [x] 4.3 The undercity: a shaft from the back of each organ hall through the foundation into a warren (hub, 2-4
+      corridors to chambers) whose farthest chamber is a sanctum; deep finds sensed only from the warren
+- [x] 4.4 The sanctum: glowing stones circling a dim heart that breathes (render only)
+- [x] 4.5 Specs, game test (down the shaft, along to the sanctum, beam a find), shots 08 and 09
+- [ ] 4.6 (later) Transit and storm extras in the ring, mystery tie-ins, full relicgen interiors in the organs
