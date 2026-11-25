@@ -45,4 +45,12 @@
 - [x] 5.5 The storm blows over the ring's open air (not in an organ's hall or a warren)
 - [x] 5.6 Each sanctum keeps an archive record (the mystery's next lead), read in place from the warren
 - [x] 5.7 Specs, the game test reads the sanctum's record, shots 10-12
-- [ ] 5.8 (later) Full relicgen interiors in the organs
+- [x] 5.8 Relic interiors in the organs, as part 6 (6.2): the warrens carry the builders' relic phenomena; a full
+      relicgen layout (heart hall, locks, sentries) under every organ stays out (each would need to be its own site)
+
+## 6. Rails and relic life (part 6)
+- [x] 6.1 Rails and pylons under the mag-trains: a beam down each district's west and north avenue midlines on pylons
+      every ~420 m from the street, solid as drawn, lit; drifters keep 22 m off the midline
+- [x] 6.2 The warrens' phenomena: one in the hub and each chamber, two in the sanctum, processions down some corridors,
+      kinds weighted by the civ's own list (`language.phenomena`), drawn by view/phenomena.lua as in a relic
+- [x] 6.3 Specs, shots

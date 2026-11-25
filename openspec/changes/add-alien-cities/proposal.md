@@ -76,3 +76,8 @@ phenomena. The megascale core, lazy district generation, LOD and mini-relic orga
 - The warren is lit; hall finds keep off the shaft; districts build in about a fifth of the time and ahead of need.
 - Mag-trains over the outer avenues, the storm over the ring, an archive record in each sanctum. No new state: the
   record is a `looted` key, the wind a function of the tick. Full relicgen interiors stay for later.
+
+## Part 6
+- Rails and pylons under the mag-trains, solid as drawn; drifters moved off the midline.
+- The warrens carry the builders' relic phenomena. A full relicgen layout under each organ is out of scope: it would
+  need each organ to be a site of its own.
