@@ -29,7 +29,8 @@ interesting to explore, and a few minutes on foot, out of a chamber and into a c
   - A lore niche reads out its glyphs (USE: READ THE GLYPHS). The text comes from the civ's lore, with a fallback for
     the Vyrr slice.
   - The lock messages say whether a sealed chamber opened or the reliquary did.
-  - The view draws a crawlspace mouth frame for every pocket and a glow on lore niches.
+  - The view draws a crawlspace mouth frame for every pocket and a glow on lore niches. Every pocket room keeps a lamp
+    and every crawlspace a dim one, added after all the other lamps so no dead-lamp roll changes (goldens unchanged).
 - No state version bump: pockets and locks are derived from the seed. Opened hand-locks use the existing
   `state.locks`, and opened Seat-locks use `state.relic_locks`. Replays are unchanged.
 
@@ -37,6 +38,7 @@ interesting to explore, and a few minutes on foot, out of a chamber and into a c
 
 - Specs: `relic-stations` (ADDED: foot pockets, the lock mix), `on-foot` (ADDED: pocket rooms and lore niches),
   `sentries-and-tools` (ADDED: guarded pockets)
-- Code: `sim/relicfoot.lua` (new), `sim/game.lua`, `sim/relic.lua`, `sim/excursion.lua`, `view/excursion.lua`
+- Code: `sim/relicfoot.lua` (new), `sim/game.lua`, `sim/relic.lua`, `sim/excursion.lua`, `view/excursion.lua`,
+  `view/relic.lua`
 - Tests: `tests/lua/relicfoot_spec.lua`, `tests/game/relic_locks.lua` (CTest `game_relic_locks`,
   `game_relic_locks_seed7`; in the coverage runs)

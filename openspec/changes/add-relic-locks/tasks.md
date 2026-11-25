@@ -9,7 +9,7 @@
 - [x] 2.3 Lock messages for sealed chambers
 
 ## 3. Look
-- [x] 3.1 Crawlspace mouth frames per pocket, niche glows
+- [x] 3.1 Crawlspace mouth frames per pocket, niche glows, a lamp per pocket room and crawlspace
 
 ## 4. Verification
 - [x] 4.1 `tests/lua/relicfoot_spec.lua`

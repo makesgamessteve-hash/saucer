@@ -958,6 +958,16 @@ function M.lamps(ruin, origin, site)
     end
   end
   for _, b in ipairs(ruin.relic.bays) do add({ b.marker[1], b.marker[2] + 2, b.marker[3] }, pal[1], 18, 0.8) end
+  -- add-relic-locks: the foot pockets keep a lamp each (after every other lamp, so no other lamp's fate changes), and
+  -- their crawlspaces a dim one at the far end
+  for _, r in ipairs(ruin.rooms) do
+    if r.kind == "pocket" or r.kind == "crawl" then
+      local mn, mx = ruinm.room_box(r, kit, origin)
+      local c = { (mn[1] + mx[1]) / 2, mx[2] - kit.wall - 0.5, (mn[3] + mx[3]) / 2 }
+      if r.kind == "pocket" then add(c, pal[2] or pal[1], 9, 1.2, true, true)
+      else add(c, pal[3] or pal[1], 7, 0.6, true, true) end
+    end
+  end
   return out
 end
 
