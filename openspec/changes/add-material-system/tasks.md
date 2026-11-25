@@ -27,6 +27,8 @@
 ## 5. The rest (plan phase 7)
 - [x] 5.1 Fate materials (design §2.3.4): war scorch, ascension crust, sleep dormancy, flight stripping, schism split
       (`view/materials.lua` `fate`; plague keeps its decay slot)
-- [ ] 5.2 Crystal sparkle, brushed-metal stretch and liquid-metal ripple (a sixth vec4 per slot)
+- [x] 5.2 Crystal sparkle, brushed-metal stretch and liquid-metal ripple (a sixth vec4 per slot; lite drops the
+      sparkle and halves the ripple; the slice's amethyst and chrome keep their look, goldens unchanged);
+      `tools/shots/material_sheet.lua`
 - [ ] 5.3 A 128 x 64 sector-sky reflection map for exteriors
 - [ ] 5.4 WebXR lite defaults: sparkle off, wobble halved within 120 m, breathing no faster than 4 s

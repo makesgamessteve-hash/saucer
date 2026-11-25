@@ -34,3 +34,14 @@ A civ's fate SHALL age its material slots (war of silence scorches every ramp an
 #### Scenario: Fates
 - **WHEN** `tests/lua/materials_spec.lua` runs "leaves the plague's look to its decay slot and ages the others by their fate"
 - **THEN** it passes
+
+### Requirement: Sparkle, brushing and ripples
+A crystal slot SHALL be able to sparkle (facet cells that twinkle with render time), a metal slot to stretch its highlight across a brushing and to ripple its normal like a liquid, packed as a sixth vec4 per slot; lite SHALL drop the sparkle and halve the ripple, and off SHALL pack every slot plain.
+
+#### Scenario: Packing
+- **WHEN** the C test `material_pack_modes` runs
+- **THEN** sparkle packs only for crystals in full, brushing and ripple only for metals, and lite halves the ripple
+
+#### Scenario: Library
+- **WHEN** `tests/lua/materials_spec.lua` runs "carries a crystal's sparkle and a metal's brushing and ripple into its slot"
+- **THEN** it passes
