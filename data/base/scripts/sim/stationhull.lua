@@ -62,7 +62,7 @@ function M.family_of(seed)
   return fams[saucer.seed_child(seed or 0, "family", 1) % #fams + 1].id
 end
 
-local function new_ctx(seed, class, mesh, family)
+local function new_ctx(seed, class, mesh, family, civ)
   local H = M.kit()
   local K = H.classes[class]
   if not K then error("unknown station class " .. tostring(class)) end
@@ -80,6 +80,12 @@ local function new_ctx(seed, class, mesh, family)
   }
   c.pal_name = c.fam.palettes[c.rng:int(1, #c.fam.palettes)]
   c.pal = H.palettes[c.pal_name]
+  -- add-civ-hulls: a station built by a civ wears that civ's materials (the family's pick still draws its number, so
+  -- the stream and the shape stay the same)
+  if civ then
+    c.dress = require("sim.hulldress").of(civ)
+    c.pal, c.pal_name = c.dress.palette, "civ:" .. civ.id
+  end
   return c
 end
 
@@ -1062,6 +1068,154 @@ function B.shells(c, F, far)
   return spots
 end
 
+
+-- ---------------------------------------------------------------------------------------------------
+-- add-civ-hulls: the builder's dress (sim/hulldress.lua, civs/hulls.lua). A crown of the civ's motif stands behind
+-- the body (a hub on the axis, elements radiating round it), smaller copies crest the stem's top, the civ's pattern
+-- marks the hub and the body's surface spots, and signal lights sit on every tip. The crown keeps inside the box of
+-- frame() (so the placement is unchanged) and well behind the hangar cell; what stands is solid as drawn.
+-- No random numbers: the station's stream is untouched.
+-- ---------------------------------------------------------------------------------------------------
+local hd = require("sim.hulldress")
+local function dress(c, F, spots, far)
+  local D = c.dress
+  if not D then return nil end
+  local K = hd.kit()
+  local S = K.station
+  local mk = S[D.motif] or S.spines
+  local P, AY, R = D.palette, c.AY, F.R
+  local core = c.mesh and c.parts.core or {}
+  local glow_core = c.mesh and {} or {}
+  local glow_far = c.mesh and far or {}
+  local farp = c.mesh and far or {}
+  local signals = {}
+  local xc = F.body_back - F.aft * S.aft
+  local hub = R * 0.13
+  local len, girth = R * mk.reach, R * mk.girth
+  local centre = { xc, AY, 0 }
+  local function sol(b) c.solids[#c.solids + 1] = b end
+  -- the hub
+  if c.mesh then
+    core[#core + 1] = { kind = "sphere", c = centre, r = hub, h = hub, seg = 14, rings = 7, color = P.plate, mat = 1 }
+    farp[#farp + 1] = { kind = "sphere", c = centre, r = hub, h = hub, seg = 8, rings = 4, color = P.plate }
+  end
+  local hb = hub * 0.7
+  sol({ { xc - hb, AY - hb, -hb }, { xc + hb, AY + hb, hb } })
+  -- the crown's elements
+  local tips = {}
+  local n = mk.n
+  local lean = D.motif == "tendrils" and -0.05 or -0.12
+  for k = 1, n do
+    local a = (k - 1) / n * TAU + 0.35
+    local dir = hd.norm({ lean, sm.cos(a), sm.sin(a) })
+    local base = { xc, AY + dir[2] * hub * 0.8, dir[3] * hub * 0.8 }
+    local el = D.motif == "arches" and len * 0.92 or len
+    local tip
+    if c.mesh then
+      local parts = {}
+      tip = hd.element(parts, D.motif, base, dir, el, girth, P, 10, glow_core)
+      for _, q in ipairs(parts) do core[#core + 1] = q end
+      local fparts = {}
+      hd.element(fparts, D.motif, base, dir, el, girth, P, 5, glow_far)
+      for _, q in ipairs(fparts) do q.mat = nil farp[#farp + 1] = q end
+    else
+      tip = hd.at(base, dir, el)
+    end
+    tips[k] = tip
+    hd.boxes(c.solids, D.motif, base, dir, el, girth)
+  end
+  -- the motif's own joins: hoops for arches, a girdle for the cage
+  local function hoop(x, r, w, tilt, lit)
+    if c.mesh then
+      local part = { kind = "ring", c = { 0, -w / 2, 0 }, rin = r - w, r = r, h = w, seg = 40, color = P.trim, mat = 3, roll = -PI / 2, yaw = tilt,
+                     pos = { x, AY, 0 } }
+      core[#core + 1] = part
+      farp[#farp + 1] = { kind = "ring", c = { 0, -w / 2, 0 }, rin = r - w, r = r, h = w, seg = 24, color = P.trim, roll = -PI / 2, yaw = tilt,
+                          pos = { x, AY, 0 } }
+    end
+    -- solid as drawn: cubes round the hoop (it stands in the plane through x at right angles to (cos tilt, 0, -sin tilt))
+    local m = 28
+    local ct, st = sm.cos(tilt), sm.sin(tilt)
+    for q = 0, m - 1 do
+      local th = q / m * TAU
+      local u, v = sm.cos(th) * (r - w / 2), sm.sin(th) * (r - w / 2)
+      local p = { x + v * st, AY + u, v * ct }
+      local h = w * 0.5
+      sol({ { p[1] - h, p[2] - h, p[3] - h }, { p[1] + h, p[2] + h, p[3] + h } })
+      if lit and q % 4 == 0 then hd.signal(signals, D, p, R * 0.04, #signals + 1, 0) end
+    end
+  end
+  if D.motif == "arches" then
+    for k = 0, 2 do hoop(xc - k * len * 0.28, len * (1 - 0.16 * k) + hub * 0.6, girth * 1.6, (k - 1) * 0.32, true) end
+  elseif D.motif == "cage" then
+    for k = 1, n do
+      local a, b = tips[k], tips[k % n + 1]
+      local d = { b[1] - a[1], b[2] - a[2], b[3] - a[3] }
+      local l = sm.sqrt(d[1] * d[1] + d[2] * d[2] + d[3] * d[3])
+      local u = hd.norm(d)
+      if c.mesh then
+        hd.along(core, { kind = "cylinder", c = { 0, 0, 0 }, r = girth * 0.8, h = l, seg = 5, color = P.trim, mat = 3 }, a, u)
+        hd.along(farp, { kind = "cylinder", c = { 0, 0, 0 }, r = girth * 0.8, h = l, seg = 4, color = P.trim }, a, u)
+      end
+      hd.boxes(c.solids, "cage", a, u, l, girth * 0.8)
+    end
+  end
+  for k, tip in ipairs(tips) do hd.signal(signals, D, tip, R * 0.05, #signals + 1, n) end
+  -- the crest along the stem's top
+  local cn = S.crest
+  local cs = S.crest_scale
+  for k = 1, cn do
+    local x = F.body_front + (F.back - F.body_front) * (0.18 + 0.5 * (k - 1) / math.max(1, cn - 1))
+    local base = { x, AY + 9 * c.s, 0 }
+    local dir = hd.norm({ 0.08, 1, 0 })
+    local el, gi = len * cs, math.max(girth * cs, 2.5 * c.s)
+    if D.motif == "arches" then
+      hoop(x, el * 0.9, gi * 1.4, 0, false)
+      hd.signal(signals, D, { x, AY + el * 0.9, 0 }, R * 0.02, #signals + 1, 0)
+    else
+      local tip
+      if c.mesh then
+        local parts = {}
+        tip = hd.element(parts, D.motif, base, dir, el, gi, P, 8, glow_core)
+        for _, q in ipairs(parts) do core[#core + 1] = q end
+      else
+        tip = hd.at(base, dir, el)
+      end
+      hd.boxes(c.solids, D.motif, base, dir, el, gi)
+      hd.signal(signals, D, tip, R * 0.02, #signals + 1, 0)
+    end
+  end
+  -- the pattern: on the hub (a ring of marks round its waist and two at its poles) and on the body's surface spots
+  local size = R * K.pattern_size
+  local marks = 0
+  if c.mesh then
+    local function mark(p, nrm, layer_far)
+      local g = {}
+      hd.mark(core, g, D.pattern, p, nrm, size, P)
+      for _, q in ipairs(g) do glow_core[#glow_core + 1] = q glow_far[#glow_far + 1] = q end
+      marks = marks + 1
+    end
+    for k = 0, 9 do
+      local a = k / 10 * TAU
+      local nrm = { 0, sm.cos(a), sm.sin(a) }
+      mark({ xc, AY + nrm[2] * hub, nrm[3] * hub }, nrm)
+    end
+    mark({ xc - hub, AY, 0 }, { -1, 0, 0 })
+    local ns = math.min(#spots, K.pattern_spots)
+    for k = 1, ns do
+      local sp = spots[math.floor((k - 1) * #spots / ns) + 1]
+      mark({ sp.p[1], sp.p[2] + AY, sp.p[3] }, hd.norm(sp.n))
+    end
+  end
+  for _, q in ipairs(glow_core) do core[#core + 1] = q end
+  -- self-light: the crown a little up close, the whole far silhouette more (it is what a pilot sees from kilometres)
+  if c.mesh then
+    for _, q in ipairs(core) do if q.mat and not q.emissive then q.emissive = S.self_glow end end
+  end
+  return { civ = D.id, motif = D.motif, pattern = D.pattern, light = D.light.kind, marks = marks, signals = signals, lamps = D.lamps,
+           crown = { xc, AY, 0 }, reach = len + hub }
+end
+
 -- ---------------------------------------------------------------------------------------------------
 -- the frame: the station's measures, the first draws of its stream (envelope and generate share it, so the
 -- placement knows the hull's box without building it)
@@ -1099,9 +1253,9 @@ end
 
 -- mesh ~= false builds the triangles too; the sim asks for the layout alone (M.get) and the view builds the parts
 -- the first time it draws (M.parts): the same stream of random numbers either way, so the same station
-function M.generate(seed, class, bay_no_in, mesh, family)
+function M.generate(seed, class, bay_no_in, mesh, family, civ)
   class = class or "port"
-  local c = new_ctx(seed, class, mesh ~= false, family)
+  local c = new_ctx(seed, class, mesh ~= false, family, civ)
   local F = frame(c)
   local K, P, rng = c.K, c.pal, c.rng
   local s = c.s
@@ -1157,6 +1311,12 @@ function M.generate(seed, class, bay_no_in, mesh, family)
     cocoons(c, sp.p, sp.n, rng:int(3, 6), 9 * s)
   end
 
+  -- add-civ-hulls: the builder's crown, crest, pattern and signals
+  local dr = dress(c, F, spots, far)
+  if dr then
+    info.civ, info.motif, info.pattern, info.light, info.marks = dr.civ, dr.motif, dr.pattern, dr.light, dr.marks
+  end
+
   -- the silhouette: the stem, the cell and the pods as a few boxes (the body added its own)
   local function fbox(x0, y0, z0, x1, y1, z1, col, emi) far[#far + 1] = { kind = "box", min = { x0, y0 + c.AY, z0 }, max = { x1, y1 + c.AY, z1 }, color = col, emissive = emi } end
   fbox(F.body_front, -9 * s, -9 * s, F.back, 9 * s, 9 * s, P.trim)
@@ -1176,7 +1336,26 @@ function M.generate(seed, class, bay_no_in, mesh, family)
   info.width = F.hi[3] - F.lo[3]
   info.height = F.hi[2] - F.lo[2]
   local L = { seed = seed, class = class, info = info, parts = c.mesh and c.parts or nil, solids = c.solids, spin = c.spin, lights = c.lights, far_bay = info.far_bay,
-              pal = P, spin_pos = { F.hx, c.AY, 0 }, bay = cell, ring_r = F.R, family = c.fam.id }
+              pal = P, spin_pos = { F.hx, c.AY, 0 }, bay = cell, ring_r = F.R, family = c.fam.id,
+              signals = dr and dr.signals or {}, lamps = dr and dr.lamps or nil, civ = dr and dr.civ or nil }
+  -- add-civ-hulls: the whole far silhouette lights itself a little (it is what a pilot sees from kilometres)
+  if c.mesh and dr then
+    local fg = hd.kit().station.far_glow
+    for _, q in ipairs(c.parts.far) do if not q.emissive or q.emissive == 0 then q.emissive = fg end end
+  end
+  -- add-civ-hulls: the plating, trim and accent take the civ's material slots (view/materials.lua) where they are drawn
+  -- in its colours (the lit parts keep the plain slot)
+  if c.mesh and dr then
+    for _, layer in ipairs({ "core", "detail" }) do
+      for _, q in ipairs(c.parts[layer]) do
+        if not q.emissive and not q.mat then
+          if q.color == P.plate or q.color == P.panel then q.mat = 1
+          elseif q.color == P.trim then q.mat = 3
+          elseif q.color == P.accent then q.mat = 4 end
+        end
+      end
+    end
+  end
   L.counts = {}
   if c.mesh then for k, v in pairs(c.parts) do L.counts[k] = #v end end
   L.hash = M.hash(L)
@@ -1199,12 +1378,13 @@ function M.seed_of(seed, sid, idx) return saucer.seed_child(seed or 0, "hull", (
 function M.seed_for(state, idx) return M.seed_of(state.seed, state.sector and state.sector.id or 1, idx) end
 
 local cache, order = {}, {}
-function M.get(seed, class, bay_no, family)
+function M.get(seed, class, bay_no, family, civ)
   family = family or M.family_of(seed)
-  local key = class .. ":" .. seed .. ":" .. tostring(bay_no) .. ":" .. family
+  local key = class .. ":" .. seed .. ":" .. tostring(bay_no) .. ":" .. family .. ":" .. (civ and civ.id or "-")
   local L = cache[key]
   if not L then
-    L = M.generate(seed, class, bay_no, false, family)
+    L = M.generate(seed, class, bay_no, false, family, civ)
+    L.civ_rec = civ
     cache[key] = L
     order[#order + 1] = key
     if #order > 24 then cache[table.remove(order, 1)] = nil end
@@ -1218,7 +1398,7 @@ function M.parts(L)
   if L.parts then return L.parts end
   local F = full[L.hash]
   if not F then
-    F = M.generate(L.seed, L.class, L.info.bay_no, true, L.family)
+    F = M.generate(L.seed, L.class, L.info.bay_no, true, L.family, L.civ_rec)
     full[L.hash] = F
     full_order[#full_order + 1] = L.hash
     if #full_order > 3 then full[table.remove(full_order, 1)] = nil end
@@ -1228,13 +1408,34 @@ end
 
 function M.parts_ready(L) return L.parts ~= nil or full[L.hash] ~= nil end
 
+-- add-civ-hulls: the civ that built a trader's station: a port's is its sector's first site's builder, a city's outpost's
+-- the city's (M.STYLE, a civ record, overrides every station's: shot scripts and the style row only)
+M.STYLE = nil
+function M.set_style(civ)
+  M.STYLE = civ
+  cache, order = {}, {}
+  full, full_order = {}, {}
+end
+function M.civ_for(state, idx)
+  if M.STYLE then return M.STYLE end
+  local list = state.sector.traders or { state.sector.trader }
+  local tr = list[idx or 1] or list[1]
+  local sites = state.sector.sites or {}
+  local site = sites[1]
+  if tr and tr.outpost then
+    for _, s in ipairs(sites) do if s.city then site = s end end
+  end
+  if not site then return nil end
+  return require("sim.civs").of(state, site)
+end
+
 function M.for_trader(state, idx)
   local list = state.sector.traders or { state.sector.trader }
   local tr = list[idx] or list[1]
   -- the arrival hangar's number inside (sim/stationgen.lua) is the one over the mouth outside
   local sg = require("sim.stationgen")
   local ss = sg.seed_for(state, idx or 1)
-  return M.get(M.seed_for(state, idx or 1), M.class_of(tr), sg.bay_number(ss), M.family_of(ss)), tr
+  return M.get(M.seed_for(state, idx or 1), M.class_of(tr), sg.bay_number(ss), M.family_of(ss), M.civ_for(state, idx or 1)), tr
 end
 
 -- the collision boxes of every trader's hull in world meters (the cell's own are sim/dock.lua's)

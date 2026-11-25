@@ -43,7 +43,10 @@ function M.set_style(civ)
   M.STYLE = civ
   for k, set in pairs(cache) do
     if type(set) == "table" and set.rooms and set.ruin then
-      for i in ipairs(set.rooms) do M.release(set, i) end
+      for i, rm in ipairs(set.rooms) do
+        M.release(set, i)
+        if rm.far then saucer.mesh.free(rm.far) rm.far = nil end
+      end
       cache[k] = nil
     end
   end
@@ -692,16 +695,142 @@ function M.blobs(rm)
   return out
 end
 
-function M.blob(rm)
-  if rm.far then return rm.far end
-  local cc = colors(M.civ_of(nil))
+-- add-civ-hulls: the far hull wears its builder's dress (sim/hulldress.lua): each big room's lobes take the civ's edge
+-- language (round: swollen lobes; chamfer: eight-sided pods; fluted: fluted columns; serrated: stacked shards) in
+-- its plating colour, a lit band of its glow round each, its pattern on the flanks and its motif crowning the room;
+-- the lit parts are emissive, so a relic reads from far off instead of as a dark silhouette.
+local function long_axis(rm)
+  local d = vec.sub(rm.max, rm.min)
+  return d[1] >= d[3] and 1 or 3, d
+end
+function M.far_parts(rm, civ)
+  local hd = require("sim.hulldress")
+  local D = hd.of(civ)
+  local K = hd.kit().relic
+  local P = D.palette
   local parts = {}
+  local long, d = long_axis(rm)
+  local short = d[4 - long]
+  local seg = K.edge_seg[D.edges] or M.BLOB_SEG
   for _, b in ipairs(M.blobs(rm)) do
-    parts[#parts + 1] = { kind = "sphere", c = b.c, r = b.r, h = b.h, seg = M.BLOB_SEG, rings = 6, color = cc.membrane,
-                          mat = S.dominant }
+    if D.edges == "chamfer" or D.edges == "fluted" then
+      -- a pod along the long axis
+      local h = b.r * 1.6
+      local q = { kind = "cylinder", c = { 0, -h / 2, 0 }, r = b.r * 0.8, h = h, seg = seg, color = P.plate, mat = S.dominant, pos = b.c }
+      if long == 1 then q.roll = -sm.pi / 2 else q.pitch = sm.pi / 2 end
+      parts[#parts + 1] = q
+      if D.edges == "fluted" then
+        -- lit flutes down its length (boxes along the long axis, at six places round it)
+        for k = 0, 5 do
+          local a = k / 6 * sm.tau
+          local off = { 0, sm.cos(a) * b.r * 0.82, 0 }
+          off[4 - long] = sm.sin(a) * b.r * 0.82
+          local mn, mx = {}, {}
+          for ax = 1, 3 do
+            local half = ax == long and h / 2 or 0.9
+            mn[ax], mx[ax] = b.c[ax] + off[ax] - half, b.c[ax] + off[ax] + half
+          end
+          parts[#parts + 1] = { kind = "box", min = mn, max = mx, color = P.glow, emissive = 0.8 }
+        end
+      end
+    elseif D.edges == "serrated" then
+      local h = b.h * 1.5
+      parts[#parts + 1] = { kind = "cone", c = { b.c[1], b.c[2] - h / 2, b.c[3] }, r = b.r * 0.9, r1 = b.r * 0.15, h = h, seg = seg, color = P.plate, mat = S.dominant }
+      parts[#parts + 1] = { kind = "cone", c = { 0, 0, 0 }, r = b.r * 0.9, r1 = b.r * 0.3, h = h * 0.35, seg = seg, color = P.trim, mat = S.accent,
+                            roll = sm.pi, pos = { b.c[1], b.c[2] - h / 2, b.c[3] } }
+    else
+      parts[#parts + 1] = { kind = "sphere", c = b.c, r = b.r, h = b.h, seg = seg, rings = 6, color = P.plate, mat = S.dominant }
+    end
+    -- the lit band round its waist
+    local bw = math.max(1.5, b.h * K.band)
+    parts[#parts + 1] = { kind = "ring", c = { b.c[1], b.c[2] - bw / 2, b.c[3] }, rin = b.r * 0.96, r = b.r * 1.03, h = bw, seg = 20, color = P.glow, emissive = 1 }
   end
-  rm.far = saucer.mesh.build({ parts = parts })
+  -- the pattern on the two long flanks
+  local size = math.max(6, short * 0.22)
+  for k = 0, 2 do
+    for _, sgn in ipairs({ -1, 1 }) do
+      local p = { rm.center[1], rm.center[2] + d[2] * 0.1, rm.center[3] }
+      p[long] = rm.min[long] + d[long] * (k + 0.5) / 3
+      p[4 - long] = rm.center[4 - long] + sgn * short * 0.62
+      local n = { 0, 0, 0 }
+      n[4 - long] = sgn
+      hd.mark(parts, parts, D.pattern, p, n, size, P)
+    end
+  end
+  -- the motif: one to three elements on the room's crown
+  local tips = {}
+  local n = math.max(1, math.min(3, math.floor(d[long] / short + 0.5)))
+  local len = math.max(d[2], short) * K.motif_scale * 2
+  local girth = math.max(2, short * K.girth)
+  local top = rm.center[2] + d[2] * 0.6
+  for k = 1, n do
+    local base = { rm.center[1], top, rm.center[3] }
+    base[long] = rm.min[long] + d[long] * (k - 0.5) / n
+    local dir = { 0, 1, 0 }
+    dir[4 - long] = (k % 2 == 0 and 0.25 or -0.25)
+    dir = hd.norm(dir)
+    local g = D.motif == "fins" and girth * 4 or (D.motif == "domes" and short * 0.3 or girth)
+    local l = D.motif == "domes" and short * 0.3 or len
+    if D.motif == "arches" then
+      -- a hoop standing over the room, across its long axis
+      local r = short * 0.75
+      local q = { kind = "ring", c = { 0, -girth / 2, 0 }, rin = r - girth, r = r, h = girth, seg = 24, color = P.trim, mat = S.accent, pos = { base[1], rm.center[2], base[3] } }
+      if long == 1 then q.roll = -sm.pi / 2 else q.pitch = sm.pi / 2 end
+      parts[#parts + 1] = q
+      tips[#tips + 1] = { base[1], rm.center[2] + r, base[3] }
+    else
+      tips[#tips + 1] = hd.element(parts, D.motif, base, dir, l, g, P, 8)
+    end
+  end
+  for _, q in ipairs(parts) do
+    if q.mat == 1 then q.mat = S.dominant elseif q.mat == 3 then q.mat = S.accent elseif q.mat == 4 then q.mat = S.rare end
+    if not q.emissive then q.emissive = K.glow end   -- self-light: a far relic reads in its colours
+  end
+  return parts, tips
+end
+
+function M.blob(rm, civ)
+  civ = civ or M.civ_of(nil)
+  if rm.far and rm.far_civ == civ.id then return rm.far end
+  if rm.far then saucer.mesh.free(rm.far) end
+  local parts, tips = M.far_parts(rm, civ)
+  rm.far, rm.far_civ, rm.tips = saucer.mesh.build({ parts = parts }), civ.id, tips
   return rm.far
+end
+
+-- the relic's signal lights: one on every crown tip of its big rooms (built with their far hulls) -> list
+function M.signals(set)
+  if set.signals then return set.signals end
+  local hd = require("sim.hulldress")
+  local D = hd.of(set.civ)
+  local out = {}
+  local n = 0
+  for _, rm in ipairs(set.rooms) do if rm.villa then n = n + 1 end end
+  for _, rm in ipairs(set.rooms) do
+    if rm.villa then
+      local _, tips = M.far_parts(rm, set.civ)
+      for _, t in ipairs(tips) do hd.signal(out, D, t, math.max(8, rm.radius * hd.kit().relic.signal), #out + 1, n) end
+    end
+  end
+  set.signals = out
+  return out
+end
+
+-- draw the signals (the light model's blink, never smaller than the kit's share of their distance)
+function M.draw_signals(v, A, set, cam, tick, opts)
+  local hd = require("sim.hulldress")
+  local K = hd.kit()
+  local D = hd.of(set.civ)
+  local n = 0
+  for _, l in ipairs(M.signals(set)) do
+    local d = vec.dist(l.p, cam.pos)
+    if d < K.signal.far and n < K.signal.max then
+      local a, c = hd.signal_at(l, tick, D.lamps)
+      v:billboard(A.tex.glow, l.p, math.max(l.size, d * K.signal.min_px), { palette = opts.palette, tint = { c[1], c[2], c[3], a } })
+      n = n + 1
+    end
+  end
+  return n
 end
 
 -- the parts of one room (inside and outside skins, its cradles; the maw's valve; the heart's decor and engine)
@@ -972,13 +1101,14 @@ function M.lamps(ruin, origin, site)
 end
 
 -- the materials of the relic nearest the eye go on the view (one civ per view in the slice)
-function M.near_relic(state, eye)
+M.NEAR_RELIC = 2400   -- m: within this of a relic's ball its rooms draw (in full near, as far hulls beyond M.NEAR)
+function M.near_relic(state, eye, range)
   local game = require("sim.game")
   for i, site in ipairs(state.sector.sites) do
     local r = site.kit == "relic" and game.ruin(i)
     if r and r.relic then
       local set = M.meshes(r, site.pos)
-      if vec.dist(set.center, eye) - set.radius < 2400 then return i, r, site, set end
+      if vec.dist(set.center, eye) - set.radius < (range or M.NEAR_RELIC) then return i, r, site, set end
     end
   end
   return nil
@@ -1037,12 +1167,33 @@ end
 function M.draw(v, A, state, cam, xr, time)
   local render = require("view.render")
   local st = { rooms = 0, culled = 0, built = 0, tris = 0 }
+  M.claimed = nil
   local i, r, site, set = M.near_relic(state, cam.pos)
-  if not i then return st end
+  if not i then
+    -- add-civ-hulls: farther out (to the kit's relic range) only the far hulls and the signals draw
+    local fi, _, fsite, fset = M.near_relic(state, cam.pos, require("sim.hulldress").kit().relic.far)
+    if not fi then return st end
+    local fciv = M.STYLE or require("sim.civs").of(state, fsite)
+    if v.materials then
+      matv.apply(v, fciv, time, xr, matv.sky(state))
+      M.claimed = fciv
+    end
+    local render = require("view.render")
+    local opts = { palette = A.pal.base }
+    for _, rm in ipairs(fset.rooms) do
+      if rm.villa and render.in_view(cam, rm.center, rm.radius, xr) then
+        v:mesh(M.blob(rm, fset.civ), opts)
+        st.blobs = (st.blobs or 0) + 1
+      end
+    end
+    st.signals = M.draw_signals(v, A, fset, cam, time * 60, opts)
+    return st
+  end
   local civ = M.STYLE or require("sim.civs").of(state, site)
   local here = room_index(set, cam.pos)
   -- add-material-system 5.3: from outside, the relic's metals reflect the sector's sky (inside: the matcap)
   matv.apply(v, civ, time, xr, not here and matv.sky(state) or nil)
+  M.claimed = civ
   local opts = { palette = A.pal.base }
   local show, keep
   if here then
@@ -1067,11 +1218,12 @@ function M.draw(v, A, state, cam, xr, time)
       if not keep[j] then M.release(set, j) end
       st.culled = st.culled + 1
       if not here and rm.villa and render.visible(cam, rm.center, rm.radius, xr) then
-        v:mesh(M.blob(rm), opts)
+        v:mesh(M.blob(rm, set.civ), opts)
         st.blobs = (st.blobs or 0) + 1
       end
     end
   end
+  if not here then st.signals = M.draw_signals(v, A, set, cam, time * 60, opts) end
   st.built = set.built
   -- the heart's engine turns; the phenomena in the rooms drawn
   local core = set.rooms[r.relic.core]

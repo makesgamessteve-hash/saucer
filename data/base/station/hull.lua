@@ -70,5 +70,5 @@ return {
   spin = 0.0012,    -- radians per sim tick the spinning layer turns (the hull and the hangar cell stand still)
   -- the approach corridor out of the hangar mouth: pairs of lights, a chase running toward the dock
   approach = { length = 420, step = 30, half_w = 20, speed = 90 },
-  budget = { core = 40000, detail = 90000, far = 6000 },   -- triangles
+  budget = { core = 40000, detail = 90000, far = 8000 },   -- triangles (add-civ-hulls: the far silhouette carries the crown and the lit pattern)
 }
