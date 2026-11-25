@@ -49,6 +49,7 @@ function M.set_style(civ)
   end
   require("view.lights").forget()
   require("view.landmarks").forget()
+  require("view.relicdecay").forget()
 end
 local C = {}
 local function colors(civ)
@@ -909,10 +910,12 @@ function M.lamps(ruin, origin, site)
   -- add-design-language §2.5: the civ's light model (from its senses) thins and dims the lamps; the Core always
   -- keeps its glow, and an echo civ's lamps ripple (view/lights reads `ripple`), a tidal civ's orbit
   local lm = civ.language.light or { model = "chromatic", lamps = 1, k = 1 }
+  local decay = require("view.relicdecay")
   local out, n = {}, 0
   local function add(pos, color, reach, k, fixture, keep)
     n = n + 1
     if not keep and (n * 61) % 100 >= math.floor((lm.lamps or 1) * 100 + 0.5) then return end
+    if not keep and decay.lamp_dead(civ, n) then return end   -- add-relic-stations: dead by the civ's fate and era
     out[#out + 1] = { pos = pos, color = color, range = reach, intensity = lux * reach * reach * (k or 1) * (lm.k or 1),
                       fixture = fixture, model = lm.model, phase = n }
   end
@@ -1065,6 +1068,7 @@ function M.draw(v, A, state, cam, xr, time)
   if show[r.relic.core] and render.visible(cam, core.center, core.radius, xr) then M.engine(v, A, r, time, opts) end
   st.phenomena = require("view.phenomena").draw(v, A, r, show, cam, time, opts)
   st.landmarks = require("view.landmarks").draw(v, r, civ, show, time, opts)
+  st.heaps = require("view.relicdecay").draw(v, r, civ, show, opts)
   -- Seat-locks: the shutter while closed, the socket's glow (brighter while the Seat turns it)
   local relic = require("sim.relic")
   local p = state.players[v.player or 1]

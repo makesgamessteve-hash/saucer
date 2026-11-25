@@ -257,7 +257,86 @@ function M.far(seed, sid, info)
     local ext = M.extent(ckit)
     out.traders = { out.trader, { pos = { cs.pos[1] + ext[1] // 2, cs.pos[2] + 150, cs.pos[3] - M.OUTPOST_GAP }, outpost = true } }
   end
+  -- add-relic-stations (plan phase 8): some far sectors hold a relic, placed last so every other site, the city and
+  -- the station come out exactly as before
+  local rs = M.relic_site(seed, sid, info, sites, obstacles, tp)
+  if rs then sites[#sites + 1] = rs end
   return out
+end
+
+-- add-relic-stations §8.4: relics are a site kind of far sectors. Sector RELIC_FIRST always holds one (a few folds
+-- from home in every universe), farther ones RELIC_CHANCE in 100; never the home sector or the Heart's. Its civ is
+-- one of the sector's own; it sits RELIC_DISTANCE out, its whole build box at least RELIC_MARGIN from every other
+-- site, the city and the trader station. Own seed child, so a sector without a relic is unchanged. -> civ index, rng
+M.RELIC_FIRST = 3
+M.RELIC_CHANCE = 35
+M.RELIC_DISTANCE = 3600
+M.RELIC_MARGIN = 120
+M.RELIC_TRIES = 16
+function M.relic_of(seed, sid, info)
+  if not sid or sid == 1 or (info and info.heart) then return nil end
+  local rng = saucer.rng.new(saucer.seed_child(seed, "relic", sid))
+  local roll = rng:int(1, 100)
+  if sid < M.RELIC_FIRST then return nil end
+  if sid > M.RELIC_FIRST and roll > M.RELIC_CHANCE then return nil end
+  local list = info and info.civs or { 1 }
+  return list[rng:int(1, #list)], rng
+end
+
+-- the build box a relic of this civ may fill (a styled relic gets the archetypes' larger grid), in meters
+function M.relic_extent(civ)
+  local kit = data.load("kits/relic.lua")
+  local g = kit.grid
+  if require("sim.relicgen").archetype(civ) then g = data.load("civs/dungeons.lua").grid end
+  return { g[1] * kit.cell, g[2] * kit.cell, g[3] * kit.cell }
+end
+
+function M.relic_site(seed, sid, info, sites, obstacles, tp)
+  local ci, rng = M.relic_of(seed, sid, info)
+  if not ci then return nil end
+  local civ = require("sim.civs").get(seed, ci)
+  local ext = M.relic_extent(civ)
+  local obs = {}
+  for _, o in ipairs(obstacles) do obs[#obs + 1] = o end
+  -- the trader station's hull, as a ball round its box
+  local sh = require("sim.stationhull")
+  local _, _, lo, hi = sh.envelope(sh.seed_of(seed, sid, 1), "port", M.station_family(seed, sid))
+  local sc, sr = {}, 0
+  for k = 1, 3 do
+    sc[k] = tp[k] + (lo[k] + hi[k]) / 2
+    sr = sr + ((hi[k] - lo[k]) / 2) ^ 2
+  end
+  obs[#obs + 1] = { sc[1], sc[2], sc[3], saucer.math.sqrt(sr) }
+  for _, s in ipairs(sites) do
+    if s.city then obs[#obs + 1] = site_ball(s) end
+  end
+  local turn = rng:float() * saucer.math.tau
+  local d0 = M.RELIC_DISTANCE + math.max(ext[1], ext[3]) // 2
+  local pos
+  for t = 0, M.RELIC_TRIES - 1 do
+    local a = turn + saucer.math.tau * (t % 8) / 8
+    local d = d0 + (t // 8) * 1500
+    local cy = rng:int(-300, 300)
+    local p = { (saucer.math.sin(a) * d - ext[1] / 2) // 1, cy - ext[2] // 2, (saucer.math.cos(a) * d - ext[3] / 2) // 1 }
+    local blo, bhi = p, { p[1] + ext[1], p[2] + ext[2], p[3] + ext[3] }
+    local ok = true
+    for _, o in ipairs(obs) do
+      if box_gap(o, blo, bhi) - o[4] < M.RELIC_MARGIN then
+        ok = false
+        break
+      end
+    end
+    if ok then
+      pos = p
+      break
+    end
+  end
+  -- (nothing fits: far beyond everything, on the first bearing)
+  pos = pos or { (saucer.math.sin(turn) * (d0 + 4000) - ext[1] / 2) // 1, -ext[2] // 2,
+                 (saucer.math.cos(turn) * (d0 + 4000) - ext[3] / 2) // 1 }
+  local id = #sites + 1
+  return { id = id, pos = pos, seed = saucer.seed_child(seed, "relic_site", sid), kit = "relic", civ = ci, relic = true,
+           tutorial = false, danger = info and info.danger or 2 }
 end
 
 return M

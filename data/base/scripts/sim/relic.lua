@@ -134,6 +134,76 @@ function M.ghost(state, p)
   return c, not game().blocked(state, p, c, rr, hh, configs.all().grow_margin)
 end
 
+-- add-relic-stations (plan phase 8): what a relic in normal play remembers, in the state (state v20):
+--  * state.relic_rooms["sector:site:room"] = true for every room a saucer has been in (the radar's map of it)
+--  * state.relics_found["sector:site"] = { found = tick, heart = tick or nil }: the approach scan picked it up (at
+--    SCAN_RANGE from its box: one message with whose relic it is and its size), and the heart hall was reached
+-- Checked every NOTE_EVERY ticks per player; nothing runs in a sector without a relic.
+M.SCAN_RANGE = 2500
+M.NOTE_EVERY = 10
+
+local function skey(state, site) return (state.sector_id or 1) .. ":" .. site end
+M.skey = skey
+
+function M.room_seen(state, site, id)
+  return state.relic_rooms ~= nil and state.relic_rooms[skey(state, site) .. ":" .. id] == true
+end
+
+-- the rooms of relic site `site` (this sector) a saucer has been in, sorted
+function M.rooms_seen(state, site)
+  local out, pre = {}, skey(state, site) .. ":"
+  for k in pairs(state.relic_rooms or {}) do
+    if k:sub(1, #pre) == pre then out[#out + 1] = tonumber(k:sub(#pre + 1)) end
+  end
+  table.sort(out)
+  return out
+end
+
+function M.found(state, site) return state.relics_found ~= nil and state.relics_found[skey(state, site)] or nil end
+
+-- the scanner's line about a relic: whose it is, how it is built and how big
+function M.signature(state, site)
+  local g = game()
+  local r = g.ruin(site)
+  local civ = g.civ_of(state.sector.sites[site])
+  local name = civ and (civ.exonym or civ.name) or "unknown builders"
+  local R = r and r.relic
+  local halls = R and #R.halls or 0
+  return string.format("Relic signature: %s, a %s relic - %d halls round a heart engine", name, R and R.archetype or "warren", halls)
+end
+
+function M.play_step(state, p, ctx)
+  if (state.tick or 0) % M.NOTE_EVERY ~= 0 then return end
+  local g = game()
+  for i, s in ipairs(state.sector.sites) do
+    if s.kit == M.KIT and not s.relic_civ then
+      local k = skey(state, i)
+      state.relics_found = state.relics_found or {}
+      local f = state.relics_found[k]
+      if not f and g.site_distance(i, p.ship.pos) <= M.SCAN_RANGE then
+        f = { found = state.tick }
+        state.relics_found[k] = f
+        if ctx then
+          ctx.msg(state, p, M.signature(state, i))
+          ctx.fx(state, p, "scan")
+        end
+      end
+      if (p.site or 0) == i then
+        local r = g.ruin(i)
+        local room = r and require("sim.ruin").room_at(r, r.origin, p.ship.pos)
+        if room then
+          state.relic_rooms = state.relic_rooms or {}
+          state.relic_rooms[k .. ":" .. room.id] = true
+          if f and not f.heart and room.id == r.relic.core then
+            f.heart = state.tick
+            if ctx then ctx.msg(state, p, "The heart hall: the engine still turns, for no one") end
+          end
+        end
+      end
+    end
+  end
+end
+
 -- add the Vyrr relic to this sector (the debug entry, --relic-slice) and put the party at its maw, facing in
 function M.spawn_slice(state)
   local g = game()
