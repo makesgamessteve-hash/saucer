@@ -36,6 +36,13 @@ M.MOUTH = { 48, 34 }       -- m, its mouth's width and height
 M.FINDS = { 4, 6 }
 M.SENSE = 160              -- m, finds this near the ship are rolled (like a city's)
 M.MAX_ACTIVE = 16
+-- add-alien-cities-6: the mag-trains' rails: a beam down the district's west and north avenue midlines, on pylons
+-- from the foundation (solid, as drawn; the trains in view/citymega.lua run on top)
+M.RAIL_Y = { 260, 320 }    -- m above the street to the rail's top under the cars (west line, north line)
+M.RAIL = { 4, 3 }          -- m, the rail's width and depth
+M.PYLON = 6                -- m, a pylon's side
+M.PYLON_GAP = 420          -- m between pylons
+M.TRAIN_CLEAR = 4.5        -- m from the rail's top to a car's middle
 M.PREBUILD = 3000          -- m: districts this near a ship are built ahead of need, one a step
 -- add-alien-cities-4: fold bays on the terraces: a 44 x 44 m pad with 20 m clear above and a cradle (a growing back
 -- to the Villa there is free, as in a relic's bays), on tier tops with open sky over them
@@ -515,11 +522,32 @@ function M.build(d)
   if w then warren_boxes(d, out) end
   local bays = M.terrace_bays(d, out)
   for _, bay in ipairs(bays) do out[#out + 1] = bay.cradle_box end
+  out.transit = #out + 1
+  M.rail_boxes(d, out)
   return out, bays
 end
 
 local function overlaps(a0, a1, b)
   return a0[1] < b[2][1] and a1[1] > b[1][1] and a0[2] < b[2][2] and a1[2] > b[1][2] and a0[3] < b[2][3] and a1[3] > b[1][3]
+end
+
+-- the rails and pylons of district d's two lines (k 1: x = cell west edge along z; k 2: z = cell north edge along x)
+function M.rail_boxes(d, out)
+  local c, y = d.cell, d.y
+  local rw, rd, pw = M.RAIL[1] / 2, M.RAIL[2], M.PYLON / 2
+  for k = 1, 2 do
+    local top = y + M.RAIL_Y[k]
+    local a0, a1 = (k == 1 and c[2] or c[1]), (k == 1 and c[4] or c[3])
+    local e = k == 1 and c[1] or c[2]
+    if k == 1 then out[#out + 1] = { { e - rw, top - rd, a0 }, { e + rw, top, a1 } }
+    else out[#out + 1] = { { a0, top - rd, e - rw }, { a1, top, e + rw } } end
+    local n = floor((a1 - a0) / M.PYLON_GAP)
+    for i = 1, n do
+      local a = a0 + (a1 - a0) * (i - 0.5) / n
+      if k == 1 then out[#out + 1] = { { e - pw, y, a - pw }, { e + pw, top - rd, a + pw } }
+      else out[#out + 1] = { { a - pw, y, e - pw }, { a + pw, top - rd, e + pw } } end
+    end
+  end
 end
 
 -- the fold bays on district d's terraces, given its solids: tier tops at least BAY_MIN_Y up, a BAY pad inside the

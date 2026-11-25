@@ -91,7 +91,7 @@ describe("megacity", function()
       end
       expect(fx0 == c[1] and fx1 == c[3]).to_be(true)
       for n, s in ipairs(sol) do
-        if n <= sol.found then goto next end
+        if n <= sol.found or n >= sol.transit then goto next end
         expect(s[1][1] >= b[1] - 1e-6 and s[2][1] <= b[3] + 1e-6 and s[1][3] >= b[2] - 1e-6 and s[2][3] <= b[4] + 1e-6).to_be(true)
         expect(s[2][2] <= p.frame.y + d.top + 1e-6 and s[1][2] >= p.frame.y - 40 - mega.WARREN_H - mega.FLOOR).to_be(true)
         ::next::
@@ -581,6 +581,50 @@ describe("megacity", function()
     end
     local sd = megav.draw(fake_view(), A, p, { pos = hover_over(p, d), yaw = 0, pitch = 0 }, 1, function() return true end, 1000, 2)
     expect((sd.trains or 0) >= 2).to_be(true)
+    -- the rails: a beam under every train's cars, on pylons standing on the street in the avenue's middle; the
+    -- drifters keep off the pylons
+    local sol = mega.solids(p, d)
+    local rails, pylons = {}, {}
+    for n = sol.transit, #sol do
+      local b = sol[n]
+      if b[1][2] == p.frame.y then pylons[#pylons + 1] = b else rails[#rails + 1] = b end
+    end
+    expect(#rails).to_be(2)
+    expect(#pylons >= 10).to_be(true)
+    for kk = 1, 2 do
+      local rb = rails[kk]
+      expect(rb[2][2]).to_be(p.frame.y + mega.RAIL_Y[kk])
+      for _, car in ipairs(megav.train_pose(p, d, kk, 77).cars) do
+        local x, z = car.pos[1], car.pos[3]
+        expect(x >= rb[1][1] - 1e-6 and x <= rb[2][1] + 1e-6 and z >= rb[1][3] - 1e-6 and z <= rb[2][3] + 1e-6).to_be(true)
+        expect(car.pos[2] - car.size[2] / 2 > rb[2][2]).to_be(true)
+      end
+    end
+    for _, pb in ipairs(pylons) do
+      local under = false
+      for _, rb in ipairs(rails) do
+        if pb[2][2] == rb[1][2] and pb[1][1] >= rb[1][1] - 3 and pb[2][1] <= rb[2][1] + 3 and pb[1][3] >= rb[1][3] - 3 and pb[2][3] <= rb[2][3] + 3 then under = true end
+      end
+      expect(under).to_be(true)
+    end
+    for _, x in ipairs(p.districts) do
+      local xs = mega.solids(p, x)
+      for kk = 1, 2 do
+        for _, tt in ipairs({ 0, 50, 333 }) do
+          local o = megav.drift_pose(p, x, kk, tt)
+          for _, y in ipairs(p.districts) do
+            local ys = mega.solids(p, y)
+            for n = ys.transit, #ys do
+              local b = ys[n]
+              local hx, hz = o.size[1] / 2 + 2, o.size[1] / 2 + 2
+              local hit = o.pos[1] + hx > b[1][1] and o.pos[1] - hx < b[2][1] and o.pos[3] + hz > b[1][3] and o.pos[3] - hz < b[2][3]
+                and o.pos[2] - o.size[2] / 2 < b[2][2] and o.pos[2] + o.size[2] / 2 > b[1][2]
+              expect(hit).to_be(false)
+            end
+          end
+        end
+      end
+    end
     -- the archive record: sensed from the sanctum (not from the hall), read in place, then gone
     local pl = st.players[1]
     pl.site = 0
