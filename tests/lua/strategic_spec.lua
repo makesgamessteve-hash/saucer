@@ -213,10 +213,17 @@ describe("the site alarm", function()
     -- the tutorial derelict's alarm stops low
     expect(stealth.max_level(1)).to_be(S.light_alarm_max)
     expect(stealth.raise(st, 1, 3, ctx)).to_be(S.light_alarm_max)
-    -- faster fire with the alarm up, never for a light Watcher
+    -- faster fire with the alarm up; a light Watcher by light_fire as much (none without it)
     local def = hall_watcher(2)
-    expect(stealth.fire_every(st, def, 1.6)).to_be_less(1.6)
+    local full = stealth.fire_every(st, def, 1.6)
+    expect(full).to_be_less(1.6)
+    expect(S.light_alarm_max >= 2).to_be(true)
+    local lightf = stealth.fire_every(st, { site = 1, light = true }, 1.6)
+    expect(lightf < 1.6 and lightf > stealth.fire_every(st, { site = 1 }, 1.6)).to_be(true)
+    local lf = S.light_fire
+    S.light_fire = nil
     expect(stealth.fire_every(st, { site = 1, light = true }, 1.6)).to_be(1.6)
+    S.light_fire = lf
     -- cooling: nobody seen, you inside: one level per cool_in
     for _, dyn in ipairs(st.sentries[2]) do if dyn.st ~= "off" then dyn.st = "dormant" end end
     stealth.step_alarm(st, S.cool_in, ctx)
@@ -372,9 +379,17 @@ describe("a hit shakes the beam loose", function()
     local p = st.players[1]
     p.mode = "helm"
     p.tractor = { key = "nope", kind = "slot", site = 2, t = 0, total = 3, from = { 0, 0, 0 }, size = p.ship.size }
+    -- tune-sentry-economy: a light bolt shakes it loose too (unless light_drops is off)
+    local S = require("sim.sentry").tune().stealth
+    S.light_drops = false
     st.bolts = { { pos = vec.copy(p.ship.pos), vel = { 0, 0, 0 }, life = 1, site = p.site, dmg = 1, light = true } }
     sentry.step_bolts(st, 1 / 60)
     expect(p.tractor.shaken).to_be(nil)
+    S.light_drops = true
+    st.bolts = { { pos = vec.copy(p.ship.pos), vel = { 0, 0, 0 }, life = 1, site = p.site, dmg = 1, light = true } }
+    sentry.step_bolts(st, 1 / 60)
+    expect(p.tractor.shaken).to_be(true)
+    p.tractor.shaken = nil
     st.bolts = { { pos = vec.copy(p.ship.pos), vel = { 0, 0, 0 }, life = 1, site = p.site, dmg = 1 } }
     sentry.step_bolts(st, 1 / 60)
     expect(p.tractor.shaken).to_be(true)

@@ -10,6 +10,8 @@ local game = require("sim.game")
 local ap = require("sim.autopilot")
 local tractor = require("sim.tractor")
 local vec = require("lib.vec")
+-- tune-sentry-economy: the tutorial's light Watcher bites harder now; this test is about something else
+require("sim.autopilot").gentle_tutorial()
 local get = function() return T.state().players[1] end
 local function said(s)
   for _, m in ipairs(get().msgs) do if m.text:find(s, 1, true) then return true end end
