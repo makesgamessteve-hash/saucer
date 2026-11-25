@@ -8,6 +8,8 @@ local game = require("sim.game")
 local ap = require("sim.autopilot")
 local ruinm = require("sim.ruin")
 local vec = require("lib.vec")
+-- tune-sentry-economy: the tutorial's light Watcher bites harder now; this test is about something else
+require("sim.autopilot").gentle_tutorial()
 local get = function() return T.state().players[1] end
 
 T.wait(30)
