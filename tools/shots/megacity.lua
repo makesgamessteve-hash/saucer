@@ -2,8 +2,8 @@
 -- add-alien-cities-2 (plan phase 10 part 2) screenshots. Run from the folder that should receive shots_megacity/:
 --   saucer --root REPO --seed 42 --windowed --width 1280 --height 720 --script REPO/tools/shots/megacity.lua
 --   [--script-arg planet|moon|asteroid]
--- The ring from over the core, a canyon avenue, the city's megaform, the footprint from high up and a lit block
--- close by. Staged: a free camera with the HUD and cockpit out of frame (the saucer waits just behind the camera).
+-- The ring from over the core, a canyon avenue, the city's megaform, the footprint from high up, a lit block close
+-- by, an organ's hall and mouth, and drifters down an avenue. Staged: a free camera with the HUD and cockpit out of frame (the saucer waits just behind the camera).
 local T = saucer.test
 local game = require("sim.game")
 local galaxy = require("sim.galaxy")
@@ -106,4 +106,27 @@ end
 local o = near.organs[1]
 frame({ o.x0 - 380, fr.y + 160, o.z0 - 380 }, { o.x0 + o.w / 2, fr.y + o.h * 0.4, o.z0 + o.w2 / 2 }, 70)
 shot("05_lit_block")
+-- 6. inside an organ's hall: from just inside its mouth toward the turning machine
+local od
+for _, d in ipairs(p.districts) do if d.organ and not od then od = d end end
+if od then
+  local og, h = od.organ, od.organ.hall
+  local c = og.centre
+  local from
+  if og.side == 1 then from = { h[1] + 12, fr.y + 14, c[3] } elseif og.side == 2 then from = { h[4] - 12, fr.y + 14, c[3] }
+  elseif og.side == 3 then from = { c[1], fr.y + 14, h[3] + 12 } else from = { c[1], fr.y + 14, h[6] - 12 } end
+  frame(from, c, 75)
+  shot("06_organ_hall")
+  -- 7. the organ's mouth from the avenue
+  local out = { from[1] + (from[1] - c[1]) * 0.0, from[2], from[3] }
+  if og.side == 1 then out = { h[1] - 140, fr.y + 30, c[3] } elseif og.side == 2 then out = { h[4] + 140, fr.y + 30, c[3] }
+  elseif og.side == 3 then out = { c[1], fr.y + 30, h[3] - 140 } else out = { c[1], fr.y + 30, h[6] + 140 } end
+  frame(out, { c[1], fr.y + og.h * 0.5, c[3] }, 75)
+  shot("07_organ_mouth")
+end
+-- 8. drifters down an avenue: along a district's east avenue
+local dd = p.districts[1]
+local cx = dd.cell[3]
+frame({ cx, fr.y + 120, dd.cell[2] - 150 }, { cx, fr.y + 110, dd.cell[4] }, 70)
+shot("08_drifters")
 print("megacity shots done")
