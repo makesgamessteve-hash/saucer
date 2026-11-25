@@ -48,6 +48,7 @@ function M.set_style(civ)
     end
   end
   require("view.lights").forget()
+  require("view.landmarks").forget()
 end
 local C = {}
 local function colors(civ)
@@ -653,8 +654,8 @@ function M.engine_rings()
   if cache.rings then return cache.rings end
   local cc = colors()
   cache.rings = {}
-  for k = 1, 3 do
-    local parts = { { kind = "ring", c = { 0, -0.6, 0 }, rin = 0.92, r = 1.0, h = 0.04 + 0.02 * k, seg = 48, color = cc.chrome,
+  for k = 1, M.MAX_HOOPS do
+    local parts = { { kind = "ring", c = { 0, -0.6, 0 }, rin = 0.92, r = 1.0, h = 0.04 + 0.02 * ((k - 1) % 3 + 1), seg = 48, color = cc.chrome,
                       mat = S.accent } }
     for q = 0, 5 do
       local a = q / 6 * sm.tau
@@ -972,6 +973,21 @@ end
 
 -- the heart's engine turning: three hoops about the spindle on their own tilted axes (render-only: a function of the
 -- clock, nothing in the state moves)
+-- add-civ-dungeons: the heart machine of a civ: how many hoops turn about the spindle, how fast, how far they tilt,
+-- and whether they stack up the spindle (spine and helix builders) instead of nesting. The slice's Vyrr (layout
+-- pinned to the warren) keep the three tilted hoops.
+M.MAX_HOOPS = 7
+function M.machine(civ)
+  local lang = civ and civ.language or {}
+  if lang.layout == "warren" or not lang.symmetry then return { hoops = 3, speed = 1, tilt = 1, stack = false } end
+  local sym = lang.symmetry
+  local hoops = (sym.mode == "radial" and sym.n) or (sym.mode == "fractal" and 5) or (sym.mode == "bilateral" and 4) or 3
+  hoops = math.max(2, math.min(M.MAX_HOOPS, hoops))
+  local tempo = lang.sound and lang.sound.tempo or 0.6
+  return { hoops = hoops, speed = 0.5 + tempo, tilt = 0.3 + 1.5 * (lang.organic or 0.3),
+           stack = civ.massing == "spine" or civ.massing == "helix", glow = lang.lamp_colors and lang.lamp_colors[1] }
+end
+
 function M.engine(v, A, ruin, time, opts)
   for _, sd in ipairs(ruin.solids or {}) do
     if sd.kind == "engine" then
@@ -979,15 +995,23 @@ function M.engine(v, A, ruin, time, opts)
       local R = math.min(sd[2][1] - sd[1][1], sd[2][3] - sd[1][3]) / 2
       local H = sd[2][2] - sd[1][2]
       local rings = M.engine_rings()
-      for k = 1, 3 do
-        local rr = R * (1.05 - 0.12 * k)
-        v:mesh(rings[k], { pos = { c[1], sd[1][2] + H * (0.3 + 0.12 * k), c[3] }, scale = rr, palette = opts.palette,
-                           yaw = time * (0.05 + 0.03 * k) * (k % 2 == 0 and -1 or 1),
-                           pitch = 0.35 * sm.sin(time * 0.07 * k + k), roll = 0.25 * k * sm.cos(time * 0.05 + k) })
+      local mc = M.machine(M.civ_of(ruin))
+      local step = 0.36 / mc.hoops
+      for k = 1, mc.hoops do
+        local rr = R * (1.05 - step * k)
+        local y = sd[1][2] + H * (0.3 + step * k)
+        local pitch = 0.35 * mc.tilt * sm.sin(time * 0.07 * k + k)
+        local roll = 0.25 * k * mc.tilt * sm.cos(time * 0.05 + k)
+        if mc.stack then -- flat hoops climbing the spindle, alternating
+          rr, y, pitch, roll = R * 0.98, sd[1][2] + H * (0.12 + 0.76 * (k - 0.5) / mc.hoops), 0, 0
+        end
+        v:mesh(rings[k], { pos = { c[1], y, c[3] }, scale = rr, palette = opts.palette,
+                           yaw = time * (0.05 + 0.03 * k) * mc.speed * (k % 2 == 0 and -1 or 1), pitch = pitch, roll = roll })
       end
-      local pulse = 0.6 + 0.4 * sm.sin(time * 0.9)
+      local pulse = 0.6 + 0.4 * sm.sin(time * 0.9 * mc.speed)
+      local g = mc.glow or { 0.85, 0.5, 1.0 }
       v:billboard(A.tex.glow, { c[1], sd[1][2] + H * 0.42, c[3] }, R * (1.6 + 0.3 * pulse), { palette = opts.palette,
-                  tint = { 0.85, 0.5, 1.0, 0.35 + 0.25 * pulse } })
+                  tint = { g[1], g[2], g[3], 0.35 + 0.25 * pulse } })
       return true
     end
   end
@@ -1039,9 +1063,11 @@ function M.draw(v, A, state, cam, xr, time)
   local core = set.rooms[r.relic.core]
   if show[r.relic.core] and render.visible(cam, core.center, core.radius, xr) then M.engine(v, A, r, time, opts) end
   st.phenomena = require("view.phenomena").draw(v, A, r, show, cam, time, opts)
+  st.landmarks = require("view.landmarks").draw(v, r, civ, show, time, opts)
   -- Seat-locks: the shutter while closed, the socket's glow (brighter while the Seat turns it)
   local relic = require("sim.relic")
   local p = state.players[v.player or 1]
+  if p and p.ship and p.ship.pos then require("view.relicmap").note(r, room_index(set, p.ship.pos)) end
   for _, l in ipairs(r.relic.locks) do
     if not relic.lock_open(state, i, l.id) then
       local b = l.box
