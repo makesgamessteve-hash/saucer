@@ -12,6 +12,7 @@ local M = {}
 M.SLOT = { plain = 0, dominant = 1, lung = 2, accent = 3, rare = 4, ring = 5, decay = 6, floor = 7 }
 M.BREATH = 0.45      -- m: the breathing hall's slow swell along the skin's normal (period 3x the wobble's)
 M.AMBIENT = 0.22     -- matcap ambient
+M.DOMINANT_GLOW = 0.3 -- a dominant crystal's emission scale
 
 function M.library() return data.load("civs/materials.lua") end
 
@@ -42,8 +43,11 @@ function M.civ_slots(civ)
   local m = civ.materials
   local function rec(id) return lib[id] or lib.ceramic end
   local slots = {}
-  slots[M.SLOT.dominant] = M.slot(rec(m.dominant.id))
-  slots[M.SLOT.lung] = M.slot(rec(m.dominant.id), { breath = M.BREATH })
+  -- add-design-language: a crystal that covers most of the skin glows a third as much (else whole halls blow out)
+  local dom = rec(m.dominant.id)
+  local calm = dom.kind == "crystal" and { emit = (dom.emit or 0.4) * M.DOMINANT_GLOW } or nil
+  slots[M.SLOT.dominant] = M.slot(dom, calm)
+  slots[M.SLOT.lung] = M.slot(dom, { breath = M.BREATH, emit = calm and calm.emit or nil })
   slots[M.SLOT.accent] = M.slot(rec(m.accent.id))
   slots[M.SLOT.rare] = M.slot(rec(m.rare.id))
   slots[M.SLOT.ring] = M.slot(rec(m.signature and m.signature.ring or "wound"))

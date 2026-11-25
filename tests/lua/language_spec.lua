@@ -230,3 +230,14 @@ describe("design language", function()
     expect(lang.dress(0, v)).to_be(v)
   end)
 end)
+
+describe("design language slots", function()
+  it("calms a dominant crystal's glow", function()
+    local c = { id = "glassy", materials = { dominant = { id = "quartz" }, accent = { id = "gold" }, rare = { id = "amethyst" },
+                                             signature = { ring = "vein" }, decay = { "basalt" } } }
+    local s = matv.civ_slots(c)
+    expect(s[matv.SLOT.dominant].emit).to_be_near(0.15 * matv.DOMINANT_GLOW, 1e-6)
+    expect(s[matv.SLOT.lung].emit).to_be_near(0.15 * matv.DOMINANT_GLOW, 1e-6)
+    expect(matv.civ_slots(civs.vyrr())[matv.SLOT.dominant].emit).to_be(0.55)
+  end)
+end)
