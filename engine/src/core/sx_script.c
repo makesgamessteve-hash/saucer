@@ -1123,6 +1123,12 @@ static double wall_ms(void) {
 }
 
 /* build{ parts = { {kind="box", min=..., max=..., color=...}, ... } } -> id, hash, build milliseconds */
+/* add-alien-cities-2: wall-clock ms for the view's streaming budget (never read by the sim) */
+static int l_time_wall_ms(lua_State *L) {
+  lua_pushnumber(L, wall_ms());
+  return 1;
+}
+
 static int l_mesh_build(lua_State *L) {
   sx_engine *e = get_engine(L);
   sx_mesh m;
@@ -1596,7 +1602,7 @@ static int l_v_mesh(lua_State *L) {
   return 0;
 }
 
-/* view:billboard(tex, pos, size, {palette=, tint=, yaxis=true}) */
+/* view:billboard(tex, pos, size, {palette=, tint=, yaxis=true, sky=false}) */
 static int l_v_billboard(lua_State *L) {
   sx_viewport *v = check_view(L);
   sx_draw_billboard b;
@@ -1615,6 +1621,9 @@ static int l_v_billboard(lua_State *L) {
     b.palette = (int)field_num(L, o, "palette", 0);
     lua_getfield(L, o, "yaxis");
     if (!lua_isnil(L, -1)) b.yaxis = lua_toboolean(L, -1);
+    lua_pop(L, 1);
+    lua_getfield(L, o, "sky");
+    b.sky = lua_toboolean(L, -1);
     lua_pop(L, 1);
     b.size[1] = field_num(L, o, "height", b.size[0]);
   }
@@ -2465,7 +2474,7 @@ static void build_saucer_api(lua_State *L, sx_engine *e) {
   static const luaL_Reg audio_f[] = {
       {"play", l_audio_play}, {"set", l_audio_set}, {"stop", l_audio_stop}, {NULL, NULL}};
   static const luaL_Reg save_f[] = {{"write", l_save_write}, {"read", l_save_read}, {NULL, NULL}};
-  static const luaL_Reg time_f[] = {{"tick", l_time_tick}, {"sim_seconds", l_time_seconds}, {NULL, NULL}};
+  static const luaL_Reg time_f[] = {{"tick", l_time_tick}, {"sim_seconds", l_time_seconds}, {"wall_ms", l_time_wall_ms}, {NULL, NULL}};
   static const luaL_Reg mods_f[] = {{"list", l_mods_list},
                                          {"available", l_mods_available},
                                          {"set_enabled", l_mods_set_enabled},

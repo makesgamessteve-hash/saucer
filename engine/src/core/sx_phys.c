@@ -41,8 +41,14 @@ int sx_phys_add_box(sx_phys *w, const double min[3], const double max[3], unsign
   return w->count++;
 }
 
+/* add-alien-cities-2: removed boxes at the end of the list are dropped (the boxes of a city district that streams in
+ * and out are added last), so a long session does not grow the list; live boxes keep their ids and order */
 void sx_phys_remove(sx_phys *w, int id) {
   if (id >= 0 && id < w->count) w->boxes[id].used = 0;
+  while (w->count > 0 && !w->boxes[w->count - 1].used) {
+    w->count--;
+    w->dirty = 1;
+  }
 }
 
 /* ---- broadphase ---- */

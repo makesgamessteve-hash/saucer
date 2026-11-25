@@ -45,3 +45,35 @@ A city SHALL show harmless goings-on: a swarm of motes over every district that 
 #### Scenario: Swarms, machines and pulses
 - **WHEN** `tests/lua/aliencity_spec.lua` runs "places swarms, machines and lane pulses, all harmless functions of the clock"
 - **THEN** it passes
+
+### Requirement: Megacity
+A city's core SHALL be ringed by outer districts filling a footprint of about 21 km, 24 to 48 districts in all, each a
+pure function of the city's seed, each carrying a value and standing civ-shaped megaforms up to 1.5 km tall between
+canyon avenues, with strata decks; one megaform per city SHALL rise 2 to 2.8 km. What is drawn SHALL be what collides.
+
+#### Scenario: Clear ground
+- **WHEN** `tests/lua/megacity_spec.lua` runs "a city's core is ringed by outer districts, 24 to 48 districts in all"
+- **THEN** it passes, with no outer district on the core, the spaceport's approach, the sector's heart, another site, a station or the arrival point
+
+#### Scenario: The ring and its megaforms
+- **WHEN** `tests/lua/megacity_spec.lua` runs "outer districts stand civ-shaped megaforms between canyon avenues, one city form up to 2.8 km"
+- **THEN** it passes
+
+### Requirement: District streaming
+An outer district SHALL be solid only while a ship is within 1.5 km of it (kept until 1.75 km), at most 9 per player and
+16 in all, nearest first, and SHALL be built synchronously when it is needed and not yet built. A restore SHALL make the
+same districts solid from the players' positions, so a run with a restore ends in the same state as one without.
+
+#### Scenario: Streaming
+- **WHEN** `tests/lua/megacity_spec.lua` runs "only the districts near a ship are solid, built there and then if need be", "at most nine districts per player and sixteen in all are solid, nearest first" and "streaming districts in and out keeps the game deterministic across save and restore", and `tests/game/megacity.lua` runs
+- **THEN** they pass
+
+### Requirement: Megacity detail levels
+The view SHALL draw an outer district as its full mesh with lit window bands within 4 km, as a lit silhouette within
+40 km, and SHALL draw a horizon band of far towers round the city. Meshes SHALL be built ahead of the eye within a
+per-frame budget (6 ms, 4 ms on the web) and freed when far. Over a megacity the far plane SHALL reach the band, the
+city's air and light SHALL hold over its whole footprint, and the sky's backdrop sprites SHALL be drawn behind every tower.
+
+#### Scenario: Levels
+- **WHEN** `tests/lua/megacity_spec.lua` runs "the view draws full blocks and lit windows near, silhouettes far and a horizon band beyond" and "over an outer district the city's air and light hold, and the frame draws the megacity"
+- **THEN** both pass

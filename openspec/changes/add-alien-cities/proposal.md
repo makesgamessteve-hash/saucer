@@ -42,3 +42,17 @@ phenomena. The megascale core, lazy district generation, LOD and mini-relic orga
 - Tests: `tests/lua/aliencity_spec.lua`; shots `tools/shots/alien_city.lua`
 - Later in this change: a 12-20 km core of 24-48 districts generated lazily in time slices, the active set, LOD levels
   and the horizon band, strata and the undercity, mini-relic organs and the state version bump (design §4.2-§4.4)
+
+## Part 2: megascale
+
+- **The megacity** (`sim/citymega.lua`, §4.2). The core stays the downtown; a ring of outer districts fills a ~21 km
+  footprint, 24-48 districts in all. Each is a block of civ-shaped megaforms (180 m to 1.5 km, one city megaform 2-2.8 km)
+  between canyon avenues, on a foundation that floors the avenues, with strata decks between neighbours.
+- **Streaming** (§4.4). Only districts within 1.5 km of a ship are solid (9 per player, 16 in all), built synchronously
+  when needed; the view builds ahead within a 6 ms frame budget (4 ms on the web). Nothing is saved: the plan and the
+  districts are pure functions of the seed, and a restore re-derives the solid set from the players' positions.
+  The physics list drops removed boxes at its tail, so streaming does not grow it.
+- **Detail levels.** Full meshes with lit windows within 4 km, lit silhouettes to 40 km, a horizon band at 26-50 km.
+  Over a megacity the far plane is 60 km, the city's air holds over the footprint, and backdrop sprites (nebulae,
+  planet, star) are drawn with the sky so far towers stand in front of them. The planet city's haze is thinner (1.6 → 1.0).
+- Per-district diffs and the state version bump move to part 3, when the outer districts get loot and doors.

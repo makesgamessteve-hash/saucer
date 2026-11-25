@@ -94,6 +94,27 @@ TEST(phys_broadphase_huge_extent_and_stamp_wrap) {
   sx_phys_free(&w);
 }
 
+TEST(phys_remove_trims_the_tail) {
+  sx_phys w;
+  double a[3] = {0, 0, 0}, b[3] = {1, 1, 1};
+  int i0, i1, i2;
+  sx_phys_init(&w);
+  i0 = sx_phys_add_box(&w, a, b, 1);
+  i1 = sx_phys_add_box(&w, a, b, 1);
+  i2 = sx_phys_add_box(&w, a, b, 1);
+  sx_phys_remove(&w, i1);
+  CHECK_EQ_INT(w.count, 3); /* a hole in the middle stays */
+  sx_phys_remove(&w, i2);
+  CHECK_EQ_INT(w.count, 1); /* the tail and the hole under it go */
+  CHECK_EQ_INT(sx_phys_add_box(&w, a, b, 1), 1);
+  CHECK(w.boxes[i0].used);
+  sx_phys_remove(&w, 0);
+  sx_phys_remove(&w, 1);
+  CHECK_EQ_INT(w.count, 0);
+  sx_phys_remove(&w, 9);
+  sx_phys_free(&w);
+}
+
 TEST(camera_roll_banks_the_view) {
   sx_camera c;
   float m[16];

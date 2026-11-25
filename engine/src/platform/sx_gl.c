@@ -1085,7 +1085,8 @@ static void draw_mesh(const sx_render *r, const sx_viewport *v, const frame_mats
   glDrawElements(GL_TRIANGLES, G.mesh_count[d->mesh], GL_UNSIGNED_INT, (void *)0);
 }
 
-static void draw_billboards(const sx_render *r, const sx_viewport *v, const frame_mats *fm) {
+/* sky: 1 draws only the backdrop sprites (in the sky pass, depth writes off), 0 every other one */
+static void draw_billboards(const sx_render *r, const sx_viewport *v, const frame_mats *fm, int sky) {
   int i, k;
   float ident[16];
   if (!v->nbills) return;
@@ -1094,6 +1095,7 @@ static void draw_billboards(const sx_render *r, const sx_viewport *v, const fram
   glUniformMatrix4fv(G.mesh.mv, 1, GL_FALSE, fm->view);
   glUniformMatrix4fv(G.mesh.model, 1, GL_FALSE, ident);
   glUniform1i(G.mesh.lit, 0);
+  glUniform1i(G.mesh.sky, 0);
   glUniform1f(G.mesh.fog, v->fog_density);
   glUniform1i(G.mesh.tex, 1);
   glBindVertexArray(G.stream_vao);
@@ -1105,6 +1107,7 @@ static void draw_billboards(const sx_render *r, const sx_viewport *v, const fram
     int soft = b->tex > 0 && b->tex < SX_MAX_TEXTURES && r->textures[b->tex].used && r->textures[b->tex].soft;
     /* a bright glow adds light (it can never darken what is behind it); a dark one (a shade) still blends */
     int add = soft && b->tint[0] + b->tint[1] + b->tint[2] > 0.36f;
+    if ((b->sky != 0) != (sky != 0)) continue;
     if (b->yaxis && !soft) {
       float l = (float)sx_sqrt((double)(fm->right[0] * fm->right[0] + fm->right[2] * fm->right[2]));
       rt[0] = l > 1e-6f ? fm->right[0] / l : 1;
@@ -1144,7 +1147,7 @@ static void draw_billboards(const sx_render *r, const sx_viewport *v, const fram
     glDrawArrays(GL_TRIANGLES, 0, 6);
     if (add) {
       glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-      glDepthMask(GL_TRUE);
+      glDepthMask(sky ? GL_FALSE : GL_TRUE);
     }
   }
 }
@@ -1232,7 +1235,7 @@ static void draw_view(const sx_render *r, const sx_viewport *v, int fb_h, int xr
       glEnable(GL_BLEND);
       glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
       glUniform1i(G.mesh.nhz, 0); /* a glow sprite is not lit air: it would add the haze twice */
-      draw_billboards(r, v, &fm);
+      draw_billboards(r, v, &fm, 0);
       glUniform1i(G.mesh.nhz, G.view_hz);
       continue;
     }
@@ -1241,6 +1244,15 @@ static void draw_view(const sx_render *r, const sx_viewport *v, int fb_h, int xr
       const sx_draw_mesh *d = &v->meshes[i];
       int want = (d->flags & SX_DRAW_SKY) ? 0 : (d->flags & SX_DRAW_GHOST) ? 3 : 1;
       if (want == pass) draw_mesh(r, v, &fm, d);
+    }
+    if (pass == 0) {
+      /* add-alien-cities-2: the backdrop sprites ride with the sky, behind every tower however far */
+      glEnable(GL_BLEND);
+      glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+      glUniform1i(G.mesh.nhz, 0);
+      draw_billboards(r, v, &fm, 1);
+      glUniform1i(G.mesh.nhz, G.view_hz);
+      glDisable(GL_BLEND);
     }
   }
   glDepthMask(GL_TRUE);
