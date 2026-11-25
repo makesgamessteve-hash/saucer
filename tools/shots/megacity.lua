@@ -158,7 +158,8 @@ if wd then
   shot("11_sanctum")
 end
 -- 12. a mag-train high over an avenue, framed where it will be when the shot is taken
-local tp = megav.train_pose(p, dd, 1, (T.state().tick + 2 + 40) / 60).cars[1].pos
-frame({ tp[1] + 120, tp[2] + 25, tp[3] - 160 }, tp, 60)
+local td = p.districts[(#p.districts + 1) // 2]
+local tp = megav.train_pose(p, td, 1, (T.state().tick + 2 + 40) / 60).cars[3].pos
+frame({ tp[1] + 70, tp[2] + 18, tp[3] - 90 }, tp, 60)
 shot("12_train")
 print("megacity shots done")

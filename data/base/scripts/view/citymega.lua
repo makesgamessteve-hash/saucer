@@ -201,7 +201,7 @@ end
 -- the sanctum's breathing with its heart. Offered when the eye is near and low (the engine keeps those that matter).
 M.WARREN_LAMPS = 700     -- m from the district
 M.WARREN_LAMP_Y = 80     -- m above the street: higher than this the eye cannot see down the shaft
-M.WARREN_LUX = 0.9
+M.WARREN_LUX = 0.2
 function M.warren_lamps(v, p, d, t)
   local w = d.warren
   local win = p.style.window or { 1, 0.85, 0.5 }
