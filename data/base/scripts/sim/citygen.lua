@@ -37,13 +37,94 @@ end
 -- per-civ look: architecture by the civ's shape, light colours by its glyph
 M.PALETTES = { { 1.0, 0.82, 0.45 }, { 0.45, 0.95, 1.0 }, { 1.0, 0.5, 0.85 }, { 0.55, 1.0, 0.6 }, { 0.9, 0.95, 1.0 }, { 1.0, 0.55, 0.35 } }
 M.SHAPES = { angular = "ziggurat", crystalline = "spire", organic = "dome", modular = "arcology" }
+-- add-alien-cities (plan phase 10, design civs-and-relics §4.1, §4.3): a roster civ builds its towers in its massing's
+-- form, and its ordinary districts take their character from what it valued (the landmarks stay as they are)
+M.MASSING_FORMS = { ring = "crater", spine = "rib", cluster = "pods", hive = "hive", shell = "terrace", lattice = "lattice",
+                    helix = "helix", organism = "lobed" }
+M.ARCHETYPES = {
+  knowledge = { label = "Archive Spires", form = "spire" },
+  hoarding = { label = "Treasury Vaults", form = "vault" },
+  faith = { label = "Cathedral Organs", form = "organ" },
+  kinship = { label = "Brood Warrens", form = "hive" },
+  conquest = { label = "Fortress Terraces", form = "ziggurat" },
+  craft = { label = "Foundry Trenches", form = "slab" },
+  harmony = { label = "Choir Bowls", form = "bowl" },
+}
+M.VALUES = { "knowledge", "hoarding", "faith", "kinship", "conquest", "craft", "harmony" }
+M.OWN_VALUE = 60   -- % of a city's ordinary districts that carry its builders' own value (the rest: another one)
+-- the share of a tower's height its first (full-footprint) tier fills: sky-bridges land on it
+M.BASE_FRAC = { spire = 0.42, dome = 0.35, vault = 0.55, organ = 0.25, hive = 0.3, slab = 0.35, bowl = 0.12, lattice = 0.3,
+                helix = 0.25, lobed = 0.3, pods = 0.2, terrace = 0.4, rib = 0.2, crater = 0.3 }
 function M.style_of(civ)
   local glyph = civ and civ.glyph or 1
   local shape = civ and civ.shape or "angular"
   local n = #M.PALETTES
-  return { shape = shape, form = M.SHAPES[shape] or "ziggurat", window = M.PALETTES[glyph % n + 1],
+  local form = civ and civ.massing and M.MASSING_FORMS[civ.massing] or M.SHAPES[shape] or "ziggurat"
+  return { shape = shape, form = form, window = M.PALETTES[glyph % n + 1], massing = civ and civ.massing or nil,
+           value = civ and civ.axes and civ.axes.values or nil,
            accent = M.PALETTES[(glyph * 5 + 2) % n + 1], civ = civ and civ.id or nil }
 end
+
+-- the value each ordinary district stands for: the builders' own for OWN_VALUE%, another for the rest (its own rng,
+-- so the rest of the city is drawn exactly as before)
+function M.archetypes(seed, districts, value)
+  local rng = saucer.rng.new(saucer.seed_child(seed or 1, "archetype", 0))
+  local own = M.ARCHETYPES[value or ""] and value or "craft"
+  for _, d in ipairs(districts) do
+    if not d.landmark and not d.drum and not d.crater then
+      local v = own
+      if rng:int(1, 100) > M.OWN_VALUE then v = M.VALUES[rng:int(1, #M.VALUES)] end
+      d.value = v
+      d.archetype = M.ARCHETYPES[v].label
+      d.label = string.format("D%d %s", d.id, d.archetype)
+    end
+  end
+  return districts
+end
+
+-- sky lanes: one between every district and its east and south neighbours, at cell height y
+function M.lanes(dists, origin, kit, y)
+  local by, out = {}, {}
+  for _, d in ipairs(dists) do if d.dx then by[d.dz * 1000 + d.dx] = d end end
+  for _, d in ipairs(dists) do
+    for k = 1, 2 do
+      local n = d.dx and by[k == 1 and (d.dz * 1000 + d.dx + 1) or ((d.dz + 1) * 1000 + d.dx)]
+      if n then
+        local wy = origin[2] + y * kit.cell
+        out[#out + 1] = { a = { d.pos[1], wy, d.pos[3] }, b = { n.pos[1], wy, n.pos[3] }, from = d.id, to = n.id }
+      end
+    end
+  end
+  return out
+end
+
+-- the form of the tower on a lot: in a district with a value, every other tower in that value's form
+function M.form_of(style, d, gx, gz)
+  if d and d.value and (gx * 3 + gz) % 2 == 0 then return M.ARCHETYPES[d.value].form end
+  return style.form
+end
+function M.base_height(form, h) return math.floor(h * (M.BASE_FRAC[form] or 0.3)) end
+
+-- add-alien-cities: the civ-shaped forms (see M.tiers)
+M.FORMS = {
+  vault = { { 1, 1, 0, 0.55 }, { 0.84, 0.84, 0.55, 0.15 }, { 0.5, 0.5, 0.7, 0.06 } },
+  organ = { { 1, 1, 0, 0.25 }, { 0.24, 0.24, 0.25, 0.75, -1, -1 }, { 0.24, 0.24, 0.25, 0.6, 1, -1 }, { 0.24, 0.24, 0.25, 0.45, 1, 1 },
+            { 0.24, 0.24, 0.25, 0.68, -1, 1 } },
+  hive = { { 1, 1, 0, 0.3 }, { 0.55, 0.55, 0.3, 0.22, -1, -1 }, { 0.55, 0.55, 0.45, 0.22, 1, 0 }, { 0.5, 0.5, 0.62, 0.22, 0, 1 },
+           { 0.4, 0.4, 0.8, 0.2, -0.4, 0 } },
+  slab = { { 1, 1, 0, 0.35 }, { 1, 0.4, 0.35, 0.15, 0, -1 }, { 0.2, 0.2, 0.35, 0.65, 1, 1 }, { 0.2, 0.2, 0.35, 0.5, -1, 1 } },
+  bowl = { { 1, 1, 0, 0.12 }, { 0.4, 0.4, 0.12, 0.5 }, { 0.8, 0.8, 0.6, 0.12 }, { 1, 1, 0.72, 0.1 } },
+  lattice = { { 1, 1, 0, 0.3 }, { 0.22, 0.22, 0.3, 0.62, -1, -1 }, { 0.22, 0.22, 0.3, 0.62, 1, -1 }, { 0.22, 0.22, 0.3, 0.62, 1, 1 },
+              { 0.22, 0.22, 0.3, 0.62, -1, 1 }, { 1, 1, 0.92, 0.08 } },
+  helix = { { 1, 1, 0, 0.25 }, { 0.3, 0.3, 0.25, 0.75 }, { 0.55, 0.55, 0.3, 0.12, -1, -1 }, { 0.55, 0.55, 0.45, 0.12, 1, -1 },
+            { 0.55, 0.55, 0.6, 0.12, 1, 1 }, { 0.55, 0.55, 0.75, 0.12, -1, 1 } },
+  lobed = { { 1, 1, 0, 0.3 }, { 0.8, 0.7, 0.3, 0.25, 0.3, -0.2 }, { 0.6, 0.75, 0.55, 0.2, -0.3, 0.3 }, { 0.4, 0.4, 0.75, 0.25, 0.2, 0 } },
+  pods = { { 1, 1, 0, 0.2 }, { 0.45, 0.45, 0.2, 0.5, -1, -1 }, { 0.45, 0.45, 0.2, 0.8, 1, 0.2 }, { 0.4, 0.4, 0.2, 0.62, -0.2, 1 } },
+  terrace = { { 1, 1, 0, 0.4 }, { 0.85, 0.85, 0.4, 0.15 }, { 0.7, 0.7, 0.55, 0.1 } },
+  rib = { { 1, 1, 0, 0.2 }, { 0.35, 0.35, 0.2, 0.8 }, { 0.8, 0.3, 0.4, 0.05 }, { 0.8, 0.3, 0.6, 0.05 }, { 0.8, 0.3, 0.8, 0.05 } },
+  crater = { { 1, 1, 0, 0.3 }, { 1, 0.2, 0.3, 0.3, 0, -1 }, { 1, 0.2, 0.3, 0.3, 0, 1 }, { 0.2, 1, 0.3, 0.3, -1, 0 },
+             { 0.2, 1, 0.3, 0.3, 1, 0 } },
+}
 
 -- a tower's silhouette: stacked boxes { dx, dz, w, w2, dy, h } (cells, from the tower's footprint corner and base),
 -- every box inside the footprint, so what you see is exactly what you hit
@@ -66,6 +147,17 @@ function M.tiers(form, w, w2, h, inverted)
     add(1, 0.62, 0, h * 0.3)
     add(0.64, 1, h * 0.42, h * 0.2, w // 8, 0)
     add(0.8, 0.5, h * 0.72, h * 0.14, 0, w2 // 6)
+  elseif M.FORMS[form] then
+    -- add-alien-cities: { w frac, w2 frac, y0 frac, h frac, x slide, z slide } (a slide of -1..1 moves the box across
+    -- the footprint's slack, so every box stays inside it); the first box is always the full footprint
+    for _, b in ipairs(M.FORMS[form]) do
+      local ww, ww2 = math.max(4, math.floor(w * b[1])), math.max(4, math.floor(w2 * b[2]))
+      ww, ww2 = math.min(ww, w), math.min(ww2, w2)
+      local sx, sz = (w - ww) // 2, (w2 - ww2) // 2
+      local hh = math.floor(math.min(h, math.max(2, h * b[4])))   -- whole cells, so a hung tower flips exactly
+      out[#out + 1] = { dx = sx + math.floor(sx * (b[5] or 0) + 0.5), dz = sz + math.floor(sz * (b[6] or 0) + 0.5), w = ww, w2 = ww2,
+                        dy = math.min(math.floor(h * b[3]), math.floor(h) - hh), h = hh }
+    end
   else -- ziggurat: four steps, each narrower
     local y = 0
     for i = 0, 3 do
@@ -246,6 +338,8 @@ function M.generate(seed, kit, civ, origin)
   local spec = kit.city
   local rng = saucer.rng.new(seed)
   local districts, port = M.plan(rng, kit)
+  local style0 = M.style_of(civ)
+  M.archetypes(seed, districts, style0.value)
   local ext = M.extent_cells(kit)
   local rooms, doors, solids, debris = {}, {}, {}, {}
   local lots, bybuilding = {}, {}
@@ -425,13 +519,14 @@ function M.generate(seed, kit, civ, origin)
       -- asteroid towers alternate: standing on the floor or hung from the rock above
       local inverted = spec.body == "asteroid" and (lot.gx + lot.gz) % 2 == 0
       local y0 = inverted and (ceiling - h) or (lot.y - 3)
-      local tl = M.tiers(style.form, w, w2, h + 3, inverted)
+      local form = M.form_of(style, d, lot.gx, lot.gz)
+      local tl = M.tiers(form, w, w2, h + 3, inverted)
       for k, t in ipairs(tl) do
         local mn, mx = world_box({ cx + t.dx, y0 + t.dy, cz + t.dz }, { t.w, t.h, t.w2 }, kit, origin)
-        solids[#solids + 1] = { mn, mx, kind = "tower", room = 1, district = d.id, tier = k, form = style.form,
+        solids[#solids + 1] = { mn, mx, kind = "tower", room = 1, district = d.id, tier = k, form = form,
                                 apex = k == #tl or nil }
       end
-      lot.tower = { cx, cz, w, w2, math.floor(h * (style.form == "spire" and 0.42 or style.form == "dome" and 0.35 or 0.3)), inv = inverted }
+      lot.tower = { cx, cz, w, w2, M.base_height(form, h), inv = inverted, form = form }
     elseif lot.type == "plaza" then
       local w = spec.lot - 4
       local mn, mx = world_box({ lot.x0 + 2, lot.y - 2, lot.z0 + 2 }, { w, 2, w }, kit, origin)
@@ -682,9 +777,13 @@ function M.generate(seed, kit, civ, origin)
     local cx = origin[1] + (lot.x0 + spec.lot / 2) * kit.cell
     local cz = origin[3] + (lot.z0 + spec.lot / 2) * kit.cell
     city.districts[d.id] = { id = d.id, kind = d.kind, label = d.label, powered = d.powered, coupling = d.coupling,
-                             pos = { cx, origin[2] + lot.y * kit.cell, cz }, drum = d.drum, crater = d.crater, box = d.box and { origin[1] + d.box[1] * kit.cell, origin[3] + d.box[2] * kit.cell, origin[1] + d.box[3] * kit.cell, origin[3] + d.box[4] * kit.cell } }
+                             pos = { cx, origin[2] + lot.y * kit.cell, cz }, drum = d.drum, crater = d.crater,
+                             value = d.value, archetype = d.archetype, dx = d.dx, dz = d.dz, box = d.box and { origin[1] + d.box[1] * kit.cell, origin[3] + d.box[2] * kit.cell, origin[1] + d.box[3] * kit.cell, origin[3] + d.box[4] * kit.cell } }
   end
   city.rails, city.lifts, city.bridges, city.clues = rails, lifts, bridge_list, clues
+  -- add-alien-cities §4.3: sky lanes, the builders' flight corridors between neighbouring districts, high over the
+  -- towers (drawn as light pulses travelling along them; nothing in the sim)
+  city.lanes = M.lanes(city.districts, origin, kit, math.min(ceiling - 4, (spec.ground or 0) + spec.tower[4] + 6))
   city.skyline = {}
   for _, sd in ipairs(sky) do
     if sd.n > 0 then

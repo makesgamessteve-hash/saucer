@@ -1148,6 +1148,8 @@ function M.draw_ruins(v, A, state, cam, xr)
           end
         end
         if r.city then M.draw_transit(v, A, state, cam, r, st) end
+        -- add-alien-cities: swarms over the avenues, machines on the towers, pulses down the sky lanes
+        if r.city then st.city_phen = (st.city_phen or 0) + require("view.cityphen").draw(v, A, r, cam, (state.tick + (M.alpha or 0)) / 60) end
         -- add-cities: the gates of dark districts, a shutter in each shut door
         if r.city then
           for id, g in pairs(game.gates(i)) do
