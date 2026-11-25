@@ -124,12 +124,16 @@ end
 function M.layout(site, ruin, civ)
   local out = {}
   if not ruin then return out end
-  -- add-relic-stations: the first relic slice keeps no sentries
-  if ruin.relic then return out end
   local kit = ruinm.kit_of(ruin.kit)
   local t = M.tune()
   local big = kit.big or 4
   local band = t.watcher.band[civ and civ.body or "human"] or { 2, 4 }
+  -- add-relic-stations: the debug slice keeps no sentries; a relic in normal play is guarded by its own rules
+  -- (plan phase 8, sim/relicsentry.lua)
+  if ruin.relic then
+    if site.relic_civ then return out end
+    return require("sim.relicsentry").layout(out, site, ruin, kit, t, band, civ, watcher_in)
+  end
   if site.tutorial or (site.tutorial == nil and site.id == 1) then
     local r = t.watcher.light and not ruin.city and M.light_room(ruin)
     if r then watcher_in(out, site, ruin, kit, r, band, civ, true) end

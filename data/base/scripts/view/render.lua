@@ -531,11 +531,12 @@ function M.console(v, A, state, o, d)
   end
   -- add-civ-dungeons: inside a relic the radar closes in and outlines the rooms the saucer has been in
   local relicmap = require("view.relicmap")
-  local ruin, here = relicmap.inside(state, o)
+  local ruin, here, rsite = relicmap.inside(state, o)
   local range = ruin and relicmap.RANGE or nil
   if ruin then
     relicmap.note(ruin, here)
-    for _, dot in ipairs(relicmap.dots(ruin, here, ship.pos)) do
+    local remembered = rsite and require("sim.relic").rooms_seen(state, rsite) or nil
+    for _, dot in ipairs(relicmap.dots(ruin, here, ship.pos, remembered)) do
       local q = M.radar_point(ship, dot.pos, range)
       blip(v, A, d, { cx + q[1], base + q[2], cz + q[3] }, { 0.012, 0.006, 0.012 }, dot.color)
       n = n + 1

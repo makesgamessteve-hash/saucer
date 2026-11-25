@@ -14,6 +14,7 @@ M.BREATH = 0.45      -- m: the breathing hall's slow swell along the skin's norm
 M.AMBIENT = 0.22     -- matcap ambient
 M.DOMINANT_GLOW = 0.3 -- a dominant crystal's emission scale
 M.DOMINANT_TONE = 0.55 -- a dominant crystal's bright ramp, rim and reflection scale (pale quartz halls blew out to white)
+M.DOMINANT_SPARKLE = 0.35 -- a dominant crystal's sparkle scale (a whole hall of twinkling cells read as snow)
 
 function M.library() return data.load("civs/materials.lua") end
 
@@ -45,7 +46,7 @@ local function tone(c) return { c[1] * M.DOMINANT_TONE, c[2] * M.DOMINANT_TONE, 
 function M.calm_crystal(rec)
   local hi = rec.hi or { 1, 1, 1 }
   return { emit = (rec.emit or 0.4) * M.DOMINANT_GLOW, hi = tone(hi), sss = tone(rec.rim or hi),
-           reflect = (rec.refract or 0.6) * M.DOMINANT_TONE }
+           reflect = (rec.refract or 0.6) * M.DOMINANT_TONE, sparkle = rec.sparkle and rec.sparkle * M.DOMINANT_SPARKLE }
 end
 
 -- a civ's eight slots (index 1-7; slot 0 is plain)

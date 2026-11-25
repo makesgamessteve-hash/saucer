@@ -136,6 +136,7 @@ if(SAUCER_BUILD_TESTS)
   # add-relic-stations: the first relic slice (the debug entry adds the Vyrr warren relic to the sector)
   add_test(NAME game_relic COMMAND ${HL} --seed 42 --relic-slice --script tests/game/relic.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_relic_seed7 COMMAND ${HL} --seed 7 --relic-slice --script tests/game/relic.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  add_test(NAME game_relic_play COMMAND ${HL} --seed 42 --script tests/game/relic_play.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   add_test(NAME game_lighting COMMAND ${HL} --seed 42 --script tests/game/lighting.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   # the home test saves and loads: give each run its own user dir so parallel ctest runs cannot race
   add_test(NAME game_home COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-home --quiet

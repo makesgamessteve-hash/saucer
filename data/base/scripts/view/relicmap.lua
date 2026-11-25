@@ -2,7 +2,8 @@
 -- add-civ-dungeons §3.3: inside a relic the helm radar closes in (M.RANGE) and draws the outline of every room the
 -- saucer has been in -- each room's footprint at its floor, as a dotted rectangle, the room it is in now bright, the
 -- heart violet -- so a pilot can see the shape of what they explored. A view-side memory (kept per relic for the
--- session, never in the state: replays, saves and the state hash are unchanged).
+-- session), joined with what the state remembers of a relic in normal play (add-relic-stations, plan phase 8:
+-- state.relic_rooms, so the map survives a save and a reload).
 local ruinm = require("sim.ruin")
 local M = {}
 
@@ -23,17 +24,19 @@ function M.note(ruin, id)
   s[id] = true
 end
 
--- the rooms of `ruin` the saucer has been in, sorted
-function M.visited(ruin)
-  local out = {}
-  for id in pairs(seen[ruin] or {}) do out[#out + 1] = id end
+-- the rooms of `ruin` the saucer has been in, sorted (plus `extra`, the room ids the state remembers)
+function M.visited(ruin, extra)
+  local set, out = {}, {}
+  for id in pairs(seen[ruin] or {}) do set[id] = true end
+  for _, id in ipairs(extra or {}) do if ruin.rooms[id] then set[id] = true end end
+  for id in pairs(set) do out[#out + 1] = id end
   table.sort(out)
   return out
 end
 
 function M.forget() seen = setmetatable({}, { __mode = "k" }) end
 
--- the relic and room player p's saucer is in -> ruin, room id (nil outside every relic)
+-- the relic and room player p's saucer is in -> ruin, room id, site (nil outside every relic)
 function M.inside(state, p)
   if not (p and p.ship and p.ship.pos and state.sector) then return nil end
   local relicv = require("view.relic")
@@ -41,15 +44,15 @@ function M.inside(state, p)
   if not i then return nil end
   local j = relicv.room_index(set, p.ship.pos)
   if not j then return nil end
-  return r, j
+  return r, j, i
 end
 
 -- the dots of the outlines of the visited rooms of `ruin` (world positions) -> { { pos, color } ... }, nearest rooms
 -- first, at most M.MAX_DOTS
-function M.dots(ruin, here, from)
+function M.dots(ruin, here, from, extra)
   local kit = ruinm.kit_of(ruin.kit)
   local rooms = {}
-  for _, id in ipairs(M.visited(ruin)) do
+  for _, id in ipairs(M.visited(ruin, extra)) do
     local mn, mx = ruinm.room_box(ruin.rooms[id], kit, ruin.origin)
     local c = { (mn[1] + mx[1]) / 2, mn[2], (mn[3] + mx[3]) / 2 }
     local d = from and ((c[1] - from[1]) ^ 2 + (c[2] - from[2]) ^ 2 + (c[3] - from[3]) ^ 2) or 0

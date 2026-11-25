@@ -31,7 +31,9 @@ M.WORLD_KEYS = { "traders", "nests", "caches", "vault", "clock", "locks", "grids
                  -- add-wider-dark: the sector you are in, the ones you left, overrides, decoys, gifts
                  "sector_id", "visited", "overrides", "decoys", "gifts",
                  -- add-on-foot-excursions / twin vaults / Hardcore: per-site diffs and the difficulty
-                 "lockdowns", "twins", "hardcore" }
+                 "lockdowns", "twins", "hardcore",
+                 -- add-relic-stations (plan phase 8): Seat-locks opened, relic rooms explored, relics scanned
+                 "relic_locks", "relic_rooms", "relics_found" }
 
 local copy = diff.copy
 M.copy = copy

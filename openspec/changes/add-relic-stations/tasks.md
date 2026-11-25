@@ -23,3 +23,11 @@
       (the maw room is kind `entrance`: its lip, teeth and lamp now draw)
 - [x] 5.2 Inside cushions at 4 x 4 quads: the whole relic 76,900 triangles (was about 181,000), under the web cap
 - [x] 5.3 `tests/lua/relic_spec.lua`: lobes and petals; the 180k triangle cap
+
+## 6. Relics in normal play (plan phase 8)
+- [x] 6.1 `sim/sector.lua`: a relic site in far sectors (sector 3 always, else 35%), 120 m clear, appended last
+- [x] 6.2 `sim/relicsentry.lua`: Watchers in halls, Snatchers on Seat branches, Spotters at junctions
+- [x] 6.3 `sim/relicloot.lua`: warrens 25-40% of the value in richer finds; two finds per hall
+- [x] 6.4 `sim/relic.lua`: approach scan, explored rooms and the heart in the state (v20), saved with the Seat-locks
+- [x] 6.5 `view/relicdecay.lua`: dead lamps and wall heaps by fate and era; the radar map joins the state's rooms
+- [x] 6.6 `tests/lua/relicplay_spec.lua`; `tests/game/relic_play.lua`; both replays re-recorded for v20
