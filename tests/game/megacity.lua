@@ -128,6 +128,12 @@ T.assert(ap.to_console(T, 1, get), "at the beam console in the warren")
 hold = #get().hold
 T.assert(ap.beam_up(T, 1, get, deep), "beamed the sanctum's find up")
 T.assert(#get().hold == hold + 1 and get().looted[deep.key], "the sanctum's find is in the hold and taken")
+-- the sanctum's archive record, read in place
+local rec
+for _, c in ipairs(tractor.candidates(st, get(), 0, nil)) do if c.kind == "clue" then rec = c end end
+T.assert(rec ~= nil, "the sanctum keeps an archive record")
+game.pick_up(st, get(), rec, 0)
+T.assert(get().looted[rec.key], "the record is read")
 T.assert(ap.back_to_helm(T, 1, get), "back at the helm in the warren")
 T.screenshot("megacity_warren.png")
 
