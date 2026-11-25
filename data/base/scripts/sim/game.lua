@@ -477,6 +477,9 @@ local function mover(state, p)
   return function(ship, delta)
     local r, hh = shipm.dims(ship)
     local np, blocked = saucer.physics.move(ship.pos, r, hh, delta, 1)
+    -- fix-station-hull: the trader stations' spinning layer (halos, helices, shells) pushes the hull out
+    local spun, hit = require("sim.stationhull").spin_push(state, np, r)
+    if hit > 0 then np, blocked = spun, blocked + 1 end
     for _, o in ipairs(state.players) do
       if o ~= p then
         local orr, ohh = shipm.dims(o.ship)
