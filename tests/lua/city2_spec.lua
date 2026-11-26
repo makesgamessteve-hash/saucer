@@ -54,7 +54,9 @@ end
 local function fake_view(opts)
   local v = { calls = {}, width = 480, height = 270, player = 1, index = 1, xr = false, texts = "" }
   for k, x in pairs(opts or {}) do v[k] = x end
-  for _, m in ipairs({ "camera", "fog", "mesh", "billboard", "rect", "text", "image" }) do
+  -- materials: a patterned relic in the same sector can sit inside the 7 km far-hull range of a city
+  -- camera (the old lattice's centre often did not), and view.relic then calls v:materials
+  for _, m in ipairs({ "camera", "fog", "mesh", "billboard", "rect", "text", "image", "materials" }) do
     v[m] = function(self, ...)
       self.calls[m] = (self.calls[m] or 0) + 1
       if m == "text" then
@@ -63,6 +65,7 @@ local function fake_view(opts)
         return #s * 8
       end
       if m == "fog" then self.fogged = ... end
+      if m == "materials" then return 7 end
     end
   end
   return v
