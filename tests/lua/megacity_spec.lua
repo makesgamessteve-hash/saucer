@@ -91,7 +91,7 @@ describe("megacity", function()
       end
       expect(fx0 == c[1] and fx1 == c[3]).to_be(true)
       for n, s in ipairs(sol) do
-        if n <= sol.found then goto next end
+        if n <= sol.found or n >= sol.transit then goto next end
         expect(s[1][1] >= b[1] - 1e-6 and s[2][1] <= b[3] + 1e-6 and s[1][3] >= b[2] - 1e-6 and s[2][3] <= b[4] + 1e-6).to_be(true)
         expect(s[2][2] <= p.frame.y + d.top + 1e-6 and s[1][2] >= p.frame.y - 40 - mega.WARREN_H - mega.FLOOR).to_be(true)
         ::next::
@@ -540,6 +540,30 @@ describe("megacity", function()
     end
     local s2 = megav.draw(fake_view(), A, p, { pos = { eye[1], d.y + 400, eye[3] }, yaw = 0, pitch = 0 }, 1, function() return true end, 1000, 2)
     expect(s2.lamps).to_be(nil)
+    expect(s2.phenomena).to_be(nil)
+    -- strange things going on down there, of the builders' own kinds: one in the hub and each chamber, two in the
+    -- sanctum, processions down some corridors, all inside their spaces
+    expect(s1.phenomena).to_be(#w.phenomena)
+    local per = {}
+    for _, ph in ipairs(w.phenomena) do
+      local sp = w.spaces[ph.space]
+      per[ph.space] = (per[ph.space] or 0) + 1
+      expect(p.phen_weights[ph.kind] ~= nil).to_be(true)
+      expect(ph.pos[1] >= sp[1] and ph.pos[1] <= sp[3] and ph.pos[3] >= sp[2] and ph.pos[3] <= sp[4]).to_be(true)
+      expect(ph.pos[2] > w.y0 and ph.pos[2] < w.y1).to_be(true)
+      if sp[5] == "corridor" then expect(ph.kind).to_be("procession") end
+    end
+    for si, sp in ipairs(w.spaces) do
+      if sp[5] == "sanctum" then expect(per[si]).to_be(2)
+      elseif sp[5] ~= "corridor" then expect(per[si]).to_be(1) end
+    end
+    expect(mega.plan_phenomena(1, { k = 1 }, {})).to_be(nil)
+    -- every kind can be posed in a warren space (the shared relic phenomena)
+    local phv = require("view.phenomena")
+    for kind in pairs(require("sim.relicgen").PHENOMENA) do
+      local ph = { kind = kind, pos = { eye[1], eye[2], eye[3] }, size = 20, phase = 1, seed = 7, long = 1, space = 1 }
+      phv.draw_one(v, A, ph, { hub[1], w.y0, hub[2] }, { hub[3], w.y1, hub[4] }, { pos = eye }, 3, 1)
+    end
     -- lit strips on every space's ceiling and floor
     local strips = 0
     for _, q in ipairs(megav.light_parts(p, d)) do if q.max[2] <= w.y1 and q.min[2] >= w.y0 - 1e-6 then strips = strips + 1 end end
@@ -581,6 +605,50 @@ describe("megacity", function()
     end
     local sd = megav.draw(fake_view(), A, p, { pos = hover_over(p, d), yaw = 0, pitch = 0 }, 1, function() return true end, 1000, 2)
     expect((sd.trains or 0) >= 2).to_be(true)
+    -- the rails: a beam under every train's cars, on pylons standing on the street in the avenue's middle; the
+    -- drifters keep off the pylons
+    local sol = mega.solids(p, d)
+    local rails, pylons = {}, {}
+    for n = sol.transit, #sol do
+      local b = sol[n]
+      if b[1][2] == p.frame.y then pylons[#pylons + 1] = b else rails[#rails + 1] = b end
+    end
+    expect(#rails).to_be(2)
+    expect(#pylons >= 10).to_be(true)
+    for kk = 1, 2 do
+      local rb = rails[kk]
+      expect(rb[2][2]).to_be(p.frame.y + mega.RAIL_Y[kk])
+      for _, car in ipairs(megav.train_pose(p, d, kk, 77).cars) do
+        local x, z = car.pos[1], car.pos[3]
+        expect(x >= rb[1][1] - 1e-6 and x <= rb[2][1] + 1e-6 and z >= rb[1][3] - 1e-6 and z <= rb[2][3] + 1e-6).to_be(true)
+        expect(car.pos[2] - car.size[2] / 2 > rb[2][2]).to_be(true)
+      end
+    end
+    for _, pb in ipairs(pylons) do
+      local under = false
+      for _, rb in ipairs(rails) do
+        if pb[2][2] == rb[1][2] and pb[1][1] >= rb[1][1] - 3 and pb[2][1] <= rb[2][1] + 3 and pb[1][3] >= rb[1][3] - 3 and pb[2][3] <= rb[2][3] + 3 then under = true end
+      end
+      expect(under).to_be(true)
+    end
+    for _, x in ipairs(p.districts) do
+      local xs = mega.solids(p, x)
+      for kk = 1, 2 do
+        for _, tt in ipairs({ 0, 50, 333 }) do
+          local o = megav.drift_pose(p, x, kk, tt)
+          for _, y in ipairs(p.districts) do
+            local ys = mega.solids(p, y)
+            for n = ys.transit, #ys do
+              local b = ys[n]
+              local hx, hz = o.size[1] / 2 + 2, o.size[1] / 2 + 2
+              local hit = o.pos[1] + hx > b[1][1] and o.pos[1] - hx < b[2][1] and o.pos[3] + hz > b[1][3] and o.pos[3] - hz < b[2][3]
+                and o.pos[2] - o.size[2] / 2 < b[2][2] and o.pos[2] + o.size[2] / 2 > b[1][2]
+              expect(hit).to_be(false)
+            end
+          end
+        end
+      end
+    end
     -- the archive record: sensed from the sanctum (not from the hall), read in place, then gone
     local pl = st.players[1]
     pl.site = 0

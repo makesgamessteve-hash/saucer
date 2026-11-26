@@ -36,6 +36,13 @@ M.MOUTH = { 48, 34 }       -- m, its mouth's width and height
 M.FINDS = { 4, 6 }
 M.SENSE = 160              -- m, finds this near the ship are rolled (like a city's)
 M.MAX_ACTIVE = 16
+-- add-alien-cities-6: the mag-trains' rails: a beam down the district's west and north avenue midlines, on pylons
+-- from the foundation (solid, as drawn; the trains in view/citymega.lua run on top)
+M.RAIL_Y = { 260, 320 }    -- m above the street to the rail's top under the cars (west line, north line)
+M.RAIL = { 4, 3 }          -- m, the rail's width and depth
+M.PYLON = 6                -- m, a pylon's side
+M.PYLON_GAP = 420          -- m between pylons
+M.TRAIN_CLEAR = 4.5        -- m from the rail's top to a car's middle
 M.PREBUILD = 3000          -- m: districts this near a ship are built ahead of need, one a step
 -- add-alien-cities-4: fold bays on the terraces: a 44 x 44 m pad with 20 m clear above and a cradle (a growing back
 -- to the Villa there is free, as in a relic's bays), on tier tops with open sky over them
@@ -152,6 +159,12 @@ function M.plan(r, sector, i, station_ball)
     local far = mx * mx + mz * mz
     if far > best then tallest, best = d, far end
   end
+  -- add-alien-cities-6: the warrens' phenomena, from the builders' own list (as in their relics)
+  local site = sector and sector.sites and sector.sites[i]
+  local civ = site and require("sim.game").civ_of(site) or nil
+  local weights = civ and civ.language and civ.language.phenomena or require("sim.relicgen").PHENOMENA
+  out.phen_weights = weights
+  for _, d in ipairs(out.districts) do M.plan_phenomena(r.seed, d, weights) end
   if tallest then
     local drng = saucer.rng.new(saucer.seed_child(r.seed, "megaform", 0))
     local o = tallest.organs[(#tallest.organs + 1) // 2]
@@ -349,6 +362,52 @@ function M.plan_warren(seed, d)
   return d.warren
 end
 
+-- the strange things going on in district d's warren (own rng; render only, view/phenomena.lua draws them): one in
+-- the hub, one in every chamber, a procession down some corridors, two in the sanctum; kinds weighted by the civ's
+-- list. Each: { id, kind, space (index), pos, long, size, phase, seed }
+function M.plan_phenomena(seed, d, weights)
+  local w = d.warren
+  if not w then return nil end
+  local rng = saucer.rng.new(saucer.seed_child(seed, "warrenph", d.k))
+  local kinds, total = {}, 0
+  for k, wt in pairs(weights) do kinds[#kinds + 1] = { k, wt } end
+  table.sort(kinds, function(a, b) return a[1] < b[1] end)
+  for _, k in ipairs(kinds) do total = total + k[2] end
+  local function pick()
+    local x = rng:float() * total
+    for _, k in ipairs(kinds) do
+      x = x - k[2]
+      if x <= 0 then return k[1] end
+    end
+    return kinds[#kinds][1]
+  end
+  local out = {}
+  local function place(si, r, kind, fx, fy, fz)
+    local pos = { r[1] + 6 + (r[3] - r[1] - 12) * fx, w.y0 + 4 + (M.WARREN_H - 8) * fy, r[2] + 6 + (r[4] - r[2] - 12) * fz }
+    local long = (r[3] - r[1]) > (r[4] - r[2]) and 1 or 3
+    if kind == "breath" then
+      -- on a wall the room's long sides
+      if long == 1 then pos[3] = r[2] + 0.5 else pos[1] = r[1] + 0.5 end
+    end
+    out[#out + 1] = { id = #out + 1, kind = kind, space = si, pos = pos, long = long,
+                      size = min(r[3] - r[1], r[4] - r[2]) * (0.12 + 0.1 * rng:float()), phase = rng:float() * 6.283,
+                      seed = rng:int(1, 1000000) }
+  end
+  for si, r in ipairs(w.spaces) do
+    local kind = r[5]
+    if kind == "corridor" then
+      if rng:float() < 0.5 then place(si, r, "procession", 0.5, 0.9, 0.5) end
+    elseif kind == "sanctum" then
+      place(si, r, pick(), 0.25, 0.3 + 0.3 * rng:float(), 0.25)
+      place(si, r, pick(), 0.75, 0.3 + 0.3 * rng:float(), 0.75)
+    else
+      place(si, r, pick(), 0.3 + 0.4 * rng:float(), 0.3 + 0.3 * rng:float(), 0.3 + 0.4 * rng:float())
+    end
+  end
+  w.phenomena = out
+  return out
+end
+
 -- the warren's solids: its floor, and walls round every open grid cell (rows of wall cells merged into boxes)
 local function warren_boxes(d, out)
   local w = d.warren
@@ -515,11 +574,32 @@ function M.build(d)
   if w then warren_boxes(d, out) end
   local bays = M.terrace_bays(d, out)
   for _, bay in ipairs(bays) do out[#out + 1] = bay.cradle_box end
+  out.transit = #out + 1
+  M.rail_boxes(d, out)
   return out, bays
 end
 
 local function overlaps(a0, a1, b)
   return a0[1] < b[2][1] and a1[1] > b[1][1] and a0[2] < b[2][2] and a1[2] > b[1][2] and a0[3] < b[2][3] and a1[3] > b[1][3]
+end
+
+-- the rails and pylons of district d's two lines (k 1: x = cell west edge along z; k 2: z = cell north edge along x)
+function M.rail_boxes(d, out)
+  local c, y = d.cell, d.y
+  local rw, rd, pw = M.RAIL[1] / 2, M.RAIL[2], M.PYLON / 2
+  for k = 1, 2 do
+    local top = y + M.RAIL_Y[k]
+    local a0, a1 = (k == 1 and c[2] or c[1]), (k == 1 and c[4] or c[3])
+    local e = k == 1 and c[1] or c[2]
+    if k == 1 then out[#out + 1] = { { e - rw, top - rd, a0 }, { e + rw, top, a1 } }
+    else out[#out + 1] = { { a0, top - rd, e - rw }, { a1, top, e + rw } } end
+    local n = floor((a1 - a0) / M.PYLON_GAP)
+    for i = 1, n do
+      local a = a0 + (a1 - a0) * (i - 0.5) / n
+      if k == 1 then out[#out + 1] = { { e - pw, y, a - pw }, { e + pw, top - rd, a + pw } }
+      else out[#out + 1] = { { a - pw, y, e - pw }, { a + pw, top - rd, e + pw } } end
+    end
+  end
 end
 
 -- the fold bays on district d's terraces, given its solids: tier tops at least BAY_MIN_Y up, a BAY pad inside the

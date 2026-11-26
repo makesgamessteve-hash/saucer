@@ -61,7 +61,15 @@ function M.light_parts(p, d)
   local parts = {}
   local sol = mega.solids(p, d)
   for n, b in ipairs(sol) do
-    if n > (sol.found or 1) then
+    if n >= (sol.transit or math.huge) then
+      -- a rail or a pylon: the rail's lit underside, a lamp ring near a pylon's top
+      local tall = b[2][2] - b[1][2] > 10
+      if tall then
+        parts[#parts + 1] = { kind = "box", min = { b[1][1] - 0.4, b[2][2] - 8, b[1][3] - 0.4 }, max = { b[2][1] + 0.4, b[2][2] - 6, b[2][3] + 0.4 }, color = acc0, emissive = 1 }
+      else
+        parts[#parts + 1] = { kind = "box", min = { b[1][1] + 0.5, b[1][2] - 0.3, b[1][3] + 0.5 }, max = { b[2][1] - 0.5, b[1][2], b[2][3] - 0.5 }, color = acc0, emissive = 1 }
+      end
+    elseif n > (sol.found or 1) then
       local y = b[1][2] + 10
       while y + 3 < b[2][2] do
         parts[#parts + 1] = { kind = "box", min = { b[1][1] - 0.6, y, b[1][3] - 0.6 }, max = { b[2][1] + 0.6, y + 2.5, b[2][3] + 0.6 },
@@ -234,7 +242,7 @@ M.TRAIN_DRAW = 3000
 M.TRAIN_SPEED = 55     -- m/s
 M.TRAIN_CARS = 6
 M.TRAIN_CAR = { 8, 7, 32 }  -- m, a car's width, height and length
-M.TRAIN_Y = { 260, 320 }    -- m above the street, west line and north line
+M.TRAIN_Y = { mega.RAIL_Y[1] + mega.TRAIN_CLEAR, mega.RAIL_Y[2] + mega.TRAIN_CLEAR } -- m above the street, a car's middle
 function M.train_pose(p, d, k, t)
   local c = d.cell
   local len = k == 1 and (c[4] - c[2]) or (c[3] - c[1])
@@ -260,6 +268,7 @@ end
 M.DRIFT_DRAW = 3500
 M.DRIFT_SPEED = 9     -- m/s
 M.DRIFT_SIZE = { 16, 84, 6 }
+M.DRIFT_OFF = 22      -- m off the avenue's midline (the rails' pylons stand on it)
 function M.drift_pose(p, d, k, t)
   local c = d.cell
   local len = k == 1 and (c[4] - c[2]) or (c[3] - c[1])
@@ -267,7 +276,7 @@ function M.drift_pose(p, d, k, t)
     local u = (tt * M.DRIFT_SPEED + d.k * 397 + k * 911) % (2 * len)
     if u > len then u = 2 * len - u end
     local y = p.frame.y + 110 + 50 * math.sin(tt * 0.17 + d.k + k)
-    return k == 1 and { c[3], y, c[2] + u } or { c[1] + u, y, c[4] }
+    return k == 1 and { c[3] - M.DRIFT_OFF, y, c[2] + u } or { c[1] + u, y, c[4] - M.DRIFT_OFF }
   end
   local trail = {}
   for i = 1, 2 do trail[i] = { pos = at(t - i * 4), size = 6 - i * 1.5 } end
@@ -366,6 +375,14 @@ function M.draw(v, A, p, cam, tex, visible, budget, t)
         st.organs = (st.organs or 0) + 1
         if d.warren and cam.pos[2] < d.y + M.WARREN_LAMP_Y and dist <= M.WARREN_LAMPS then
           st.lamps = (st.lamps or 0) + M.warren_lamps(v, p, d, t or 0)
+          -- the strange things going on down there (as in the builders' relics)
+          local w = d.warren
+          local phv = require("view.phenomena")
+          for _, ph in ipairs(w.phenomena or {}) do
+            local r = w.spaces[ph.space]
+            phv.draw_one(v, A, ph, { r[1], w.y0, r[2] }, { r[3], w.y1, r[4] }, cam, t or 0, A.pal.base)
+            st.phenomena = (st.phenomena or 0) + 1
+          end
         end
         if d.warren then
           local sp = M.sanctum_pose(d, t or 0)

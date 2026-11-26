@@ -132,3 +132,13 @@ record, sensed only from the warren and read in place like the core's records.
 #### Scenario: Trains, storm and records
 - **WHEN** `tests/lua/megacity_spec.lua` runs "mag-trains run over the outer avenues, the storm blows over the ring, and each sanctum keeps an archive record", and `tests/game/megacity.lua` runs
 - **THEN** they pass
+
+### Requirement: Rails and warren phenomena
+The mag-trains SHALL run on rails down each district's west and north avenue midlines, carried on pylons from the
+street, collided as drawn, with the drifters kept off the pylons. Every warren SHALL hold strange, harmless,
+render-only phenomena of the builders' own kinds (as in their relics): one in the hub and each chamber, two in the
+sanctum, processions down some corridors.
+
+#### Scenario: Rails and phenomena
+- **WHEN** `tests/lua/megacity_spec.lua` runs "mag-trains run over the outer avenues, the storm blows over the ring, and each sanctum keeps an archive record" and "the warren is lit, the hall's finds keep off the shaft, and districts near a ship are built ahead of need"
+- **THEN** they pass
