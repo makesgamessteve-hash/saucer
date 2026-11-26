@@ -24,7 +24,7 @@ silhouette. Two builders should read apart from far off: in silhouette, surface 
   - a crown of the motif behind the body (a hub on the axis, elements radiating round it), smaller copies cresting
     the stem's top, all solid as drawn and well behind the hangar cell and its approach;
   - the pattern on the hub and on the body's surface spots;
-  - signal lights on every tip, drawn out to 9 km and never smaller than 1.1% of their distance;
+  - signal lights on every tip, drawn out to 9 km and never smaller than 2% of their distance, their colour lifted against the fog;
   - the far silhouette lights itself a little (and the crown a little up close), so a station far off reads in its
     colours.
   - When a relic of another civ holds the view's material slots, a station draws a plain twin of its meshes.
