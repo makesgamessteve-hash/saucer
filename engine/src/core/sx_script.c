@@ -1602,7 +1602,31 @@ static int l_v_mesh(lua_State *L) {
   return 0;
 }
 
-/* view:billboard(tex, pos, size, {palette=, tint=, yaxis=true, sky=false}) */
+/* replace-bubble-sprites: map a form name (or a number) to SX_BILLFORM_* (0 if absent/unknown) */
+static int bill_form(lua_State *L, int o) {
+  int f = 0;
+  const char *s;
+  if (!o) return 0;
+  lua_getfield(L, o, "form");
+  if (lua_isnumber(L, -1)) {
+    f = (int)lua_tointeger(L, -1);
+  } else if (lua_isstring(L, -1)) {
+    s = lua_tostring(L, -1);
+    if (!strcmp(s, "disk")) f = SX_BILLFORM_DISK;
+    else if (!strcmp(s, "flare")) f = SX_BILLFORM_FLARE;
+    else if (!strcmp(s, "spark")) f = SX_BILLFORM_SPARK;
+    else if (!strcmp(s, "ring")) f = SX_BILLFORM_RING;
+    else if (!strcmp(s, "shard")) f = SX_BILLFORM_SHARD;
+    else if (!strcmp(s, "streak")) f = SX_BILLFORM_STREAK;
+    else if (!strcmp(s, "chevron")) f = SX_BILLFORM_CHEVRON;
+    else if (!strcmp(s, "slit")) f = SX_BILLFORM_SLIT;
+  }
+  lua_pop(L, 1);
+  if (f < 0 || f > SX_BILLFORM_SLIT) f = 0;
+  return f;
+}
+
+/* view:billboard(tex, pos, size, {palette=, tint=, yaxis=true, sky=false, form=, height=}) */
 static int l_v_billboard(lua_State *L) {
   sx_viewport *v = check_view(L);
   sx_draw_billboard b;
@@ -1626,6 +1650,7 @@ static int l_v_billboard(lua_State *L) {
     b.sky = lua_toboolean(L, -1);
     lua_pop(L, 1);
     b.size[1] = field_num(L, o, "height", b.size[0]);
+    b.form = bill_form(L, o);
   }
   sx_view_billboard(v, &b);
   return 0;

@@ -9,6 +9,7 @@
 local holo = require("sim.holo")
 local vec = require("lib.vec")
 local sm = saucer.math
+local spr = require("view.sprites")
 local M = {}
 
 local GRID = { 0.95, 0.75, 0.25 }
@@ -286,11 +287,11 @@ function M.ruin_model(v, A, state, host, q, tick)
   local pts = trail and trail.pts or {}
   local function to_model(w) return { base[1] + (w[1] - c[1]) * s, base[2] + (w[2] - c[2]) * s, base[3] + (w[3] - c[3]) * s } end
   for i = 1, #pts, math.max(1, #pts // 80) do
-    v:billboard(A.tex.glow, to_model(pts[i]), 0.12, { palette = A.pal.base, tint = { 1, 0.8, 0.3, 0.8 } })
+    spr.spark(v, A, to_model(pts[i]), 0.12, { tint = { 1, 0.8, 0.3, 0.8 } })
     n = n + 1
   end
   for _, mk in ipairs(trail and trail.marks or {}) do
-    v:billboard(A.tex.loot, to_model(mk), 0.3, { palette = A.pal.base, tint = { 0.6, 1, 0.6, 1 } })
+    spr.spark(v, A, to_model(mk), 0.3, { tint = { 0.6, 1, 0.6, 1 } })
     n = n + 1
   end
   if #pts > 1 then
@@ -302,7 +303,7 @@ function M.ruin_model(v, A, state, host, q, tick)
     local w = { a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, a[3] + (b[3] - a[3]) * t }
     v:mesh(A.saucer[1].hull, { pos = to_model(w), scale = math.max(s * 4, 0.02), ghost = true,
                                tint = { 1, 0.85, 0.4, 0.9 } })
-    v:billboard(A.tex.glow, to_model(w), 0.35, { palette = A.pal.base, tint = { 1, 0.9, 0.5, 1 } })
+    spr.light(v, A, to_model(w), 0.35, { tint = { 1, 0.9, 0.5, 1 } })
     n = n + 1
   end
   return n
@@ -329,13 +330,13 @@ function M.render(v, state, p)
   local n = 1
   for _, q in ipairs(sc.props) do
     if q.kind == "sun" then
-      v:billboard(A.tex.glow, { q.at[1], q.y or 30, q.at[2] }, q.r or 30, { palette = A.pal.base, tint = q.color or { 1, 0.85, 0.5, 1 } })
+      spr.light(v, A, { q.at[1], q.y or 30, q.at[2] }, q.r or 30, { tint = q.color or { 1, 0.85, 0.5, 1 } })
       n = n + 1
     elseif q.kind == "ruin_model" then
       n = n + M.ruin_model(v, A, state, host, q, state.tick)
     elseif q.kind == "glyph" then
       local bob = 0.2 * sm.sin((state.tick % 3600) * 0.03 + q.at[1])
-      v:billboard(A.tex.echo, { q.at[1], (q.y or 2) + bob, q.at[2] }, q.r or 0.6, { palette = A.pal.base, tint = q.color })
+      spr.ring(v, A, { q.at[1], (q.y or 2) + bob, q.at[2] }, q.r or 0.6, { tint = q.color })
       n = n + 1
     end
   end
@@ -344,7 +345,7 @@ function M.render(v, state, p)
     for i, g in ipairs(sc.gates) do
       if i >= p.holo_run.gate then
         local pulse = i == p.holo_run.gate and (0.7 + 0.3 * sm.sin(state.tick * 0.2)) or 0.35
-        v:billboard(A.tex.glow, { g[1], g[2], g[3] }, (g.r or 1.5) * 0.6, { palette = A.pal.base, tint = { 1, 0.85, 0.3, pulse } })
+        spr.ring(v, A, { g[1], g[2], g[3] }, (g.r or 1.5) * 0.6, { tint = { 1, 0.85, 0.3, pulse } })
         n = n + 1
       end
     end

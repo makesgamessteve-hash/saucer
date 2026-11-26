@@ -7,6 +7,7 @@ local kit = require("lib.meshkit")
 local hud = require("view.hud")
 local configs = require("sim.config")
 local vec = require("lib.vec")
+local spr = require("view.sprites")
 local game = require("sim.game")
 local tractor = require("sim.tractor")
 local shipm = require("sim.ship")
@@ -53,7 +54,7 @@ function M.floor_cone(v, A, def, dyn, wpos, pitch, t, tint)
       if d[2] < -0.05 then
         local k = (def.floor + 0.3 - wpos[2]) / d[2]
         if k > 0 and k <= reach then
-          v:billboard(A.tex.glow or A.tex.beam, vec.add(wpos, vec.scale(d, k)), 3.0, { palette = A.pal.base, tint = col })
+          spr.pool(v, A, vec.add(wpos, vec.scale(d, k)), 1.6, col)
           n = n + 1
         end
       end
@@ -85,7 +86,7 @@ function M.draw_sentries(v, A, state, p)
           kit.draw(v, assets.rig(A, "watcher", {}, def.glyph or 1), { pos = wpos, yaw = byaw },
                    { head = { yaw = dyn.yaw - byaw }, eye = { pitch = pitch } })
           local f = sentry.dir_of(dyn.yaw, pitch)
-          v:billboard(A.tex.beam, vec.add(wpos, vec.scale(f, 1.9)), 1.0, { palette = A.pal.base, tint = tint })
+          spr.slit(v, A, vec.add(wpos, vec.scale(f, 1.9)), 1.0, { tint = tint })
           -- add-strategic-sentries: the light it throws on the floor (where it is looking now)
           if p.site == site and def.floor and dyn.st ~= "off" and dyn.st ~= "disabled" then
             M.floor_cone(v, A, def, dyn, wpos, pitch, t, tint)
@@ -96,14 +97,14 @@ function M.draw_sentries(v, A, state, p)
             end
           end
           if show and def.cell and dyn.st ~= "off" then
-            v:billboard(A.tex.glow or A.tex.beam, def.cell, 1.6, { palette = A.pal.base, tint = { 0.3, 1, 0.9, 0.9 } })
+            spr.mark(v, A, def.cell, 1.6, { tint = { 0.3, 1, 0.9, 0.9 } })
           end
           if show then
             for _, da in ipairs({ -t.watcher.half_angle, 0, t.watcher.half_angle }) do
               local d = sentry.dir_of(dyn.yaw + da, pitch)
               for k = 1, 12 do
-                v:billboard(A.tex.beam, vec.add(wpos, vec.scale(d, k * t.watcher.range / 12)), 0.7,
-                  { palette = A.pal.base, tint = { tint[1], tint[2], tint[3], 0.45 } })
+                spr.streak(v, A, vec.add(wpos, vec.scale(d, k * t.watcher.range / 12)), 0.7,
+                  { tint = { tint[1], tint[2], tint[3], 0.45 } })
               end
             end
           end
@@ -112,15 +113,15 @@ function M.draw_sentries(v, A, state, p)
           local pos = dyn.pos or def.pos
           v:mesh(A.decoy, { pos = pos, yaw = dyn.yaw or 0, scale = 3 })
           local f = sentry.dir_of(dyn.yaw or 0, dyn.pitch or -0.35)
-          v:billboard(A.tex.glow or A.tex.beam, vec.add(pos, vec.scale(f, 0.8)), show and 2.0 or 1.2,
-            { palette = A.pal.base, tint = dyn.st == "dormant" and { 0.35, 0.6, 1, 0.9 } or tint })
+          spr.slit(v, A, vec.add(pos, vec.scale(f, 0.8)), show and 2.0 or 1.2,
+            { tint = dyn.st == "dormant" and { 0.35, 0.6, 1, 0.9 } or tint })
           if show and t.stealth then
             local S = t.stealth.spotter
             for _, da in ipairs({ -S.half_angle, 0, S.half_angle }) do
               local d = sentry.dir_of((dyn.yaw or 0) + da, dyn.pitch or -0.35)
               for k = 1, 8 do
-                v:billboard(A.tex.beam, vec.add(pos, vec.scale(d, k * S.range / 8)), 0.6,
-                  { palette = A.pal.base, tint = { 0.35, 0.6, 1, 0.4 } })
+                spr.streak(v, A, vec.add(pos, vec.scale(d, k * S.range / 8)), 0.6,
+                  { tint = { 0.35, 0.6, 1, 0.4 } })
               end
             end
           end
@@ -129,19 +130,19 @@ function M.draw_sentries(v, A, state, p)
           local pos = dyn.pos or def.pos
           local spin = (dyn.st == "chase" or dyn.st == "clamped") and state.tick * 0.2 or state.tick * 0.02
           v:mesh(A.clamp, { pos = pos, yaw = spin })
-          v:billboard(A.tex.beam, { pos[1], pos[2] + 1.6, pos[3] }, show and 1.6 or 0.8,
-            { palette = A.pal.base, tint = tint })
+          spr.slit(v, A, { pos[1], pos[2] + 1.6, pos[3] }, show and 1.6 or 0.8,
+            { tint = tint })
         elseif def.kind == "warden" then
           -- add-home-among-stars: the Warden, its eye ring turning fast when it hunts
           local pos = dyn.pos or def.pos
           local spin = dyn.st == "hunt" and state.tick * 0.15 or state.tick * 0.015
           v:mesh(A.warden, { pos = pos, yaw = spin })
-          v:billboard(A.tex.beam, { pos[1], pos[2] + 2.6, pos[3] }, show and 2.2 or 1.2,
-            { palette = A.pal.base, tint = tint })
+          spr.slit(v, A, { pos[1], pos[2] + 2.6, pos[3] }, show and 2.2 or 1.2,
+            { tint = tint })
         elseif def.kind == "lockdown" then
           v:mesh(A.lockdown, { pos = def.pos, yaw = state.tick * 0.01 })
-          v:billboard(A.tex.beam, { def.pos[1], def.pos[2] + 1.1, def.pos[3] }, show and 1.4 or 0.7,
-            { palette = A.pal.base, tint = tint })
+          spr.slit(v, A, { def.pos[1], def.pos[2] + 1.1, def.pos[3] }, show and 1.4 or 0.7,
+            { tint = tint })
           -- sealed doors: a glowing slab across each
           for _, bi in ipairs(dyn.sealed or {}) do
             local b = def.boxes[bi]
@@ -153,35 +154,35 @@ function M.draw_sentries(v, A, state, p)
           local hunting = dyn.st == "chase" or dyn.st == "latched" or dyn.st == "hunt"
           kit.draw(v, assets.rig(A, "snatcher", {}, def.glyph or 1), { pos = pos, yaw = state.tick * 0.05 },
                    { claws = { pitch = hunting and -0.45 or 0 }, eye = { yaw = sm.sin(state.tick * 0.1) * 0.7 } })
-          v:billboard(A.tex.beam, { pos[1], pos[2] + 0.55, pos[3] }, show and 1.4 or 0.5,
-            { palette = A.pal.base, tint = tint })
+          spr.slit(v, A, { pos[1], pos[2] + 0.55, pos[3] }, show and 1.4 or 0.5,
+            { tint = tint })
           if def.nest then v:mesh(A.nest, { pos = def.nest }) end
         end
       end
     end
   end
   for _, b in ipairs(state.bolts or {}) do
-    v:billboard(A.tex.beam, b.pos, 0.9, { palette = A.pal.base, tint = { 0.5, 0.8, 1, 1 } })
+    spr.streak(v, A, b.pos, 0.9, { tint = { 0.5, 0.8, 1, 1 }, height = 1.8 })
   end
   -- add-strategic-sentries: a Scanner pulse marks the guarded finds (amber, pulsing)
   if (p.scan_until or 0) > state.tick and (p.site or 0) ~= 0 then
     for _, s in ipairs(require("sim.stealth").guarded(game.ruin(p.site), p, p.site)) do
       local k = 1 + 0.3 * math.sin(state.tick * 0.2)
-      v:billboard(A.tex.glow or A.tex.beam, { s.pos[1], s.pos[2] + 2, s.pos[3] }, 2.4 * k,
-        { palette = A.pal.base, tint = { 1, 0.7, 0.2, 0.9 } })
+      spr.mark(v, A, { s.pos[1], s.pos[2] + 2, s.pos[3] }, 2.4 * k,
+        { tint = { 1, 0.7, 0.2, 0.9 } })
     end
   end
   -- add-wider-dark: thrown decoys blink, gifts tumble, the Heart's core beats
   for _, d in ipairs(state.decoys or {}) do
     v:mesh(A.decoy, { pos = d.pos, yaw = state.tick * 0.15 })
     if state.tick % 20 < 10 then
-      v:billboard(A.tex.glow or A.tex.beam, d.pos, 2.2, { palette = A.pal.base, tint = { 0.4, 0.9, 1, 0.8 } })
+      spr.spark(v, A, d.pos, 2.2, { tint = { 0.4, 0.9, 1, 0.8 } })
     end
   end
   for _, gft in ipairs(state.gifts or {}) do
     v:mesh(A.gift, { pos = gft.pos, yaw = state.tick * 0.03, pitch = 0.3 })
     if gft.to == 0 or gft.to == p.index then
-      v:billboard(A.tex.glow or A.tex.beam, gft.pos, 2.0, { palette = A.pal.base, tint = { 1, 0.6, 0.85, 0.7 } })
+      spr.spark(v, A, gft.pos, 2.0, { tint = { 1, 0.6, 0.85, 0.7 } })
     end
   end
   local heart = require("sim.heart")
@@ -191,8 +192,8 @@ function M.draw_sentries(v, A, state, p)
     if core then
       local beat = 1 + 0.12 * math.sin(state.tick * (hm.heart_open and 0.25 or 0.08))
       v:mesh(A.heart_core, { pos = core, yaw = state.tick * 0.01, scale = beat })
-      v:billboard(A.tex.glow or A.tex.beam, core, hm.heart_open and 10 or 6,
-        { palette = A.pal.base, tint = hm.ending and { 0.6, 1, 0.8, 0.8 } or { 1, 0.4, 0.6, 0.8 } })
+      spr.light(v, A, core, hm.heart_open and 10 or 6,
+        { tint = hm.ending and { 0.6, 1, 0.8, 0.8 } or { 1, 0.4, 0.6, 0.8 } })
     end
   end
   local m = state.mystery
@@ -476,7 +477,7 @@ function M.home_parts(v, A, o, d, tick)
   if H then
     local pulse = 0.7 + 0.3 * sm.sin(tick * 0.04)
     local y = L.decks[1].floor + H.y
-    v:billboard(A.tex.glow, at(d, { H.x, y, H.z }), 1.1 * d.scale, { palette = A.pal.base, tint = { 0.4, 0.9, 1.0, 0.5 * pulse } })
+    spr.light(v, A, at(d, { H.x, y, H.z }), 1.1 * d.scale, { tint = { 0.4, 0.9, 1.0, 0.5 * pulse } })
     v:mesh(A.unit, { pos = at(d, { H.x, y, H.z }), yaw = d.yaw + tick * 0.03, roll = d.roll,
                      scale = { 0.22 * d.scale, 0.32 * d.scale, 0.22 * d.scale }, tint = { 0.5, 1.0, 1.0, 1 } })
     n = n + 2
@@ -488,9 +489,9 @@ function M.home_parts(v, A, o, d, tick)
                      scale = { 0.34 * d.scale, 0.24 * d.scale, 0.34 * d.scale }, tint = { 0.55, 0.57, 0.62, 1 } })
     for j = 0, 5 do
       local f = ((tick + j * 17) % 90) / 90
-      v:billboard(A.tex.glow, at(d, { pot[1] + 0.08 * sm.sin(j * 1.7 + f * 4), pot[2] + 0.3 + f * 0.9,
+      spr.streak(v, A, at(d, { pot[1] + 0.08 * sm.sin(j * 1.7 + f * 4), pot[2] + 0.3 + f * 0.9,
                                        pot[3] + 0.08 * sm.cos(j * 2.3) }), (0.18 + f * 0.35) * d.scale,
-                  { palette = A.pal.base, tint = { 1, 1, 1, 0.55 * (1 - f) } })
+                  { height = (0.45 + f * 0.8) * d.scale, tint = { 1, 1, 1, 0.55 * (1 - f) } })
     end
     n = n + 7
   end
@@ -652,7 +653,7 @@ function M.draw_beam(v, A, o, scan, tick)
       local rr = dd * tan(b.half_angle) * 0.7 * (((k * 37) % 10) / 10)
       local side = vec.add(vec.scale(rt, sm.cos(ang) * rr), vec.scale(f, sm.sin(ang) * rr))
       local q = vec.add(vec.add(e, vec.scale(a, dd)), side)
-      v:billboard(A.tex.beam, q, 0.25 + 0.3 * (1 - ph), { palette = A.pal.base, tint = M.BEAM_TINT.mote })
+      spr.streak(v, A, q, 0.25 + 0.3 * (1 - ph), { height = 0.7 + 0.5 * (1 - ph), tint = M.BEAM_TINT.mote })
       n = n + 1
     end
   end
@@ -667,16 +668,16 @@ function M.draw_target(v, A, o, scan)
   local n = 0
   for k = 0, 11 do
     local a = k * sm.tau / 12
-    v:billboard(A.tex.beam, { c.pos[1] + sm.sin(a) * R, c.pos[2] - 0.4, c.pos[3] + sm.cos(a) * R }, 0.35,
-                { palette = A.pal.base, tint = tint })
+    spr.spark(v, A, { c.pos[1] + sm.sin(a) * R, c.pos[2] - 0.4, c.pos[3] + sm.cos(a) * R }, 0.35,
+              { tint = tint })
     n = n + 1
   end
   if c.axis then
     local fa, fk = vec.fwd(c.axis), vec.fwd(o.ship.yaw)
     for k = -4, 4 do
-      v:billboard(A.tex.beam, vec.add(c.pos, vec.scale(fa, k * 0.9)), 0.3, { palette = A.pal.base, tint = { 1, 0.75, 0.25, 1 } })
-      v:billboard(A.tex.beam, vec.add({ c.pos[1], c.pos[2] + 0.3, c.pos[3] }, vec.scale(fk, k * 0.9)), 0.22,
-                  { palette = A.pal.base, tint = { 0.4, 0.9, 1, 0.9 } })
+      spr.streak(v, A, vec.add(c.pos, vec.scale(fa, k * 0.9)), 0.3, { tint = { 1, 0.75, 0.25, 1 } })
+      spr.streak(v, A, vec.add({ c.pos[1], c.pos[2] + 0.3, c.pos[3] }, vec.scale(fk, k * 0.9)), 0.22,
+                  { tint = { 0.4, 0.9, 1, 0.9 } })
       n = n + 2
     end
   end
@@ -845,16 +846,16 @@ function M.thruster_glow(v, A, o, d, c)
     local lift = math.min(1, math.max(0, vel[2] / 10))
     for _, t in ipairs(T.belly) do
       local lp = { sm.sin(t[2]) * t[1], T.belly_y - 0.25, sm.cos(t[2]) * t[1] }
-      v:billboard(A.tex.glow, at(d, lp), (1.1 + 1.6 * math.max(k * 0.5, lift)) * d.scale, { palette = A.pal.base, tint = tint })
+      spr.light(v, A, at(d, lp), (1.1 + 1.6 * math.max(k * 0.5, lift)) * d.scale, { tint = tint })
       n = n + 1
     end
     for _, tip in ipairs(T.rear) do
-      v:billboard(A.tex.glow, at(d, { tip[1], tip[2], tip[3] - 0.3 - k * 0.8 }), (0.9 + 1.5 * k) * d.scale,
-                  { palette = A.pal.base, tint = tint })
+      spr.light(v, A, at(d, { tip[1], tip[2], tip[3] - 0.3 - k * 0.8 }), (0.9 + 1.5 * k) * d.scale,
+                  { tint = tint })
       n = n + 1
     end
   elseif c.id == "seat" then
-    v:billboard(A.tex.glow, at(d, { 0, -0.35, -1.1 - k * 0.2 }), (0.35 + 0.6 * k) * d.scale, { palette = A.pal.base, tint = tint })
+    spr.light(v, A, at(d, { 0, -0.35, -1.1 - k * 0.2 }), (0.35 + 0.6 * k) * d.scale, { tint = tint })
     n = n + 1
   end
   return n
@@ -1254,27 +1255,27 @@ function M.render(v, state, alpha)
       if p.tractor and p.tractor.key == cand.key then
         pos, k = tractor.pull_pose(p.ship, p.tractor)
         -- a glow round the item riding the beam, so it reads as it shrinks
-        v:billboard(A.tex.beam, pos, (0.6 + cand.item.size * 0.35) * k * 1.8, { palette = A.pal.base,
+        spr.streak(v, A, pos, (0.6 + cand.item.size * 0.35) * k * 1.8, {
                     tint = { 0.8, 1, 0.9, 0.55 } })
       end
       if cand.kind == "coupling" then
         -- add-cities: a district's power coupling, a tall glowing pylon head
         local pulse = 0.65 + 0.35 * sm.sin(state.tick * 0.07)
         v:mesh(A.foot.lock, { pos = { pos[1], pos[2] - 1.2, pos[3] }, yaw = spin, scale = 2.4 * k, palette = A.pal.base })
-        v:billboard(A.tex.glow, pos, 7 * k, { palette = A.pal.base, tint = { 1, 0.7, 0.2, 0.9 * pulse } })
+        spr.light(v, A, pos, 7 * k, { tint = { 1, 0.7, 0.2, 0.9 * pulse } })
       elseif cand.kind == "story" then
         -- add-run-story: a clue of the run's story, tinted by what it is (log amber, mural violet, record teal)
         local pulse = 0.7 + 0.3 * sm.sin(state.tick * 0.05)
         local tint = cand.carrier == "mural" and { 0.85, 0.5, 1.0 } or (cand.carrier == "archive" and { 0.4, 1.0, 0.9 } or { 1.0, 0.8, 0.35 })
-        v:billboard(A.tex.glow, pos, 6 * k, { palette = A.pal.base, tint = { tint[1], tint[2], tint[3], 0.55 * pulse } })
-        v:billboard(A.tex.echo, pos, 2.0 * k, { palette = A.pal.base, tint = { tint[1], tint[2], tint[3], 1 } })
+        spr.ring(v, A, pos, 2.0 * k, { tint = { tint[1], tint[2], tint[3], 1 } })
+        spr.spark(v, A, pos, 6 * k, { tint = { tint[1], tint[2], tint[3], 0.35 * pulse } })
       elseif cand.item and cand.item.xl then
         -- add-relic-stations: the relic's XL idol
         require("view.relic").idol(v, A, pos, spin, k, state.tick)
       elseif cand.echo or cand.kind == "curio" or cand.kind == "clue" then
-        v:billboard(A.tex.echo, pos, (cand.kind == "curio" and 2.4 or 1.6) * k, { palette = A.pal.base })
+        spr.ring(v, A, pos, (cand.kind == "curio" and 2.4 or 1.6) * k, { tint = { 0.55, 0.95, 1, 1 } })
       else
-        v:billboard(A.tex.loot, pos, s * k, { palette = A.pal.base })
+        spr.spark(v, A, pos, s * k, { tint = { 1, 0.85, 0.3, 0.95 } })
         -- long scrap lies still along its own axis, stretched; the rest slowly turns
         local sc = s * 0.6 * k
         v:mesh(A.cache_mesh, { pos = { pos[1], pos[2] - s * k * 0.7, pos[3] }, yaw = cand.axis or spin,

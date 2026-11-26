@@ -12,6 +12,7 @@
 -- Meshes are built once per relic (cached by layout hash) and drawn per room, culled against the view.
 local vec = require("lib.vec")
 local sm = saucer.math
+local spr = require("view.sprites")
 local ruinm = require("sim.ruin")
 local matv = require("view.materials")
 local M = {}
@@ -830,7 +831,7 @@ function M.draw_signals(v, A, set, cam, tick, opts)
     if d < K.signal.far and n < K.signal.max then
       local a, c = hd.signal_at(l, tick, D.lamps)
       local size, tint, layers = hd.signal_look(l, d, a, c, require("view.render").FOG)
-      for _ = 1, layers do v:billboard(A.tex.glow, l.p, size, { palette = opts.palette, tint = tint }) end
+      for _ = 1, layers do spr.slit(v, A, l.p, size, { palette = opts.palette, tint = tint }) end
       n = n + 1
     end
   end
@@ -1029,7 +1030,7 @@ end
 function M.idol(v, A, pos, spin, k, tick)
   v:mesh(M.idol_mesh(), { pos = pos, yaw = spin * 0.5, scale = k, palette = A.pal.base })
   local pulse = 0.7 + 0.3 * sm.sin(tick * 0.05)
-  v:billboard(A.tex.glow, { pos[1], pos[2] + 1.2 * k, pos[3] }, 7 * k, { palette = A.pal.base,
+  spr.light(v, A, { pos[1], pos[2] + 1.2 * k, pos[3] }, 7 * k, {
               tint = { 0.75, 0.45, 1.0, 0.45 * pulse } })
 end
 
@@ -1157,7 +1158,7 @@ function M.engine(v, A, ruin, time, opts)
       end
       local pulse = 0.6 + 0.4 * sm.sin(time * 0.9 * mc.speed)
       local g = mc.glow or { 0.85, 0.5, 1.0 }
-      v:billboard(A.tex.glow, { c[1], sd[1][2] + H * 0.42, c[3] }, R * (1.6 + 0.3 * pulse), { palette = opts.palette,
+      spr.light(v, A, { c[1], sd[1][2] + H * 0.42, c[3] }, R * (1.6 + 0.3 * pulse), { palette = opts.palette,
                   tint = { g[1], g[2], g[3], 0.35 + 0.25 * pulse } })
       return true
     end
@@ -1244,7 +1245,7 @@ function M.draw(v, A, state, cam, xr, time)
       local b = l.box
       v:mesh(A.unit, { pos = vec.scale(vec.add(b[1], b[2]), 0.5), scale = vec.sub(b[2], b[1]), tint = { 0.7, 0.72, 0.8, 1 } })
       local turn = p and p.relic_turn or 0
-      v:billboard(A.tex.glow, l.socket, 1.2 + turn, { palette = A.pal.base,
+      spr.ring(v, A, l.socket, 1.2 + turn, {
                   tint = { 0.8, 0.5, 1.0, 0.6 + 0.4 * math.min(1, turn / relic.LOCK_TIME) } })
     end
   end

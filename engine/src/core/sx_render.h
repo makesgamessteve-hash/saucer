@@ -50,6 +50,20 @@ typedef struct sx_draw_mesh {
   int owner; /* add-realistic-lighting: a light of the same owner does not shadow it */
 } sx_draw_mesh;
 
+/* replace-bubble-sprites: procedural billboard forms (shader u_form). 0 = unset (a soft
+ * texture still draws as a disk); 1 disk, 2 flare, 3 spark, 4 ring, 5 shard, 6 streak,
+ * 7 chevron, 8 slit. */
+enum {
+  SX_BILLFORM_DISK = 1,
+  SX_BILLFORM_FLARE = 2,
+  SX_BILLFORM_SPARK = 3,
+  SX_BILLFORM_RING = 4,
+  SX_BILLFORM_SHARD = 5,
+  SX_BILLFORM_STREAK = 6,
+  SX_BILLFORM_CHEVRON = 7,
+  SX_BILLFORM_SLIT = 8
+};
+
 typedef struct sx_draw_billboard {
   int tex, palette;
   float pos[3];
@@ -57,6 +71,7 @@ typedef struct sx_draw_billboard {
   float tint[4];
   int yaxis; /* 1: rotate around Y only (items), 0: face camera (particles) */
   int sky;   /* add-alien-cities-2: a backdrop sprite, drawn with the sky behind everything */
+  int form;  /* replace-bubble-sprites: SX_BILLFORM_* (0: legacy, a soft tex is a disk) */
 } sx_draw_billboard;
 
 typedef struct sx_draw_ui {

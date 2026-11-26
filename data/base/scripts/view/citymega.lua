@@ -7,6 +7,7 @@
 -- Meshes are built ahead of the eye (PREFETCH m) and only while the frame's BUDGET_MS lasts, nearest first; the
 -- solids come from the sim's cache, so building them here only does the sim's work early. Nothing here is saved.
 local mega = require("sim.citymega")
+local spr = require("view.sprites")
 
 local M = {}
 M.NEAR = 4000
@@ -341,7 +342,7 @@ function M.draw(v, A, p, cam, tex, visible, budget, t)
           for _, f in ipairs(o.trail) do
             v:mesh(box, { pos = f.pos, scale = { f.size, f.size, f.size }, yaw = -o.yaw, palette = A.pal.base, tint = tint })
           end
-          if A.tex.glow then v:billboard(A.tex.glow, o.pos, o.glow, { palette = A.pal.base, tint = { win[1], win[2], win[3], 0.45 } }) end
+          spr.light(v, A, o.pos, o.glow, { tint = { win[1], win[2], win[3], 0.45 } })
           st.drifters = (st.drifters or 0) + 1
         end
       end
@@ -371,7 +372,7 @@ function M.draw(v, A, p, cam, tex, visible, budget, t)
         local cs = o.core.size
         v:mesh(require("view.assets").unit_box(true), { pos = o.core.pos, scale = { cs, cs, cs }, yaw = o.yaw * 2, pitch = o.yaw,
                                                         palette = A.pal.base, tint = { win[1], win[2], win[3], 1 } })
-        if A.tex.glow then v:billboard(A.tex.glow, o.core.pos, o.glow, { palette = A.pal.base, tint = { acc[1], acc[2], acc[3], 0.35 + 0.3 * o.pulse } }) end
+        spr.light(v, A, o.core.pos, o.glow, { tint = { acc[1], acc[2], acc[3], 0.35 + 0.3 * o.pulse } })
         st.organs = (st.organs or 0) + 1
         if d.warren and cam.pos[2] < d.y + M.WARREN_LAMP_Y and dist <= M.WARREN_LAMPS then
           st.lamps = (st.lamps or 0) + M.warren_lamps(v, p, d, t or 0)
@@ -393,7 +394,7 @@ function M.draw(v, A, p, cam, tex, visible, budget, t)
           end
           local hz = sp.heart.size
           v:mesh(box, { pos = sp.heart.pos, scale = { hz, hz, hz }, yaw = -o.yaw, palette = A.pal.base, tint = { win[1] * 0.5, win[2] * 0.5, win[3] * 0.5, 1 } })
-          if A.tex.glow then v:billboard(A.tex.glow, sp.heart.pos, hz * 4, { palette = A.pal.base, tint = { win[1], win[2], win[3], 0.25 + 0.3 * sp.breath } }) end
+          spr.light(v, A, sp.heart.pos, hz * 4, { tint = { win[1], win[2], win[3], 0.25 + 0.3 * sp.breath } })
           st.sanctums = (st.sanctums or 0) + 1
         end
       end

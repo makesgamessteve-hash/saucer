@@ -74,7 +74,8 @@ function M.init()
     loot = M.texture("authored/sprites/loot.png"),
     echo = M.texture("authored/sprites/echo.png"),
     beam = M.texture("authored/sprites/beam.png"),
-    -- soft: billboards draw it as a smooth additive falloff in the tint (fix-glow: texels read as dark blocks)
+    -- soft: a leftover disk fallback (fix-glow: palette texels read as dark blocks). New draws go through
+    -- view/sprites.lua with an explicit form (flare, shard, ring, ...).
     glow = M.texture("authored/sprites/glow.png", { soft = true }),
     -- add-detail-pass: one wall material per derelict kit
     kit_starship = M.texture("generated/textures/kit_starship.png"),

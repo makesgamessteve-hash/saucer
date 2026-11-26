@@ -7,6 +7,7 @@
 --   pulse    lights running along a sky lane from one district to the next, one after another
 local vec = require("lib.vec")
 local sm = saucer.math
+local spr = require("view.sprites")
 local M = {}
 
 M.SWARM_MOTES = 18
@@ -124,9 +125,14 @@ function M.draw(v, A, r, cam, t)
         if o.ring then
           v:mesh(ring_mesh, { pos = o.pos, scale = o.size, yaw = o.yaw, pitch = o.pitch, roll = 0, palette = A.pal.base,
                               tint = { acc[1], acc[2], acc[3], 1 } })
+        elseif ph.kind == "pulse" then
+          local dir = vec.sub(ph.b, ph.a)
+          spr.bolt(v, A, o.pos, dir, 18, { win[1], win[2], win[3], o.alpha or 0.5 })
+        elseif ph.kind == "swarm" then
+          spr.shard(v, A, o.pos, o.size, { tint = { acc[1], acc[2], acc[3], o.alpha or 0.5 } })
         else
-          local c = ph.kind == "pulse" and win or acc
-          v:billboard(A.tex.glow, o.pos, o.size, { palette = A.pal.base, tint = { c[1], c[2], c[3], o.alpha or 0.5 } })
+          -- the machine's arm tips
+          spr.light(v, A, o.pos, o.size, { tint = { acc[1], acc[2], acc[3], o.alpha or 0.5 } })
         end
       end
       n = n + 1

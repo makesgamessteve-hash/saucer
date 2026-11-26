@@ -219,7 +219,7 @@ static const char *mesh_fs =
     "in vec3 v_uv; in vec3 v_col; in float v_emi; in float v_dist; in vec3 v_nrm; in vec3 v_wpos;\n"
     "in vec3 v_vnrm; flat in int v_mat;\n"
     "uniform vec4 u_mat[48]; uniform float u_mtime; uniform int u_mmode; uniform sampler2D u_matcap; uniform int u_envmap;\n"
-    "uniform sampler2D u_idx; uniform sampler2D u_pal; uniform int u_palrow; uniform int u_tex;\n"
+    "uniform sampler2D u_idx; uniform sampler2D u_pal; uniform int u_palrow; uniform int u_tex; uniform int u_form;\n"
     "uniform vec4 u_tint; uniform vec3 u_light; uniform float u_ambient; uniform int u_lit;\n"
     "uniform vec3 u_fogcol; uniform float u_fog; uniform int u_dither;\n"
     "uniform int u_mode; uniform int u_nl; uniform vec3 u_amb; uniform float u_expo;\n"
@@ -311,10 +311,52 @@ static const char *mesh_fs =
     "    base = texelFetch(u_pal, ivec2(i, u_palrow), 0);\n"
     "  }\n"
     "  if (u_tex == 2) {\n"
-    "    // a soft glow: a smooth falloff in the tint's colour, no palette texels (they read as dark blocks)\n"
-    "    vec2 q = v_uv.xy / v_uv.z * 2.0 - 1.0; float r2 = dot(q, q);\n"
-    "    if (r2 >= 1.0) discard;\n"
-    "    float f = 1.0 - r2; base = vec4(1.0, 1.0, 1.0, f * f * (u_fog > 0.0 ? exp(-u_fog * v_dist) : 1.0));\n"
+    "    // replace-bubble-sprites: procedural forms in the tint (palette texels read as dark blocks)\n"
+    "    vec2 q = v_uv.xy / v_uv.z * 2.0 - 1.0;\n"
+    "    float a = 0.0;\n"
+    "    int f = u_form;\n"
+    "    if (f <= 1) {\n"
+    "      float r2 = dot(q, q);\n"
+    "      if (r2 >= 1.0) discard;\n"
+    "      float t = 1.0 - r2; a = t * t;\n"
+    "    } else if (f == 2) {\n"
+    "      float r = length(q);\n"
+    "      if (r >= 1.0) discard;\n"
+    "      float core = 1.0 - r; core = core * core;\n"
+    "      float ax = max(0.0, 1.0 - abs(q.x) * 10.0) * max(0.0, 1.0 - abs(q.y));\n"
+    "      float ay = max(0.0, 1.0 - abs(q.y) * 10.0) * max(0.0, 1.0 - abs(q.x));\n"
+    "      float d = max(0.0, 1.0 - abs(abs(q.x) - abs(q.y)) * 12.0) * max(0.0, 1.0 - r) * 0.35;\n"
+    "      a = min(1.0, core * 0.7 + ax * ax + ay * ay + d);\n"
+    "    } else if (f == 3) {\n"
+    "      float d = abs(q.x) + abs(q.y);\n"
+    "      if (d >= 1.0) discard;\n"
+    "      float t = 1.0 - d; a = t * t;\n"
+    "    } else if (f == 4) {\n"
+    "      float r = length(q);\n"
+    "      float d = abs(r - 0.72) / 0.28;\n"
+    "      if (d >= 1.0) discard;\n"
+    "      float t = 1.0 - d; a = t * t;\n"
+    "    } else if (f == 5) {\n"
+    "      float d = abs(q.x) * 2.4 + abs(q.y) * 0.75;\n"
+    "      if (d >= 1.0) discard;\n"
+    "      float t = 1.0 - d; a = t * t;\n"
+    "    } else if (f == 6) {\n"
+    "      float ax = max(0.0, 1.0 - abs(q.x));\n"
+    "      float ay = max(0.0, 1.0 - abs(q.y) * 6.0);\n"
+    "      a = ax * ax * ay * ay;\n"
+    "      if (a <= 0.001) discard;\n"
+    "    } else if (f == 7) {\n"
+    "      float arm = abs(q.x) * 1.15 + q.y * 0.7;\n"
+    "      float d = abs(arm + 0.05) / 0.28;\n"
+    "      if (d >= 1.0 || q.y > 0.85 || q.y < -0.85) discard;\n"
+    "      float t = 1.0 - d; a = t * t;\n"
+    "    } else if (f == 8) {\n"
+    "      float ax = max(0.0, 1.0 - abs(q.x) * 8.0);\n"
+    "      float ay = max(0.0, 1.0 - abs(q.y));\n"
+    "      a = ax * ax * ay;\n"
+    "      if (a <= 0.001) discard;\n"
+    "    } else { discard; }\n"
+    "    base = vec4(1.0, 1.0, 1.0, a * (u_fog > 0.0 ? exp(-u_fog * v_dist) : 1.0));\n"
     "  }\n"
     "  vec3 c = base.rgb * v_col * u_tint.rgb;\n"
     "  vec3 lit = c;\n"
@@ -461,7 +503,7 @@ static const char *ui_fs =
 
 typedef struct prog {
   GLuint id;
-  GLint mvp, mv, model, snap, affine, idx, pal, palrow, tex, tint, light, ambient, lit, fogcol, fog, dither, size, color;
+  GLint mvp, mv, model, snap, affine, idx, pal, palrow, tex, form, tint, light, ambient, lit, fogcol, fog, dither, size, color;
   GLint mode, nl, amb, expo, lpos, lcol, ldir, lpar, shadow, shmat, shrect, shbias, ncasc, shtexel, lidx;
   GLint eye, nhz, hzsteps, sky, hzpos, hzcol, hzdir;
   GLint mat, mtime, mmode, matcap, envmap; /* add-material-system */
@@ -533,7 +575,7 @@ static int link_prog(prog *p, const char *vs, const char *fs, int ui) {
     return 0;
   }
 #define U(n) p->n = glGetUniformLocation(p->id, "u_" #n)
-  U(mvp); U(mv); U(model); U(snap); U(affine); U(idx); U(pal); U(palrow); U(tex); U(tint); U(light); U(ambient); U(lit);
+  U(mvp); U(mv); U(model); U(snap); U(affine); U(idx); U(pal); U(palrow); U(tex); U(form); U(tint); U(light); U(ambient); U(lit);
   U(fogcol); U(fog); U(dither); U(size); U(color);
   U(mode); U(nl); U(amb); U(expo); U(lpos); U(lcol); U(ldir); U(lpar); U(shadow); U(shmat); U(shrect); U(shbias);
   U(ncasc); U(shtexel); U(lidx);
@@ -1073,6 +1115,7 @@ static void draw_mesh(const sx_render *r, const sx_viewport *v, const frame_mats
   glUniformMatrix4fv(G.mesh.mv, 1, GL_FALSE, mv);
   glUniformMatrix4fv(G.mesh.model, 1, GL_FALSE, model);
   glUniform1i(G.mesh.tex, d->tex > 0 ? 1 : 0);
+  if (G.mesh.form >= 0) glUniform1i(G.mesh.form, 0);
   glUniform1i(G.mesh.palrow, pal_row(r, d->palette));
   glUniform1i(G.mesh.lit, (d->flags & SX_DRAW_UNLIT) ? 0 : 1);
   glUniform1i(G.mesh.sky, (d->flags & SX_DRAW_SKY) ? 1 : 0);
@@ -1105,10 +1148,12 @@ static void draw_billboards(const sx_render *r, const sx_viewport *v, const fram
     float vtx[6][SX_VTX_FLOATS], rt[3], up[3];
     static const float corner[6][2] = {{-1, -1}, {1, -1}, {1, 1}, {-1, -1}, {1, 1}, {-1, 1}};
     int soft = b->tex > 0 && b->tex < SX_MAX_TEXTURES && r->textures[b->tex].used && r->textures[b->tex].soft;
+    int form = b->form > 0 ? b->form : (soft ? SX_BILLFORM_DISK : 0);
+    int glow = form > 0; /* procedural tint form: a soft texture or an explicit form */
     /* a bright glow adds light (it can never darken what is behind it); a dark one (a shade) still blends */
-    int add = soft && b->tint[0] + b->tint[1] + b->tint[2] > 0.36f;
+    int add = glow && b->tint[0] + b->tint[1] + b->tint[2] > 0.36f;
     if ((b->sky != 0) != (sky != 0)) continue;
-    if (b->yaxis && !soft) {
+    if (b->yaxis && !glow) {
       float l = (float)sx_sqrt((double)(fm->right[0] * fm->right[0] + fm->right[2] * fm->right[2]));
       rt[0] = l > 1e-6f ? fm->right[0] / l : 1;
       rt[1] = 0;
@@ -1137,7 +1182,8 @@ static void draw_billboards(const sx_render *r, const sx_viewport *v, const fram
     }
     glUniform4f(G.mesh.tint, b->tint[0], b->tint[1], b->tint[2], b->tint[3]);
     glUniform1i(G.mesh.palrow, pal_row(r, b->palette));
-    glUniform1i(G.mesh.tex, soft ? 2 : 1);
+    glUniform1i(G.mesh.tex, glow ? 2 : 1);
+    if (G.mesh.form >= 0) glUniform1i(G.mesh.form, form);
     if (add) {
       glBlendFunc(GL_SRC_ALPHA, GL_ONE);
       glDepthMask(GL_FALSE);

@@ -12,6 +12,7 @@ local configs = require("sim.config")
 local game = require("sim.game")
 local ex = require("sim.excursion")
 local sm = saucer.math
+local spr = require("view.sprites")
 local M = {}
 
 M.NEAR = 260 -- props of sites whose foot features are this close to the camera
@@ -59,14 +60,14 @@ function M.site_props(v, A, state, p, site, f, tick)
     local open = ex.lock_open(state, site, l.id)
     v:mesh(A.foot.lock, { pos = l.pos, yaw = l.yaw + sm.pi, palette = A.pal.base })
     local glow = open and { 0.3, 1, 0.45, 0.8 } or { 1, 0.7, 0.2, 0.5 + 0.3 * sm.sin(tick * 0.08) }
-    v:billboard(A.tex.glow, { l.pos[1], l.pos[2] + 0.55, l.pos[3] }, 0.35, { palette = A.pal.base, tint = glow })
+    spr.ring(v, A, { l.pos[1], l.pos[2] + 0.55, l.pos[3] }, 0.35, { tint = glow })
     n = n + 2
   end
   for _, c in ipairs(f.consoles) do
     local down = ex.grid_down(state, site)
     v:mesh(A.foot.console, { pos = c.pos, yaw = c.yaw + sm.pi, palette = A.pal.base })
-    v:billboard(A.tex.glow, { c.pos[1], c.pos[2] + 0.7, c.pos[3] }, 0.45,
-                { palette = A.pal.base, tint = down and { 0.3, 1, 0.5, 0.6 } or { 1, 0.3, 0.25, 0.6 } })
+    spr.slit(v, A, { c.pos[1], c.pos[2] + 0.7, c.pos[3] }, 0.45,
+             { tint = down and { 0.3, 1, 0.5, 0.6 } or { 1, 0.3, 0.25, 0.6 } })
     n = n + 2
   end
   -- your Delicate finds still in the chamber
@@ -74,7 +75,7 @@ function M.site_props(v, A, state, p, site, f, tick)
     for _, d in ipairs(f.delicates) do
       if not p.looted["delicate:" .. ex.key(site, d.id)] then
         v:mesh(A.unit, { pos = d.pos, yaw = tick * 0.03, scale = { 0.22, 0.34, 0.22 }, tint = { 0.6, 0.95, 1, 1 } })
-        v:billboard(A.tex.glow, d.pos, 0.7, { palette = A.pal.base, tint = { 0.6, 0.9, 1, 0.45 } })
+        spr.spark(v, A, d.pos, 0.7, { tint = { 0.6, 0.9, 1, 0.45 } })
         n = n + 2
       end
     end
@@ -102,7 +103,7 @@ function M.site_props(v, A, state, p, site, f, tick)
   end
   -- a relic's lore niches: a faint glyph glow on the wall
   for _, ni in ipairs(f.niches or {}) do
-    v:billboard(A.tex.glow, ni.pos, 0.6, { palette = A.pal.base, tint = { 0.7, 0.85, 1, 0.35 + 0.15 * sm.sin(tick * 0.05) } })
+    spr.ring(v, A, ni.pos, 0.6, { tint = { 0.7, 0.85, 1, 0.35 + 0.15 * sm.sin(tick * 0.05) } })
     n = n + 1
   end
   return n
@@ -170,7 +171,7 @@ function M.own(v, A, state, p, cam)
     end
     local dia = c.diameter * mp.scale
     if dia < 1.5 then
-      v:billboard(A.tex.glow, mp.pos, math.max(0.05, dia * 0.9), { palette = A.pal.base, tint = { 0.6, 0.9, 1, 0.35 } })
+      spr.light(v, A, mp.pos, math.max(0.05, dia * 0.9), { tint = { 0.6, 0.9, 1, 0.35 } })
     end
     n = n + 3
   end

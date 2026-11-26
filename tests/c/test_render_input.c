@@ -123,6 +123,22 @@ TEST(render_frame_lists_and_layout) {
   sx_render_free(&r);
 }
 
+TEST(render_billboard_form) {
+  static sx_render r;
+  sx_draw_billboard b;
+  memset(&b, 0, sizeof b);
+  b.form = SX_BILLFORM_FLARE;
+  b.size[0] = b.size[1] = 2.0f;
+  sx_render_init(&r);
+  sx_render_begin_frame(&r, 1);
+  sx_view_billboard(&r.views[0], &b);
+  CHECK(r.views[0].nbills == 1 && r.views[0].bills[0].form == SX_BILLFORM_FLARE);
+  b.form = SX_BILLFORM_SLIT;
+  sx_view_billboard(&r.views[0], &b);
+  CHECK(r.views[0].nbills == 2 && r.views[0].bills[1].form == SX_BILLFORM_SLIT);
+  sx_render_free(&r);
+}
+
 TEST(render_matrices) {
   float a[16], b[16], m[16], f[3];
   float pos[3] = {1, 2, 3}, sc[3] = {2, 2, 2};

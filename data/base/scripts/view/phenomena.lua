@@ -13,6 +13,7 @@
 local vec = require("lib.vec")
 local sm = saucer.math
 local matv = require("view.materials")
+local spr = require("view.sprites")
 local M = {}
 
 M.FADE = 60          -- m: a shadow is gone when the eye is this close; an eye dims inside twice this
@@ -57,7 +58,7 @@ function M.pose(ph, t, eye, room_min, room_max)
       local a = h01(sd, i + 80) * sm.tau + t * 0.2
       local rr = s * 0.4 * h01(sd, i + 120)
       out[#out + 1] = { pos = { p[1] + sm.cos(a) * rr, room_min[2] + 1 + rise, p[3] + sm.sin(a) * rr }, size = 0.9 + h01(sd, i) * 0.8,
-                        alpha = 0.5 * (1 - rise / (top - room_min[2])) }
+                        alpha = 0.5 * (1 - rise / (top - room_min[2])), form = "shard" }
     end
   elseif k == "orbit" then
     for i = 1, 9 do
@@ -67,7 +68,7 @@ function M.pose(ph, t, eye, room_min, room_max)
       out[#out + 1] = { mesh = "shard", pos = { p[1] + sm.cos(a) * rr, p[2] + sm.sin(a) * rr * tilt, p[3] + sm.sin(a) * rr },
                         size = 1.5 + 2 * h01(sd, i + 18), yaw = -a, roll = 0.6 * sm.sin(t + i), pitch = 0 }
     end
-    out[#out + 1] = { pos = p, size = s * 0.25, alpha = 0.15 + 0.1 * sm.sin(t * 0.7 + ph.phase) }
+    out[#out + 1] = { pos = p, size = s * 0.25, alpha = 0.15 + 0.1 * sm.sin(t * 0.7 + ph.phase), form = "flare" }
   elseif k == "eye" then
     local d = vec.dist(eye, p)
     local look = vec.sub(eye, p)
@@ -75,7 +76,7 @@ function M.pose(ph, t, eye, room_min, room_max)
     local pitch = -sm.atan2(look[2], math.sqrt(look[1] ^ 2 + look[3] ^ 2))
     local near = math.max(0.15, math.min(1, (d - M.FADE) / M.FADE))
     out[#out + 1] = { mesh = "orb", pos = p, size = math.max(2.5, s * 0.15), yaw = yaw, pitch = pitch, roll = 0, alpha = near }
-    out[#out + 1] = { pos = p, size = math.max(2.5, s * 0.15) * 3, alpha = 0.35 * near }
+    out[#out + 1] = { pos = p, size = math.max(2.5, s * 0.15) * 3, alpha = 0.35 * near, form = "flare" }
   elseif k == "procession" then
     local long = ph.long or 3
     local y = room_max[2] - 3
@@ -84,7 +85,7 @@ function M.pose(ph, t, eye, room_min, room_max)
       local q = ((t * 6 + i * len / 5) % len)
       local pos = { p[1], y, p[3] }
       pos[long] = room_min[long] + 4 + q
-      out[#out + 1] = { pos = pos, size = 3.5, alpha = 0.55 * sm.sin(math.pi * q / len) }
+      out[#out + 1] = { pos = pos, size = 3.5, alpha = 0.55 * sm.sin(math.pi * q / len), form = "slit" }
     end
   elseif k == "breath" then
     local b = 0.5 + 0.5 * sm.sin(t * 0.45 + ph.phase)
@@ -130,9 +131,11 @@ function M.draw_one(v, A, ph, mn, mx, cam, t, palette)
       v:mesh(ms[o.mesh], { pos = o.pos, scale = o.size, yaw = o.yaw or 0, pitch = o.pitch or 0, roll = o.roll or 0,
                            palette = palette })
     elseif o.dark then
-      v:billboard(A.tex.glow, o.pos, o.size, { palette = palette, tint = { 0.02, 0.0, 0.03, o.alpha } })
+      spr.shade(v, A, o.pos, o.size, o.alpha)
+    elseif o.ring then
+      spr.ripple(v, A, o.pos, o.size, { 0.8, 0.5, 1.0, o.alpha or 0.45 })
     else
-      v:billboard(A.tex.glow, o.pos, o.size, { palette = palette, tint = { 0.8, 0.5, 1.0, o.alpha or 0.5 } })
+      spr.draw(v, A, o.form or "shard", o.pos, o.size, { palette = palette, tint = { 0.8, 0.5, 1.0, o.alpha or 0.5 } })
     end
   end
 end

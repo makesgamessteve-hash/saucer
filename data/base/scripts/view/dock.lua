@@ -8,6 +8,7 @@ local dock = require("sim.dock")
 local landing = require("sim.landing")
 local assets = require("view.assets")
 local sm = saucer.math
+local spr = require("view.sprites")
 local M = {}
 
 M.NEAR = 900   -- bays this close to the camera are drawn
@@ -72,7 +73,7 @@ function M.bay(v, A, state, idx, bay, tick)
   local on = towed(state, idx)
   for _, e in ipairs(M.emitters(bay)) do
     n = n + box(v, { e[1] - 0.6, e[2] - 0.6, e[3] - 0.6 }, { e[1] + 0.6, e[2] + 0.6, e[3] + 0.6 }, on and WARN or STRIP)
-    v:billboard(A.tex.glow, e, on and 9 or 4, { palette = A.pal.base, tint = on and { 1, 0.8, 0.3, 0.55 } or { 0.4, 0.9, 1, 0.35 } })
+    spr.light(v, A, e, on and 9 or 4, { tint = on and { 1, 0.8, 0.3, 0.55 } or { 0.4, 0.9, 1, 0.35 } })
   end
   return n
 end
