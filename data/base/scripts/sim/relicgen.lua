@@ -196,9 +196,585 @@ local function lattice(rng, D)
   return order, edges, start, key
 end
 
+
+-- vary-relic-room-plans: lay the halls of a patterned relic (centres from sim/relicpat.lua) and join them with
+-- straight trunks, L-corridors or shafts so the heart sits in the reserved centre and the maw opens on the
+-- start hall's outward face. The warren path (layout, no D.pattern) is unchanged.
+local function layout_pattern(rng, kit)
+  local pat = require("sim.relicpat")
+  local D, grid = kit.dungeon, kit.grid
+  local P, why = pat.plan(rng, D, grid)
+  if not P then return nil, nil, nil, why or "pattern" end
+  local rooms, doors = {}, {}
+  local function add(kind, cell, size, class, parent)
+    local r = room(#rooms + 1, kind, cell, size, class, parent)
+    rooms[#rooms + 1] = r
+    return r
+  end
+  local big = D.hall_w[#D.hall_w]
+  local start_n = P.halls[P.start]
+  -- a lung needs a big-square hall that is not the maw's hall and has no downward shaft (faces["-y"]).
+  -- mark one mid-level hall that isn't the upper end of a stack, and make every other hall big like the warren
+  -- so chamber branches still have hosts.
+  local upper = {}
+  for _, e in ipairs(P.edges) do
+    local a, b = P.halls[e[1]], P.halls[e[2]]
+    if a and b and a.x == b.x and a.z == b.z and a.l ~= b.l then
+      if a.l > b.l then upper[e[1]] = true else upper[e[2]] = true end
+    end
+  end
+  local mid, lung_idx = 0, nil
+  for _, n in ipairs(P.halls) do if n.l > mid then mid = n.l end end
+  mid = mid // 2
+  for idx, n in ipairs(P.halls) do
+    if idx ~= P.start and not upper[idx] then
+      if not lung_idx or math.abs(n.l - mid) < math.abs(P.halls[lung_idx].l - mid) then lung_idx = idx end
+    end
+  end
+  if not lung_idx then
+    for idx, _ in ipairs(P.halls) do if idx ~= P.start then lung_idx = idx; break end end
+  end
+  local function hall_size(n, idx)
+    local main = idx == P.start or idx == lung_idx or n.main or n.gullet or (idx % 2 == 0)
+    local w = main and big or D.hall_w[rng:int(1, #D.hall_w)]
+    local d = main and big or D.hall_w[rng:int(1, #D.hall_w)]
+    if not main and idx % 3 == 0 then w = big end
+    local h = D.hall_h[math.max(w, d)] or D.hall_h[big]
+    return w, h, d
+  end
+  -- the maw first (room 1), on the start hall's outward face
+  local sw, sh, sd = hall_size(start_n, P.start)
+  local scell = { start_n.x - sw // 2, start_n.y, start_n.z - sd // 2 }
+  local dx, dz = start_n.x - P.heart.cx, start_n.z - P.heart.cz
+  local axis, sign = 3, -1
+  if math.abs(dx) >= math.abs(dz) then axis, sign = 1, dx >= 0 and 1 or -1 else sign = dz >= 0 and 1 or -1 end
+  local mw, mh, md = D.maw[1], D.maw[2], D.maw[3]
+  local l = axis == 1 and 3 or 1
+  local mcell, msize = { 0, scell[2] + (sh - mh) // 2, 0 }, { 0, mh, 0 }
+  msize[axis], msize[l] = md, mw
+  if sign > 0 then mcell[axis] = scell[axis] + (axis == 1 and sw or sd) else mcell[axis] = scell[axis] - md end
+  mcell[l] = scell[l] + (axis == 1 and sd or sw) // 2 - mw // 2
+  -- keep the maw inside the grid; if the outward face would leave it, flip inward? no: flip to the other axis
+  local function in_g(c, sz)
+    for k = 1, 3 do if c[k] < 1 or c[k] + sz[k] > grid[k] - 1 then return false end end
+    return true
+  end
+  if not in_g(mcell, msize) then
+    axis, sign = l, ((axis == 1 and dz or dx) >= 0 and 1 or -1)
+    l = axis == 1 and 3 or 1
+    msize = { 0, mh, 0 }
+    msize[axis], msize[l] = md, mw
+    mcell = { 0, scell[2] + (sh - mh) // 2, 0 }
+    if sign > 0 then mcell[axis] = scell[axis] + (axis == 1 and sw or sd) else mcell[axis] = scell[axis] - md end
+    mcell[l] = scell[l] + (axis == 1 and sd or sw) // 2 - mw // 2
+  end
+  local maw = add("entrance", mcell, msize, 4, 0)
+  local face = (axis == 1 and (sign > 0 and "+x" or "-x") or (sign > 0 and "+z" or "-z"))
+  maw.faces[face] = true
+  local at = sign > 0 and mcell[axis] + msize[axis] or mcell[axis]
+  doors[1] = { a = 0, b = 1, class = 4, axis = axis, sign = -sign, at = at,
+               lo = mcell[l], hi = mcell[l] + msize[l], vlo = mcell[2], vhi = mcell[2] + msize[2] }
+  local halls, by = {}, {}
+  for idx, n in ipairs(P.halls) do
+    local w, h, d = hall_size(n, idx)
+    if idx == P.start then w, h, d = sw, sh, sd end
+    local r = add("hall", { n.x - w // 2, n.y, n.z - d // 2 }, { w, h, d }, 4, idx == P.start and maw.id or nil)
+    r.node = { n.x, n.z, n.l }
+    r.hall = #halls + 1
+    halls[#halls + 1] = r
+    by[idx] = r
+  end
+  -- maw -> start hall: the hall is on the inward side of the maw
+  doors[#doors + 1] = door(maw, halls[P.start], axis, -sign, 4)
+
+  local trunks, shafts = {}, {}
+  local parented = { [halls[P.start].id] = true }
+
+  local function boxed_in(c, sz)
+    for k = 1, 3 do if c[k] < 1 or c[k] + sz[k] > grid[k] - 1 then return true end end
+    return false
+  end
+  -- the heart is added last; keep its reserved box empty of trunks so a walk through the centre cannot
+  -- run a corridor through the engine hall
+  local heart_res = { cell = P.heart.origin, size = P.heart.size }
+  local function hits(c, sz, ignore)
+    if boxed_in(c, sz) then return true end
+    if ignore ~= heart_res and overlaps(c, sz, heart_res.cell, heart_res.size, 0) then return true end
+    for _, o in ipairs(rooms) do
+      if o ~= ignore and overlaps(c, sz, o.cell, o.size, 0) then return true end
+    end
+    return false
+  end
+  local function put(kind, c, sz, parent)
+    if sz[1] < 1 or sz[2] < 1 or sz[3] < 1 then return nil end
+    if hits(c, sz, nil) then return nil end
+    return add(kind, c, sz, 4, parent)
+  end
+
+  -- a straight trunk along one horizontal axis when the two rooms have a gap and enough lateral overlap
+  local function straight(A, B)
+    for _, ax in ipairs({ 1, 3 }) do
+      local a, b = A, B
+      if a.cell[ax] > b.cell[ax] then a, b = b, a end
+      local glo, ghi = a.cell[ax] + a.size[ax], b.cell[ax]
+      if ghi - glo >= 1 then
+        local lat = ax == 1 and 3 or 1
+        local u0 = math.max(a.cell[lat], b.cell[lat])
+        local u1 = math.min(a.cell[lat] + a.size[lat], b.cell[lat] + b.size[lat])
+        if u1 - u0 >= D.trunk[1] then
+          local c, sz = { 0, math.max(a.cell[2], b.cell[2]), 0 }, { 0, D.trunk[2], 0 }
+          c[ax], sz[ax] = glo, ghi - glo
+          c[lat], sz[lat] = u0 + (u1 - u0) // 2 - D.trunk[1] // 2, D.trunk[1]
+          -- the trunk must sit in both halls' vertical span
+          if c[2] + sz[2] <= a.cell[2] + a.size[2] and c[2] + sz[2] <= b.cell[2] + b.size[2] then
+            return c, sz, ax, a, b
+          end
+        end
+      end
+    end
+    return nil
+  end
+
+  local function add_straight(A, B, parent, tree)
+    local c, sz, ax, a, b = straight(A, B)
+    if not c then return false end
+    local t = put("trunk", c, sz, parent)
+    if not t then return false end
+    t.axis = ax
+    trunks[#trunks + 1] = t
+    local sg = (a == A) and 1 or -1
+    -- door from A into the trunk, then trunk to B (or B into the trunk on a loop)
+    if a == A then
+      doors[#doors + 1] = door(A, t, ax, 1, 4)
+    else
+      doors[#doors + 1] = door(A, t, ax, -1, 4)
+    end
+    if tree then
+      doors[#doors + 1] = door(t, B, ax, a == A and 1 or -1, 4)
+      B.parent = t.id
+      parented[B.id] = true
+    else
+      doors[#doors + 1] = door(B, t, ax, a == A and -1 or 1, 4)
+    end
+    return true
+  end
+
+  -- rebuild L properly: compute both trunks + elbow, commit if all fit
+  local function try_ell(A, B, parent, tree, corner)
+    local Tw, Th = D.trunk[1], D.trunk[2]
+    local ecx, ecz
+    if corner == 1 then
+      ecx, ecz = B.cell[1] + B.size[1] // 2, A.cell[3] + A.size[3] // 2
+    else
+      ecx, ecz = A.cell[1] + A.size[1] // 2, B.cell[3] + B.size[3] // 2
+    end
+    local ey = math.max(A.cell[2], B.cell[2])
+    local Ecell, Esz = { ecx - Tw // 2, ey, ecz - Tw // 2 }, { Tw, Th, Tw }
+    if hits(Ecell, Esz, nil) then return false end
+    -- pretend the elbow is a room to measure straight trunks
+    local Efake = { cell = Ecell, size = Esz, id = -1 }
+    local c1, s1, ax1, a1, b1 = straight(A, Efake)
+    local c2, s2, ax2, a2, b2 = straight(Efake, B)
+    if not (c1 and c2) then return false end
+    if hits(c1, s1, nil) or hits(c2, s2, nil) then return false end
+    -- the two trunks must not overlap each other (they meet at the elbow)
+    -- commit elbow then trunks
+    local E = add("trunk", Ecell, Esz, 4, parent)
+    E.axis, E.elbow = 1, true
+    trunks[#trunks + 1] = E
+    local t1 = add("trunk", c1, s1, 4, parent)
+    t1.axis = ax1
+    trunks[#trunks + 1] = t1
+    local t2 = add("trunk", c2, s2, 4, E.id)
+    t2.axis = ax2
+    trunks[#trunks + 1] = t2
+    -- doors: A-t1, t1-E, E-t2, t2-B (or B-t2 on a loop)
+    local function join(X, T, Y, ax)
+      -- T is between X and Y along ax; X may be on the - or + side
+      local x_first = X.cell[ax] < Y.cell[ax]
+      if x_first then
+        doors[#doors + 1] = door(X, T, ax, 1, 4)
+        if Y.id == B.id and not tree then
+          doors[#doors + 1] = door(Y, T, ax, -1, 4)
+        else
+          doors[#doors + 1] = door(T, Y, ax, 1, 4)
+        end
+      else
+        doors[#doors + 1] = door(X, T, ax, -1, 4)
+        if Y.id == B.id and not tree then
+          doors[#doors + 1] = door(Y, T, ax, 1, 4)
+        else
+          doors[#doors + 1] = door(T, Y, ax, -1, 4)
+        end
+      end
+    end
+    -- t1 is between A and E; t2 between E and B. For loops, the last door is from B into t2.
+    do
+      local x_first = A.cell[ax1] < E.cell[ax1]
+      doors[#doors + 1] = door(A, t1, ax1, x_first and 1 or -1, 4)
+      doors[#doors + 1] = door(t1, E, ax1, x_first and 1 or -1, 4)
+    end
+    do
+      local x_first = E.cell[ax2] < B.cell[ax2]
+      doors[#doors + 1] = door(E, t2, ax2, x_first and 1 or -1, 4)
+      if tree then
+        doors[#doors + 1] = door(t2, B, ax2, x_first and 1 or -1, 4)
+        B.parent = t2.id
+        parented[B.id] = true
+      else
+        doors[#doors + 1] = door(B, t2, ax2, x_first and -1 or 1, 4)
+      end
+    end
+    return true
+  end
+
+  -- a shaft from the lower hall up to the higher hall's floor; if they don't stack, a landing and a horizontal run
+  local function try_shaft(A, B, parent, tree)
+    local lo, hi = A, B
+    if lo.cell[2] > hi.cell[2] then lo, hi = hi, lo end
+    if lo.cell[2] + lo.size[2] >= hi.cell[2] then return false end
+    local Sh = D.shaft
+    local c = { lo.cell[1] + lo.size[1] // 2 - Sh // 2, lo.cell[2] + lo.size[2],
+                lo.cell[3] + lo.size[3] // 2 - Sh // 2 }
+    local sz = { Sh, hi.cell[2] - c[2], Sh }
+    if sz[2] < 1 then return false end
+    -- does the shaft's xz sit inside the upper hall? then a single shaft joins them
+    local stacked = c[1] >= hi.cell[1] and c[1] + sz[1] <= hi.cell[1] + hi.size[1]
+                    and c[3] >= hi.cell[3] and c[3] + sz[3] <= hi.cell[3] + hi.size[3]
+    -- allow overlap (not full containment) of at least Sh
+    local ox0 = math.max(c[1], hi.cell[1])
+    local ox1 = math.min(c[1] + sz[1], hi.cell[1] + hi.size[1])
+    local oz0 = math.max(c[3], hi.cell[3])
+    local oz1 = math.min(c[3] + sz[3], hi.cell[3] + hi.size[3])
+    stacked = (ox1 - ox0 >= Sh - 1) and (oz1 - oz0 >= Sh - 1)
+    if stacked then
+      if hits(c, sz, nil) then return false end
+      local t = add("shaft", c, sz, 4, A.id)
+      shafts[#shafts + 1] = t
+      -- always hang the doors off the already-reached hall A so a directed walk from the maw can reach B
+      if A == lo then
+        doors[#doors + 1] = door(A, t, 2, 1, 4)
+        if tree then doors[#doors + 1] = door(t, B, 2, 1, 4) else doors[#doors + 1] = door(B, t, 2, -1, 4) end
+      else
+        doors[#doors + 1] = door(A, t, 2, -1, 4)
+        if tree then doors[#doors + 1] = door(t, B, 2, -1, 4) else doors[#doors + 1] = door(B, t, 2, 1, 4) end
+      end
+      if tree then B.parent = t.id; parented[B.id] = true end
+      return true
+    end
+    -- landing at the upper floor, over the lower hall (or an offset if that cell is already a hall), then a
+    -- horizontal (straight or L) to the upper hall
+    local Lsz = { Sh, D.trunk[2], Sh }
+    local function land_at(lx, lz)
+      local Lcell = { lx, hi.cell[2], lz }
+      local sc = { lx, lo.cell[2] + lo.size[2], lz }
+      local ssz = { Sh, hi.cell[2] - sc[2], Sh }
+      if ssz[2] < 1 or hits(sc, ssz, nil) or hits(Lcell, Lsz, nil) then return nil end
+      return sc, ssz, Lcell
+    end
+    local sc, ssz, Lcell = land_at(c[1], c[3])
+    if not sc then
+      for _, off in ipairs({ { Sh, 0 }, { -Sh, 0 }, { 0, Sh }, { 0, -Sh }, { Sh, Sh }, { -Sh, Sh }, { Sh, -Sh }, { -Sh, -Sh } }) do
+        sc, ssz, Lcell = land_at(c[1] + off[1], c[3] + off[2])
+        if sc then break end
+      end
+    end
+    if not sc then return false end
+    c, sz = sc, ssz
+    local shf = add("shaft", c, sz, 4, A.id)
+    shafts[#shafts + 1] = shf
+    local land = add("trunk", Lcell, Lsz, 4, shf.id)
+    land.axis, land.landing = 2, true
+    trunks[#trunks + 1] = land
+    if A == lo then
+      -- up from the lower hall, then across to the upper
+      doors[#doors + 1] = door(lo, shf, 2, 1, 4)
+      doors[#doors + 1] = door(shf, land, 2, 1, 4)
+      parented[land.id] = true
+      local ok = add_straight(land, hi, land.id, tree) or try_ell(land, hi, land.id, tree, 1)
+                 or try_ell(land, hi, land.id, tree, 2)
+      if not ok then return not tree end
+      return true
+    end
+    -- down: from the upper hall across to the landing, then down the shaft to the lower
+    parented[land.id] = true
+    local ok = add_straight(A, land, A.id, true) or try_ell(A, land, A.id, true, 1) or try_ell(A, land, A.id, true, 2)
+    if not ok then return not tree end
+    doors[#doors + 1] = door(land, shf, 2, -1, 4)
+    if tree then
+      doors[#doors + 1] = door(shf, lo, 2, -1, 4)
+      B.parent = shf.id
+      parented[B.id] = true
+    else
+      doors[#doors + 1] = door(lo, shf, 2, 1, 4)
+    end
+    return true
+  end
+
+  local function connect(A, B, tree)
+    if add_straight(A, B, A.id, tree) then return true end
+    if try_ell(A, B, A.id, tree, 1) then return true end
+    if try_ell(A, B, A.id, tree, 2) then return true end
+    if A.cell[2] ~= B.cell[2] then
+      if try_shaft(A, B, A.id, tree) then return true end
+    end
+    return false
+  end
+
+  -- tree edges first (so parent chains exist), then loops. Prefer easy connections: a straight or L trunk
+  -- on one level, or a stacked shaft, so we never have to drive a corridor through another hall.
+  local function stacked_pair(A, B)
+    local ox0 = math.max(A.cell[1], B.cell[1])
+    local ox1 = math.min(A.cell[1] + A.size[1], B.cell[1] + B.size[1])
+    local oz0 = math.max(A.cell[3], B.cell[3])
+    local oz1 = math.min(A.cell[3] + A.size[3], B.cell[3] + B.size[3])
+    return (ox1 - ox0 >= D.shaft - 1) and (oz1 - oz0 >= D.shaft - 1)
+      and math.abs(A.cell[2] - B.cell[2]) > 0 and math.abs(A.cell[2] - B.cell[2]) <= D.level_h + 2
+  end
+  local function clear_straight(A, B)
+    local c, sz = straight(A, B)
+    return c and not hits(c, sz, nil)
+  end
+  local function easy(A, B)
+    if clear_straight(A, B) then return true end
+    -- an L is easy if either corner box is free (the same test try_ell uses, without committing)
+    for corner = 1, 2 do
+      local Tw, Th = D.trunk[1], D.trunk[2]
+      local ecx, ecz
+      if corner == 1 then
+        ecx, ecz = B.cell[1] + B.size[1] // 2, A.cell[3] + A.size[3] // 2
+      else
+        ecx, ecz = A.cell[1] + A.size[1] // 2, B.cell[3] + B.size[3] // 2
+      end
+      local ey = math.max(A.cell[2], B.cell[2])
+      local Ecell, Esz = { ecx - Tw // 2, ey, ecz - Tw // 2 }, { Tw, Th, Tw }
+      if not hits(Ecell, Esz, nil) and A.cell[2] == B.cell[2] then
+        local Efake = { cell = Ecell, size = Esz }
+        if straight(A, Efake) and straight(Efake, B) then return true end
+      end
+    end
+    if stacked_pair(A, B) then return true end
+    return false
+  end
+  local tree_edges, loop_edges = {}, {}
+  local adj = {}
+  local function add_adj(i, j)
+    adj[i] = adj[i] or {}
+    adj[j] = adj[j] or {}
+    adj[i][#adj[i] + 1] = j
+    adj[j][#adj[j] + 1] = i
+  end
+  -- planned edges that are actually easy, plus every easy pair of nearby halls
+  local already = {}
+  local function mark(i, j)
+    local k = math.min(i, j) .. ":" .. math.max(i, j)
+    if already[k] then return end
+    already[k] = true
+    add_adj(i, j)
+  end
+  for _, e in ipairs(P.edges) do
+    if easy(by[e[1]], by[e[2]]) then mark(e[1], e[2]) end
+  end
+  for i = 1, #P.halls do
+    for j = i + 1, #P.halls do
+      local A, B = by[i], by[j]
+      local dx = (A.cell[1] + A.size[1] / 2) - (B.cell[1] + B.size[1] / 2)
+      local dz = (A.cell[3] + A.size[3] / 2) - (B.cell[3] + B.size[3] / 2)
+      local same = A.cell[2] == B.cell[2]
+      local pitch = D.pitch or 40
+      local dist = math.sqrt(dx * dx + dz * dz)
+      local near = same and dist <= pitch * 1.25 and dist >= pitch * 0.6
+      if (near and easy(A, B)) or stacked_pair(A, B) then mark(i, j) end
+    end
+  end
+  local seen = { [P.start] = true }
+  local q = { P.start }
+  local qi = 1
+  while qi <= #q do
+    local i = q[qi]; qi = qi + 1
+    for _, j in ipairs(adj[i] or {}) do
+      if not seen[j] then
+        seen[j] = true
+        q[#q + 1] = j
+        tree_edges[#tree_edges + 1] = { i, j }
+      else
+        if i < j then loop_edges[#loop_edges + 1] = { i, j } end
+      end
+    end
+  end
+  local leftover = {}
+  for i = 1, #P.halls do
+    if not seen[i] then leftover[#leftover + 1] = i end
+  end
+
+  for _, e in ipairs(tree_edges) do
+    if not connect(by[e[1]], by[e[2]], true) then
+      return nil, nil, nil, "tree edge"
+    end
+    seen[e[2]] = true
+  end
+
+  local function connect_via(A, B, tree)
+    local acx = A.cell[1] + A.size[1] // 2
+    local acz = A.cell[3] + A.size[3] // 2
+    local bcx = B.cell[1] + B.size[1] // 2
+    local bcz = B.cell[3] + B.size[3] // 2
+    local Tw, Th = D.trunk[1], D.trunk[2]
+    local pitch = D.pitch or 40
+    local mids = {
+      { bcx, acz }, { acx, bcz },
+      { acx, acz + (bcz >= acz and pitch or -pitch) },
+      { acx + (bcx >= acx and pitch or -pitch), acz },
+      { bcx, bcz + (acz >= bcz and pitch or -pitch) },
+      { bcx + (acx >= bcx and pitch or -pitch), bcz },
+      { (acx + bcx) // 2, (acz + bcz) // 2 },
+    }
+    local y = math.max(A.cell[2], B.cell[2])
+    if A.cell[2] ~= B.cell[2] then
+      -- first get a landing on B's level, then walk
+      -- try_shaft already tried this; give up on mixed-level walk here
+      return false
+    end
+    for _, m in ipairs(mids) do
+      local Ecell, Esz = { m[1] - Tw // 2, y, m[2] - Tw // 2 }, { Tw, Th, Tw }
+      if not hits(Ecell, Esz, nil) then
+        local Efake = { cell = Ecell, size = Esz }
+        local c1, s1 = straight(A, Efake)
+        local c2, s2 = straight(Efake, B)
+        if c1 and c2 and not hits(c1, s1, nil) and not hits(c2, s2, nil) then
+          local E = add("trunk", Ecell, Esz, 4, A.id)
+          E.axis, E.elbow = 1, true
+          trunks[#trunks + 1] = E
+          -- reuse add_straight from A to E and E to B
+          if add_straight(A, E, A.id, true) and add_straight(E, B, E.id, tree) then
+            return true
+          end
+        end
+      end
+    end
+    return false
+  end
+
+  -- leftovers: try every already-reached hall, nearest first, until one connects
+  for _, i in ipairs(leftover) do
+    local cands = {}
+    for j = 1, #P.halls do
+      if seen[j] and (parented[by[j].id] or j == P.start) then
+        -- parented marks halls reached through a tree door; the start is parented via the maw
+        local A, B = by[j], by[i]
+        local dx = (A.cell[1] + A.size[1] / 2) - (B.cell[1] + B.size[1] / 2)
+        local dz = (A.cell[3] + A.size[3] / 2) - (B.cell[3] + B.size[3] / 2)
+        local dy = A.cell[2] - B.cell[2]
+        cands[#cands + 1] = { j, dx * dx + dz * dz + dy * dy }
+      end
+    end
+    table.sort(cands, function(a, b) return a[2] < b[2] end)
+    local ok = false
+    for _, c in ipairs(cands) do
+      if connect(by[c[1]], by[i], true) or connect_via(by[c[1]], by[i], true) then ok = true; break end
+    end
+    if ok then seen[i] = true end
+  end
+  for _, e in ipairs(loop_edges) do
+    local A, B = by[e[1]], by[e[2]]
+    if straight(A, B) or stacked_pair(A, B) then connect(A, B, false) end
+  end
+
+  -- drop halls (and any dangling corridors) that were never reached from the maw, so a leftover that
+  -- would have had to cross the heart cannot be left as an unreachable room
+  do
+    local adj = {}
+    for _, d in ipairs(doors) do
+      adj[d.a] = adj[d.a] or {}
+      adj[d.b] = adj[d.b] or {}
+      adj[d.a][#adj[d.a] + 1] = d.b
+      adj[d.b][#adj[d.b] + 1] = d.a
+    end
+    local seen, q = { [0] = true, [1] = true }, { 1 }
+    local qi = 1
+    while qi <= #q do
+      local i = q[qi]; qi = qi + 1
+      for _, j in ipairs(adj[i] or {}) do
+        if not seen[j] then seen[j] = true; q[#q + 1] = j end
+      end
+    end
+    local reached_n = 0
+    for _, r in ipairs(rooms) do if seen[r.id] then reached_n = reached_n + 1 end end
+    if reached_n < #rooms then
+      local map, nrooms, ndoors = {}, {}, {}
+      for _, r in ipairs(rooms) do
+        if seen[r.id] then
+          map[r.id] = #nrooms + 1
+          r.id = map[r.id]
+          nrooms[#nrooms + 1] = r
+          if r.parent and map[r.parent] then r.parent = map[r.parent] end
+        end
+      end
+      for _, d in ipairs(doors) do
+        if d.a == 0 then
+          d.b = map[d.b]
+          if d.b then ndoors[#ndoors + 1] = d end
+        elseif map[d.a] and map[d.b] then
+          d.a, d.b = map[d.a], map[d.b]
+          ndoors[#ndoors + 1] = d
+        end
+      end
+      rooms, doors = nrooms, ndoors
+      local function keep(list)
+        local out = {}
+        for _, r in ipairs(list) do if map[r.id] or seen[r.id] then
+          -- r.id already remapped if it was in rooms and reached
+          if r.id and map[r.id] == nil then
+            -- already remapped in the rooms loop (r is the same table)
+          end
+          if seen[r.id] or true then
+            -- after remap, r.id is the new id; keep every remapped room still in the list
+            out[#out + 1] = r
+          end
+        end end
+        return out
+      end
+      -- halls/trunks/shafts are the same tables as in rooms, so their .id is already remapped
+      local function keep2(list)
+        local out = {}
+        for _, r in ipairs(list) do
+          if r.id and r.id >= 1 and r.id <= #rooms and rooms[r.id] == r then out[#out + 1] = r end
+        end
+        return out
+      end
+      halls, trunks, shafts = keep2(halls), keep2(trunks), keep2(shafts)
+      -- re-index hall.hall
+      for i, h in ipairs(halls) do h.hall = i end
+      if #halls < 8 then return nil, nil, nil, "too few halls" end
+    end
+  end
+
+  -- the heart in the reserved centre
+  local H = D.heart
+  local heart = add("core", { P.heart.origin[1], P.heart.origin[2], P.heart.origin[3] }, { H[1], H[2], H[3] }, 4)
+  local linked_heart = false
+  for _, i in ipairs(P.entries) do
+    local h = by[i]
+    if h then
+      local tree = not linked_heart
+      if connect(h, heart, tree) then
+        if tree then linked_heart = true end
+        for _, t in ipairs(trunks) do
+          if t.parent == h.id or (heart.parent == t.id) then t.heart = true end
+        end
+      end
+    end
+  end
+  if not linked_heart then return nil, nil, nil, "heart unreachable" end
+
+  return rooms, doors, { halls = halls, trunks = trunks, shafts = shafts, core = heart, maw = maw }
+end
+
+
 -- the warren's rooms and doors in cells (x across, y up, z from the maw toward the heart)
 local function layout(rng, kit)
   local D = kit.dungeon
+  if D.pattern then return layout_pattern(rng, kit) end
   local order, edges, start, key = lattice(rng, D)
   local rooms, doors = {}, {}
   local function add(kind, cell, size, class, parent)
@@ -673,7 +1249,8 @@ function M.try(seed, kit, civ, origin)
   kit = M.styled(kit, civ)
   local rng = saucer.rng.new(seed)
   local D = kit.dungeon
-  local rooms, doors, L = layout(rng, kit)
+  local rooms, doors, L, why = layout(rng, kit)
+  if not rooms then return nil, why or "layout" end
   local bays, branches, locks, chambers = {}, {}, {}, {}
   -- the lung: the first big hall on a middle level whose free +x/-x side takes the reliquary's long branch
   local function face_free(h, f) return not h.faces[f] end
@@ -839,7 +1416,7 @@ function M.try(seed, kit, civ, origin)
   end
   local chamber_ids = {}
   for _, q in ipairs(chambers) do chamber_ids[#chamber_ids + 1] = q.id end
-  local relic = { archetype = D.archetype or "warren", civ_id = civ and civ.id or "vyrr", spaces = sp, bays = bays, branches = branches,
+  local relic = { archetype = D.archetype or "warren", pattern = D.pattern, civ_id = civ and civ.id or "vyrr", spaces = sp, bays = bays, branches = branches,
                   pockets = {}, locks = locks, lung = lung.id, plague = plague.id, core = L.core.id, heart = L.core.id,
                   halls = {}, trunks = {}, shafts = {}, chambers = chamber_ids, levels = nlev,
                   villa_share = villa / (villa + seat), length = 0, engine = 1 }
