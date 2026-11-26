@@ -14,6 +14,7 @@ local configs = require("sim.config")
 local avatar = require("sim.avatar")
 local vec = require("lib.vec")
 local sm = saucer.math
+local spr = require("view.sprites")
 local M = {}
 
 M.AMBIENT_SPACE = { 0.035, 0.035, 0.05 } -- starlight and the nebulae: silhouettes, nothing more
@@ -359,10 +360,10 @@ end
 function M.sky(v, A, eye, star)
   if not A.tex.glow then return 0 end
   local d = star.dir
-  v:billboard(A.tex.glow, { eye[1] + d[1] * 1800, eye[2] + d[2] * 1800, eye[3] + d[3] * 1800 }, 260,
-              { palette = A.pal.base, tint = { star.color[1], star.color[2], star.color[3], 0.85 }, sky = true })
-  v:billboard(A.tex.glow, { eye[1] + d[1] * 1800, eye[2] + d[2] * 1800, eye[3] + d[3] * 1800 }, 90,
-              { palette = A.pal.base, tint = { 1, 1, 1, 1 }, sky = true })
+  spr.light(v, A, { eye[1] + d[1] * 1800, eye[2] + d[2] * 1800, eye[3] + d[3] * 1800 }, 260,
+            { tint = { star.color[1], star.color[2], star.color[3], 0.85 }, sky = true })
+  spr.spark(v, A, { eye[1] + d[1] * 1800, eye[2] + d[2] * 1800, eye[3] + d[3] * 1800 }, 90,
+            { tint = { 1, 1, 1, 1 }, sky = true })
   return 2
 end
 
@@ -404,7 +405,7 @@ function M.site_lamps(v, A, state, eye)
                    shadow = not l.fixture })
           n = n + 1
           if glow and vec.dist(l.pos, eye) < M.GLOW_NEAR then
-            v:billboard(glow, l.pos, l.fixture and 1.4 or 2.6, { palette = A.pal.base,
+            spr.light(v, A, l.pos, l.fixture and 1.4 or 2.6, {
                         tint = { l.color[1], l.color[2], l.color[3], 0.8 * kk } })
           end
         end

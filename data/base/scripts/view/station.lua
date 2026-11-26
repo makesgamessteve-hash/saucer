@@ -15,6 +15,7 @@ local configs = require("sim.config")
 local vec = require("lib.vec")
 local assets = require("view.assets")
 local sm = saucer.math
+local spr = require("view.sprites")
 local M = {}
 
 local cache = {}
@@ -1077,7 +1078,7 @@ function M.draw_folk(v, A, state, p, L)
     local bob = th.mode == "flee" and 0.06 * math.abs(sm.sin(tick * 0.5)) or 0
     npc(L.thief.species, th.pos[1], th.pos[2], th.yaw, bob)
     if th.mode == "flee" then
-      v:billboard(A.tex.glow, { th.pos[1], 2.3, th.pos[2] }, 0.5, { palette = A.pal.base, tint = { 1, 0.25, 0.2, 0.9 } })
+      spr.mark(v, A, { th.pos[1], 2.3, th.pos[2] }, 0.5, { tint = { 1, 0.25, 0.2, 0.9 } })
       -- the coin glints in his fist
       v:mesh(A.saucer[visit.pocket_size()].hull, { pos = { th.pos[1] + 0.3, 1.0, th.pos[2] }, scale = 1.5, yaw = tick * 0.1,
                                                    tex = A.tex.hull, palette = A.pal.base })
@@ -1149,7 +1150,7 @@ function M.render(v, state, p)
     if q.kind == "holosign" then
       v:mesh(A.unit, { pos = { q.at[1], q.y, q.at[2] }, yaw = state.tick * 0.01, scale = { 3.2, 1.0, 0.05 }, ghost = true,
                        tint = { 1, 0.75, 0.3, 0.45 } })
-      v:billboard(A.tex.glow, { q.at[1], q.y, q.at[2] }, 2.2, { palette = A.pal.base, tint = { 1, 0.8, 0.4, 0.5 } })
+      spr.light(v, A, { q.at[1], q.y, q.at[2] }, 2.2, { tint = { 1, 0.8, 0.4, 0.5 } })
       n = n + 2
     end
   end
@@ -1169,7 +1170,7 @@ function M.render(v, state, p)
     end
     local dia = c.diameter * mp.scale
     if dia < 1.5 then
-      v:billboard(A.tex.glow, mp.pos, math.max(0.05, dia * 0.9), { palette = A.pal.base, tint = { 0.6, 0.9, 1, 0.35 } })
+      spr.light(v, A, mp.pos, math.max(0.05, dia * 0.9), { tint = { 0.6, 0.9, 1, 0.35 } })
     end
     n = n + 3
   end
@@ -1191,7 +1192,7 @@ function M.render(v, state, p)
       local ps = visit.pocket_size()
       v:mesh(A.saucer[ps].hull, { pos = { hand[1], hand[2] + 0.012, hand[3] }, yaw = state.tick * 0.02, tex = A.tex.hull,
                                   palette = A.pal.base })
-      v:billboard(A.tex.glow, { hand[1], hand[2] + 0.03, hand[3] }, 0.05, { palette = A.pal.base, tint = { 0.6, 1, 1, 0.5 } })
+      spr.spark(v, A, { hand[1], hand[2] + 0.03, hand[3] }, 0.05, { tint = { 0.6, 1, 1, 0.5 } })
       n = n + 2
     end
   end

@@ -9,6 +9,7 @@ local sh = require("sim.stationhull")
 local dock = require("sim.dock")
 local vec = require("lib.vec")
 local sm = saucer.math
+local spr = require("view.sprites")
 local M = {}
 
 M.TINT = { 1.45, 1.45, 1.45, 1 }   -- plating is lit up so the hull reads against the dark (the fog and the dim sun swallow it otherwise)
@@ -128,8 +129,8 @@ function M.beacons(v, A, L, origin, cam, tick)
     local l = list[i][1]
     local d = sm.sqrt(list[i][2])
     local size = math.max(l.size * 2, math.min(60, d * 0.02 * l.size))
-    v:billboard(A.tex.glow, { origin[1] + l.p[1], origin[2] + l.p[2], origin[3] + l.p[3] }, size,
-                { palette = A.pal.base, tint = { l.c[1], l.c[2], l.c[3], 0.9 } })
+    spr.slit(v, A, { origin[1] + l.p[1], origin[2] + l.p[2], origin[3] + l.p[3] }, size,
+             { tint = { l.c[1], l.c[2], l.c[3], 0.9 } })
     n = n + 1
   end
   return n
@@ -149,7 +150,7 @@ function M.signals(v, A, L, origin, cam, tick)
     if d < K.far and n < K.max then
       local a, c = hd.signal_at(l, tick, L.lamps or { l.c })
       local size, tint, layers = hd.signal_look(l, d, a, c, require("view.render").FOG)
-      for _ = 1, layers do v:billboard(A.tex.glow, p, size, { palette = A.pal.base, tint = tint }) end
+      for _ = 1, layers do spr.slit(v, A, p, size, { tint = tint }) end
       n = n + 1
     end
   end
@@ -187,7 +188,7 @@ function M.approach(v, A, state, idx, cam, tick)
     local lit = ((head - from_far) % cycle) < 3 * H.step
     local a = lit and 0.95 or 0.28
     local size = lit and 7 or 3.5
-    v:billboard(A.tex.glow, l.pos, size, { palette = A.pal.base, tint = lit and { 1, 0.85, 0.3, a } or { 0.4, 0.9, 1, a } })
+    spr.slit(v, A, l.pos, size, { tint = lit and { 1, 0.85, 0.3, a } or { 0.4, 0.9, 1, a } })
     n = n + 1
   end
   return n
