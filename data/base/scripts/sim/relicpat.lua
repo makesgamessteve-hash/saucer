@@ -238,6 +238,42 @@ local function key(i, j, l) return (l * 128 + j + 64) * 128 + (i + 64) end
 local function grid_plan(rng, D, grid, heart, cells, extras)
   local pitch = D._gpitch or D.pitch or 40
   local halls, edges, linked, at = {}, {}, {}, {}
+  -- relic-room-shapes: this relic's own variation -- a turn or mirror, some halls left out (never the main way, an
+  -- entry or a cardinal spoke), and a few side spurs -- so no two relics of one species share a plan
+  local V = D._v
+  if V then
+    local function tf(i, j)
+      if V.mirror then i = -i end
+      for _ = 1, V.turn do i, j = -j, i end
+      return i, j
+    end
+    local out = {}
+    for _, c in ipairs(cells) do
+      local i, j = tf(c[1], c[2])
+      local keep = (c[4] and (c[4].main or c[4].entry)) or i == 0 or j == 0
+      if keep or rng:float() >= V.drop then out[#out + 1] = { i, j, c[3], c[4] } end
+    end
+    local etf = {}
+    for _, e in ipairs(extras or {}) do
+      local a, b = tf(e[1], e[2])
+      local c2, d2 = tf(e[4], e[5])
+      etf[#etf + 1] = { a, b, e[3], c2, d2, e[6] }
+    end
+    extras = etf
+    local n0 = #out
+    for _ = 1, V.spurs do
+      local c = out[rng:int(1, n0)]
+      local i, j = c[1], c[2]
+      local di, dj
+      if math.abs(i) >= math.abs(j) then di, dj = (i >= 0 and 1 or -1), 0 else di, dj = 0, (j >= 0 and 1 or -1) end
+      if rng:float() < 0.4 then di, dj = dj, di end
+      for _ = 1, rng:int(1, V.spur_len) do
+        i, j = i + di, j + dj
+        out[#out + 1] = { i, j, c[3] }
+      end
+    end
+    cells = out
+  end
   for _, c in ipairs(cells) do
     local i, j, l = c[1], c[2], c[3]
     local x, z = heart.cx + i * pitch, heart.cz + j * pitch
@@ -270,6 +306,14 @@ local function grid_plan(rng, D, grid, heart, cells, extras)
     adj[e[1]][#adj[e[1]] + 1] = e[2]
     adj[e[2]][#adj[e[2]] + 1] = e[1]
   end
+  if V then
+    for _, list in pairs(adj) do
+      for k = #list, 2, -1 do
+        local m = rng:int(1, k)
+        list[k], list[m] = list[m], list[k]
+      end
+    end
+  end
   local keep = { [start] = true }
   local q, qi = { start }, 1
   while qi <= #q do
@@ -280,7 +324,7 @@ local function grid_plan(rng, D, grid, heart, cells, extras)
   end
   if #q < 8 then return nil end
   -- cap the component so Villa spaces stay in the 40-80 budget
-  local cap = 26
+  local cap = V and V.cap or 26
   local levels_seen = {}
   for _, i in ipairs(q) do levels_seen[halls[i].l] = true end
   local nlev = 0
@@ -330,25 +374,38 @@ end
 function M.rings(rng, D, grid)
   local heart = heart_at(D, grid)
   -- a 4-connected octagon (16 cells) on the mid level, inner cardinals on every level
-  local r = 3
-  local mid = math.min(1, D.levels - 1)
-  local oct = {
-    { r, 0 }, { r, 1 }, { 1, r }, { 0, r }, { -1, r }, { -r, 1 }, { -r, 0 }, { -r, -1 },
-    { -1, -r }, { 0, -r }, { 1, -r }, { r, -1 },
-  }
-  -- fill the 4-steps of a rounded square of radius r
+  local V = D._v or {}
+  local r = V.ring_r or 3
+  local mid = V.mid or math.min(1, D.levels - 1)
+  -- one wide ring on the mid level (a 4-connected rounded square), spokes stacked at the cardinals on every level;
+  -- some relics also carry a second, wider or partial ring on another level
   local cells = {}
-  for l = 0, D.levels - 1 do
-    for _, d in ipairs({ { r, 0 }, { -r, 0 }, { 0, r }, { 0, -r } }) do
-      cells[#cells + 1] = { d[1], d[2], l }
+  local function ring(rr, l, arc)
+    for s = -rr, rr do
+      for _, c in ipairs({ { s, rr }, { s, -rr }, { rr, s }, { -rr, s } }) do
+        local corner = math.abs(c[1]) == rr and math.abs(c[2]) == rr
+        if not (corner and V.round_corners and rr > 3) and (not arc or c[1] * arc[1] + c[2] * arc[2] >= 0) then
+          cells[#cells + 1] = { c[1], c[2], l }
+        end
+      end
     end
-    if l == mid then
-      -- the four sides AND corners of the square ring, so it is 4-connected
-      for s = -r, r do
-        cells[#cells + 1] = { s, r, l }
-        cells[#cells + 1] = { s, -r, l }
-        cells[#cells + 1] = { r, s, l }
-        cells[#cells + 1] = { -r, s, l }
+    if V.round_corners and rr > 3 then
+      for _, q in ipairs({ { 1, 1 }, { -1, 1 }, { 1, -1 }, { -1, -1 } }) do
+        cells[#cells + 1] = { q[1] * (rr - 1), q[2] * (rr - 1), l }
+        cells[#cells + 1] = { q[1] * rr, q[2] * (rr - 1), l }
+        cells[#cells + 1] = { q[1] * (rr - 1), q[2] * rr, l }
+      end
+    end
+  end
+  for l = 0, D.levels - 1 do
+    for s = 3, r do
+      for _, d in ipairs({ { s, 0 }, { -s, 0 }, { 0, s }, { 0, -s } }) do cells[#cells + 1] = { d[1], d[2], l } end
+    end
+    if l == mid then ring(r, l) end
+    if V.ring2 and l == V.ring2.l then
+      ring(V.ring2.r, l, V.ring2.arc)
+      for s = 3, V.ring2.r do
+        for _, d in ipairs({ { s, 0 }, { -s, 0 }, { 0, s }, { 0, -s } }) do cells[#cells + 1] = { d[1], d[2], l } end
       end
     end
   end
@@ -357,15 +414,22 @@ end
 
 function M.shells(rng, D, grid)
   local heart = heart_at(D, grid)
+  local V = D._v or {}
   local r0 = 3
-  local mid = math.min(1, D.levels - 1)
+  local mid = V.mid or math.min(1, D.levels - 1)
   local cells = {}
   for l = 0, D.levels - 1 do
     -- stacked cardinals at r0 on every level (shafts)
     for _, d in ipairs({ { r0, 0 }, { -r0, 0 }, { 0, r0 }, { 0, -r0 } }) do
       cells[#cells + 1] = { d[1], d[2], l }
     end
-    local r = (l == mid) and r0 or (r0 - 1)
+    -- a sphere's cross-sections: the shell on each level has its own radius, so the plan is nested rings
+    local r = V.shell_r and V.shell_r[l + 1] or ((l == mid) and r0 or (r0 - 1))
+    if r > r0 then
+      for s = r0 + 1, r do
+        for _, d in ipairs({ { s, 0 }, { -s, 0 }, { 0, s }, { 0, -s } }) do cells[#cells + 1] = { d[1], d[2], l } end
+      end
+    end
     for s = -r, r do
       cells[#cells + 1] = { s, r, l }
       cells[#cells + 1] = { s, -r, l }
@@ -385,28 +449,36 @@ end
 
 function M.helix(rng, D, grid)
   local heart = heart_at(D, grid)
-  local r0 = 3
-  local levels = math.max(5, D.levels)
+  local V = D._v or {}
+  local r0 = V.helix_r or 3
+  local levels = V.helix_levels or math.max(5, D.levels)
   local sign = rng:int(0, 1) * 2 - 1
   local function ring_path(r)
+    -- the square's perimeter, every step 4-adjacent to the last (corners included)
     local p = {}
     for s = 0, r - 1 do p[#p + 1] = { r, s } end
     for s = r, 1 - r, -1 do p[#p + 1] = { s, r } end
-    for s = r - 1, 1 - r, -1 do p[#p + 1] = { -r, s } end
+    for s = r, 1 - r, -1 do p[#p + 1] = { -r, s } end
     for s = -r, r - 1 do p[#p + 1] = { s, -r } end
-    for s = 1 - r, -1 do p[#p + 1] = { r, s } end
+    for s = -r, -1 do p[#p + 1] = { r, s } end
     return p
   end
   local path = ring_path(r0)
+  if V.phase then
+    local q = {}
+    for k = 1, #path do q[k] = path[(k + V.phase - 1) % #path + 1] end
+    path = q
+  end
   if sign < 0 then
     local q = {}
     for i = #path, 1, -1 do q[#q + 1] = path[i] end
     path = q
   end
   local cells = {}
-  local per = math.max(2, math.floor(#path / levels))
+  local per = V.helix_per or math.max(2, math.floor(#path / levels))
   local last_l = 0
   for idx, c in ipairs(path) do
+    if idx > levels * per then break end   -- one climb, no lap round the top
     local l = math.min(levels - 1, math.floor((idx - 1) / per))
     if l ~= last_l then
       -- stack at this footprint so a shaft can carry the climb
@@ -415,8 +487,8 @@ function M.helix(rng, D, grid)
     end
     cells[#cells + 1] = { c[1], c[2], l, { main = true } }
   end
-  for _, d in ipairs({ { r0, 0 }, { -r0, 0 }, { 0, r0 }, { 0, -r0 } }) do
-    cells[#cells + 1] = { d[1], d[2], 0, { entry = true } }
+  for _, d in ipairs({ { 3, 0 }, { -3, 0 }, { 0, 3 }, { 0, -3 } }) do
+    for s = 3, r0 do cells[#cells + 1] = { d[1] / 3 * s, d[2] / 3 * s, 0, { entry = true } } end
   end
   local D2 = {}
   for k, v in pairs(D) do D2[k] = v end
@@ -427,7 +499,8 @@ end
 function M.spiral(rng, D, grid)
   local heart = heart_at(D, grid)
   local r0 = math.max(3, math.ceil(M.ring_radius(D) / (D.pitch or 40)))
-  local rmax = r0 + 2
+  local V = D._v or {}
+  local rmax = r0 + (V.spiral_extra or 2)
   local sign = rng:int(0, 1) * 2 - 1
   local cells = {}
   -- square spiral, 4-connected by construction, from the outer south inward to r0
@@ -456,7 +529,7 @@ function M.spiral(rng, D, grid)
   end
   -- a few 1-cell organ branches, 4-connected
   local n = #cells
-  for k = 3, n - 2, 4 do
+  for k = 3, n - 2, V.branch_every or 4 do
     if rng:int(1, 2) == 1 then
       local c = cells[k]
       local side = (k % 2 == 0) and 1 or -1
@@ -473,14 +546,18 @@ end
 function M.diamond(rng, D, grid)
   local heart = heart_at(D, grid)
   local R0 = M.clearance(D)
-  local pitch = math.max(D.pitch or 40, R0)
+  local pitch = math.max(D.pitch or 40, R0) + math.floor(((D._v and D._v.spread or 1) - 0.85) * 40)
   local mid = math.min(1, D.levels - 1)
   -- 4 inner cardinals on every level, the manhattan-2 diamond only on the mid level (8 cells, 4-linked
   -- through the inner cardinals). About 4 * levels + 8 halls, well inside the Villa-space budget.
-  local cells = every_cell(1, 2, D.levels, function(i, j, l)
+  local V = D._v or {}
+  local R = V.diamond_r or 2
+  local l2 = V.diamond_l2
+  local cells = every_cell(1, R, D.levels, function(i, j, l)
     local man = math.abs(i) + math.abs(j)
-    if man == 1 and (i == 0 or j == 0) then return true end
-    if man == 2 and l == mid then return true end
+    if (i == 0 or j == 0) and man >= 1 and man <= (l == mid and R or (V.spoke_r or 1)) then return true end
+    if man == R and l == mid then return true end
+    if l2 and l == l2.l and man == l2.r then return true end
     return false
   end)
   local D2 = {}
@@ -491,7 +568,7 @@ end
 
 function M.sierpinski(rng, D, grid)
   local heart = heart_at(D, grid)
-  local pitch = math.max(32, math.min(D.pitch or 40, 36))
+  local pitch = math.max(30, math.min(D.pitch or 40, 42))
   local n = 8
   local i0, j0 = 5.5, 5.5
   local rot = rng:int(0, 3)
@@ -501,7 +578,9 @@ function M.sierpinski(rng, D, grid)
     for i = 0, n - 1 do
       for j = 0, n - 1 do
         if (i & j) == 0 then
+          local V = D._v or {}
           local keep = (l == mid) or (i == 0 and j == 0) or (i == 0 and j == n - 1) or (i == n - 1 and j == 0)
+            or (V.sier_rows and V.sier_rows[l + 1] and (i == V.sier_rows[l + 1] or j == V.sier_rows[l + 1]))
           if keep then
             local x, z = i - i0, j - j0
             if rot == 1 then x, z = -z, x
@@ -522,7 +601,8 @@ end
 function M.htree(rng, D, grid)
   local heart = heart_at(D, grid)
   local r0 = math.max(2, math.ceil(M.clearance(D) / (D.pitch or 40)))
-  local depth = rng:int(0, 2) == 0 and 3 or 2
+  local V = D._v or {}
+  local depth = V.htree_depth or (rng:int(0, 2) == 0 and 3 or 2)
   local mid = math.min(1, D.levels - 1)
   local cells = {}
   local function put(i, j, l)
@@ -542,12 +622,14 @@ function M.htree(rng, D, grid)
     end
   end
   local arm = (depth >= 3) and 3 or 2
+  local arms = V.htree_arms or { arm, arm, arm, arm }
+  local deps = V.htree_deps or { 0, 0, 0, 0 }
   for l = 0, D.levels - 1 do
     local dep = (l == mid) and depth or 1
-    bar(r0, 0, 1, 0, arm, dep, l)
-    bar(-r0, 0, -1, 0, arm, dep, l)
-    bar(0, r0, 0, 1, arm, dep, l)
-    bar(0, -r0, 0, -1, arm, dep, l)
+    bar(r0, 0, 1, 0, arms[1], math.max(0, dep + deps[1]), l)
+    bar(-r0, 0, -1, 0, arms[2], math.max(0, dep + deps[2]), l)
+    bar(0, r0, 0, 1, arms[3], math.max(0, dep + deps[3]), l)
+    bar(0, -r0, 0, -1, arms[4], math.max(0, dep + deps[4]), l)
   end
   return grid_plan(rng, D, grid, heart, cells)
 end
@@ -555,9 +637,12 @@ end
 function M.spine(rng, D, grid)
   local heart = heart_at(D, grid)
   local r0 = math.max(2, math.ceil(M.clearance(D) / (D.pitch or 40)))
-  local half = rng:int(4, 6)
-  local mid = math.min(1, D.levels - 1)
+  local V = D._v or {}
+  local half = V.spine_half or rng:int(4, 6)
+  local mid = V.mid or math.min(1, D.levels - 1)
   local sign = rng:int(0, 1) * 2 - 1
+  local bend = V.spine_bend or 3
+  local wing = V.wing_every or 2
   local cells = {}
   local function put(i, j, l, extra)
     if math.abs(i) < r0 and math.abs(j) < r0 then return end
@@ -568,13 +653,13 @@ function M.spine(rng, D, grid)
     for s = -n, n do
       if s ~= 0 then
         local jj = (s > 0 and 1 or -1) * (r0 + math.abs(s) - 1)
-        local ii = sign * ((math.abs(s) % 3 == 2) and 1 or 0)
+        local ii = sign * ((math.abs(s) % bend == bend - 1) and 1 or 0)
         put(ii, jj, l, { main = true, gullet = true })
       end
     end
     local dep = (l == mid) and 2 or 1
     for s = -n, n do
-      if s ~= 0 and (math.abs(s) % 2 == 0 or l == mid) then
+      if s ~= 0 and (math.abs(s) % wing == 0 or l == mid) then
         local jj = (s > 0 and 1 or -1) * (r0 + math.abs(s) - 1)
         local side = (s % 2 == 0) and 1 or -1
         for w = 1, dep + 1 do
@@ -588,6 +673,62 @@ function M.spine(rng, D, grid)
     end
   end
   return grid_plan(rng, D, grid, heart, cells)
+end
+
+-- variant(rng, D) -> this relic's own parameters for its pattern (drawn from its seed). Pattern code reads them from
+-- D._v; grid_plan applies the turn, mirror, drops, spurs and hall cap.
+function M.variant(rng, D)
+  local L = D.levels or 3
+  local V = {
+    turn = rng:int(0, 3), mirror = rng:int(0, 1) == 1,
+    drop = 0.08 + rng:float() * 0.27, spurs = rng:int(1, 5), spur_len = rng:int(1, 3), cap = rng:int(18, 26),
+    mid = rng:int(0, math.max(0, math.min(2, L - 1))),
+    spread = 0.85 + rng:float() * 0.35,
+  }
+  local p = D.pattern
+  if p == "rings" then
+    V.ring_r = rng:int(3, 4)
+    V.round_corners = rng:int(0, 1) == 1
+    if rng:float() < 0.6 then
+      local l = (V.mid + rng:int(1, L - 1)) % L
+      local arcs = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }
+      V.ring2 = { l = l, r = (V.ring_r == 3) and 5 or 3, arc = rng:float() < 0.5 and arcs[rng:int(1, 4)] or nil }
+    end
+  elseif p == "shells" then
+    local R = rng:int(4, 6)
+    V.shell_r = {}
+    local c = V.mid
+    for l = 0, L - 1 do
+      local t = (l - c) / math.max(1, L - 1)
+      V.shell_r[l + 1] = math.max(3, math.floor(R * math.sqrt(math.max(0, 1 - 2.2 * t * t)) + 0.5))
+    end
+  elseif p == "helix" then
+    -- the climb is the design: a longer cap and fewer spurs so the hall cap never cuts it
+    V.helix_r = 3
+    V.helix_levels = rng:int(5, 6)
+    V.helix_per = rng:int(3, 4)
+    V.phase = rng:int(0, 23)
+    V.cap, V.spurs = 30, rng:int(0, 2)
+  elseif p == "spiral" then
+    V.spiral_extra = rng:int(1, 3)
+    V.branch_every = rng:int(2, 5)
+  elseif p == "diamond" then
+    V.diamond_r = rng:int(2, 3)
+    V.spoke_r = rng:int(1, 2)
+    if rng:float() < 0.6 then V.diamond_l2 = { l = (V.mid + 1) % L, r = rng:int(2, 3) } end
+  elseif p == "sierpinski" then
+    V.sier_rows = {}
+    for l = 1, L do V.sier_rows[l] = rng:float() < 0.5 and rng:int(0, 7) or false end
+  elseif p == "htree" then
+    V.htree_depth = rng:int(2, 3)
+    V.htree_arms = { rng:int(1, 3), rng:int(1, 3), rng:int(1, 3), rng:int(1, 3) }
+    V.htree_deps = { rng:int(-1, 1), rng:int(-1, 1), rng:int(-1, 1), rng:int(-1, 1) }
+  elseif p == "spine" then
+    V.spine_half = rng:int(3, 6)
+    V.spine_bend = rng:int(2, 4)
+    V.wing_every = rng:int(2, 3)
+  end
+  return V
 end
 
 M.PATTERNS = {
@@ -606,8 +747,14 @@ function M.plan(rng, D, grid)
   local name = D.pattern
   local fn = name and M.PATTERNS[name]
   if not fn then return nil, "no pattern" end
-  local p = fn(rng, D, grid)
+  local D2 = {}
+  for k, v in pairs(D) do D2[k] = v end
+  D2._v = M.variant(rng, D)
+  -- every relic has its own spacing between halls: the whole plan grows or shrinks around the heart
+  D2.pitch = math.floor((D.pitch or 40) * D2._v.spread + 0.5)
+  local p = fn(rng, D2, grid)
   if not p or #p.halls < 8 then return nil, "too few halls" end
+  p.variant = D2._v
   if not p.start or not p.entries or #p.entries == 0 then return nil, "no way to the heart" end
   p.pattern = name
   return p
