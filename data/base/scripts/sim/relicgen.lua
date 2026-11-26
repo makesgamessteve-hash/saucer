@@ -1402,7 +1402,29 @@ function M.try(seed, kit, civ, origin)
   local hc = { (hmn[1] + hmx[1]) / 2, (hmn[3] + hmx[3]) / 2 }
   local solids = { { { hc[1] - E[1], hmn[2] + kit.wall, hc[2] - E[2] }, { hc[1] + E[1], hmx[2] - kit.wall, hc[2] + E[2] },
                      kind = "engine", room = L.core.id } }
+  -- relic-room-shapes: a patterned relic's halls take the shapes its pattern calls for (sim/relicshape.lua); the
+  -- maw's hall, the lung and the plague hall keep their boxes. Drawn from a child seed so the graph stays the same.
+  local shapes = require("sim.relicshape")
+  if D.pattern then
+    local srng = saucer.rng.new(saucer.seed_child(seed, "shape", 1))
+    local style = shapes.style(srng, D.pattern)
+    local protect = { [L.halls[1].id] = true, [lung.id] = true, [plague.id] = true, [L.core.id] = true }
+    local hx, hz = L.core.cell[1] + L.core.size[1] / 2, L.core.cell[3] + L.core.size[3] / 2
+    shapes.assign(srng, rooms, doors, protect, hx, hz, style)
+  end
   local sl = slots(rng, seed, rooms, doors, L, kit, origin)
+  local byid = {}
+  for _, rm in ipairs(rooms) do byid[rm.id] = rm end
+  for _, s in ipairs(sl) do
+    local rm = byid[s.room]
+    if rm and rm.shape then
+      s.pos = shapes.settle(rm, kit, origin, s.pos, 4, ruinm.face_holes(rm, doors, rooms, kit, origin, 2, -1))
+    end
+  end
+  local fill = {}
+  for _, rm in ipairs(rooms) do
+    for _, b in ipairs(shapes.fill(rm, kit, origin)) do fill[#fill + 1] = b end
+  end
   local walls = ruinm.walls(rooms, doors, kit, origin)
   local sp = spaces(rooms, kit, origin)
   local villa, seat = 0, 0
@@ -1426,8 +1448,12 @@ function M.try(seed, kit, civ, origin)
   local mn = box(L.maw, kit, origin)
   relic.length = hmx[3] - mn[3]
   relic.phenomena = phenomena(rng, rooms, doors, L, kit, origin, civ)
+  for _, ph in ipairs(relic.phenomena) do
+    local rm = byid[ph.room]
+    if rm and rm.shape then ph.pos = shapes.settle(rm, kit, origin, ph.pos, 1) end
+  end
   local _, reach = ruinm.validate(rooms, doors, sl)
-  local r = { seed = seed, kit = kit.id, rooms = rooms, doors = doors, slots = sl, walls = walls, debris = {}, solids = solids,
+  local r = { seed = seed, kit = kit.id, rooms = rooms, doors = doors, slots = sl, walls = walls, debris = {}, solids = solids, fill = fill,
               origin = origin, reach = reach, relic = relic,
               hash = saucer.seed_child(ruinm.layout_hash(rooms, doors, solids), "relic", seed % 1000003) }
   local ok, why = M.validate(r, kit)
@@ -1438,7 +1464,7 @@ end
 
 -- generate(seed, kit, civ, origin) -> the relic's ruin table (memoized: a restore rebuilds derived data every time)
 local memo, memo_n = {}, 0
-function M.generate(seed, kit, civ, origin)
+local function plain(seed, kit, civ, origin)
   local key = string.format("%s|%s|%s|%g,%g,%g", tostring(seed), kit.id, civ and civ.id or "?", origin[1], origin[2], origin[3])
   if memo[key] then return memo[key] end
   local out, why
@@ -1455,6 +1481,51 @@ function M.generate(seed, kit, civ, origin)
   memo[key] = out
   memo_n = memo_n + 1
   return out
+end
+
+-- relic-room-shapes: no two relics of one species alike. `siblings` are the seeds of the species' earlier relics in
+-- the universe (sim/sector.lua: in sector order); this relic is drawn again (a seed child per try) until its layout
+-- signature is at least relicsig.MIN_DIST from every one of theirs (each of them drawn the same way against its own
+-- earlier siblings). After UNIQUE_TRIES the most distinct draw stands. Signatures do not depend on the origin, so the
+-- siblings are drawn at ORIGIN0.
+M.UNIQUE_TRIES = 64
+M.ORIGIN0 = { 0, 0, 0 }
+local umemo, umemo_n = {}, 0
+function M.generate(seed, kit, civ, origin, siblings)
+  if not siblings or #siblings == 0 or not M.archetype(civ) then return plain(seed, kit, civ, origin) end
+  local key = string.format("%s|%s|%s|%g,%g,%g|%s", tostring(seed), kit.id, civ and civ.id or "?", origin[1], origin[2],
+    origin[3], table.concat(siblings, ","))
+  if umemo[key] then return umemo[key] end
+  local others = {}
+  for k, sd in ipairs(siblings) do
+    local sub = {}
+    for j = 1, k - 1 do sub[j] = siblings[j] end
+    others[k] = M.generate(sd, kit, civ, M.ORIGIN0, sub)
+  end
+  local best = (M.unlike(seed, kit, civ, origin, others))
+  if umemo_n > 32 then umemo, umemo_n = {}, 0 end
+  umemo[key] = best
+  umemo_n = umemo_n + 1
+  return best
+end
+
+-- unlike(seed, kit, civ, origin, others) -> this relic drawn (a seed child per try) until it is at least
+-- relicsig.MIN_DIST from every relic of `others`; the most distinct draw after UNIQUE_TRIES. -> ruin, its distance to
+-- the nearest of `others` (1 with none), the try taken
+function M.unlike(seed, kit, civ, origin, others)
+  local sig = require("sim.relicsig")
+  local best, bd, ba
+  for a = 0, M.UNIQUE_TRIES - 1 do
+    local r = plain(a == 0 and seed or saucer.seed_child(seed, "unique", a), kit, civ, origin)
+    local d = 1
+    for _, o in ipairs(others) do
+      d = math.min(d, sig.distance(r, o))
+      if d < sig.MIN_DIST then break end
+    end
+    if not bd or d > bd then best, bd, ba = r, d, a end
+    if d >= sig.MIN_DIST then break end
+  end
+  return best, bd, ba
 end
 
 return M

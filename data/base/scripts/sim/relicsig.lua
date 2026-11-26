@@ -2,15 +2,16 @@
 -- relic-room-shapes: a relic's layout signature and the distance between two relics, so no two relics of the same
 -- species look alike (design: every relic of a civ is a variation, never a copy). The signature is the room plan seen
 -- from above -- every space's walkable footprint (room shapes included), all levels together -- rasterized on a
--- PX-metre grid centred on the heart. distance(a, b) is 1 - IoU of the two footprints, minimised over the eight
+-- PX-metre grid centred on the heart. The heart hall itself is left out: it is the same great hall in every relic, and
+-- it would only make every two relics look more alike than they are. distance(a, b) is 1 - IoU of the two footprints, minimised over the eight
 -- turns and mirrors of the square, so a relic that is only another relic turned or mirrored still counts as alike.
 local ruinm = require("sim.ruin")
 local shape = require("sim.relicshape")
 local M = {}
 
-M.PX = 16          -- metres per signature pixel
-M.N = 128          -- pixels per side (2 km)
-M.MIN_DIST = 0.30  -- two relics of one species must differ by at least this much (tests/lua/relicunique_spec.lua)
+M.PX = 8           -- metres per signature pixel (two pixels to a grid cell)
+M.N = 256          -- pixels per side (2 km)
+M.MIN_DIST = 0.25  -- two relics of one species must differ by at least this much (tests/lua/relicunique_spec.lua)
 
 -- signature(ruin) -> { set = { [index] = true }, n = count, cx, cz }
 function M.signature(r)
@@ -24,17 +25,19 @@ function M.signature(r)
   local h = N // 2
   local set, n = {}, 0
   for _, rm in ipairs(r.rooms) do
-    local mn, mx = ruinm.room_box(rm, kit, o)
-    local i0 = math.floor((mn[1] - cx) / P) + h
-    local i1 = math.floor((mx[1] - cx) / P) + h
-    local j0 = math.floor((mn[3] - cz) / P) + h
-    local j1 = math.floor((mx[3] - cz) / P) + h
-    for i = math.max(0, i0), math.min(N - 1, i1) do
-      for j = math.max(0, j0), math.min(N - 1, j1) do
-        local x, z = cx + (i - h + 0.5) * P, cz + (j - h + 0.5) * P
-        if x >= mn[1] and x <= mx[1] and z >= mn[3] and z <= mx[3] and shape.free_world(rm, kit, o, x, z) then
-          local k = j * N + i
-          if not set[k] then set[k], n = true, n + 1 end
+    if rm.id ~= core.id then
+      local mn, mx = ruinm.room_box(rm, kit, o)
+      local i0 = math.floor((mn[1] - cx) / P) + h
+      local i1 = math.floor((mx[1] - cx) / P) + h
+      local j0 = math.floor((mn[3] - cz) / P) + h
+      local j1 = math.floor((mx[3] - cz) / P) + h
+      for i = math.max(0, i0), math.min(N - 1, i1) do
+        for j = math.max(0, j0), math.min(N - 1, j1) do
+          local x, z = cx + (i - h + 0.5) * P, cz + (j - h + 0.5) * P
+          if x >= mn[1] and x <= mx[1] and z >= mn[3] and z <= mx[3] and shape.free_world(rm, kit, o, x, z) then
+            local k = j * N + i
+            if not set[k] then set[k], n = true, n + 1 end
+          end
         end
       end
     end

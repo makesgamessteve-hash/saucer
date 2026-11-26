@@ -10,6 +10,7 @@
 -- The heart hall keeps no sentry: it is the place to stand and look. They wear the civ's glyph like any sentry.
 local vec = require("lib.vec")
 local ruinm = require("sim.ruin")
+local shapes = require("sim.relicshape")
 local M = {}
 
 M.WATCHERS = 8
@@ -18,6 +19,7 @@ M.SNATCHERS = 4
 M.SPOTTERS = 2
 M.SPOTTER_SQUARE = 18 -- m half-side of a Spotter's beat round its junction
 M.SPOTTER_LIFT = 10   -- m over the hall's floor
+M.SPOTTER_MIN = 4     -- m: the smallest half side a Spotter's square shrinks to in a shaped hall
 
 -- how many doors touch each room
 local function door_count(ruin)
@@ -97,6 +99,14 @@ local function spotter(out, site, kit, hall, t)
   local mn, mx = ruinm.room_box(hall, kit, site.pos)
   local c = { (mn[1] + mx[1]) / 2, mn[2] + kit.wall + M.SPOTTER_LIFT, (mn[3] + mx[3]) / 2 }
   local h = math.min(M.SPOTTER_SQUARE, (mx[1] - mn[1]) / 2 - 4, (mx[3] - mn[3]) / 2 - 4)
+  -- relic-room-shapes: in a shaped hall the square shrinks until its corners and sides are over free floor
+  local function over_floor(q)
+    for _, d in ipairs({ { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 }, { 0, -1 }, { 1, 0 }, { 0, 1 }, { -1, 0 } }) do
+      if not shapes.free_world(hall, kit, site.pos, c[1] + d[1] * q, c[3] + d[2] * q) then return false end
+    end
+    return true
+  end
+  while h > M.SPOTTER_MIN and not over_floor(h) do h = h - 2 end
   local pts = { { c[1] - h, c[2], c[3] - h }, { c[1] + h, c[2], c[3] - h }, { c[1] + h, c[2], c[3] + h },
                 { c[1] - h, c[2], c[3] + h }, { c[1] - h, c[2], c[3] - h } }
   out[#out + 1] = { id = #out + 1, kind = "spotter", site = site.id, room = hall.id, pos = vec.copy(pts[1]), route = pts,
@@ -115,6 +125,12 @@ function M.layout(out, site, ruin, kit, t, band, civ, watcher_in)
       watcher_in(out, site, ruin, kit, r, band, civ)
       if #out > before then
         out[#out].relic = true
+        -- relic-room-shapes: a shaped hall's turret hangs over its free floor, its power cell lies on it
+        if r.shape then
+          local w = out[#out]
+          w.pos = shapes.settle(r, kit, site.pos, w.pos, 3)
+          if w.cell then w.cell = shapes.settle(r, kit, site.pos, w.cell, 1.5) end
+        end
         nw = nw + 1
       end
     end

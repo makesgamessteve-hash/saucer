@@ -839,6 +839,46 @@ function M.draw_signals(v, A, set, cam, tick, opts)
 end
 
 -- the parts of one room (inside and outside skins, its cradles; the maw's valve; the heart's decor and engine)
+-- relic-room-shapes: a shaped hall's own wall, along its contour (sim/relicshape.lua): an upright slab per straight
+-- run, on the solid side of the line (so it never stands in the free floor), with a glowing seam at the floor and
+-- one under the ceiling that trace the shape
+M.SHAPE_WALL = 1.2    -- m: a shaped hall's wall slab
+local function shape_walls(parts, r, kit, origin, cc, mat, c)
+  local shapes = require("sim.relicshape")
+  local s = r.shape
+  local mn, mx = ruinm.room_box(r, kit, origin)
+  local y0, y1 = mn[2] + kit.wall, mx[2] - kit.wall
+  local cell = kit.cell
+  for _, g in ipairs(shapes.contour(s)) do
+    local dx, dz = (g[3] - g[1]) * cell, (g[4] - g[2]) * cell
+    local len = math.sqrt(dx * dx + dz * dz)
+    if len > 1e-3 then
+      local ux, uz = dx / len, dz / len
+      -- n: the line's normal; the slab goes on the solid side of it
+      local mxc, mzc = (g[1] + g[3]) / 2, (g[2] + g[4]) / 2
+      local nx, nz = uz, -ux
+      local side = shapes.free(s, mxc + nx * 0.2, mzc + nz * 0.2) and -1 or 1
+      local z0, z1 = 0, M.SHAPE_WALL
+      if side < 0 then z0, z1 = -M.SHAPE_WALL, 0 end
+      local yaw = saucer.math.atan2(-uz, ux)
+      local pos = { origin[1] + mxc * cell, y0, origin[3] + mzc * cell }
+      -- the slab's local +z after the yaw is (sin yaw, 0, cos yaw): flip z if it points against n
+      local lzx, lzz = math.sin(yaw), math.cos(yaw)
+      if lzx * nx + lzz * nz < 0 then z0, z1 = -z1, -z0 end
+      local h = len / 2 + 0.3
+      parts[#parts + 1] = { kind = "box", min = { -h, 0, z0 }, max = { h, y1 - y0, z1 }, pos = pos, yaw = yaw, color = c,
+                            mat = mat, shape_wall = true }
+      local sz0, sz1 = side > 0 and -0.15 or 0, side > 0 and 0 or 0.15
+      if lzx * nx + lzz * nz < 0 then sz0, sz1 = -sz1, -sz0 end
+      parts[#parts + 1] = { kind = "box", min = { -h, 0, sz0 }, max = { h, 0.35, sz1 }, pos = pos, yaw = yaw,
+                            color = cc.amethyst, emissive = 0.9, shape_wall = true }
+      parts[#parts + 1] = { kind = "box", min = { -h, y1 - y0 - 0.5, sz0 }, max = { h, y1 - y0 - 0.15, sz1 }, pos = pos,
+                            yaw = yaw, color = cc.wound, emissive = 0.6, shape_wall = true }
+    end
+  end
+end
+M.shape_walls = shape_walls
+
 local function room_parts(ruin, origin, r, ctx)
   local kit, cc = ctx.kit, ctx.cc
   local parts, ext = {}, {}
@@ -848,6 +888,7 @@ local function room_parts(ruin, origin, r, ctx)
     local mat, c = S.dominant, cc.membrane
     if r.id == ruin.relic.lung then mat = S.lung elseif r.id == ruin.relic.plague then mat, c = S.decay, cc.necrotic end
     n = big_room(parts, ext, ruin, r, kit, origin, walls, cc, mat, c)
+    if r.shape then shape_walls(parts, r, kit, origin, cc, mat, c) end
     if r.kind == "core" then
       local engine
       for _, sd in ipairs(ruin.solids or {}) do if sd.kind == "engine" and sd.room == r.id then engine = sd end end
@@ -1063,7 +1104,9 @@ function M.lamps(ruin, origin, site)
       local q4 = (mx[1] - mn[1]) / 4
       local z4 = (mx[3] - mn[3]) / 4
       for _, q in ipairs({ { -1, -1 }, { 1, -1 }, { -1, 1 }, { 1, 1 } }) do
-        add({ cx + q[1] * q4, f + 6, cz + q[2] * z4 }, c, math.max(24, q4 * 1.4))
+        -- relic-room-shapes: a shaped hall's lamps hang over its free floor
+        local p = require("sim.relicshape").settle(r, kit, origin, { cx + q[1] * q4, f + 6, cz + q[2] * z4 }, 2)
+        add(p, c, math.max(24, q4 * 1.4))
       end
       add({ cx, mx[2] - 8, cz }, pal[1], math.max(30, q4 * 2), 0.9)
     elseif r.kind == "trunk" then

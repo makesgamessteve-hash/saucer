@@ -520,11 +520,12 @@ end
 -- generation is pure: memoize per (seed, kit, civ, origin, first class) so a
 -- restore (which rebuilds derived data every time) does not redo the work
 local memo, memo_n = {}, 0
-function M.generate(seed, kit_id, civ, origin, tries, first_class)
+function M.generate(seed, kit_id, civ, origin, tries, first_class, siblings)
   local ckit = kit_of(kit_id)
   if ckit.city then return M.generate_city(seed, ckit, civ, origin) end
-  -- add-relic-stations: a relic's spine comes from sim/relicgen.lua (same table shape, memoized there)
-  if ckit.relic then return require("sim.relicgen").generate(seed, ckit, civ, origin) end
+  -- add-relic-stations: a relic's spine comes from sim/relicgen.lua (same table shape, memoized there);
+  -- relic-room-shapes: `siblings`, the seeds of the species' earlier relics, keep it unlike every one of them
+  if ckit.relic then return require("sim.relicgen").generate(seed, ckit, civ, origin, siblings) end
   local key = string.format("%s|%s|%s|%g,%g,%g|%s|%s", tostring(seed), kit_id, civ and civ.id or "?", origin[1], origin[2],
     origin[3], tostring(tries), tostring(first_class))
   if not M.GRID and memo[key] then return memo[key] end

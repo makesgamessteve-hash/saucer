@@ -91,7 +91,7 @@ function M.rebuild(state)
   rt.ruins, rt.bounds, rt.sentries, rt.shutters, rt.seals, rt.gates = {}, {}, {}, {}, {}, {}
   rt.fallen, rt.bridge_box, rt.relic_locks = {}, {}, {}
   for i, site in ipairs(state.sector.sites) do
-    local r = ruinm.generate(site.seed, site.kit, civ_of(site), site.pos, nil, site.first)
+    local r = ruinm.generate(site.seed, site.kit, civ_of(site), site.pos, nil, site.first, site.siblings)
     if site.relic then require("sim.relicloot").apply(site, r) end   -- add-relic-stations: the warrens' share
     -- add-relic-locks: the relic's foot pockets, its sealed chambers and their locks (a derived copy of the ruin)
     if r and r.relic then r = require("sim.relicfoot").derive(site, r, civ_of(site), state.seed) end
@@ -103,6 +103,8 @@ function M.rebuild(state)
     rt.bounds[i] = { lo, hi }
     for _, b in ipairs(r.walls) do saucer.physics.add_box(b[1], b[2], 1) end
     for _, b in ipairs(r.debris) do saucer.physics.add_box(b[1], b[2], 1) end
+    -- relic-room-shapes: the solid round a shaped hall's floor (sim/relicshape.lua)
+    for _, b in ipairs(r.fill or {}) do saucer.physics.add_box(b[1], b[2], 1) end
     rt.fallen[i], rt.bridge_box[i] = {}, {}
     local bridge_at = {}
     for _, bi in ipairs(r.city and r.city.bridges or {}) do bridge_at[bi] = true end
@@ -321,7 +323,7 @@ function M.new_player(index, pos, yaw)
   return p
 end
 
-M.VERSION = 21 -- state version; saves made by a newer game are refused
+M.VERSION = 22 -- state version; saves made by a newer game are refused
 
 function M.init(state, ctx)
   M.state_ref = state
