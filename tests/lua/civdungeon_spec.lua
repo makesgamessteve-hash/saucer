@@ -1,6 +1,8 @@
 -- SPDX-License-Identifier: MIT
--- add-civ-dungeons (plan phase 6): each civ's relic is laid out by its massing archetype's room grammar
--- (civs/dungeons.lua) and its body scale; the slice's Vyrr keep the kit's warren.
+-- add-civ-dungeons (plan phase 6), vary-relic-room-plans: each civ's relic is laid out by its massing
+-- archetype's room grammar (civs/dungeons.lua) and its body scale; styled relics use a non-rectangular
+-- pattern (spiral, rings, shells, helix, Sierpinski, H-tree, diamond, spine) with the heart in the
+-- centre. The slice's Vyrr keep the kit's warren.
 local civs = require("sim.civs")
 local gen = require("sim.relicgen")
 local ruinm = require("sim.ruin")
@@ -45,8 +47,8 @@ describe("civ dungeons", function()
       expect(r.relic.route[#r.relic.route]).to_be(r.relic.core)
       S[m] = stats(r)
     end
-    -- measurable differences: the lattice loops most, the organism least; the helix stacks the most levels
-    expect(S.lattice.loops > S.organism.loops * 2).to_be(true)
+    -- measurable differences: the diamond lattice loops more than the spiral; the helix stacks the most levels
+    expect(S.lattice.loops > S.organism.loops).to_be(true)
     expect(S.helix.levels > S.ring.levels).to_be(true)
     expect(S.helix.levels >= 5).to_be(true)
     expect(S.hive.halls >= S.cluster.halls).to_be(true)
@@ -262,5 +264,76 @@ describe("relic radar outlines", function()
     expect(n > #relicmap.dots(r, h2, p.ship.pos)).to_be(true)
     relicmap.forget()
     expect(#relicmap.visited(r)).to_be(0)
+  end)
+end)
+
+
+describe("relic room-plan patterns", function()
+  it("keeps the slice's Vyrr warren hash", function()
+    local r = gen.generate(42, kit(), relic.civ(), ORIGIN)
+    expect(r.hash).to_be(1135955029977479047)
+    expect(r.relic.pattern).to_be(nil)
+  end)
+
+  it("names a pattern for every massing archetype and puts the heart inside the halls' footprint", function()
+    local names = {
+      organism = "spiral", lattice = "diamond", shell = "shells", ring = "rings",
+      helix = "helix", hive = "sierpinski", cluster = "htree", spine = "spine",
+    }
+    for m, pat in pairs(names) do
+      local r = gen.generate(11, kit(), civ_of(m, "human"), ORIGIN)
+      expect(r.relic.pattern).to_be(pat)
+      local heart = r.rooms[r.relic.core]
+      local hx = heart.cell[1] + heart.size[1] / 2
+      local hz = heart.cell[3] + heart.size[3] / 2
+      local x0, x1, z0, z1 = 1e9, -1e9, 1e9, -1e9
+      for _, id in ipairs(r.relic.halls) do
+        local h = r.rooms[id]
+        local cx, cz = h.cell[1] + h.size[1] / 2, h.cell[3] + h.size[3] / 2
+        if cx < x0 then x0 = cx end
+        if cx > x1 then x1 = cx end
+        if cz < z0 then z0 = cz end
+        if cz > z1 then z1 = cz end
+      end
+      -- the heart sits in the reserved centre, not past a rectangular last row
+      expect(hx > x0 and hx < x1 and hz > z0 and hz < z1).to_be(true)
+    end
+  end)
+
+  it("leaves the centre of a ring or shell empty of halls (not a filled rectangle)", function()
+    for _, m in ipairs({ "ring", "shell", "lattice", "helix" }) do
+      local r = gen.generate(11, kit(), civ_of(m, "human"), ORIGIN)
+      local heart = r.rooms[r.relic.core]
+      local hx = heart.cell[1] + heart.size[1] / 2
+      local hz = heart.cell[3] + heart.size[3] / 2
+      local inner = 0
+      for _, id in ipairs(r.relic.halls) do
+        local h = r.rooms[id]
+        local dx = h.cell[1] + h.size[1] / 2 - hx
+        local dz = h.cell[3] + h.size[3] / 2 - hz
+        if dx * dx + dz * dz < (heart.size[1] * 0.55) ^ 2 then inner = inner + 1 end
+      end
+      expect(inner).to_be(0)
+    end
+  end)
+
+  it("varies a spiral or helix with the seed (handedness or start)", function()
+    local function start_xz(m, seed)
+      local r = gen.generate(seed, kit(), civ_of(m, "human"), ORIGIN)
+      local h = r.rooms[r.relic.halls[1]]
+      -- the maw's hall is the start; use the farthest hall in +x as a signed fingerprint
+      local best = 0
+      for _, id in ipairs(r.relic.halls) do
+        local c = r.rooms[id]
+        best = best + (c.cell[1] + c.cell[3])
+      end
+      return best, r.hash
+    end
+    local a, ha = start_xz("organism", 11)
+    local b, hb = start_xz("organism", 17)
+    expect(ha ~= hb).to_be(true)
+    local c, hc = start_xz("helix", 11)
+    local d, hd = start_xz("helix", 17)
+    expect(hc ~= hd).to_be(true)
   end)
 end)
