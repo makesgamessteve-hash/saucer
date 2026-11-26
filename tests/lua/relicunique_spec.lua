@@ -35,6 +35,8 @@ describe("relic uniqueness", function()
     expect(sig.distance(L, mirrored)).to_be(0)
     expect(sig.distance(L, far)).to_be(1)
     expect(sig.distance(fake({}), fake({}))).to_be(0)
+    expect(sig.bound(L, far)).to_be(0.5)
+    expect(sig.bound(fake({}), fake({}))).to_be(0)
     -- off the edge after a turn: that pixel only counts against
     expect(sig.distance(fake({ { 0, 1 } }), fake({ { 0, 1 } }))).to_be(0)
     local d, i, j = sig.min_pairwise({ L, far, turned })
@@ -65,7 +67,7 @@ describe("relic uniqueness", function()
     gen.UNIQUE_TRIES = 1
     local r, d, a = gen.unlike(77, KIT, civ, O, { plain })
     gen.UNIQUE_TRIES = keep
-    expect(r).to_be(plain)
+    expect(r.hash).to_be(plain.hash)
     expect(d).to_be(0)
     expect(a).to_be(0)
   end)

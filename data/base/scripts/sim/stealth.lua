@@ -262,7 +262,7 @@ function M.decorate(site, ruin, defs)
           -- relic-room-shapes: not inside a shaped hall's solid (only on its free floor)
           if r.shape then
             for _, q in ipairs({ { bmn[1], bmn[3] }, { bmx[1], bmn[3] }, { bmn[1], bmx[3] }, { bmx[1], bmx[3] } }) do
-              if not shapes.free_world(r, kit, site.pos, q[1], q[2]) then clear = false end
+              if not shapes.open_world(r, kit, site.pos, q[1], q[2]) then clear = false end
             end
           end
           for _, c in ipairs(hatches) do

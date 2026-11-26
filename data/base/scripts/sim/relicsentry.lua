@@ -102,7 +102,7 @@ local function spotter(out, site, kit, hall, t)
   -- relic-room-shapes: in a shaped hall the square shrinks until its corners and sides are over free floor
   local function over_floor(q)
     for _, d in ipairs({ { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 }, { 0, -1 }, { 1, 0 }, { 0, 1 }, { -1, 0 } }) do
-      if not shapes.free_world(hall, kit, site.pos, c[1] + d[1] * q, c[3] + d[2] * q) then return false end
+      if not shapes.open_world(hall, kit, site.pos, c[1] + d[1] * q, c[3] + d[2] * q) then return false end
     end
     return true
   end

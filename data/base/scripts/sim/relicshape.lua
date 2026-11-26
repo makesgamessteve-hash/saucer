@@ -30,7 +30,9 @@ M.PALETTE = {
 M.MIN_FREE = 0.32     -- a shaped hall keeps at least this share of its floor (else it falls back to a chamfer)
 M.STEP = 0.5          -- contour sampling, cells
 M.DOOR_PAD = 1.5      -- cells of clear floor round a door's opening, all the way to the centre
-M.KEEP = { 2.5, 4 }   -- the clear centre's half width (cells): min, max
+M.KEEP = { 2.5, 4 }   -- the clear centre's half width (cells): min, max (before the saucers its doors let in)
+M.CENTRE_PAD = 1.5    -- cells beyond the biggest saucer's radius at the centre (the solid may cut one cell in)
+M.CELL = 4            -- metres per grid cell (kits/relic.lua cell), for the saucer radius
 
 -- style(rng, pattern) -> this relic's own shape style (drawn from its seed)
 function M.style(rng, pattern)
@@ -133,6 +135,21 @@ local function hull(pts)
 end
 M.hull = hull
 
+-- open(shape, x, z) -> is the cell point (x, z) in a cell the solid leaves open (the cell's centre and its four
+-- corners all free)? Stricter than free(): what collision sees.
+function M.open(s, x, z)
+  local i, j = math.floor(x), math.floor(z)
+  return M.free(s, i + 0.5, j + 0.5) and M.free(s, i, j) and M.free(s, i + 1, j) and M.free(s, i, j + 1)
+    and M.free(s, i + 1, j + 1)
+end
+
+-- open_world(room, kit, origin, x, z) -> the same for a world point (true for a room without a shape)
+function M.open_world(rm, kit, origin, x, z)
+  local s = rm.shape
+  if not s then return true end
+  return M.open(s, (x - origin[1]) / kit.cell, (z - origin[3]) / kit.cell)
+end
+
 -- the channels every door keeps to the hall's centre, and the clear centre. A channel is the door's opening (padded
 -- by DOOR_PAD on every side) swept straight to the centre: the hull of that rectangle and the same rectangle moved to
 -- the centre, so the channel is at least as wide as the padded door whichever way it runs, and the door -> centre
@@ -161,7 +178,15 @@ local function keeps(s, rm, doors)
       out[#out + 1] = hull(pts)
     end
   end
+  -- the centre: room for the biggest saucer any of its doors lets in, turning there (its radius + CENTRE_PAD)
   local k = math.max(M.KEEP[1], math.min(M.KEEP[2], math.min(s.hw, s.hd) * 0.22))
+  local ap, configs = require("sim.autopilot"), require("sim.config")
+  for _, d in ipairs(doors) do
+    if d.a == rm.id or d.b == rm.id then
+      local rad = configs.get(ap.config_for_class(d.class)).diameter / 2 / M.CELL
+      k = math.max(k, rad + M.CENTRE_PAD)
+    end
+  end
   out[#out + 1] = { cx - k, cx + k, cz - k, cz + k, rect = true }
   return out
 end
@@ -230,14 +255,12 @@ function M.fill(rm, kit, origin)
   for j = s.z0, s.z1 - 1 do
     local row, i = {}, s.x0
     while i < s.x1 do
-      local solid = not (M.free(s, i + 0.5, j + 0.5) and M.free(s, i, j) and M.free(s, i + 1, j) and M.free(s, i, j + 1)
-        and M.free(s, i + 1, j + 1))
+      local solid = not M.open(s, i + 0.5, j + 0.5)
       if solid then
         local a = i
         while i + 1 < s.x1 do
           local k = i + 1
-          local nxt = not (M.free(s, k + 0.5, j + 0.5) and M.free(s, k, j) and M.free(s, k + 1, j) and M.free(s, k, j + 1)
-            and M.free(s, k + 1, j + 1))
+          local nxt = not M.open(s, k + 0.5, j + 0.5)
           if not nxt then break end
           i = k
         end
@@ -350,8 +373,11 @@ function M.settle(rm, kit, origin, pos, margin, avoid)
   if not s then return pos end
   local m = (margin or 2) / kit.cell
   local function ok(x, z)
-    if not (M.free(s, x, z) and M.free(s, x - m, z) and M.free(s, x + m, z) and M.free(s, x, z - m) and M.free(s, x, z + m)) then
-      return false
+    -- every cell under the square of half side `margin` round the point open
+    for i = math.floor(x - m), math.floor(x + m) do
+      for j = math.floor(z - m), math.floor(z + m) do
+        if not M.open(s, i + 0.5, j + 0.5) then return false end
+      end
     end
     local wx, wz, mm = origin[1] + x * kit.cell, origin[3] + z * kit.cell, m * kit.cell
     for _, h in ipairs(avoid or {}) do

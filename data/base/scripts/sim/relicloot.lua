@@ -85,7 +85,7 @@ function M.apply(site, ruin)
         -- relic-room-shapes: a shaped hall's finds lie on its free floor
         local on_floor = true
         for _, d in ipairs({ { 0, 0 }, { -3, -3 }, { 3, -3 }, { -3, 3 }, { 3, 3 } }) do
-          if not shapes.free_world(h, kit, origin, x + d[1], z + d[2]) then on_floor = false end
+          if not shapes.open_world(h, kit, origin, x + d[1], z + d[2]) then on_floor = false end
         end
         if not used[q] and on_floor and clear_of(holes, x - 3, x + 3, z - 3, z + 3, M.HOLE_PAD) then
           used[q] = true

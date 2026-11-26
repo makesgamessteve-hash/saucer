@@ -840,8 +840,8 @@ end
 
 -- the parts of one room (inside and outside skins, its cradles; the maw's valve; the heart's decor and engine)
 -- relic-room-shapes: a shaped hall's own wall, along its contour (sim/relicshape.lua): an upright slab per straight
--- run, on the solid side of the line (so it never stands in the free floor), with a glowing seam at the floor and
--- one under the ceiling that trace the shape
+-- run, on the solid side of the line (so it never stands in the free floor), in the civ's accent so it reads apart
+-- from the box's own skin, with a glowing seam at the floor and one under the ceiling that trace the shape
 M.SHAPE_WALL = 1.2    -- m: a shaped hall's wall slab
 local function shape_walls(parts, r, kit, origin, cc, mat, c)
   local shapes = require("sim.relicshape")
@@ -866,8 +866,8 @@ local function shape_walls(parts, r, kit, origin, cc, mat, c)
       local lzx, lzz = math.sin(yaw), math.cos(yaw)
       if lzx * nx + lzz * nz < 0 then z0, z1 = -z1, -z0 end
       local h = len / 2 + 0.3
-      parts[#parts + 1] = { kind = "box", min = { -h, 0, z0 }, max = { h, y1 - y0, z1 }, pos = pos, yaw = yaw, color = c,
-                            mat = mat, shape_wall = true }
+      parts[#parts + 1] = { kind = "box", min = { -h, 0, z0 }, max = { h, y1 - y0, z1 }, pos = pos, yaw = yaw,
+                            color = cc.chrome, mat = mat, shape_wall = true }
       local sz0, sz1 = side > 0 and -0.15 or 0, side > 0 and 0 or 0.15
       if lzx * nx + lzz * nz < 0 then sz0, sz1 = -sz1, -sz0 end
       parts[#parts + 1] = { kind = "box", min = { -h, 0, sz0 }, max = { h, 0.35, sz1 }, pos = pos, yaw = yaw,

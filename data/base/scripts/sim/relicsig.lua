@@ -76,6 +76,13 @@ function M.distance(a, b)
   return best
 end
 
+-- bound(a, b) -> a lower bound of distance(a, b) from the footprint sizes alone (IoU <= smaller / larger)
+function M.bound(a, b)
+  local na, nb = M.signature(a).n, M.signature(b).n
+  if na + nb == 0 then return 0 end
+  return 1 - math.min(na, nb) / math.max(na, nb)
+end
+
 -- min_pairwise(list) -> smallest distance between any two relics of the list, and the pair
 function M.min_pairwise(list)
   local best, bi, bj = 1, nil, nil

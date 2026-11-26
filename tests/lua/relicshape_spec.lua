@@ -48,9 +48,9 @@ local function seg_hits(a, b, mn, mx, r)
   end
   return true
 end
-local function in_fill(r, pos, pad)
+local function in_fill(r, pos, pad, room)
   for _, b in ipairs(r.fill or {}) do
-    if pos[1] > b[1][1] - pad and pos[1] < b[2][1] + pad and pos[3] > b[1][3] - pad and pos[3] < b[2][3] + pad
+    if (not room or b.room == room) and pos[1] > b[1][1] - pad and pos[1] < b[2][1] + pad and pos[3] > b[1][3] - pad and pos[3] < b[2][3] + pad
         and pos[2] > b[1][2] - pad and pos[2] < b[2][2] + pad then
       return true
     end
@@ -149,7 +149,7 @@ describe("relic room shapes", function()
     shapes.MIN_FREE = keep
     expect(rs[3].shape.kind).to_be("chamfer")
     -- a tiny hall its door channels and centre fill: no shape at all
-    local tiny = { { id = 9, kind = "hall", class = 4, cell = { 0, 0, 0 }, size = { 6, 4, 6 }, faces = {} } }
+    local tiny = { { id = 9, kind = "hall", class = 4, cell = { 0, 0, 0 }, size = { 5, 4, 5 }, faces = {} } }
     expect(shapes.assign(saucer.rng.new(1), tiny, {}, {}, 0, 0, style({ plain = 0, mix = 0, primary = "round" }))).to_be(0)
     -- palettes: every pattern names shapes that exist; an unknown pattern gets chamfers
     for pat, pal in pairs(shapes.PALETTE) do
@@ -210,24 +210,46 @@ describe("relic room shapes", function()
     end
   end)
 
-  it("the autopilot's way into every shaped hall, loot and phenomena stay clear of the solid", function()
+  it("the way through every shaped hall (door -> centre -> door), loot and phenomena stay clear of the solid", function()
     for _, m in ipairs(MASSINGS) do
       local r = gen.generate(42, KIT, civ_of(m), O)
-      local targets = { r.relic.core }
-      for _, rm in ipairs(r.rooms) do if rm.shape then targets[#targets + 1] = rm.id end end
-      for _, id in ipairs(targets) do
-        local wps = ap.route(r, O, id)
-        for k = 2, #wps do
-          local rad = configs.get(wps[k].size).diameter / 2
-          for _, b in ipairs(r.fill) do
-            if seg_hits(wps[k - 1].pos, wps[k].pos, b[1], b[2], rad * 0.9) then
-              error(string.format("%s: way to room %d crosses the solid of room %d", m, id, b.room))
+      for _, rm in ipairs(r.rooms) do
+        if rm.shape then
+          local c = ap.room_center(rm, KIT, O, 1)
+          for _, d in ipairs(r.doors) do
+            if d.a == rm.id or d.b == rm.id then
+              local dc = ap.door_center(d, r.rooms, KIT, O)
+              local rad = configs.get(ap.config_for_class(d.class)).diameter / 2
+              for _, b in ipairs(r.fill) do
+                if b.room == rm.id and seg_hits(dc, c, b[1], b[2], rad * 0.9) then
+                  error(string.format("%s: door %d-%d (axis %d class %d %s..%s) -> centre of room %d crosses the solid of %d [%g %g %g %g] rad %g", m, d.a, d.b, d.axis, d.class, d.lo, d.hi, rm.id, b.room, b[1][1] / 4, b[1][3] / 4, b[2][1] / 4, b[2][3] / 4, rad))
+                end
+              end
             end
           end
         end
       end
-      for _, s in ipairs(r.slots) do expect(in_fill(r, s.pos, 1)).to_be(false) end
-      for _, ph in ipairs(r.relic.phenomena) do expect(in_fill(r, ph.pos, 0)).to_be(false) end
+      -- the main way to the heart, room centre -> door -> room centre
+      local route = r.relic.route
+      for k = 2, #route do
+        local a, b = r.rooms[route[k - 1]], r.rooms[route[k]]
+        for _, d in ipairs(r.doors) do
+          if d.class >= 4 and ((d.a == a.id and d.b == b.id) or (d.a == b.id and d.b == a.id)) then
+            local dc = ap.door_center(d, r.rooms, KIT, O)
+            local rad = configs.get(ap.config_for_class(d.class)).diameter / 2
+            for _, q in ipairs({ a, b }) do
+              local c = ap.room_center(q, KIT, O, 1)
+              for _, bx in ipairs(r.fill) do
+                if bx.room == q.id and seg_hits(dc, c, bx[1], bx[2], rad * 0.9) then
+                  error(string.format("%s: main way crosses the solid of room %d", m, q.id))
+                end
+              end
+            end
+          end
+        end
+      end
+      for _, s in ipairs(r.slots) do expect(in_fill(r, s.pos, 1, s.room)).to_be(false) end
+      for _, ph in ipairs(r.relic.phenomena) do expect(in_fill(r, ph.pos, 0, ph.room)).to_be(false) end
     end
   end)
 
@@ -248,14 +270,14 @@ describe("relic room shapes", function()
     for _, d in ipairs(game.sentries(i)) do
       local rm = r.rooms[d.room]
       if rm and rm.shape then
-        expect(shapes.free_world(rm, KIT, site.pos, d.pos[1], d.pos[3])).to_be(true)
-        if d.cell then expect(shapes.free_world(rm, KIT, site.pos, d.cell[1], d.cell[3])).to_be(true) end
-        for _, p in ipairs(d.route or {}) do expect(shapes.free_world(rm, KIT, site.pos, p[1], p[3])).to_be(true) end
+        expect(shapes.open_world(rm, KIT, site.pos, d.pos[1], d.pos[3])).to_be(true)
+        if d.cell then expect(shapes.open_world(rm, KIT, site.pos, d.cell[1], d.cell[3])).to_be(true) end
+        for _, p in ipairs(d.route or {}) do expect(shapes.open_world(rm, KIT, site.pos, p[1], p[3])).to_be(true) end
       end
     end
     for _, s in ipairs(r.slots) do
       local rm = r.rooms[s.room]
-      if rm and rm.shape then expect(shapes.free_world(rm, KIT, site.pos, s.pos[1], s.pos[3])).to_be(true) end
+      if rm and rm.shape then expect(shapes.open_world(rm, KIT, site.pos, s.pos[1], s.pos[3])).to_be(true) end
     end
     for _, d in ipairs(r.debris) do
       local rm = r.rooms[d.room]

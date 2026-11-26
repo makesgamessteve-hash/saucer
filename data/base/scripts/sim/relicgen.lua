@@ -1511,7 +1511,7 @@ end
 
 -- unlike(seed, kit, civ, origin, others) -> this relic drawn (a seed child per try) until it is at least
 -- relicsig.MIN_DIST from every relic of `others`; the most distinct draw after UNIQUE_TRIES. -> ruin, its distance to
--- the nearest of `others` (1 with none), the try taken
+-- the nearest of `others` (1 with none; a lower bound where it is at least MIN_DIST), the try taken
 function M.unlike(seed, kit, civ, origin, others)
   local sig = require("sim.relicsig")
   local best, bd, ba
@@ -1519,7 +1519,8 @@ function M.unlike(seed, kit, civ, origin, others)
     local r = plain(a == 0 and seed or saucer.seed_child(seed, "unique", a), kit, civ, origin)
     local d = 1
     for _, o in ipairs(others) do
-      d = math.min(d, sig.distance(r, o))
+      local lb = sig.bound(r, o)   -- (sizes far apart: unlike enough without the full count)
+      d = math.min(d, lb >= sig.MIN_DIST and lb or sig.distance(r, o))
       if d < sig.MIN_DIST then break end
     end
     if not bd or d > bd then best, bd, ba = r, d, a end
