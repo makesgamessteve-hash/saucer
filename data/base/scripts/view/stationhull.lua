@@ -22,7 +22,7 @@ local LAYERS = { "core", "detail", "ring", "ringd", "far" }
 -- lazy (the frame loop): at most one build per frame (M.budget), the layout's triangles count as one, so a station
 -- shows up over a few frames instead of costing one long one; returns nothing for a layer that is not built yet
 M.budget = 1
-function M.mesh(L, layer, lazy)
+function M.mesh(L, layer, lazy, plain)
   local ent = cache[L.hash]
   if not ent then
     ent = { tris = {} }
@@ -36,7 +36,8 @@ function M.mesh(L, layer, lazy)
       cache[old] = nil
     end
   end
-  local id = ent[layer]
+  local key = plain and (layer .. "_plain") or layer
+  local id = ent[key]
   if not id then
     if lazy then
       if M.budget <= 0 then return nil end
@@ -46,12 +47,23 @@ function M.mesh(L, layer, lazy)
         return nil
       end
     end
-    local mesh = saucer.mesh.build({ parts = sh.parts(L)[layer] })
-    ent[layer] = mesh
-    ent.tris[layer] = saucer.mesh.info(mesh).triangles
+    local parts = sh.parts(L)[layer]
+    if plain then -- add-civ-hulls: the same parts on the plain slot (another civ's materials hold the view)
+      local copy = {}
+      for i, q in ipairs(parts) do
+        local c = {}
+        for k, v in pairs(q) do c[k] = v end
+        c.mat = nil
+        copy[i] = c
+      end
+      parts = copy
+    end
+    local mesh = saucer.mesh.build({ parts = parts })
+    ent[key] = mesh
+    ent.tris[key] = saucer.mesh.info(mesh).triangles
     id = mesh
   end
-  return id, ent.tris[layer]
+  return id, ent.tris[key]
 end
 
 -- triangles of every layer of a layout (builds them all: tests and tools)
@@ -123,6 +135,27 @@ function M.beacons(v, A, L, origin, cam, tick)
   return n
 end
 
+-- add-civ-hulls: the builder's signal lights (sim/hulldress.lua): out to the kit's signal range, blinking by the civ's
+-- light model, never smaller than a few thousandths of their distance so a station reads from kilometres away
+function M.signals(v, A, L, origin, cam, tick)
+  local list = L.signals
+  if not list or #list == 0 then return 0 end
+  local hd = require("sim.hulldress")
+  local K = hd.kit().signal
+  local n = 0
+  for _, l in ipairs(list) do
+    local p = { origin[1] + l.p[1], origin[2] + l.p[2], origin[3] + l.p[3] }
+    local d = vec.dist(p, cam.pos)
+    if d < K.far and n < K.max then
+      local a, c = hd.signal_at(l, tick, L.lamps or { l.c })
+      local size, tint, layers = hd.signal_look(l, d, a, c, require("view.render").FOG)
+      for _ = 1, layers do v:billboard(A.tex.glow, p, size, { palette = A.pal.base, tint = tint }) end
+      n = n + 1
+    end
+  end
+  return n
+end
+
 -- the approach corridor: two rows of lights out of the cell's mouth, a bright chase running toward the dock
 function M.approach_lights(state, idx)
   local T = dock.tune()
@@ -177,8 +210,18 @@ function M.draw(v, A, state, cam, tick)
     local k = math.min(3.2, M.TINT[1] * (1 + 0.0005 * d + 0.5 * (0.0005 * d) ^ 2))
     local tint = { k, k, k, 1 }
     stats.levels[idx] = level
+    -- add-civ-hulls: the station's plating shades as its builder's materials, unless a relic of another civ holds the
+    -- view's material slots this frame (then its plain twin draws)
+    local civ = L.civ_rec
+    local held = require("view.relic").claimed
+    local plain = civ == nil or (held ~= nil and held ~= civ)
+    if civ and not held and level ~= "far" and v.materials then
+      local matv = require("view.materials")
+      matv.apply(v, civ, tick / 60, v.xr, matv.sky(state))
+      require("view.relic").claimed = civ
+    end
     local function draw(layer, opts)
-      local id, tris = M.mesh(L, layer, true)
+      local id, tris = M.mesh(L, layer, true, plain and civ ~= nil and layer ~= "far")
       if not id then return end
       opts.tint = tint
       v:mesh(id, opts)
@@ -198,6 +241,7 @@ function M.draw(v, A, state, cam, tick)
       end
       stats.lights = stats.lights + M.beacons(v, A, L, p, cam, tick)
     end
+    stats.signals = (stats.signals or 0) + M.signals(v, A, L, p, cam, tick)
     stats.lights = stats.lights + M.approach(v, A, state, idx, cam, tick)
     n = n + 1
   end
