@@ -293,12 +293,22 @@ function M.signal_at(l, tick, lamps)
   return 0.18 + 0.12 * (0.5 + 0.5 * sm.sin(t * sm.tau)), c   -- dim
 end
 
--- the colour lift a signal at distance d needs against a fog of this density (the fog keeps exp(-density d) of it)
+-- the lift a signal at distance d needs against a fog of this density (the fog keeps exp(-density d) of it), capped
 -- (e^x as (1 + x/1024)^1024: ten squarings; the sandbox has no exp)
 function M.fog_lift(d, density)
   local g = 1 + (density or 0) * d / 1024
   for _ = 1, 10 do g = g * g end
   return math.min(M.kit().signal.boost, g)
+end
+
+-- a signal's billboard at distance d -> size, tint, layers: the colour at full strength (a tint above 1 does not
+-- draw), the alpha up, the glow wider and stacked (glows add) as the fog would swallow it
+function M.signal_look(l, d, a, c, density)
+  local K = M.kit().signal
+  local up = M.fog_lift(d, density)
+  local mx = math.max(c[1], c[2], c[3], 0.001)
+  local size = math.max(l.size, d * K.min_px) * (1 + 0.15 * (up - 1))
+  return size, { c[1] / mx, c[2] / mx, c[3] / mx, math.min(1, a * up) }, math.min(3, math.floor(up / 2) + 1)
 end
 
 return M

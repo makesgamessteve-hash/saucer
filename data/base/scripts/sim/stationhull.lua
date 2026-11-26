@@ -1142,7 +1142,7 @@ local function dress(c, F, spots, far)
       local p = { x + v * st, AY + u, v * ct }
       local h = w * 0.5
       sol({ { p[1] - h, p[2] - h, p[3] - h }, { p[1] + h, p[2] + h, p[3] + h } })
-      if lit and q % 4 == 0 then hd.signal(signals, D, p, R * 0.04, #signals + 1, 0) end
+      if lit and q % 4 == 0 then hd.signal(signals, D, p, R * 0.07, #signals + 1, 0) end
     end
   end
   if D.motif == "arches" then
@@ -1160,7 +1160,7 @@ local function dress(c, F, spots, far)
       hd.boxes(c.solids, "cage", a, u, l, girth * 0.8)
     end
   end
-  for k, tip in ipairs(tips) do hd.signal(signals, D, tip, R * 0.05, #signals + 1, n) end
+  for k, tip in ipairs(tips) do hd.signal(signals, D, tip, R * 0.1, #signals + 1, n) end
   -- the crest along the stem's top
   local cn = S.crest
   local cs = S.crest_scale

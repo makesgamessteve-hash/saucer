@@ -829,8 +829,8 @@ function M.draw_signals(v, A, set, cam, tick, opts)
     local d = vec.dist(l.p, cam.pos)
     if d < K.signal.far and n < K.signal.max then
       local a, c = hd.signal_at(l, tick, D.lamps)
-      local up = hd.fog_lift(d, require("view.render").FOG)
-      v:billboard(A.tex.glow, l.p, math.max(l.size, d * K.signal.min_px), { palette = opts.palette, tint = { c[1] * up, c[2] * up, c[3] * up, a } })
+      local size, tint, layers = hd.signal_look(l, d, a, c, require("view.render").FOG)
+      for _ = 1, layers do v:billboard(A.tex.glow, l.p, size, { palette = opts.palette, tint = tint }) end
       n = n + 1
     end
   end

@@ -22,7 +22,7 @@ return {
     aft = 0.55,         -- the crown stands this far behind the body's back (x the aft length), inside the box
     crest = 5,          -- smaller copies along the top of the stem (they read in a side view)
     crest_scale = 0.18, -- their size (x the crown's)
-    far_glow = 0.32,    -- the far silhouette's self-light (0..1): a station far off reads in its colours, not as a shadow
+    far_glow = 0.45,    -- the far silhouette's self-light (0..1): a station far off reads in its colours, not as a shadow
     self_glow = 0.12,   -- the crown's self-light up close
   },
   -- the signature rule's surface pattern: what grows on the hull's surface spots, and how many lit marks each has
@@ -47,7 +47,7 @@ return {
   },
   -- signals: drawn out to `far` m, never smaller than min_px x distance, their colour lifted against the fog (by up to
   -- `boost` times) so a far one still reads as a light
-  signal = { far = 9000, min_px = 0.011, max = 64, boost = 8 },
+  signal = { far = 9000, min_px = 0.02, max = 64, boost = 8 },
   -- a relic seen from beyond its near range: each big room as a hull of the civ's edge language, crowned by its motif
   relic = { edge_seg = { round = 10, chamfer = 8, fluted = 16, serrated = 5 }, motif_scale = 0.65, girth = 0.14, far = 7000,
             band = 0.08, glow = 0.25, signal = 0.16 },
