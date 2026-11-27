@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: MIT
 -- City generation (OpenSpec add-cities). A city is a hierarchy, all of it a pure function of the site seed:
---   city -> districts (3 x 3 lots each, one landmark per special district)
+--   city -> districts (concentric rings around a big centre, one landmark per special district)
 --        -> lots (blocks: a tower, an enterable building, a plaza or nothing)
 --        -> buildings (a stack of great halls joined by hatches, undercity levels below the street,
 --           closets for the Seat, a spire on top) and tunnels under the streets between neighbours.
@@ -8,7 +8,7 @@
 -- physics, the beam, sentries, saves and the renderer treat it like any other site, plus `city`: the plan
 -- (districts, landmarks, power couplings, gates) the map, the grid and the gravity rules read.
 -- Three bodies share the generator and differ in their plan (kits/city_<body>.lua, field `city`):
---   planet   a horizon-wide grid of towers, deep undercity, strong gravity
+--   planet   a concentric city of towers around a great centre, deep undercity, strong gravity
 --   moon     a crater with a great dome and terraced canyon-wall districts, low gravity
 --   asteroid a hollow carved rock: a shell with a mouth, two tiers of lots, a spin-gravity drum at the heart
 local ruinm = require("sim.ruin")
@@ -101,6 +101,12 @@ end
 -- the form of the tower on a lot: in a district with a value, every other tower in that value's form
 function M.form_of(style, d, gx, gz)
   if d and d.value and (gx * 3 + gz) % 2 == 0 then return M.ARCHETYPES[d.value].form end
+  -- most remaining lots use the ring's silhouette so each ring reads differently;
+  -- every seventh lot keeps the civ's massing so a city's own style still shows up
+  if d and d.role and (gx * 5 + gz * 3) % 7 ~= 0 then
+    local rf = { core = "spire", civic = "dome", market = "slab", residential = "arcology", industrial = "vault" }
+    if rf[d.role] then return rf[d.role] end
+  end
   return style.form
 end
 function M.base_height(form, h) return math.floor(h * (M.BASE_FRAC[form] or 0.3)) end
@@ -187,8 +193,89 @@ function M.extent_cells(kit)
 end
 
 -- ------------------------------------------------------------------ the plan
--- district index of a lot and the number of districts
-local function district_of(spec, gx, gz)
+-- a circular mask: lots in the corners of the bounding square are skyline, not core
+function M.city_centre(spec)
+  local nx, nz = spec.lots[1], spec.lots[2]
+  return (nx + 1) / 2, (nz + 1) / 2, math.max(nx, nz) / 2 + 0.05
+end
+
+function M.lot_radius(spec, gx, gz)
+  local cx, cz = M.city_centre(spec)
+  local dx, dz = gx - cx, gz - cz
+  return math.sqrt(dx * dx + dz * dz)
+end
+
+function M.in_disk(spec, gx, gz)
+  local _, _, rad = M.city_centre(spec)
+  return M.lot_radius(spec, gx, gz) <= rad
+end
+
+-- the circular footprint of the core plus its skyline, in world metres from origin, for the megacity's keep-out
+function M.footprint(kit, origin)
+  local spec = kit.city
+  local cell = kit.cell
+  origin = origin or { 0, 0, 0 }
+  local cx, cz, rad = M.city_centre(spec)
+  local R = spec.ring or 0
+  local pitch = spec.lot + spec.street
+  local x0 = spec.margin + (R + cx - 1) * pitch + spec.street // 2 + spec.lot / 2
+  local z0 = spec.approach + (cz - 1) * pitch + spec.lot / 2
+  return {
+    x = origin[1] + x0 * cell,
+    z = origin[3] + z0 * cell,
+    r = (rad + R) * pitch * cell,
+  }
+end
+
+
+-- ring bands and wedge counts: planet cities keep 16 districts, moon and
+-- asteroid cities keep 9, matching the earlier 3x3-block counts.
+local function ring_bands(spec)
+  local nx, nz = spec.lots[1], spec.lots[2]
+  local nd = ((nx + M.DISTRICT - 1) // M.DISTRICT) * ((nz + M.DISTRICT - 1) // M.DISTRICT)
+  if nd >= 16 then
+    return {
+      { r = 2.35, n = 1, role = "core" },
+      { r = 3.45, n = 3, role = "civic" },
+      { r = 4.45, n = 4, role = "market" },
+      { r = 5.35, n = 4, role = "residential" },
+      { r = 99, n = 4, role = "industrial" },
+    }
+  end
+  local scale = math.max(nx, nz) / 9
+  return {
+    { r = 1.85 * scale, n = 1, role = "core" },
+    { r = 2.55 * scale, n = 2, role = "civic" },
+    { r = 3.25 * scale, n = 2, role = "market" },
+    { r = 3.95 * scale, n = 2, role = "residential" },
+    { r = 99, n = 2, role = "industrial" },
+  }
+end
+
+-- world radii of the major ring roads (metres), plus the downtown footprint
+function M.ring_world_radii(kit, origin)
+  local spec = kit.city
+  local bands = ring_bands(spec)
+  local pitch = (spec.lot + spec.street) * kit.cell
+  local fp = M.footprint(kit, origin)
+  local _, _, rad = M.city_centre(spec)
+  local rs = {}
+  rs[#rs + 1] = bands[1].r * 0.55 * pitch
+  for i, b in ipairs(bands) do
+    if b.r > 50 then
+      local prev = bands[i - 1] and bands[i - 1].r or (rad * 0.7)
+      rs[#rs + 1] = (prev + 0.85) * pitch
+      rs[#rs + 1] = rad * pitch
+    else
+      rs[#rs + 1] = b.r * pitch
+    end
+  end
+  return fp, rs
+end
+
+-- district index of a lot (concentric plan: needs the dmap from M.plan)
+local function district_of(spec, gx, gz, dmap)
+  if dmap then return dmap[gz * 1000 + gx] end
   local dx, dz = (gx - 1) // M.DISTRICT, (gz - 1) // M.DISTRICT
   local nd = (spec.lots[1] + M.DISTRICT - 1) // M.DISTRICT
   return dz * nd + dx + 1
@@ -198,53 +285,182 @@ M.district_of = district_of
 function M.plan(rng, kit)
   local spec = kit.city
   local nx, nz = spec.lots[1], spec.lots[2]
-  local nd = (nx + M.DISTRICT - 1) // M.DISTRICT
-  local ndz = (nz + M.DISTRICT - 1) // M.DISTRICT
-  local districts = {}
-  for dz = 1, ndz do
-    for dx = 1, nd do
-      local gx0, gz0 = (dx - 1) * M.DISTRICT + 1, (dz - 1) * M.DISTRICT + 1
-      local d = { id = #districts + 1, dx = dx, dz = dz, lots = {} }
-      for gz = gz0, math.min(gz0 + M.DISTRICT - 1, nz) do
-        for gx = gx0, math.min(gx0 + M.DISTRICT - 1, nx) do d.lots[#d.lots + 1] = { gx, gz } end
+  local cx, cz = M.city_centre(spec)
+  local bands = ring_bands(spec)
+  -- gather lots in the disk, bucketed by ring
+  local buckets = {}
+  for i = 1, #bands do buckets[i] = {} end
+  for gz = 1, nz do
+    for gx = 1, nx do
+      if M.in_disk(spec, gx, gz) then
+        local rad = M.lot_radius(spec, gx, gz)
+        local bi = #bands
+        for i, b in ipairs(bands) do
+          if rad <= b.r then bi = i break end
+        end
+        local ang = saucer.math.atan2(gx - cx, gz - cz)
+        buckets[bi][#buckets[bi] + 1] = { gx, gz, ang = ang, rad = rad }
       end
-      d.center = d.lots[(#d.lots + 1) // 2]
-      districts[#districts + 1] = d
     end
   end
-  -- the spaceport is the district of the front-centre lot; the rest of the landmarks go to random districts
+  -- if a ring came out empty, fold it into its neighbour so every district has lots
+  for i = #buckets, 2, -1 do
+    if #buckets[i] == 0 then
+      bands[i - 1].n = bands[i - 1].n + bands[i].n
+      bands[i].n = 0
+    end
+  end
+  local districts, dmap = {}, {}
+  local function add_district(lots, role, ring, wedge)
+    table.sort(lots, function(a, b) if a.ang ~= b.ang then return a.ang < b.ang end return a.rad < b.rad end)
+    local d = { id = #districts + 1, role = role, ring = ring, wedge = wedge or 1, lots = {} }
+    local sx, sz = 0, 0
+    for _, l in ipairs(lots) do
+      d.lots[#d.lots + 1] = { l[1], l[2] }
+      dmap[l[2] * 1000 + l[1]] = d.id
+      sx, sz = sx + l[1], sz + l[2]
+    end
+    -- the centre lot is the one closest to the mean of the wedge
+    local mx, mz = sx / #lots, sz / #lots
+    local best, bd = 1, 1e9
+    for i, l in ipairs(d.lots) do
+      local dd = (l[1] - mx) * (l[1] - mx) + (l[2] - mz) * (l[2] - mz)
+      if dd < bd then best, bd = i, dd end
+    end
+    d.center = d.lots[best]
+    -- dx/dz keep a residual grid address (wedge, ring) for anything that still reads them
+    d.dx, d.dz = d.wedge, d.ring
+    districts[#districts + 1] = d
+    return d
+  end
+  for i, b in ipairs(bands) do
+    local pool = buckets[i]
+    local n = b.n
+    if n > 0 and #pool > 0 then
+      if b.role == "core" or n == 1 then
+        add_district(pool, b.role, i - 1, 1)
+      else
+        table.sort(pool, function(a, c) if a.ang ~= c.ang then return a.ang < c.ang end return a.rad < c.rad end)
+        -- split the ring into n wedges as evenly as we can by count, in angle order
+        local base, extra = #pool // n, #pool % n
+        local k = 1
+        for w = 1, n do
+          local take = base + (w <= extra and 1 or 0)
+          local slice = {}
+          for _ = 1, take do
+            slice[#slice + 1] = pool[k]
+            k = k + 1
+          end
+          if #slice > 0 then add_district(slice, b.role, i - 1, w) end
+        end
+      end
+    end
+  end
+  -- the spaceport is the district of the front-centre lot; the rest of the landmarks go by ring role
   local port_lot = { nx // 2 + 1, 1 }
-  local pd = district_of(spec, port_lot[1], port_lot[2])
-  local order = {}
-  for i = 1, #districts do if i ~= pd then order[#order + 1] = i end end
-  for k = #order, 2, -1 do
-    local j = rng:int(1, k)
-    order[k], order[j] = order[j], order[k]
+  local pd = dmap[port_lot[2] * 1000 + port_lot[1]]
+  if not pd then
+    -- the front-centre lot is just outside the disk: use the nearest industrial lot
+    local best, bd = nil, 1e9
+    for _, d in ipairs(districts) do
+      if d.role == "industrial" then
+        for _, l in ipairs(d.lots) do
+          local dd = (l[1] - port_lot[1]) ^ 2 + (l[2] - port_lot[2]) ^ 2
+          if dd < bd then best, bd, port_lot = d.id, dd, { l[1], l[2] } end
+        end
+      end
+    end
+    pd = best or #districts
   end
-  districts[pd].kind = "spaceport"
-  districts[pd].center = port_lot
-  local marks = { "reactor", "archive", "foundry", "garden", "palace" }
-  for i, di in ipairs(order) do
-    districts[di].kind = marks[i] or M.FILLER[rng:int(1, #M.FILLER)]
-  end
-  -- body-specific heart: the drum of an asteroid, the crater dome of a moon
-  local mid = district_of(spec, (nx + 1) // 2, (nz + 1) // 2 + 1)
-  -- (the district that held that kind swaps with it, so every landmark stays in the city once)
   local function give(di, kind)
     for _, o in ipairs(districts) do
-      if o.kind == kind and o ~= districts[di] then o.kind = districts[di].kind end
+      if o.kind == kind and o ~= districts[di] then o.kind = districts[di].kind or "market" end
     end
     districts[di].kind = kind
   end
-  if spec.body == "asteroid" and mid ~= pd then give(mid, "reactor") districts[mid].drum = true end
-  if spec.body == "moon" and mid ~= pd then give(mid, "garden") districts[mid].crater = true end
+  -- default kind from the ring role, then place each landmark once
   for _, d in ipairs(districts) do
-    d.landmark = d.kind == "spaceport" or d.kind == "reactor" or d.kind == "archive" or d.kind == "foundry"
-      or d.kind == "garden" or d.kind == "palace"
+    d.kind = d.role == "core" and "palace" or (d.role == "civic" and "archive" or d.role)
+  end
+  give(pd, "spaceport")
+  districts[pd].center = port_lot
+  -- pick one district per remaining landmark, preferring a matching role
+  local function pick_role(role, fallback)
+    for _, d in ipairs(districts) do
+      if d.id ~= pd and d.role == role and not d.landmark_set then return d end
+    end
+    for _, d in ipairs(districts) do
+      if d.id ~= pd and (not fallback or d.role == fallback) and not d.landmark_set then return d end
+    end
+    for _, d in ipairs(districts) do
+      if d.id ~= pd and not d.landmark_set then return d end
+    end
+  end
+  local mid_gx, mid_gz = (nx + 1) // 2, (nz + 1) // 2 + 1
+  local mid = dmap[mid_gz * 1000 + mid_gx] or (districts[1] and districts[1].id)
+  local function place(kind, role, fallback)
+    local d = pick_role(role, fallback)
+    if d then give(d.id, kind) d.landmark_set = true end
+  end
+  if spec.body == "asteroid" and mid and mid ~= pd then
+    give(mid, "reactor")
+    districts[mid].drum = true
+    districts[mid].landmark_set = true
+  elseif spec.body == "moon" and mid and mid ~= pd then
+    give(mid, "garden")
+    districts[mid].crater = true
+    districts[mid].landmark_set = true
+  else
+    place("palace", "core", "civic")
+  end
+  if not (spec.body == "asteroid") then place("reactor", "industrial", "market") end
+  if not (spec.body == "moon") then place("garden", "civic", "residential") end
+  place("archive", "civic", "market")
+  place("foundry", "industrial", "market")
+  if spec.body ~= "planet" then
+    -- palace still needs a home when the core is the crater or the drum
+    local has
+    for _, d in ipairs(districts) do if d.kind == "palace" then has = true end end
+    if not has then place("palace", "civic", "market") end
+  end
+  -- leftover districts keep their ring-role kind; each landmark kind appears once
+  local marks = { spaceport = true, reactor = true, archive = true, foundry = true, garden = true, palace = true }
+  local seen = {}
+  for _, d in ipairs(districts) do
+    if not d.kind or d.kind == "core" or d.kind == "civic" then
+      d.kind = (d.role == "market" or d.role == "residential" or d.role == "industrial") and d.role or "market"
+    end
+    if marks[d.kind] then
+      if seen[d.kind] then
+        d.kind = (d.role == "market" or d.role == "residential" or d.role == "industrial") and d.role or "market"
+      else
+        seen[d.kind] = true
+      end
+    end
+  end
+  -- if a landmark is still missing, promote a leftover filler of a matching role
+  local prefer = { palace = "core", archive = "civic", garden = "civic", foundry = "industrial", reactor = "industrial", spaceport = "industrial" }
+  for _, kind in ipairs(M.LANDMARKS) do
+    if not seen[kind] then
+      local d = nil
+      for _, o in ipairs(districts) do
+        if not marks[o.kind] and o.role == prefer[kind] then d = o break end
+      end
+      if not d then
+        for _, o in ipairs(districts) do
+          if not marks[o.kind] then d = o break end
+        end
+      end
+      if d then d.kind = kind seen[kind] = true end
+    end
+  end
+  for _, d in ipairs(districts) do
+    d.landmark = not not marks[d.kind]
     d.label = string.format("D%d %s", d.id, M.LABEL[d.drum and "drum" or d.crater and "crater" or d.kind])
     d.powered = d.kind == "spaceport"
+    d.landmark_set = nil
   end
-  return districts, pd
+  return districts, pd, dmap
 end
 
 -- what stands on each lot: { type = tower|building|plaza|empty|landmark, y, d }
@@ -337,7 +553,7 @@ end
 function M.generate(seed, kit, civ, origin)
   local spec = kit.city
   local rng = saucer.rng.new(seed)
-  local districts, port = M.plan(rng, kit)
+  local districts, port, dmap = M.plan(rng, kit)
   local style0 = M.style_of(civ)
   M.archetypes(seed, districts, style0.value)
   local ext = M.extent_cells(kit)
@@ -350,21 +566,40 @@ function M.generate(seed, kit, civ, origin)
   local ux, uz = M.HALL[1], M.HALL[3]
   local off = (spec.lot - ux) // 2
 
-  -- 1. the lots: type, level, stack
+  -- mix of lot types by ring role (towers, buildings, plazas, empty)
+  local MIX = {
+    core = { 2, 1, 6, 1 },
+    civic = { 2, 6, 2, 1 },
+    market = { 2, 6, 2, 1 },
+    residential = { 4, 3, 2, 1 },
+    industrial = { 3, 3, 2, 2 },
+    spaceport = spec.mix,
+  }
+
+  -- 1. the lots: type, level, stack (only lots inside the circular core)
   local plan = {}
   for gz = 1, nz do
     for gx = 1, nx do
-      local d = districts[district_of(spec, gx, gz)]
-      local lot = { gx = gx, gz = gz, d = d.id, y = lot_level(spec, rng, gx, gz), type = pick_type(rng, spec.mix) }
-      lot.x0, lot.z0 = lot_origin(spec, gx, gz)
-      if d.center[1] == gx and d.center[2] == gz then lot.type, lot.landmark = "building", d.kind end
-      plan[#plan + 1] = lot
-      lots[gz * 1000 + gx] = lot
+      local di = dmap and dmap[gz * 1000 + gx]
+      if di then
+        local d = districts[di]
+        local mix = MIX[d.role] or spec.mix
+        local lot = { gx = gx, gz = gz, d = d.id, y = lot_level(spec, rng, gx, gz), type = pick_type(rng, mix) }
+        lot.x0, lot.z0 = lot_origin(spec, gx, gz)
+        if d.center[1] == gx and d.center[2] == gz then lot.type, lot.landmark = "building", d.kind end
+        -- the very centre is a great plaza; a crown of tall towers rings it
+        if d.role == "core" and not lot.landmark then
+          if M.lot_radius(spec, gx, gz) < 1.2 then lot.type = "plaza" else lot.type = "tower" end
+        end
+        plan[#plan + 1] = lot
+        lots[gz * 1000 + gx] = lot
+      end
     end
   end
   -- the crater of a moon: nothing stands within `crater` lots of its dome
   if spec.crater then
-    local cd = districts[district_of(spec, (nx + 1) // 2, (nz + 1) // 2 + 1)]
+    local mid_gx, mid_gz = (nx + 1) // 2, (nz + 1) // 2 + 1
+    local cd = districts[(dmap and dmap[mid_gz * 1000 + mid_gx]) or 1]
     for _, lot in ipairs(plan) do
       local dx, dz = lot.gx - cd.center[1], lot.gz - cd.center[2]
       if dx * dx + dz * dz <= spec.crater * spec.crater and not lot.landmark then lot.type = "empty" end
@@ -470,8 +705,12 @@ function M.generate(seed, kit, civ, origin)
     return ground
   end
 
-  -- the front-centre lot holds the spaceport hangar: room 1, its door on the -z face
+  -- the spaceport hangar: room 1, its door on the -z face (the front-centre lot, or the port district's centre)
   local plot = lots[1 * 1000 + nx // 2 + 1]
+  if not plot then
+    local pd = districts[port]
+    plot = pd and lots[pd.center[2] * 1000 + pd.center[1]]
+  end
   plot.type, plot.landmark, plot.hangar = "building", "spaceport", true
   build(plot)
   for _, lot in ipairs(plan) do
@@ -512,7 +751,22 @@ function M.generate(seed, kit, civ, origin)
     local d = districts[lot.d]
     if lot.type == "tower" then
       local w, w2 = rng:int(spec.tower[1], spec.tower[2]), rng:int(spec.tower[1], spec.tower[2])
-      local h = rng:int(spec.tower[3], spec.tower[4])
+      local h0, h1 = spec.tower[3], spec.tower[4]
+      local role = d.role
+      local h
+      if role == "core" then
+        h = rng:int(math.max(h0, math.floor(h1 * 0.9)), math.floor(h1 * 1.25))
+      elseif role == "civic" then
+        h = rng:int(math.floor((h0 + h1) * 0.45), h1)
+      elseif role == "market" then
+        h = rng:int(h0, math.floor(h1 * 0.85))
+      elseif role == "residential" then
+        h = rng:int(h0, math.floor((h0 + h1) * 0.55))
+      elseif role == "industrial" then
+        h = rng:int(h0, math.floor(h1 * 0.7))
+      else
+        h = rng:int(h0, h1)
+      end
       h = math.min(h, ceiling - lot.y)
       local cx = lot.x0 + (spec.lot - w) // 2
       local cz = lot.z0 + (spec.lot - w2) // 2
@@ -524,7 +778,7 @@ function M.generate(seed, kit, civ, origin)
       for k, t in ipairs(tl) do
         local mn, mx = world_box({ cx + t.dx, y0 + t.dy, cz + t.dz }, { t.w, t.h, t.w2 }, kit, origin)
         solids[#solids + 1] = { mn, mx, kind = "tower", room = 1, district = d.id, tier = k, form = form,
-                                apex = k == #tl or nil }
+                                role = d.role, apex = k == #tl or nil }
       end
       lot.tower = { cx, cz, w, w2, M.base_height(form, h), inv = inverted, form = form }
     elseif lot.type == "plaza" then
@@ -541,6 +795,17 @@ function M.generate(seed, kit, civ, origin)
       solids[#solids + 1] = { bm, bx, kind = "monument", room = 1, district = d.id }
     end
   end
+  -- a landmark spire at the exact city centre (the core plaza)
+  do
+    local fp = M.footprint(kit, origin)
+    local gy = origin[2] + (spec.ground or 0) * kit.cell
+    local h = math.min(280, (ceiling - (spec.ground or 0)) * kit.cell * 0.85)
+    if h < 80 then h = 80 end
+    solids[#solids + 1] = {
+      { fp.x - 10, gy, fp.z - 10 }, { fp.x + 10, gy + h, fp.z + 10 },
+      kind = "crown", room = 1, district = districts[1] and districts[1].id or 1, role = "core",
+    }
+  end
   -- 4b. the skyline: an outer ring of lots round and behind the core, towers and blocks only (no rooms, no
   -- doors, no slots): a few hundred cheap collision boxes that make the city run on for kilometres. Its own
   -- rng, so the core of a seed is the same with or without it.
@@ -549,9 +814,14 @@ function M.generate(seed, kit, civ, origin)
   local R = spec.ring or 0
   if R > 0 then
     local rr = saucer.rng.new(saucer.seed_child(seed, "ring", 0))
+    local ccx, ccz, crad = M.city_centre(spec)
     for gz = 1, nz + R do
       for gx = 1 - R, nx + R do
-        if not (gx >= 1 and gx <= nx and gz <= nz) then
+        local rad = math.sqrt((gx - ccx) * (gx - ccx) + (gz - ccz) * (gz - ccz))
+        local playable = gx >= 1 and gx <= nx and gz >= 1 and gz <= nz and rad <= crad
+        local in_ring = rad > crad and rad <= crad + R + 0.2
+        local approach = gz < 1 and math.abs(gx - ccx) < 2.2
+        if not playable and in_ring and not approach then
           local bx, bz = (gx - 1 + 3 * R) // M.DISTRICT, (gz - 1) // M.DISTRICT
           local key = bz * 1000 + bx
           local sd = skyby[key]
@@ -563,7 +833,7 @@ function M.generate(seed, kit, civ, origin)
           local x0, z0 = lot_origin(spec, gx, gz)
           local y = lot_level(spec, rr, gx, gz)
           local roll = rr:int(1, 100)
-          local edge = math.max(1, 1 - gx, gx - nx, gz - nz)
+          local edge = math.max(1, rad - crad)
           local fall = 1 - 0.5 * (edge - 1) / R
           local w, w2, h
           if roll <= 55 then
@@ -778,6 +1048,7 @@ function M.generate(seed, kit, civ, origin)
     local cz = origin[3] + (lot.z0 + spec.lot / 2) * kit.cell
     city.districts[d.id] = { id = d.id, kind = d.kind, label = d.label, powered = d.powered, coupling = d.coupling,
                              pos = { cx, origin[2] + lot.y * kit.cell, cz }, drum = d.drum, crater = d.crater,
+                             role = d.role, ring = d.ring, wedge = d.wedge,
                              value = d.value, archetype = d.archetype, dx = d.dx, dz = d.dz, box = d.box and { origin[1] + d.box[1] * kit.cell, origin[3] + d.box[2] * kit.cell, origin[1] + d.box[3] * kit.cell, origin[3] + d.box[4] * kit.cell } }
   end
   city.rails, city.lifts, city.bridges, city.clues = rails, lifts, bridge_list, clues

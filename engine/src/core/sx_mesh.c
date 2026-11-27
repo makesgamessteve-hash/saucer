@@ -372,6 +372,62 @@ void sx_mesh_patch(sx_mesh *m, const float c[3], const float u[3], const float v
 
 /* add-material-system: the hash covers the 12 pre-material floats of every vertex as one stream (so meshes
  * without materials keep the hashes committed before the 13th float), plus the material slots when any is set */
+
+/* add-generated-planets: a grid of shared vertices with analytic slope normals */
+void sx_mesh_heightfield(sx_mesh *m, const float c[3], const float u[3], const float v[3], const float *h, int su,
+                         int sv, const float *col, const sx_part_style *s) {
+  int i, j, base = m->nv;
+  if (!h) return;
+  if (su < 1) su = 1;
+  if (su > 64) su = 64;
+  if (sv < 1) sv = 1;
+  if (sv > 64) sv = 64;
+  for (j = 0; j <= sv; j++)
+    for (i = 0; i <= su; i++) {
+      float a = (float)i / (float)su, b = (float)j / (float)sv;
+      float p[3], n[3], ln;
+      int k;
+      float yu, yv, y = h[j * (su + 1) + i];
+      float yim = h[j * (su + 1) + (i > 0 ? i - 1 : i)];
+      float yip = h[j * (su + 1) + (i < su ? i + 1 : i)];
+      float yjm = h[(j > 0 ? j - 1 : j) * (su + 1) + i];
+      float yjp = h[(j < sv ? j + 1 : j) * (su + 1) + i];
+      float du = (float)((i < su && i > 0) ? 2 : 1) / (float)su;
+      float dv = (float)((j < sv && j > 0) ? 2 : 1) / (float)sv;
+      for (k = 0; k < 3; k++) p[k] = c[k] + a * u[k] + b * v[k];
+      p[1] = y;
+      /* tangent: u + (dy/da) * up, v + (dy/db) * up; normal is their cross */
+      yu = (yip - yim) / du;
+      yv = (yjp - yjm) / dv;
+      {
+        float tu[3] = { u[0], yu, u[2] };
+        float tv[3] = { v[0], yv, v[2] };
+        n[0] = tu[1] * tv[2] - tu[2] * tv[1];
+        n[1] = tu[2] * tv[0] - tu[0] * tv[2];
+        n[2] = tu[0] * tv[1] - tu[1] * tv[0];
+      }
+      ln = (float)sx_sqrt((double)n[0] * n[0] + (double)n[1] * n[1] + (double)n[2] * n[2]);
+      if (ln > 1e-12f) { n[0] /= ln; n[1] /= ln; n[2] /= ln; }
+      else { n[0] = 0; n[1] = 1; n[2] = 0; }
+      {
+        sx_part_style vs = *s;
+        if (col) {
+          int ci = (j * (su + 1) + i) * 3;
+          vs.color[0] = col[ci];
+          vs.color[1] = col[ci + 1];
+          vs.color[2] = col[ci + 2];
+        }
+        add_vertex(m, p, n, a, b, &vs);
+      }
+    }
+  for (j = 0; j < sv; j++)
+    for (i = 0; i < su; i++) {
+      int a = base + j * (su + 1) + i, b = a + 1, d = a + su + 1, e = d + 1;
+      add_tri(m, a, b, e);
+      add_tri(m, a, e, d);
+    }
+}
+
 uint64_t sx_mesh_hash(const sx_mesh *m) {
   uint64_t h;
   int i, k, mats = 0;

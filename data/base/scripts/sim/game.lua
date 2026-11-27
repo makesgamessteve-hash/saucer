@@ -39,6 +39,7 @@ local civs = require("sim.civs")
 local galaxy = require("sim.galaxy")
 local archive = require("sim.archive")
 local megacity = require("sim.citymega") -- add-alien-cities-2
+local planet = require("sim.planet") -- add-generated-planets
 local requests = require("sim.requests")
 local coop = require("sim.coop")
 local adv = require("sim.advsentry")
@@ -143,6 +144,9 @@ function M.rebuild(state)
   -- add-alien-cities-2: the outer districts near a player are solid again (the physics world was just cleared)
   megacity.reset()
   M.mega_sync(state)
+  -- add-generated-planets: the body's surface around the city
+  planet.clear()
+  planet.sync(state)
   -- add-wider-dark: doors a Lockdown node holds sealed right now
   for i, list in pairs(state.sentries or {}) do
     for k, dyn in ipairs(list) do
@@ -323,12 +327,12 @@ function M.new_player(index, pos, yaw)
   return p
 end
 
-M.VERSION = 23 -- state version; saves made by a newer game are refused
+M.VERSION = 24 -- state version; saves made by a newer game are refused
 
 function M.init(state, ctx)
   M.state_ref = state
   local seed = ctx.seed
-  state.version = M.VERSION  -- v21: styled relics use non-rectangular room-plan patterns (vary-relic-room-plans); v20: relics in far sectors, guarded, with their explored rooms and scans remembered (add-relic-stations, plan phase 8); v19: alien stations, bigger, move the trader, the far hangar and grow an alien wing inside (add-alien-stations); v18: realistic lighting (add-realistic-lighting); v17: suspicion meters, site alarms, guarded finds, cover, power cells, Spotters (add-strategic-sentries); v16: the fun fixes (add-fun-fixes); v15: megastructure stations move the trader and the far hangar (add-huge-stations); v14: landing gear, the hull hatch and the suit (add-dock-land-eva); v13: the run story (add-run-story); v12: sliding doors keep a goal and a hold timer (fix-bedroom-door); v11: seed-plus-diff saves (save format 3); v10: playtest recommendations (add-playtest-recs); v9: the wider dark (add-wider-dark); v8: on-foot excursions; v7: station visits
+  state.version = M.VERSION  -- v24: generated planets under body cities, concentric plans, shader-lit globes (add-generated-planets); v23: relic shape fixes; v21: styled relics use non-rectangular room-plan patterns (vary-relic-room-plans); v20: relics in far sectors, guarded, with their explored rooms and scans remembered (add-relic-stations, plan phase 8); v19: alien stations, bigger, move the trader, the far hangar and grow an alien wing inside (add-alien-stations); v18: realistic lighting (add-realistic-lighting); v17: suspicion meters, site alarms, guarded finds, cover, power cells, Spotters (add-strategic-sentries); v16: the fun fixes (add-fun-fixes); v15: megastructure stations move the trader and the far hangar (add-huge-stations); v14: landing gear, the hull hatch and the suit (add-dock-land-eva); v13: the run story (add-run-story); v12: sliding doors keep a goal and a hold timer (fix-bedroom-door); v11: seed-plus-diff saves (save format 3); v10: playtest recommendations (add-playtest-recs); v9: the wider dark (add-wider-dark); v8: on-foot excursions; v7: station visits
   state.seed = seed
   state.tick = 0
   civs.use(seed)
@@ -539,6 +543,9 @@ local function mover(state, p)
     -- fix-station-hull: the trader stations' spinning layer (halos, helices, shells) pushes the hull out
     local spun, hit = require("sim.stationhull").spin_push(state, np, r)
     if hit > 0 then np, blocked = spun, blocked + 1 end
+    -- add-generated-planets: don't sink through the body
+    local lifted = planet.clamp(np, hh)
+    if lifted[2] ~= np[2] then np, blocked = lifted, blocked + 1 end
     for _, o in ipairs(state.players) do
       if o ~= p then
         local orr, ohh = shipm.dims(o.ship)
@@ -1547,6 +1554,7 @@ function M.step(state, cmds, dt)
   end
   claims.resolve(state, dt, ctx_fns)
   M.mega_sync(state)
+  planet.sync(state)
   for i = 1, #state.players do
     local p = state.players[i]
     if p and cmds[i] then M.step_player(state, p, cmds[i], dt) end

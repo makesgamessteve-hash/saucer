@@ -17,6 +17,8 @@ local panelm = require("sim.panel")
 local sm = saucer.math
 local ruinm = require("sim.ruin")
 local megav = require("view.citymega") -- add-alien-cities-2
+local planetv = require("view.planet") -- add-generated-planets
+local planet = require("sim.planet")
 local cities = require("sim.cities")
 local M = {}
 
@@ -916,12 +918,15 @@ M.SKY = {
 -- (add-alien-cities-2: drawn with the sky, so a tower however far stands in front of them)
 function M.sky(v, A, eye)
   local n = 0
+  local hide_planet = planet.hide_sky_billboard()
   for _, s in ipairs(M.SKY) do
-    local tex = A.tex[s.tex]
-    if tex then
-      v:billboard(tex, { eye[1] + s.at[1], eye[2] + s.at[2], eye[3] + s.at[3] }, s.size,
-                  { palette = A.pal[s.pal] or A.pal.base, tint = s.tint, sky = true })
-      n = n + 1
+    if not (hide_planet and s.tex == "planet") then
+      local tex = A.tex[s.tex]
+      if tex then
+        v:billboard(tex, { eye[1] + s.at[1], eye[2] + s.at[2], eye[3] + s.at[3] }, s.size,
+                    { palette = A.pal[s.pal] or A.pal.base, tint = s.tint, sky = true })
+        n = n + 1
+      end
     end
   end
   return n
@@ -936,13 +941,14 @@ M.GATE_DIST = 420
 M.CITY_NEAR = 340     -- add-cities: a district nearer than this draws its chunks, else one coarse mesh
 M.LOD_DIST = 1100     -- beyond this a site is drawn as its coarse silhouette
 M.CULL_DIST = 2400    -- beyond this (fog) nothing of a site is drawn
+M.CITY_CULL = 18000   -- add-generated-planets: a city stays visible from the air
 M.VIEW_HALF = 1.15    -- radians: half of the widest view angle plus slack
 M.stats = { chunks = 0, culled = 0, lod = 0 }
 
 -- is a sphere (centre c, radius r) possibly visible from camera cam?
-function M.visible(cam, c, r, xr)
+function M.visible(cam, c, r, xr, maxd)
   local dist = vec.len(vec.sub(c, cam.pos))
-  if dist - r > M.CULL_DIST then return false end
+  if dist - r > (maxd or M._cull or M.CULL_DIST) then return false end
   return M.in_view(cam, c, r, xr)
 end
 -- add-alien-cities-2: inside the view cone, at any distance
@@ -978,6 +984,11 @@ function M.city_env(state, p)
   if p.site == 0 then
     local _, mr, mp = game.mega_city_at(state, p.ship.pos, 0)
     if mp and require("sim.citymega").in_air(mp, p.ship.pos) then r = mr end
+    -- add-generated-planets: the body's air holds over the whole cap, not just the city footprint
+    if not r then
+      local pl = planet.over(p.ship.pos)
+      if pl and pl.site then r = game.ruin(pl.site) end
+    end
   end
   if not (r and r.city) then return nil end
   local e = ruinm.kit_of(r.kit).city.env
@@ -1076,6 +1087,7 @@ function M.draw_ruins(v, A, state, cam, xr)
       local set = assets.ruin_chunks(r, site.pos)
       local tex = assets.kit_texture(A, set.kit)
       local ftex = assets.floor_texture(A, set.kit)
+      M._cull = r.city and M.CITY_CULL or nil
       local lod = set.lod
       -- (a city's far skyline is now its megacity: view/citymega.lua)
       if set.horizon and not r.city then v:mesh(set.horizon.mesh, { tex = tex, palette = A.pal.base }) end
@@ -1164,6 +1176,7 @@ function M.draw_ruins(v, A, state, cam, xr)
         if r.city then M.draw_transit(v, A, state, cam, r, st) end
         -- add-alien-cities: swarms over the avenues, machines on the towers, pulses down the sky lanes
         if r.city then st.city_phen = (st.city_phen or 0) + require("view.cityphen").draw(v, A, r, cam, (state.tick + (M.alpha or 0)) / 60) end
+        if r.city then st.roads = (st.roads or 0) + require("view.cityroads").draw(v, A, r, set, cam) end
         -- add-cities: the gates of dark districts, a shutter in each shut door
         if r.city then
           for id, g in pairs(game.gates(i)) do
@@ -1179,6 +1192,7 @@ function M.draw_ruins(v, A, state, cam, xr)
       end
     end
   end
+  M._cull = nil
   -- add-alien-cities-2: the megacity round every city the eye is over (view/citymega.lua)
   for i, site in ipairs(state.sector.sites) do
     local r = site.city and game.ruin(i)
@@ -1221,14 +1235,36 @@ function M.render(v, state, alpha)
   local cam = xrv.adjust(v, require("view.juice").camera(M.camera(p, v.xr), p, state.tick, v.xr))
   -- add-alien-cities-2: over a megacity the far plane reaches its horizon band
   megav.far_plane(cam, function(pos) return game.mega_city_at(state, pos, megav.ZONE) end)
+  -- add-generated-planets: keep the whole body on screen from orbit
+  planetv.far_plane(cam, state)
   v:camera(cam)
   local cenv = M.city_env(state, p)
-  v:fog(cenv or { color = { 0.02, 0.02, 0.06 }, density = M.FOG, clear = { 0.0, 0.0, 0.025 }, light = { 0.35, 0.8, 0.45 },
+  -- add-generated-planets: thin the city's haze from the air so the ring plan
+  -- reads, while street level keeps some depth; slightly brighter at the kerb
+  if cenv and cam then
+    local gy = cam.pos[2]
+    local pl = planet.over(cam.pos) or planet.live()[1]
+    if pl then gy = pl.gy end
+    local alt = cam.pos[2] - gy
+    if alt > 200 then
+      local fade = math.min(1, (alt - 200) / 2800)
+      cenv.density = cenv.density * (1 - 0.78 * fade)
+    elseif alt < 90 then
+      cenv.ambient = math.min(1, (cenv.ambient or 0.5) + 0.18)
+    end
+  end
+  -- add-generated-planets: in a sector with a body, space fog is thin enough to see the globe from orbit
+  -- (the usual density swallows anything 20 km away). City air keeps the old haze.
+  v:fog(cenv or { color = { 0.02, 0.02, 0.06 },
+          density = (#planet.live() > 0 and 0.000003 or M.FOG),
+          clear = { 0.0, 0.0, 0.025 }, light = { 0.35, 0.8, 0.45 },
           ambient = 0.55 })
   -- add-realistic-lighting: the star outside, the lamps of every place near the eye (view/lights.lua)
   local lit = lightsv.begin(v, state, p, cam, cenv)
   if not (cenv and cenv.day > 0.55) then v:mesh(A.stars, { pos = cam.pos, sky = true }) end
   if not (cenv and cenv.day > 0.55) then M.sky(v, A, cam.pos) end
+  -- add-generated-planets: the body sits behind the city and in front of the stars
+  planetv.draw(v, A, state, cam)
   if not lit.inside then lightsv.sky(v, A, cam.pos, lit.star) end
   lightsv.site_lamps(v, A, state, cam.pos)
   lightsv.bays(v, state, cam.pos, state.tick)

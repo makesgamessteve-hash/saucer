@@ -53,10 +53,10 @@ describe("megacity", function()
       for _, d in ipairs(p.districts) do
         expect(d.id > mega.BASE_ID).to_be(true)
         expect(d.archetype).to_be(citygen.ARCHETYPES[d.value].label)
-        -- clear of the core
+        -- clear of the circular core (downtown disk plus its skyline)
         local b = d.box
-        local core = { fr.origin[1], fr.origin[3], fr.origin[1] + fr.ext[1], fr.origin[3] + fr.ext[3] }
-        expect(b[3] <= core[1] or b[1] >= core[3] or b[4] <= core[2] or b[2] >= core[4]).to_be(true)
+        local fp = citygen.footprint(fr.kit, fr.origin)
+        expect(mega.rect_dist(b, fp.x, fp.z) >= fp.r).to_be(true)
         -- clear of every other site, every station and the arrival point
         for _, o in ipairs(mega.obstacles(st.sector, i)) do
           expect(mega.rect_dist(b, o[1], o[2]) >= o[3]).to_be(true)
@@ -571,7 +571,18 @@ describe("megacity", function()
     -- built ahead: hover over a district's middle; within a few steps its unbuilt neighbours are built too
     mega.clear_cache()
     local pl = st.players[1]
+    -- a district on the ring that has neighbours (the annulus has a gap at the
+    -- approach and the heart, so districts[1] may sit alone)
     local far = p.districts[1]
+    for _, x in ipairs(p.districts) do
+      local n = 0
+      for _, y in ipairs(p.districts) do
+        if y ~= x and mega.rect_dist(y.box, (x.box[1] + x.box[3]) / 2, (x.box[2] + x.box[4]) / 2) <= mega.PREBUILD then
+          n = n + 1
+        end
+      end
+      if n >= 2 then far = x break end
+    end
     pl.ship.pos = hover_over(p, far)
     pl.ship.pos[2] = p.frame.y + 3000
     local before = mega.stats.prebuilt or 0

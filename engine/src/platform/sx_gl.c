@@ -228,6 +228,8 @@ static const char *mesh_fs =
     "uniform int u_ncasc; uniform float u_shtexel; uniform int u_lidx[16];\n"
     "uniform vec3 u_eye; uniform int u_nhz; uniform int u_hzsteps; uniform int u_sky;\n"
     "uniform vec4 u_hzpos[4]; uniform vec4 u_hzcol[4]; uniform vec4 u_hzdir[4];\n"
+    "uniform int u_planet; uniform vec3 u_pcenter; uniform float u_pradius; uniform float u_pseed;\n"
+    "uniform int u_pbody; uniform float u_pheart; uniform float u_pcap; uniform float u_pcity;\n"
     "out vec4 o_col;\n"
     "const float bayer[16] = float[16](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0,\n"
     "                                  3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);\n"
@@ -235,6 +237,25 @@ static const char *mesh_fs =
     "                           vec3(-1.0, 0.0, 0.0), vec3(1.0, 0.0, 0.0));\n"
     "const vec3 FU[6] = vec3[6](vec3(0.0, 1.0, 0.0), vec3(0.0, 1.0, 0.0), vec3(0.0, 0.0, 1.0), vec3(0.0, 0.0, -1.0),\n"
     "                           vec3(0.0, 1.0, 0.0), vec3(0.0, 1.0, 0.0));\n"
+    "float phash(vec3 p) {\n"
+    "  return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * (43758.5453 + u_pseed * 0.001));\n"
+    "}\n"
+    "float pnoise(vec3 x) {\n"
+    "  vec3 i = floor(x);\n"
+    "  vec3 f = fract(x);\n"
+    "  f = f * f * (3.0 - 2.0 * f);\n"
+    "  float n000 = phash(i), n100 = phash(i + vec3(1.0, 0.0, 0.0));\n"
+    "  float n010 = phash(i + vec3(0.0, 1.0, 0.0)), n110 = phash(i + vec3(1.0, 1.0, 0.0));\n"
+    "  float n001 = phash(i + vec3(0.0, 0.0, 1.0)), n101 = phash(i + vec3(1.0, 0.0, 1.0));\n"
+    "  float n011 = phash(i + vec3(0.0, 1.0, 0.0) + vec3(0.0, 0.0, 1.0)), n111 = phash(i + vec3(1.0, 1.0, 1.0));\n"
+    "  return mix(mix(mix(n000, n100, f.x), mix(n010, n110, f.x), f.y),\n"
+    "             mix(mix(n001, n101, f.x), mix(n011, n111, f.x), f.y), f.z);\n"
+    "}\n"
+    "float pfbm(vec3 p) {\n"
+    "  float a = 0.0, w = 0.5;\n"
+    "  for (int k = 0; k < 5; k++) { a += w * pnoise(p); p *= 2.07; w *= 0.5; }\n"
+    "  return a;\n"
+    "}\n"
     "float tap(vec4 rect, vec2 uv, float z) {\n"
     "  vec2 m = vec2(u_shtexel) / rect.zw;\n"
     "  return texture(u_shadow, vec3(rect.xy + clamp(uv, m, 1.0 - m) * rect.zw, z));\n"
@@ -360,7 +381,80 @@ static const char *mesh_fs =
     "  }\n"
     "  vec3 c = base.rgb * v_col * u_tint.rgb;\n"
     "  vec3 lit = c;\n"
-    "  if (u_lit == 1 && u_mode == 0) {\n"
+    "  float planet_a = -1.0;\n"
+    "  if (u_planet > 0) {\n"
+    "    vec3 pn = normalize(v_wpos - u_pcenter);\n"
+    "    if (u_planet == 1 && u_pheart > 1.0 && length(vec2(v_wpos.x, v_wpos.z)) < u_pheart) discard;\n"
+    "    vec3 L = normalize(u_light);\n"
+    "    vec3 V = normalize(u_eye - v_wpos);\n"
+    "    float ndl = dot(pn, L);\n"
+    "    if (u_planet == 1) {\n"
+    "      float n1 = pfbm(pn * 3.4 + vec3(u_pseed * 0.00021));\n"
+    "      float n2 = pfbm(pn * 9.0 + vec3(19.0, 4.0, 11.0));\n"
+    "      float n3 = pnoise(pn * 28.0);\n"
+    "      float h = n1 * 0.72 + n2 * 0.22 + n3 * 0.06;\n"
+    "      float chd = length(vec2(v_wpos.x - u_pcenter.x, v_wpos.z - u_pcenter.z));\n"
+    "      float city = (u_pcity > 1.0) ? (1.0 - smoothstep(u_pcity * 0.92, u_pcity * 1.18, chd)) : 0.0;\n"
+    "      float ice = (1.0 - city) * smoothstep(0.68, 0.80, -pn.y + n2 * 0.08);\n"
+    "      vec3 alb;\n"
+    "      float ocean = 0.0;\n"
+    "      if (u_pbody >= 2) {\n"
+    "        alb = mix(vec3(0.28, 0.24, 0.20), vec3(0.48, 0.42, 0.36), n1);\n"
+    "        alb = mix(alb, vec3(0.18, 0.16, 0.15), step(0.62, n2));\n"
+    "      } else if (u_pbody == 1) {\n"
+    "        alb = mix(vec3(0.42, 0.40, 0.38), vec3(0.72, 0.70, 0.66), n1);\n"
+    "        alb = mix(alb, vec3(0.22, 0.22, 0.24), smoothstep(0.38, 0.32, n1));\n"
+    "        alb = mix(alb, vec3(0.88, 0.90, 0.93), ice * 0.85);\n"
+    "      } else {\n"
+    "        ocean = 1.0 - smoothstep(0.50, 0.55, h);\n"
+    "        float shallow = (1.0 - ocean) * (1.0 - smoothstep(0.50, 0.545, h)) + ocean * smoothstep(0.42, 0.48, h);\n"
+    "        vec3 deep = vec3(0.06, 0.22, 0.48);\n"
+    "        vec3 shoal = vec3(0.14, 0.48, 0.58);\n"
+    "        vec3 beach = vec3(0.86, 0.78, 0.52);\n"
+    "        float lat = abs(pn.y);\n"
+    "        vec3 grass = mix(vec3(0.28, 0.52, 0.18), vec3(0.55, 0.50, 0.22), smoothstep(0.15, 0.55, lat));\n"
+    "        vec3 rock = mix(vec3(0.48, 0.40, 0.28), vec3(0.62, 0.58, 0.50), n2);\n"
+    "        vec3 land = mix(grass, rock, smoothstep(0.56, 0.70, h + lat * 0.08));\n"
+    "        alb = mix(deep, shoal, smoothstep(0.36, 0.48, h));\n"
+    "        alb = mix(alb, beach, clamp(shallow * (1.0 - ocean * 0.35), 0.0, 1.0));\n"
+    "        alb = mix(alb, land, 1.0 - ocean);\n"
+    "        alb = mix(alb, vec3(0.90, 0.93, 0.96), ice);\n"
+    "        ocean *= (1.0 - ice);\n"
+    "      }\n"
+    "      float day = smoothstep(-0.05, 0.18, ndl);\n"
+    "      float term = exp(-abs(ndl) * 8.0);\n"
+    "      vec3 ambc = alb * vec3(0.06, 0.07, 0.12);\n"
+    "      lit = ambc + alb * (0.18 + 1.15 * day);\n"
+    "      lit += vec3(1.0, 0.55, 0.28) * term * 0.28 * (0.4 + 0.6 * (1.0 - ocean));\n"
+    "      if (ocean > 0.4) {\n"
+    "        vec3 R = reflect(-L, pn);\n"
+    "        lit += vec3(0.55, 0.62, 0.70) * pow(max(dot(R, V), 0.0), 48.0) * day * ocean;\n"
+    "      }\n"
+    "      if (city > 0.0) {\n"
+    "        float night = pow(clamp(1.0 - day * 1.15, 0.0, 1.0), 0.55);\n"
+    "        float speckle = pnoise(pn * 140.0 + vec3(3.0, 8.0, 1.5));\n"
+    "        float lamps = smoothstep(0.42, 0.72, speckle);\n"
+    "        lit += vec3(1.0, 0.78, 0.38) * (night * city * (0.70 + 2.4 * lamps));\n"
+    "        lit += vec3(1.0, 0.82, 0.48) * (night * city * 0.85);\n"
+    "        lit = mix(lit, lit * vec3(0.90, 0.88, 0.84) + vec3(0.10, 0.08, 0.05), city * day * 0.55);\n"
+    "      }\n"
+    "      c = lit;\n"
+    "    } else if (u_planet == 2) {\n"
+    "      float fres = pow(1.0 - abs(dot(pn, V)), 2.4);\n"
+    "      float sunlit = 0.18 + 0.82 * smoothstep(-0.15, 0.55, ndl);\n"
+    "      vec3 col = mix(vec3(0.25, 0.40, 0.85), vec3(0.75, 0.88, 1.0), sunlit);\n"
+    "      col += vec3(1.0, 0.55, 0.30) * exp(-abs(ndl) * 8.0) * 0.35;\n"
+    "      c = lit = col;\n"
+    "      planet_a = clamp(fres * sunlit * 0.90, 0.0, 0.88);\n"
+    "    } else {\n"
+    "      float cl = pfbm(pn * 6.5 + vec3(3.0, u_pseed * 0.00013, 8.0));\n"
+    "      float cover = smoothstep(0.52, 0.68, cl);\n"
+    "      if (cover < 0.02) discard;\n"
+    "      float day = smoothstep(-0.05, 0.2, ndl);\n"
+    "      c = lit = mix(vec3(0.55, 0.58, 0.62), vec3(0.96, 0.97, 0.99), day);\n"
+    "      planet_a = cover * (0.25 + 0.55 * day);\n"
+    "    }\n"
+    "  } else if (u_lit == 1 && u_mode == 0) {\n"
     "    float d = max(dot(normalize(v_nrm), normalize(u_light)), 0.0);\n"
     "    lit = c * (u_ambient + (1.0 - u_ambient) * d);\n"
     "  } else if (u_lit == 1) {\n"
@@ -462,6 +556,7 @@ static const char *mesh_fs =
     "    c = floor(clamp(c, 0.0, 1.0) * 31.0 + b) / 31.0;\n"
     "  }\n"
     "  float a = base.a * u_tint.a;\n"
+    "  if (planet_a >= 0.0) a = planet_a * u_tint.a;\n"
     "  if (u_tex == 2 && u_dither == 1) a = floor(a * 15.0 + b) / 15.0;\n"
     "  if (a < 0.01) discard;\n"
     "  o_col = vec4(c, a);\n"
@@ -507,6 +602,7 @@ typedef struct prog {
   GLint mode, nl, amb, expo, lpos, lcol, ldir, lpar, shadow, shmat, shrect, shbias, ncasc, shtexel, lidx;
   GLint eye, nhz, hzsteps, sky, hzpos, hzcol, hzdir;
   GLint mat, mtime, mmode, matcap, envmap; /* add-material-system */
+  GLint planet, pcenter, pradius, pseed, pbody, pheart, pcap, pcity; /* add-generated-planets */
 } prog;
 
 static struct {
@@ -581,6 +677,7 @@ static int link_prog(prog *p, const char *vs, const char *fs, int ui) {
   U(ncasc); U(shtexel); U(lidx);
   U(eye); U(nhz); U(hzsteps); U(sky); U(hzpos); U(hzcol); U(hzdir);
   U(mat); U(mtime); U(mmode); U(matcap); U(envmap);
+  U(planet); U(pcenter); U(pradius); U(pseed); U(pbody); U(pheart); U(pcap); U(pcity);
 #undef U
   glUseProgram(p->id);
   glUniform1i(p->idx, 0);
@@ -971,6 +1068,14 @@ static void set_lights(const sx_viewport *v) {
   glUniform4fv(G.mesh.lcol, 16, &lcol[0][0]);
   glUniform4fv(G.mesh.ldir, 16, &ldir[0][0]);
   glUniform4fv(G.mesh.lpar, 16, &lpar[0][0]);
+  /* add-generated-planets: the sector sun is also u_light (fog.light is a colour, not a direction) */
+  for (k = 0; k < n; k++) {
+    const sx_light *l = &lt->lights[lt->active[k]];
+    if (l->kind == SX_LIGHT_SUN) {
+      glUniform3f(G.mesh.light, l->dir[0], l->dir[1], l->dir[2]);
+      break;
+    }
+  }
   glUniform3f(G.mesh.amb, lt->ambient[0], lt->ambient[1], lt->ambient[2]);
   glUniform1f(G.mesh.expo, lt->exposure);
   memcpy(rect, lt->shadow_rect, sizeof rect);
@@ -1123,6 +1228,19 @@ static void draw_mesh(const sx_render *r, const sx_viewport *v, const frame_mats
   glUniform1f(G.mesh.fog, (d->flags & SX_DRAW_NOFOG) ? 0.0f : v->fog_density);
   if (d->flags & SX_DRAW_GHOST) glUniform4f(G.mesh.tint, d->tint[0] * 0.6f, d->tint[1] * 0.85f, d->tint[2], d->tint[3] * 0.35f);
   else glUniform4f(G.mesh.tint, d->tint[0], d->tint[1], d->tint[2], d->tint[3]);
+  if (G.mesh.planet >= 0) {
+    int pl = (d->flags & SX_DRAW_PLANET) ? (int)(d->planet[7] + 0.5f) : 0;
+    glUniform1i(G.mesh.planet, pl);
+    if (pl) {
+      glUniform3f(G.mesh.pcenter, d->planet[0], d->planet[1], d->planet[2]);
+      glUniform1f(G.mesh.pradius, d->planet[3]);
+      glUniform1f(G.mesh.pseed, d->planet[4]);
+      glUniform1i(G.mesh.pbody, (int)(d->planet[5] + 0.5f));
+      glUniform1f(G.mesh.pheart, d->planet[6]);
+      if (G.mesh.pcap >= 0) glUniform1f(G.mesh.pcap, d->planet[8]);
+      if (G.mesh.pcity >= 0) glUniform1f(G.mesh.pcity, d->planet[9]);
+    }
+  }
   bind_tex(r, d->tex);
   glBindVertexArray(G.mesh_vao[d->mesh]);
   glDrawElements(GL_TRIANGLES, G.mesh_count[d->mesh], GL_UNSIGNED_INT, (void *)0);
@@ -1139,6 +1257,7 @@ static void draw_billboards(const sx_render *r, const sx_viewport *v, const fram
   glUniformMatrix4fv(G.mesh.model, 1, GL_FALSE, ident);
   glUniform1i(G.mesh.lit, 0);
   glUniform1i(G.mesh.sky, 0);
+  if (G.mesh.planet >= 0) glUniform1i(G.mesh.planet, 0);
   glUniform1f(G.mesh.fog, v->fog_density);
   glUniform1i(G.mesh.tex, 1);
   glBindVertexArray(G.stream_vao);
@@ -1288,7 +1407,7 @@ static void draw_view(const sx_render *r, const sx_viewport *v, int fb_h, int xr
     if (pass == 3) glDepthMask(GL_FALSE);
     for (i = 0; i < v->nmeshes; i++) {
       const sx_draw_mesh *d = &v->meshes[i];
-      int want = (d->flags & SX_DRAW_SKY) ? 0 : (d->flags & SX_DRAW_GHOST) ? 3 : 1;
+      int want = (d->flags & SX_DRAW_SKY) ? 0 : ((d->flags & SX_DRAW_GHOST) || ((d->flags & SX_DRAW_PLANET) && d->planet[7] >= 1.5f)) ? 3 : 1;
       if (want == pass) draw_mesh(r, v, &fm, d);
     }
     if (pass == 0) {
