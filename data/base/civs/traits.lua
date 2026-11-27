@@ -39,11 +39,11 @@ return {
     senses = { sight = 3, echo = 2, chemical = 2, field = 2, tidal = 1, touch = 1 },
     -- social structure: picks the massing archetype of its relics
     -- (and, with values, the legacy temperament: a civ's temperament is one its values or its social structure allow)
-    social = { hive = { massing = { "hive", "cluster" }, temper = { "reclusive", "ceremonial" }, w = 2 },
+    social = { hive = { massing = { "hive", "cluster", "lattice" }, temper = { "reclusive", "ceremonial" }, w = 2 },
                caste = { massing = { "spine" }, temper = { "proud", "ceremonial" }, w = 2 },
                council = { massing = { "cluster", "spine" }, temper = { "mercantile", "curious" }, w = 2 },
                nomad = { massing = { "ring", "helix" }, temper = { "mercantile", "curious", "reclusive" }, w = 2 },
-               gestalt = { massing = { "shell" }, temper = { "ceremonial", "curious" }, w = 1 },
+               gestalt = { massing = { "shell", "organism" }, temper = { "ceremonial", "curious" }, w = 1 },
                solitary = { massing = { "cluster" }, temper = { "proud", "reclusive" }, w = 1 } },
     -- tech focus: a civ's first legacy domain is its tech focus when it is one of these (resonance and lithics are new)
     tech = { optics = 2, gravitics = 2, bio = 2, fold = 2, resonance = 1, lithics = 1 },
