@@ -327,7 +327,7 @@ function M.new_player(index, pos, yaw)
   return p
 end
 
-M.VERSION = 25 -- state version; saves made by a newer game are refused
+M.VERSION = 26 -- state version; saves made by a newer game are refused
 
 function M.init(state, ctx)
   M.state_ref = state

@@ -693,13 +693,17 @@ describe("drawing a city", function()
     local fp, radii = citygen.ring_world_radii(kit, r.origin)
     expect(#radii).to_be_greater(3)
     local roads = cityroads.parts(r, kit, r.origin)
-    local rings, spokes = 0, 0
+    local rings, spokes, lamps, zones = 0, 0, 0, 0
     for _, p in ipairs(roads) do
       if p.kind == "ring" then rings = rings + 1 end
       if p.kind == "box" and p.yaw then spokes = spokes + 1 end
+      if p.kind == "sphere" and (p.emissive or 0) > 0.5 then lamps = lamps + 1 end
+      if p.kind == "ring" and (p.emissive or 0) > 0 and (p.emissive or 0) < 0.25 then zones = zones + 1 end
     end
     expect(rings).to_be_greater(3)
     expect(spokes).to_be_greater(7)
+    expect(lamps).to_be_greater(20)
+    expect(zones).to_be_greater(2)
     expect(#roads).to_be_greater(10)
   end)
 end)

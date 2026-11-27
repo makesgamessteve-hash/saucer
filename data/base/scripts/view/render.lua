@@ -1239,6 +1239,20 @@ function M.render(v, state, alpha)
   planetv.far_plane(cam, state)
   v:camera(cam)
   local cenv = M.city_env(state, p)
+  -- add-generated-planets: thin the city's haze from the air so the ring plan
+  -- reads, while street level keeps some depth; slightly brighter at the kerb
+  if cenv and cam then
+    local gy = cam.pos[2]
+    local pl = planet.over(cam.pos) or planet.live()[1]
+    if pl then gy = pl.gy end
+    local alt = cam.pos[2] - gy
+    if alt > 200 then
+      local fade = math.min(1, (alt - 200) / 2800)
+      cenv.density = cenv.density * (1 - 0.78 * fade)
+    elseif alt < 90 then
+      cenv.ambient = math.min(1, (cenv.ambient or 0.5) + 0.18)
+    end
+  end
   -- add-generated-planets: in a sector with a body, space fog is thin enough to see the globe from orbit
   -- (the usual density swallows anything 20 km away). City air keeps the old haze.
   v:fog(cenv or { color = { 0.02, 0.02, 0.06 },

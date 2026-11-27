@@ -375,7 +375,7 @@ void sx_mesh_patch(sx_mesh *m, const float c[3], const float u[3], const float v
 
 /* add-generated-planets: a grid of shared vertices with analytic slope normals */
 void sx_mesh_heightfield(sx_mesh *m, const float c[3], const float u[3], const float v[3], const float *h, int su,
-                         int sv, const sx_part_style *s) {
+                         int sv, const float *col, const sx_part_style *s) {
   int i, j, base = m->nv;
   if (!h) return;
   if (su < 1) su = 1;
@@ -409,7 +409,16 @@ void sx_mesh_heightfield(sx_mesh *m, const float c[3], const float u[3], const f
       ln = (float)sx_sqrt((double)n[0] * n[0] + (double)n[1] * n[1] + (double)n[2] * n[2]);
       if (ln > 1e-12f) { n[0] /= ln; n[1] /= ln; n[2] /= ln; }
       else { n[0] = 0; n[1] = 1; n[2] = 0; }
-      add_vertex(m, p, n, a, b, s);
+      {
+        sx_part_style vs = *s;
+        if (col) {
+          int ci = (j * (su + 1) + i) * 3;
+          vs.color[0] = col[ci];
+          vs.color[1] = col[ci + 1];
+          vs.color[2] = col[ci + 2];
+        }
+        add_vertex(m, p, n, a, b, &vs);
+      }
     }
   for (j = 0; j < sv; j++)
     for (i = 0; i < su; i++) {

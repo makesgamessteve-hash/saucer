@@ -10,10 +10,10 @@
 ## 3. Cities
 - [x] 3.1 `sim/citygen.lua` and `view/cityroads.lua`: concentric plan, ring roads and radials, central spire, distinct silhouettes and colours per ring
 - [x] 3.2 `sim/citymega.lua`: outer districts in an annulus around the circular core
-- [ ] 3.3 State version 25; seed-42 slice and co-op replays re-recorded
+- [ ] 3.3 State version 26; seed-42 slice and co-op replays re-recorded
 
 ## 4. Verification
 - [x] 4.1 `tests/lua/planet_spec.lua`: tangent street, determinism, body kinds, heart bay, smooth globe and terrain, sky billboard, landing and clamp
 - [x] 4.2 `tests/lua/city_spec.lua`: concentric core and rings, disk footprint, tallest towers at the core
 - [ ] 4.3 Local gate (`openspec validate --all --strict`, coverage >= 95% C and Lua)
-- [ ] 4.4 Screenshots: planet far + close with terminator, city from above showing ring roads, oblique, 3 street-level districts, city edge with planet terrain (shots_planet/v3/)
+- [x] 4.4 Screenshots: planet far + close with terminator, city from above showing ring roads, oblique, 3 street-level districts, city edge with planet terrain (shots_planet/v4/)

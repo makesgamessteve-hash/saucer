@@ -1125,7 +1125,27 @@ static int build_part(lua_State *L, int idx, sx_mesh *m) {
             lua_pop(L, 1);
           }
         }
-        sx_mesh_heightfield(m, c, pu, pv, hh, su, sv, &s);
+        {
+          float *cc = NULL;
+          lua_getfield(L, idx, "colors");
+          if (lua_istable(L, -1)) {
+            int cn = (int)lua_rawlen(L, -1), ci;
+            cc = (float *)malloc((size_t)(su + 1) * (size_t)(sv + 1) * 3 * sizeof(float));
+            if (cc) {
+              for (ci = 0; ci < (su + 1) * (sv + 1) * 3; ci++) {
+                cc[ci] = (ci % 3 == 0) ? s.color[0] : (ci % 3 == 1) ? s.color[1] : s.color[2];
+                if (ci < cn) {
+                  lua_rawgeti(L, -1, ci + 1);
+                  if (lua_isnumber(L, -1)) cc[ci] = (float)lua_tonumber(L, -1);
+                  lua_pop(L, 1);
+                }
+              }
+            }
+          }
+          lua_pop(L, 1);
+          sx_mesh_heightfield(m, c, pu, pv, hh, su, sv, cc, &s);
+          free(cc);
+        }
         free(hh);
       }
       lua_pop(L, 1);
@@ -1631,6 +1651,7 @@ static int l_v_mesh(lua_State *L) {
       d.planet[6] = field_num(L, pt, "heart", 0);
       d.planet[7] = field_num(L, pt, "mode", 0);
       d.planet[8] = field_num(L, pt, "cap", 0);
+      d.planet[9] = field_num(L, pt, "city", 0);
       if (d.planet[7] > 0.5f) d.flags |= SX_DRAW_PLANET;
     }
     lua_pop(L, 1);

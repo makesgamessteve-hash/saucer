@@ -101,8 +101,9 @@ end
 -- the form of the tower on a lot: in a district with a value, every other tower in that value's form
 function M.form_of(style, d, gx, gz)
   if d and d.value and (gx * 3 + gz) % 2 == 0 then return M.ARCHETYPES[d.value].form end
-  -- every other remaining lot uses the ring's silhouette; the rest keep the civ's massing
-  if d and d.role and (gx + gz) % 2 == 0 then
+  -- most remaining lots use the ring's silhouette so each ring reads differently;
+  -- every seventh lot keeps the civ's massing so a city's own style still shows up
+  if d and d.role and (gx * 5 + gz * 3) % 7 ~= 0 then
     local rf = { core = "spire", civic = "dome", market = "slab", residential = "arcology", industrial = "vault" }
     if rf[d.role] then return rf[d.role] end
   end

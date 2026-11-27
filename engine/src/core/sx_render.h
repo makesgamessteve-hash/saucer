@@ -49,8 +49,8 @@ typedef struct sx_draw_mesh {
   float tint[4];
   int flags;
   int owner; /* add-realistic-lighting: a light of the same owner does not shadow it */
-  /* add-generated-planets: cx,cy,cz,R,seed,body,heart,mode,cap (1 surface, 2 atmo, 3 clouds) */
-  float planet[9];
+  /* add-generated-planets: cx,cy,cz,R,seed,body,heart,mode,cap,city (1 surface, 2 atmo, 3 clouds) */
+  float planet[10];
 } sx_draw_mesh;
 
 /* replace-bubble-sprites: procedural billboard forms (shader u_form). 0 = unset (a soft

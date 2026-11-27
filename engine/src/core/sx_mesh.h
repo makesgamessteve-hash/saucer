@@ -50,6 +50,6 @@ void sx_mesh_patch(sx_mesh *m, const float c[3], const float u[3], const float v
                    const sx_part_style *s);
 /* add-generated-planets: a bilinear heightfield, (su+1)*(sv+1) heights along +y, shared verts, gradient normals */
 void sx_mesh_heightfield(sx_mesh *m, const float c[3], const float u[3], const float v[3], const float *h, int su,
-                         int sv, const sx_part_style *s);
+                         int sv, const float *col, const sx_part_style *s);
 uint64_t sx_mesh_hash(const sx_mesh *m);
 #endif

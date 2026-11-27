@@ -229,7 +229,7 @@ static const char *mesh_fs =
     "uniform vec3 u_eye; uniform int u_nhz; uniform int u_hzsteps; uniform int u_sky;\n"
     "uniform vec4 u_hzpos[4]; uniform vec4 u_hzcol[4]; uniform vec4 u_hzdir[4];\n"
     "uniform int u_planet; uniform vec3 u_pcenter; uniform float u_pradius; uniform float u_pseed;\n"
-    "uniform int u_pbody; uniform float u_pheart; uniform float u_pcap;\n"
+    "uniform int u_pbody; uniform float u_pheart; uniform float u_pcap; uniform float u_pcity;\n"
     "out vec4 o_col;\n"
     "const float bayer[16] = float[16](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0,\n"
     "                                  3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);\n"
@@ -393,7 +393,9 @@ static const char *mesh_fs =
     "      float n2 = pfbm(pn * 9.0 + vec3(19.0, 4.0, 11.0));\n"
     "      float n3 = pnoise(pn * 28.0);\n"
     "      float h = n1 * 0.72 + n2 * 0.22 + n3 * 0.06;\n"
-    "      float ice = smoothstep(0.68, 0.80, abs(pn.y) + n2 * 0.08);\n"
+    "      float chd = length(vec2(v_wpos.x - u_pcenter.x, v_wpos.z - u_pcenter.z));\n"
+    "      float city = (u_pcity > 1.0) ? (1.0 - smoothstep(u_pcity * 0.92, u_pcity * 1.18, chd)) : 0.0;\n"
+    "      float ice = (1.0 - city) * smoothstep(0.68, 0.80, -pn.y + n2 * 0.08);\n"
     "      vec3 alb;\n"
     "      float ocean = 0.0;\n"
     "      if (u_pbody >= 2) {\n"
@@ -427,6 +429,14 @@ static const char *mesh_fs =
     "      if (ocean > 0.4) {\n"
     "        vec3 R = reflect(-L, pn);\n"
     "        lit += vec3(0.55, 0.62, 0.70) * pow(max(dot(R, V), 0.0), 48.0) * day * ocean;\n"
+    "      }\n"
+    "      if (city > 0.0) {\n"
+    "        float night = pow(clamp(1.0 - day * 1.15, 0.0, 1.0), 0.55);\n"
+    "        float speckle = pnoise(pn * 140.0 + vec3(3.0, 8.0, 1.5));\n"
+    "        float lamps = smoothstep(0.42, 0.72, speckle);\n"
+    "        lit += vec3(1.0, 0.78, 0.38) * (night * city * (0.70 + 2.4 * lamps));\n"
+    "        lit += vec3(1.0, 0.82, 0.48) * (night * city * 0.85);\n"
+    "        lit = mix(lit, lit * vec3(0.90, 0.88, 0.84) + vec3(0.10, 0.08, 0.05), city * day * 0.55);\n"
     "      }\n"
     "      c = lit;\n"
     "    } else if (u_planet == 2) {\n"
@@ -592,7 +602,7 @@ typedef struct prog {
   GLint mode, nl, amb, expo, lpos, lcol, ldir, lpar, shadow, shmat, shrect, shbias, ncasc, shtexel, lidx;
   GLint eye, nhz, hzsteps, sky, hzpos, hzcol, hzdir;
   GLint mat, mtime, mmode, matcap, envmap; /* add-material-system */
-  GLint planet, pcenter, pradius, pseed, pbody, pheart, pcap; /* add-generated-planets */
+  GLint planet, pcenter, pradius, pseed, pbody, pheart, pcap, pcity; /* add-generated-planets */
 } prog;
 
 static struct {
@@ -667,7 +677,7 @@ static int link_prog(prog *p, const char *vs, const char *fs, int ui) {
   U(ncasc); U(shtexel); U(lidx);
   U(eye); U(nhz); U(hzsteps); U(sky); U(hzpos); U(hzcol); U(hzdir);
   U(mat); U(mtime); U(mmode); U(matcap); U(envmap);
-  U(planet); U(pcenter); U(pradius); U(pseed); U(pbody); U(pheart); U(pcap);
+  U(planet); U(pcenter); U(pradius); U(pseed); U(pbody); U(pheart); U(pcap); U(pcity);
 #undef U
   glUseProgram(p->id);
   glUniform1i(p->idx, 0);
@@ -1228,6 +1238,7 @@ static void draw_mesh(const sx_render *r, const sx_viewport *v, const frame_mats
       glUniform1i(G.mesh.pbody, (int)(d->planet[5] + 0.5f));
       glUniform1f(G.mesh.pheart, d->planet[6]);
       if (G.mesh.pcap >= 0) glUniform1f(G.mesh.pcap, d->planet[8]);
+      if (G.mesh.pcity >= 0) glUniform1f(G.mesh.pcity, d->planet[9]);
     }
   }
   bind_tex(r, d->tex);

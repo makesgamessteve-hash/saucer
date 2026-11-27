@@ -127,6 +127,7 @@ describe("generated planet bodies", function()
     for _, part in ipairs(tp) do
       expect(part.kind).to_be("heightfield")
       expect(#part.heights).to_be((part.seg + 1) * (part.rings + 1))
+      expect(#part.colors).to_be(#part.heights * 3)
     end
     for _, part in ipairs(ap) do
       expect(part.kind).to_be("sphere")
@@ -149,6 +150,14 @@ describe("generated planet bodies", function()
     end
     expect(samples).to_be_greater(20)
     expect(jumps).to_be_less(8)
+    -- ice lives only at the far (south) pole, never under the city; the globe
+    -- is told the city rim so the night side can be drawn as a lit disc
+    local opts = planetv.planet_opts(pl, 1)
+    expect(opts.city).to_be_greater(1000)
+    expect(planet.kind(pl, pl.cx, pl.cz) == "ice").to_be_falsy()
+    local south = planet.kind(pl, pl.cx, pl.cz + pl.R * 0.95)
+    -- a point near the far pole is ice or ocean/space, never the city slab
+    expect(south == "space").to_be_falsy()
     local moon = planet.of(gen("city_moon", 333, { 9000, 0, 2000 }))
     expect(#planetv.atmo_parts(moon)).to_be(0)
     -- draw through the live list

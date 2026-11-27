@@ -492,8 +492,11 @@ function M.solid_parts(s, k, hanging)
           local len = f < 2 and lx or lz
           local nw = math.max(1, math.floor(len / 9))
           for w = 0, nw - 1 do
-            -- each window is lit or dark by a hash of its place (about four in ten are lit)
-            if M.hash3(mn[1] + f * 7 + w * 131, y, mn[3] + w) % 100 < 42 then
+            -- most windows stay lit so a fresh city is not dark at street level;
+            -- a smaller set stay switchable so the restore-wave still has a visible lift
+            local hv = M.hash3(mn[1] + f * 7 + w * 131, y, mn[3] + w) % 100
+            local chance = (s.role == "residential") and 78 or 68
+            if hv < chance then
               local u0 = (w + 0.5) / nw * len - 2.2
               local lo, hi
               if f < 2 then
@@ -503,7 +506,8 @@ function M.solid_parts(s, k, hanging)
                 local x0 = f == 2 and mn[1] - 0.15 or mx[1] - 0.15
                 lo, hi = { x0, y, mn[3] + u0 }, { x0 + 0.3, y + 2.0, mn[3] + u0 + 4.4 }
               end
-              parts[#parts + 1] = { kind = "box", min = lo, max = hi, color = win, emissive = 1, light = true }
+              parts[#parts + 1] = { kind = "box", min = lo, max = hi, color = win, emissive = 1,
+                                    light = (hv < 18) or nil }
             end
           end
         end
@@ -553,24 +557,33 @@ function M.solid_parts(s, k, hanging)
     -- add-generated-planets: each ring's buildings have their own roof dress
     if s.role == "civic" and s.apex then
       local cx, cz = (mn[1] + mx[1]) / 2, (mn[3] + mx[3]) / 2
-      local rr = math.min(mx[1] - mn[1], mx[3] - mn[3]) * 0.42
-      parts[#parts + 1] = { kind = "hemisphere", c = { cx, mx[2], cz }, r = rr, h = rr * 0.85, seg = 12, rings = 5,
-                            color = { 0.55, 0.46, 0.62 } }
+      local rr = math.min(mx[1] - mn[1], mx[3] - mn[3]) * 0.48
+      parts[#parts + 1] = { kind = "hemisphere", c = { cx, mx[2], cz }, r = rr, h = rr * 0.95, seg = 12, rings = 5,
+                            color = { 0.62, 0.50, 0.70 } }
+      -- a low arched collar so civic halls read as domes-and-arches from the street
+      parts[#parts + 1] = { kind = "cylinder", c = { cx, mn[2], cz }, r = rr * 1.05, h = 4.2, seg = 12,
+                            color = { 0.58, 0.50, 0.64 } }
     elseif s.role == "market" and (s.tier or 1) == 1 then
-      local aw = { 0.85, 0.45, 0.18 }
-      local y0, y1 = mn[2] + 3.2, mn[2] + 5.4
-      parts[#parts + 1] = { kind = "box", min = { mn[1] - 2.2, y0, mn[3] - 2.2 }, max = { mx[1] + 2.2, y1, mn[3] + 0.4 },
-                            color = aw, emissive = 0.15 }
-      parts[#parts + 1] = { kind = "box", min = { mn[1] - 2.2, y0, mx[3] - 0.4 }, max = { mx[1] + 2.2, y1, mx[3] + 2.2 },
-                            color = aw, emissive = 0.15 }
-      parts[#parts + 1] = { kind = "box", min = { mn[1] - 0.15, y1 - 0.2, mn[3] - 0.15 }, max = { mx[1] + 0.15, y1 + 0.15, mx[3] + 0.15 },
-                            color = { 1.0, 0.72, 0.25 }, emissive = 0.8, light = true }
+      local aw = { 0.88, 0.48, 0.18 }
+      local y0, y1 = mn[2] + 3.2, mn[2] + 5.8
+      parts[#parts + 1] = { kind = "box", min = { mn[1] - 3.4, y0, mn[3] - 3.4 }, max = { mx[1] + 3.4, y1, mn[3] + 0.5 },
+                            color = aw, emissive = 0.22 }
+      parts[#parts + 1] = { kind = "box", min = { mn[1] - 3.4, y0, mx[3] - 0.5 }, max = { mx[1] + 3.4, y1, mx[3] + 3.4 },
+                            color = aw, emissive = 0.22 }
+      parts[#parts + 1] = { kind = "box", min = { mn[1] - 3.4, y0, mn[3] - 3.4 }, max = { mn[1] + 0.5, y1, mx[3] + 3.4 },
+                            color = aw, emissive = 0.22 }
+      parts[#parts + 1] = { kind = "box", min = { mx[1] - 0.5, y0, mn[3] - 3.4 }, max = { mx[1] + 3.4, y1, mx[3] + 3.4 },
+                            color = aw, emissive = 0.22 }
+      parts[#parts + 1] = { kind = "box", min = { mn[1] - 0.15, y1 - 0.2, mn[3] - 0.15 }, max = { mx[1] + 0.15, y1 + 0.2, mx[3] + 0.15 },
+                            color = { 1.0, 0.78, 0.28 }, emissive = 0.95 }
     elseif s.role == "industrial" and (s.tier or 1) == 1 then
       local cx, cz = (mn[1] + mx[1]) / 2, (mn[3] + mx[3]) / 2
-      parts[#parts + 1] = { kind = "cylinder", c = { mn[1] + 3, mx[2], mn[3] + 3 }, r = 2.4, h = 9, seg = 10,
+      parts[#parts + 1] = { kind = "cylinder", c = { mn[1] + 3, mx[2], mn[3] + 3 }, r = 2.6, h = 11, seg = 10,
                             color = { 0.38, 0.36, 0.34 } }
-      parts[#parts + 1] = { kind = "cylinder", c = { mx[1] - 5, mx[2], mn[3] + 3 }, r = 1.8, h = 14, seg = 10,
+      parts[#parts + 1] = { kind = "cylinder", c = { mx[1] - 5, mx[2], mn[3] + 3 }, r = 2.0, h = 16, seg = 10,
                             color = { 0.28, 0.28, 0.30 } }
+      parts[#parts + 1] = { kind = "sphere", c = { mx[1] - 4, mn[2] + 5, mx[3] - 4 }, r = 4.2, h = 4.2, seg = 8, rings = 4,
+                            color = { 0.42, 0.32, 0.22 } }
       -- a simple crane arm
       parts[#parts + 1] = { kind = "box", min = { cx - 0.4, mx[2], cz - 0.4 }, max = { cx + 0.4, mx[2] + 10, cz + 0.4 },
                             color = { 0.7, 0.45, 0.15 } }
@@ -590,8 +603,8 @@ function M.solid_parts(s, k, hanging)
                  color = { 0.72, 0.68, 0.58 } }
     parts[#parts + 1] = { kind = "cone", c = { cx, mn[2] + h * 0.16, cz }, r = r * 0.42, r1 = r * 0.05, h = h * 0.74, seg = 14,
                           color = { 0.88, 0.80, 0.55 } }
-    parts[#parts + 1] = { kind = "sphere", c = { cx, mn[2] + h * 0.93, cz }, r = r * 0.14, h = r * 0.14, seg = 10, rings = 5,
-                          color = { 1.0, 0.85, 0.3 }, emissive = 0.85, light = true }
+    parts[#parts + 1] = { kind = "sphere", c = { cx, mn[2] + h * 0.93, cz }, r = r * 0.18, h = r * 0.18, seg = 10, rings = 5,
+                          color = { 1.0, 0.88, 0.35 }, emissive = 1 }
   elseif s.kind == "rail" or s.kind == "pylon" or s.kind == "liftpost" then
     -- add-cities-2: transit. The rail deck has lit edges, a pylon a lit collar, a lift post a lit stripe every 24 m.
     local acc = k.accent or { 1, 0.8, 0.4 }

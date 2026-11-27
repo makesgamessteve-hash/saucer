@@ -48,10 +48,18 @@ The body's air SHALL hold over the cap. The surface outside the city rim SHALL b
 - **THEN** it passes
 
 ### Requirement: Concentric city layout
-A body city SHALL be planned as a big centre with a plaza and a landmark spire, then ring-districts outward (civic, market, residential, industrial and a spaceport on the outer ring), each ring with its own building mix and silhouette. Curved ring roads and radial avenues SHALL make the plan readable from the air. The core footprint SHALL be a disk, not a square.
+A body city SHALL be planned as a big centre with a plaza and a landmark spire, then ring-districts outward (civic, market, residential, industrial and a spaceport on the outer ring), each ring with its own building mix and silhouette. Curved ring roads and radial avenues SHALL make the plan readable from the air. The core footprint SHALL be a disk, not a square. Ring roads SHALL be lit, each ring SHALL have its own ground colour, and street lamps SHALL line the avenues.
 
 #### Scenario: a city is concentric: a big core and rings of different districts
 - **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+
+### Requirement: City disc and far-pole ice
+Ice SHALL sit only at the far pole, not under the city. On the night side the city SHALL show as a lit disc on the globe.
+
+#### Scenario: ice sits at the far pole and the city disc is marked on the globe
+- **WHEN** `tests/lua/planet_spec.lua` runs its scenario of a globe and a terrain cap being built
 - **THEN** it passes
 
 ### Requirement: Annular megacity

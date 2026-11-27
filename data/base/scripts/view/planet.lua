@@ -49,6 +49,7 @@ function M.planet_opts(pl, mode)
     heart = pl.heart or 0,
     mode = mode,
     cap = (mode == 1) and M.cap_r(pl) or 0,
+    city = pl.rim or 0,
   }
 end
 
@@ -117,7 +118,7 @@ function M.terrain_parts(pl)
     if su > 64 then su = 64 end
     if sv < 1 then sv = 1 end
     if sv > 64 then sv = 64 end
-    local heights, any = {}, false
+    local heights, colors, any = {}, {}, false
     for j = 0, sv do
       for i = 0, su do
         local x = x0 + (x1 - x0) * i / su
@@ -127,6 +128,20 @@ function M.terrain_parts(pl)
         local d = sm.sqrt((x - pl.cx) * (x - pl.cx) + (z - pl.cz) * (z - pl.cz))
         if d < pl.rim * 0.98 then y = pl.gy end
         heights[#heights + 1] = y
+        -- per-vertex colour so neighbouring tiles share an edge colour and
+        -- biome steps blend across a cell instead of sitting on a square edge
+        -- average neighbouring samples so a biome edge blends across a cell
+        -- instead of sitting on one triangle
+        local acc = { 0, 0, 0 }
+        for oj = -1, 1 do
+          for oi = -1, 1 do
+            local c = planet.color(pl, x + oi * 550, z + oj * 550)
+            acc[1], acc[2], acc[3] = acc[1] + c[1], acc[2] + c[2], acc[3] + c[3]
+          end
+        end
+        colors[#colors + 1] = acc[1] / 9
+        colors[#colors + 1] = acc[2] / 9
+        colors[#colors + 1] = acc[3] / 9
       end
     end
     if not any then return end
@@ -136,9 +151,10 @@ function M.terrain_parts(pl)
       u = { x1 - x0, 0, 0 },
       v = { 0, 0, z1 - z0 },
       heights = heights,
+      colors = colors,
       seg = su, rings = sv,
       color = field_color(pl, x0, z0, x1, z1),
-      emissive = 0,
+      emissive = 0.08,
     }
   end
   local rings = {
