@@ -164,4 +164,30 @@ describe("relic uniqueness", function()
     expect(sig.distance(a, b)).to_be(sig.distance(a, b))
     civs.use(42)
   end)
+
+  it("every layout turns up in real worlds: the builders' social structures hand out all eight", function()
+    local seen, counts = {}, {}
+    for seed = 1, 120 do
+      civs.use(seed)
+      local g = galaxy.generate(seed)
+      for sid = 1, #g.sectors do
+        local ci = sector.relic_of(seed, sid, g.sectors[sid])
+        if ci then
+          local m = civs.get(seed, ci).massing
+          seen[m] = true
+          counts[m] = (counts[m] or 0) + 1
+        end
+      end
+    end
+    civs.use(42)
+    for _, m in ipairs(MASSINGS) do
+      if not seen[m] then error("no relic in 120 worlds has the " .. m .. " layout") end
+    end
+    -- and they all build: a world's relic of each layout generates and its pattern is the layout's own
+    local pat = { organism = "spiral", lattice = "diamond" }
+    for m, want in pairs(pat) do
+      local r = gen.generate(7001, KIT, civ_of(m), O)
+      expect(r.relic.pattern).to_be(want)
+    end
+  end)
 end)

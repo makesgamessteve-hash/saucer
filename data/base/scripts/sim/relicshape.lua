@@ -443,6 +443,48 @@ function M.contour(s)
   return out
 end
 
+-- chains(shape) -> the contour as polylines { { x, z }, ... } in cells: segments joined end to start (marching squares
+-- walks every run the same way round the solid), so a wall's dressing (ribs, bands) can be spaced along a whole run
+-- rather than per segment. A closed run repeats its first point at the end. Cached.
+function M.chains(s)
+  if s.chain_cache then return s.chain_cache end
+  local segs = M.contour(s)
+  local function key(x, z) return string.format("%.3f,%.3f", x, z) end
+  local from = {}
+  for k, g in ipairs(segs) do
+    local kk = key(g[1], g[2])
+    from[kk] = from[kk] or {}
+    from[kk][#from[kk] + 1] = k
+  end
+  local ends = {}
+  for _, g in ipairs(segs) do ends[key(g[3], g[4])] = true end
+  local used, out = {}, {}
+  local function walk(k0)
+    local g = segs[k0]
+    used[k0] = true
+    local pts = { { g[1], g[2] }, { g[3], g[4] } }
+    while true do
+      local nxt
+      for _, n in ipairs(from[key(pts[#pts][1], pts[#pts][2])] or {}) do
+        if not used[n] then nxt = n break end
+      end
+      if not nxt then break end
+      used[nxt] = true
+      pts[#pts + 1] = { segs[nxt][3], segs[nxt][4] }
+    end
+    out[#out + 1] = pts
+  end
+  -- open runs first (they start where nothing ends), then whatever is left: closed loops
+  for k, g in ipairs(segs) do
+    if not used[k] and not ends[key(g[1], g[2])] then walk(k) end
+  end
+  for k in ipairs(segs) do
+    if not used[k] then walk(k) end
+  end
+  s.chain_cache = out
+  return out
+end
+
 -- settle(room, kit, origin, pos, margin, avoid) -> pos moved (x, z only) to the nearest point of the shape's free
 -- floor with `margin` metres of free floor round it and clear of the `avoid` rectangles ({ x0, x1, z0, z1 }, world
 -- metres: a floor hatch); pos unchanged for a room without a shape or a point already fine
