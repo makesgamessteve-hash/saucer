@@ -64,6 +64,20 @@ describe("relic room shapes", function()
       local s = shapes.make(k, HALL, DOORS, style(), 0, 0, saucer.rng.new(3))
       local share = shapes.free_share(s)
       expect(share > 0.3 and share < 0.98).to_be(true)
+      -- the grid (worked out a row at a time) answers as free() does at every corner and centre; open() reads it
+      local corner, centre = shapes.grid(s)
+      expect(shapes.grid(s)).to_be(corner)
+      for j = s.z0, s.z1 do
+        for i = s.x0, s.x1 do
+          expect(corner[j][i]).to_be(shapes.free(s, i, j))
+          if i < s.x1 and j < s.z1 then
+            expect(centre[j][i]).to_be(shapes.free(s, i + 0.5, j + 0.5))
+            local plain = { kind = s.kind }
+            setmetatable(plain, { __index = function(_, key) if key ~= "corner" then return s[key] end end })
+            expect(shapes.open(s, i + 0.3, j + 0.7)).to_be(shapes.open(plain, i + 0.3, j + 0.7))
+          end
+        end
+      end
       expect(shapes.free(s, s.cx, s.cz)).to_be(true)
       expect(shapes.free(s, s.x0 - 1, s.cz)).to_be(false)
       expect(shapes.free(s, s.cx, s.z1 + 1)).to_be(false)

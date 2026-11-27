@@ -111,4 +111,57 @@ describe("relic uniqueness", function()
       if d < sig.MIN_DIST then error(string.format("%s: two stations only %.3f apart", m, d)) end
     end
   end)
+
+  it("the fold spool draws the sector ahead a relic a tick, and the jump's tick finds it drawn", function()
+    local game = require("sim.game")
+    local function count(f)
+      local n = 0
+      debug.sethook(function() n = n + 1 end, "", 1000)
+      f()
+      debug.sethook()
+      return n * 1000
+    end
+    -- seed 16, sector 6: a relic with an earlier relic of its species (drawn first), and more than one draw in all
+    local seed, sid = 16, 6
+    civs.use(seed)
+    local info = galaxy.generate(seed).sectors[sid]
+    local site
+    for _, s in ipairs(sector.generate(seed, sid, info).sites) do
+      if s.relic then site = s end
+    end
+    expect(#site.siblings).to_be(1)
+    local st = { seed = seed, jump = { to = sid, spool = -1 } }
+    local dt = 1 / 60
+    game.warm_jump(st, dt)                 -- not spooling yet: nothing
+    st.jump.spool = dt / 2
+    game.warm_jump(st, dt)                 -- the jump's own tick: nothing
+    st.jump = false
+    game.warm_jump(st, dt)
+    st.jump = { to = sid, spool = 3 }
+    local ticks, worst = 0, 0
+    for _ = 1, 60 do
+      worst = math.max(worst, count(function() game.warm_jump(st, dt) end))
+      ticks = ticks + 1
+      st.jump.spool = st.jump.spool - dt
+    end
+    expect(worst < 15000000).to_be(true)   -- one draw a tick: well inside a tick's 20M instructions
+    local civ = game.civ_of(site)
+    local r
+    local cost = count(function() r = ruinm.generate(site.seed, site.kit, civ, site.pos, nil, site.first, site.siblings) end)
+    expect(cost < 100000).to_be(true)      -- drawn ahead: the jump only looks it up
+    expect(gen.warm(site.seed, KIT, civ, site.pos, site.siblings)).to_be(true)
+    expect(sig.distance(r, gen.generate(site.siblings[1], KIT, civ, gen.ORIGIN0)) >= sig.MIN_DIST).to_be(true)
+    -- a fresh relic with a sibling takes more than one warm() (one draw each), then stands as generate() draws it
+    local calls = 0
+    while not gen.warm(9191, KIT, civ, O, { 9192 }) do calls = calls + 1 end
+    expect(calls >= 1).to_be(true)
+    expect(gen.warm(9191, KIT, civ, O, { 9192 })).to_be(true)
+    -- an error that is not warm()'s own yield goes through
+    expect(pcall(gen.warm, 1, { id = "nokit" }, civ, O, nil)).to_be(false)
+    -- distances are kept per pair
+    local a, b = gen.generate(9191, KIT, civ, O, { 9192 }), gen.generate(9192, KIT, civ, gen.ORIGIN0, {})
+    expect(sig.distance(a, b)).to_be(sig.distance_raw(a, b))
+    expect(sig.distance(a, b)).to_be(sig.distance(a, b))
+    civs.use(42)
+  end)
 end)

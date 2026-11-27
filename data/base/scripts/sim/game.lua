@@ -392,6 +392,30 @@ end
 
 -- the party's fold jump lands: stash this sector, bring up the next one and
 -- set every saucer down in formation at its arrival point
+-- relic-room-shapes: while the Fold Core spools, each tick draws one relic of the sector ahead (sim/relicgen.lua warm;
+-- generation is pure and memoized), so the jump's tick finds its relics drawn. A relic kept unlike its species'
+-- earlier relics draws those as well, more than one tick's instruction budget would hold. Never on the jump's own
+-- tick; derived data only (nothing in the state changes)
+local warm = { key = false }
+function M.warm_jump(state, dt)
+  local j = state.jump
+  if not j or not j.spool or j.spool < 0 or j.spool - dt <= 1e-9 then return end
+  local key = tostring(state.seed) .. ":" .. tostring(j.to)
+  if warm.key ~= key then warm.key, warm.sites, warm.done = key, false, false end
+  if warm.done then return end
+  if not warm.sites then
+    warm.sites = sector.generate(state.seed, j.to, galaxy.generate(state.seed).sectors[j.to]).sites
+    return
+  end
+  local gen = require("sim.relicgen")
+  for _, site in ipairs(warm.sites) do
+    if site.relic and not gen.warm(site.seed, ruinm.kit_of(site.kit), civ_of(site), site.pos, site.siblings) then
+      return
+    end
+  end
+  warm.done = true
+end
+
 function M.enter_sector(state, to)
   coop.undock_all(state, ctx_fns)
   galaxy.stash(state)
@@ -1542,6 +1566,7 @@ function M.step(state, cmds, dt)
   coop.step(state, ctx_fns)
   twin.step(state, ctx_fns)
   heart.step(state, ctx_fns)
+  M.warm_jump(state, dt)
   galaxy.step(state, dt, ctx_fns, M.enter_sector)
 end
 

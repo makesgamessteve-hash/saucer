@@ -16,3 +16,4 @@
 - [x] 3.1 `tests/lua/relicshape_spec.lua`: kinds, channels, fill, settle, assignment, shell vs ring, autopilot ways, loot, phenomena, sentries, cover, lamps, walls, map, collision
 - [x] 3.2 `tests/lua/relicunique_spec.lua`: metric, redraw, every relic in play of many universes, a run of stations per species
 - [x] 3.3 State version 22; seed-42 slice and co-op replays re-recorded
+- [x] 3.4 Instruction budget: shape grid a row at a time; `relicgen.warm` / `game.warm_jump` draw the sector ahead during the fold spool (widerdark peak tick under main's)

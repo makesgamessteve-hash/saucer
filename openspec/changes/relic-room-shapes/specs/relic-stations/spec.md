@@ -46,3 +46,10 @@ turns and mirrors). The generator SHALL redraw a relic against its species' earl
 #### Scenario: A run of stations per species
 - **WHEN** `tests/lua/relicunique_spec.lua` runs "a run of stations of each species: all unlike each other"
 - **THEN** it passes
+
+### Requirement: Relics drawn within the tick budget
+Shaped relics, and relics drawn against their species' earlier relics, SHALL NOT overrun a tick's instruction budget when the party jumps. While the Fold Core spools, each tick SHALL draw at most one relic of the sector ahead (generation is pure and memoized), so the jump's own tick finds the sector's relics drawn. A shaped hall's free floor SHALL be worked out once, a row at a time.
+
+#### Scenario: Drawn ahead during the spool
+- **WHEN** `tests/lua/relicunique_spec.lua` runs "the fold spool draws the sector ahead a relic a tick, and the jump's tick finds it drawn"
+- **THEN** it passes

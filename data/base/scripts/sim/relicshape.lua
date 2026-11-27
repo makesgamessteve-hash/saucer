@@ -56,9 +56,9 @@ local function inside_kind(s, x, z)
     for _ = 1, s.p do pu, pv = pu * au, pv * av end   -- integer powers: no pow() in the sim
     return pu + pv <= 1
   elseif k == "poly" then
-    for i = 0, s.sides - 1 do
-      local a = s.rot + 2 * math.pi * i / s.sides
-      if u * math.cos(a) + v * math.sin(a) > math.cos(math.pi / s.sides) * 1.08 then return false end
+    local lim = s.poly_lim
+    for _, n in ipairs(s.normals) do
+      if u * n[1] + v * n[2] > lim then return false end
     end
     return true
   elseif k == "diamond" then
@@ -94,17 +94,77 @@ local function in_convex(poly, x, z)
 end
 
 -- free(shape, x, z) -> is the cell point (x, z) walkable floor of the shaped hall?
-function M.free(s, x, z)
-  if x < s.x0 - 1e-6 or x > s.x1 + 1e-6 or z < s.z0 - 1e-6 or z > s.z1 + 1e-6 then return false end
+local function test(s, x, z)
   if inside_kind(s, x, z) then return true end
   for _, q in ipairs(s.keep) do
-    if q.rect then
-      if x >= q[1] - 1e-6 and x <= q[2] + 1e-6 and z >= q[3] - 1e-6 and z <= q[4] + 1e-6 then return true end
-    elseif in_convex(q, x, z) then
-      return true
+    if x >= q.bx0 and x <= q.bx1 and z >= q.bz0 and z <= q.bz1 then   -- (inside its bounds: a rect is all inside)
+      if q.rect or in_convex(q, x, z) then return true end
     end
   end
   return false
+end
+
+function M.free(s, x, z)
+  if x < s.x0 - 1e-6 or x > s.x1 + 1e-6 or z < s.z0 - 1e-6 or z > s.z1 + 1e-6 then return false end
+  return test(s, x, z)
+end
+
+-- the x range a keep covers on the row z (nil where it misses the row), with test()'s tolerance
+local function keep_span(q, z)
+  if z < q.bz0 or z > q.bz1 then return nil end
+  if q.rect then return q.bx0, q.bx1 end
+  local lo, hi = math.huge, -math.huge
+  z = math.max(q.bz0 + 1e-6, math.min(q.bz1 - 1e-6, z))
+  for i, a in ipairs(q) do
+    local b = q[i % #q + 1]
+    if (a[2] - z) * (b[2] - z) <= 0 then
+      if a[2] == b[2] then
+        lo, hi = math.min(lo, a[1], b[1]), math.max(hi, a[1], b[1])
+      else
+        local x = a[1] + (z - a[2]) * (b[1] - a[1]) / (b[2] - a[2])
+        lo, hi = math.min(lo, x), math.max(hi, x)
+      end
+    end
+  end
+  if lo > hi then return nil end
+  return lo - 1e-6, hi + 1e-6
+end
+
+-- one row of the grid: the points x0 + off .. x1 (step 1) on the row z -> { [i] = free } (the keeps marked by their
+-- spans first, the shape's own test only for the rest)
+local function grid_row(s, z, off, last)
+  local row = {}
+  for _, q in ipairs(s.keep) do
+    local lo, hi = keep_span(q, z)
+    if lo then
+      for i = math.max(s.x0, math.ceil(lo - off)), math.min(last, math.floor(hi - off)) do row[i] = true end
+    end
+  end
+  for i = s.x0, last do
+    if not row[i] then row[i] = inside_kind(s, i + off, z) end
+  end
+  return row
+end
+
+-- grid(shape) -> the free() answers at the box's cell corners and cell centres, rows first: corner[j][i]
+-- (j = z0..z1, i = x0..x1) and centre[j][i] (the cell i, j), worked out once per shape, a row at a time (the share,
+-- fill and open read them); also sets s.share, the share of the cells whose centre is free
+function M.grid(s)
+  if s.corner then return s.corner, s.centre end
+  local corner, centre, f = {}, {}, 0
+  for j = s.z0, s.z1 do
+    corner[j] = grid_row(s, j, 0, s.x1)
+    if j < s.z1 then
+      local row = grid_row(s, j + 0.5, 0.5, s.x1 - 1)
+      centre[j] = row
+      for i = s.x0, s.x1 - 1 do
+        if row[i] then f = f + 1 end
+      end
+    end
+  end
+  local n = (s.x1 - s.x0) * (s.z1 - s.z0)
+  s.corner, s.centre, s.share = corner, centre, n > 0 and f / n or 1
+  return corner, centre
 end
 
 -- free_world(room, kit, origin, x, z) -> the same test for a world point (true for a room without a shape)
@@ -139,6 +199,10 @@ M.hull = hull
 -- corners all free)? Stricter than free(): what collision sees.
 function M.open(s, x, z)
   local i, j = math.floor(x), math.floor(z)
+  if s.corner and i >= s.x0 and i < s.x1 and j >= s.z0 and j < s.z1 then
+    local c, c1 = s.corner[j], s.corner[j + 1]
+    return s.centre[j][i] and c[i] and c[i + 1] and c1[i] and c1[i + 1]
+  end
   return M.free(s, i + 0.5, j + 0.5) and M.free(s, i, j) and M.free(s, i + 1, j) and M.free(s, i, j + 1)
     and M.free(s, i + 1, j + 1)
 end
@@ -191,16 +255,10 @@ local function keeps(s, rm, doors)
   return out
 end
 
--- the share of the box's floor the shape leaves free (sampled on the contour grid)
+-- the share of the box's floor the shape leaves free (sampled at the cells' centres: generation pays for it)
 function M.free_share(s)
-  local n, f = 0, 0
-  for x = s.x0 + 0.25, s.x1, M.STEP do
-    for z = s.z0 + 0.25, s.z1, M.STEP do
-      n = n + 1
-      if M.free(s, x, z) then f = f + 1 end
-    end
-  end
-  return n > 0 and f / n or 1
+  M.grid(s)
+  return s.share
 end
 
 -- make(kind, room, doors, style, hx, hz, rng) -> a shape record for one hall
@@ -220,7 +278,24 @@ function M.make(kind, rm, doors, S, hx, hz, rng)
   if S.tri == 1 or (S.tri == 2 and rm.id % 2 == 0) then sx, sz = -sx, -sz end
   if rng and rng:float() < 0.3 then sx = -sx end
   s.tx, s.tz, s.cut = sx, sz, S.tri_cut
+  s.normals = {}
+  for i = 0, s.sides - 1 do
+    local a = s.rot + 2 * math.pi * i / s.sides
+    s.normals[#s.normals + 1] = { math.cos(a), math.sin(a) }
+  end
+  s.poly_lim = math.cos(math.pi / s.sides) * 1.08
   s.keep = keeps(s, rm, doors)
+  for _, q in ipairs(s.keep) do
+    if q.rect then
+      q.bx0, q.bx1, q.bz0, q.bz1 = q[1] - 1e-6, q[2] + 1e-6, q[3] - 1e-6, q[4] + 1e-6
+    else
+      q.bx0, q.bx1, q.bz0, q.bz1 = math.huge, -math.huge, math.huge, -math.huge
+      for _, p in ipairs(q) do
+        q.bx0, q.bx1 = math.min(q.bx0, p[1] - 1e-6), math.max(q.bx1, p[1] + 1e-6)
+        q.bz0, q.bz1 = math.min(q.bz0, p[2] - 1e-6), math.max(q.bz1, p[2] + 1e-6)
+      end
+    end
+  end
   return s
 end
 
@@ -234,8 +309,12 @@ function M.assign(rng, rooms, doors, protect, hx, hz, S)
       if roll >= S.plain then
         local kind = (rng:float() < S.mix) and S.second or S.primary
         local s = M.make(kind, rm, doors, S, hx, hz, rng)
-        if M.free_share(s) < M.MIN_FREE or M.free_share(s) > 0.97 then s = M.make("chamfer", rm, doors, S, hx, hz, rng) end
-        if M.free_share(s) <= 0.97 then
+        local share = M.free_share(s)
+        if share < M.MIN_FREE or share > 0.97 then
+          s = M.make("chamfer", rm, doors, S, hx, hz, rng)
+          share = M.free_share(s)
+        end
+        if share <= 0.97 then
           rm.shape = s
           n = n + 1
         end
@@ -251,19 +330,18 @@ function M.fill(rm, kit, origin)
   if not s then return {} end
   local mn, mx = ruinm.room_box(rm, kit, origin)
   local y0, y1 = mn[2] + kit.wall, mx[2] - kit.wall
+  local corner, centre = M.grid(s)
+  local function open_cell(i, j)
+    local c, c1 = corner[j], corner[j + 1]
+    return centre[j][i] and c[i] and c[i + 1] and c1[i] and c1[i + 1]
+  end
   local spans = {}
   for j = s.z0, s.z1 - 1 do
     local row, i = {}, s.x0
     while i < s.x1 do
-      local solid = not M.open(s, i + 0.5, j + 0.5)
-      if solid then
+      if not open_cell(i, j) then
         local a = i
-        while i + 1 < s.x1 do
-          local k = i + 1
-          local nxt = not M.open(s, k + 0.5, j + 0.5)
-          if not nxt then break end
-          i = k
-        end
+        while i + 1 < s.x1 and not open_cell(i + 1, j) do i = i + 1 end
         row[#row + 1] = { a, i + 1 }
       end
       i = i + 1

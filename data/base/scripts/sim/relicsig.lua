@@ -59,7 +59,20 @@ local function sym(t, i, j, N)
 end
 
 -- distance(a, b) -> 0 (identical up to a turn or mirror) .. 1 (nothing in common)
+local dcache = setmetatable({}, { __mode = "k" })   -- distance(a, b) per pair of ruins (relicgen.warm asks again)
 function M.distance(a, b)
+  local ca = dcache[a]
+  if ca and ca[b] then return ca[b] end
+  local d = M.distance_raw(a, b)
+  if not ca then
+    ca = setmetatable({}, { __mode = "k" })
+    dcache[a] = ca
+  end
+  ca[b] = d
+  return d
+end
+
+function M.distance_raw(a, b)
   local sa, sb = M.signature(a), M.signature(b)
   if sa.n + sb.n == 0 then return 0 end
   local N = M.N

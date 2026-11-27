@@ -1402,29 +1402,7 @@ function M.try(seed, kit, civ, origin)
   local hc = { (hmn[1] + hmx[1]) / 2, (hmn[3] + hmx[3]) / 2 }
   local solids = { { { hc[1] - E[1], hmn[2] + kit.wall, hc[2] - E[2] }, { hc[1] + E[1], hmx[2] - kit.wall, hc[2] + E[2] },
                      kind = "engine", room = L.core.id } }
-  -- relic-room-shapes: a patterned relic's halls take the shapes its pattern calls for (sim/relicshape.lua); the
-  -- maw's hall, the lung and the plague hall keep their boxes. Drawn from a child seed so the graph stays the same.
-  local shapes = require("sim.relicshape")
-  if D.pattern then
-    local srng = saucer.rng.new(saucer.seed_child(seed, "shape", 1))
-    local style = shapes.style(srng, D.pattern)
-    local protect = { [L.halls[1].id] = true, [lung.id] = true, [plague.id] = true, [L.core.id] = true }
-    local hx, hz = L.core.cell[1] + L.core.size[1] / 2, L.core.cell[3] + L.core.size[3] / 2
-    shapes.assign(srng, rooms, doors, protect, hx, hz, style)
-  end
   local sl = slots(rng, seed, rooms, doors, L, kit, origin)
-  local byid = {}
-  for _, rm in ipairs(rooms) do byid[rm.id] = rm end
-  for _, s in ipairs(sl) do
-    local rm = byid[s.room]
-    if rm and rm.shape then
-      s.pos = shapes.settle(rm, kit, origin, s.pos, 4, ruinm.face_holes(rm, doors, rooms, kit, origin, 2, -1))
-    end
-  end
-  local fill = {}
-  for _, rm in ipairs(rooms) do
-    for _, b in ipairs(shapes.fill(rm, kit, origin)) do fill[#fill + 1] = b end
-  end
   local walls = ruinm.walls(rooms, doors, kit, origin)
   local sp = spaces(rooms, kit, origin)
   local villa, seat = 0, 0
@@ -1448,25 +1426,53 @@ function M.try(seed, kit, civ, origin)
   local mn = box(L.maw, kit, origin)
   relic.length = hmx[3] - mn[3]
   relic.phenomena = phenomena(rng, rooms, doors, L, kit, origin, civ)
-  for _, ph in ipairs(relic.phenomena) do
-    local rm = byid[ph.room]
-    if rm and rm.shape then ph.pos = shapes.settle(rm, kit, origin, ph.pos, 1) end
-  end
   local _, reach = ruinm.validate(rooms, doors, sl)
-  local r = { seed = seed, kit = kit.id, rooms = rooms, doors = doors, slots = sl, walls = walls, debris = {}, solids = solids, fill = fill,
+  local r = { seed = seed, kit = kit.id, rooms = rooms, doors = doors, slots = sl, walls = walls, debris = {}, solids = solids, fill = {},
               origin = origin, reach = reach, relic = relic,
               hash = saucer.seed_child(ruinm.layout_hash(rooms, doors, solids), "relic", seed % 1000003) }
   local ok, why = M.validate(r, kit)
   if not ok then return nil, why end
+  -- relic-room-shapes: a patterned relic's halls take the shapes its pattern calls for (sim/relicshape.lua); the
+  -- maw's hall, the lung and the plague hall keep their boxes. Drawn from a child seed so the graph stays the same,
+  -- and only for the try that stands (a shape changes no gate: the room graph, doors and spaces stay as validated).
+  if D.pattern then
+    local shapes = require("sim.relicshape")
+    local srng = saucer.rng.new(saucer.seed_child(seed, "shape", 1))
+    local style = shapes.style(srng, D.pattern)
+    local protect = { [L.halls[1].id] = true, [lung.id] = true, [plague.id] = true, [L.core.id] = true }
+    local hx, hz = L.core.cell[1] + L.core.size[1] / 2, L.core.cell[3] + L.core.size[3] / 2
+    shapes.assign(srng, rooms, doors, protect, hx, hz, style)
+    local byid = {}
+    for _, rm in ipairs(rooms) do byid[rm.id] = rm end
+    for _, sl1 in ipairs(sl) do
+      local rm = byid[sl1.room]
+      if rm and rm.shape then
+        sl1.pos = shapes.settle(rm, kit, origin, sl1.pos, 4, ruinm.face_holes(rm, doors, rooms, kit, origin, 2, -1))
+      end
+    end
+    for _, ph in ipairs(relic.phenomena) do
+      local rm = byid[ph.room]
+      if rm and rm.shape then ph.pos = shapes.settle(rm, kit, origin, ph.pos, 1) end
+    end
+    for _, rm in ipairs(rooms) do
+      for _, b in ipairs(shapes.fill(rm, kit, origin)) do r.fill[#r.fill + 1] = b end
+    end
+  end
   relic.route_m, relic.route = M.route(r, kit)
   return r
 end
 
 -- generate(seed, kit, civ, origin) -> the relic's ruin table (memoized: a restore rebuilds derived data every time)
 local memo, memo_n = {}, 0
+local WARM_YIELD = {}   -- (thrown by plain() when warm()'s one draw is spent)
+local allowance = nil   -- draws warm() still lets plain() make (nil: as many as it takes)
 local function plain(seed, kit, civ, origin)
   local key = string.format("%s|%s|%s|%g,%g,%g", tostring(seed), kit.id, civ and civ.id or "?", origin[1], origin[2], origin[3])
   if memo[key] then return memo[key] end
+  if allowance then
+    if allowance <= 0 then error(WARM_YIELD) end
+    allowance = allowance - 1
+  end
   local out, why
   local tries = M.archetype(civ) and data.load("civs/dungeons.lua").tries or M.MAX_TRIES
   for i = 0, tries - 1 do
@@ -1507,6 +1513,18 @@ function M.generate(seed, kit, civ, origin, siblings)
   umemo[key] = best
   umemo_n = umemo_n + 1
   return best
+end
+
+-- warm(seed, kit, civ, origin, siblings) -> done: generate() with at most one fresh draw (one plain relic: a few
+-- million instructions); every draw is memoized, so calling it again goes on where it stopped. The fold spool's ticks
+-- call it for the next sector's relics (sim/game.lua warm_jump), so the jump's own tick finds them drawn: a relic
+-- with siblings may take several draws, more than one tick's budget would hold
+function M.warm(seed, kit, civ, origin, siblings)
+  allowance = 1
+  local ok, err = pcall(M.generate, seed, kit, civ, origin, siblings)
+  allowance = nil
+  if not ok and err ~= WARM_YIELD then error(err, 0) end
+  return ok
 end
 
 -- unlike(seed, kit, civ, origin, others) -> this relic drawn (a seed child per try) until it is at least
