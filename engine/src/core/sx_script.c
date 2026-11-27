@@ -1102,6 +1102,33 @@ static int build_part(lua_State *L, int idx, sx_mesh *m) {
       field_vec(L, idx, "u", pu, 3);
       field_vec(L, idx, "v", pv, 3);
       sx_mesh_patch(m, c, pu, pv, field_num(L, idx, "h", 0), seg, (int)field_num(L, idx, "rings", seg), &s);
+    } else if (strcmp(k, "heightfield") == 0) {
+      /* add-generated-planets: heights is (seg+1)*(rings+1) world-y values, row-major in v then u */
+      float pu[3] = {1, 0, 0}, pv[3] = {0, 0, 1};
+      int i, len, su = seg, sv = (int)field_num(L, idx, "rings", (float)seg);
+      float *hh;
+      if (su < 1) su = 1;
+      if (su > 64) su = 64;
+      if (sv < 1) sv = 1;
+      if (sv > 64) sv = 64;
+      field_vec(L, idx, "u", pu, 3);
+      field_vec(L, idx, "v", pv, 3);
+      lua_getfield(L, idx, "heights");
+      len = lua_istable(L, -1) ? (int)lua_rawlen(L, -1) : 0;
+      hh = (float *)malloc((size_t)(su + 1) * (size_t)(sv + 1) * sizeof(float));
+      if (hh) {
+        for (i = 0; i < (su + 1) * (sv + 1); i++) {
+          hh[i] = c[1];
+          if (i < len) {
+            lua_rawgeti(L, -1, i + 1);
+            if (lua_isnumber(L, -1)) hh[i] = (float)lua_tonumber(L, -1);
+            lua_pop(L, 1);
+          }
+        }
+        sx_mesh_heightfield(m, c, pu, pv, hh, su, sv, &s);
+        free(hh);
+      }
+      lua_pop(L, 1);
     } else if (strcmp(k, "stars") == 0) {
       sx_mesh_stars(m, (int)field_num(L, idx, "count", 500), r, field_num(L, idx, "size", 1),
                     (uint64_t)field_num(L, idx, "seed", 1));
@@ -1593,6 +1620,20 @@ static int l_v_mesh(lua_State *L) {
     if (lua_toboolean(L, -1)) d.flags |= SX_DRAW_NOSHADOW;
     lua_pop(L, 4);
     d.owner = (int)field_num(L, o, "owner", 0);
+    /* add-generated-planets: { c={x,y,z}, r=, seed=, body=, heart=, mode= } */
+    lua_getfield(L, o, "planet");
+    if (lua_istable(L, -1)) {
+      int pt = lua_gettop(L);
+      field_vec(L, pt, "c", d.planet, 3);
+      d.planet[3] = field_num(L, pt, "r", 0);
+      d.planet[4] = field_num(L, pt, "seed", 0);
+      d.planet[5] = field_num(L, pt, "body", 0);
+      d.planet[6] = field_num(L, pt, "heart", 0);
+      d.planet[7] = field_num(L, pt, "mode", 0);
+      d.planet[8] = field_num(L, pt, "cap", 0);
+      if (d.planet[7] > 0.5f) d.flags |= SX_DRAW_PLANET;
+    }
+    lua_pop(L, 1);
   }
   if (o && (field_num(L, o, "pitch", 0) != 0.0f || field_num(L, o, "roll", 0) != 0.0f))
     sx_mat4_model_ypr(d.model, pos, field_num(L, o, "yaw", 0), field_num(L, o, "pitch", 0), field_num(L, o, "roll", 0), sc);

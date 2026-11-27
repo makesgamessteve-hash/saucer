@@ -101,6 +101,11 @@ end
 -- the form of the tower on a lot: in a district with a value, every other tower in that value's form
 function M.form_of(style, d, gx, gz)
   if d and d.value and (gx * 3 + gz) % 2 == 0 then return M.ARCHETYPES[d.value].form end
+  -- every other remaining lot uses the ring's silhouette; the rest keep the civ's massing
+  if d and d.role and (gx + gz) % 2 == 0 then
+    local rf = { core = "spire", civic = "dome", market = "slab", residential = "arcology", industrial = "vault" }
+    if rf[d.role] then return rf[d.role] end
+  end
   return style.form
 end
 function M.base_height(form, h) return math.floor(h * (M.BASE_FRAC[form] or 0.3)) end
@@ -244,6 +249,27 @@ local function ring_bands(spec)
     { r = 3.95 * scale, n = 2, role = "residential" },
     { r = 99, n = 2, role = "industrial" },
   }
+end
+
+-- world radii of the major ring roads (metres), plus the downtown footprint
+function M.ring_world_radii(kit, origin)
+  local spec = kit.city
+  local bands = ring_bands(spec)
+  local pitch = (spec.lot + spec.street) * kit.cell
+  local fp = M.footprint(kit, origin)
+  local _, _, rad = M.city_centre(spec)
+  local rs = {}
+  rs[#rs + 1] = bands[1].r * 0.55 * pitch
+  for i, b in ipairs(bands) do
+    if b.r > 50 then
+      local prev = bands[i - 1] and bands[i - 1].r or (rad * 0.7)
+      rs[#rs + 1] = (prev + 0.85) * pitch
+      rs[#rs + 1] = rad * pitch
+    else
+      rs[#rs + 1] = b.r * pitch
+    end
+  end
+  return fp, rs
 end
 
 -- district index of a lot (concentric plan: needs the dmap from M.plan)
@@ -751,7 +777,7 @@ function M.generate(seed, kit, civ, origin)
       for k, t in ipairs(tl) do
         local mn, mx = world_box({ cx + t.dx, y0 + t.dy, cz + t.dz }, { t.w, t.h, t.w2 }, kit, origin)
         solids[#solids + 1] = { mn, mx, kind = "tower", room = 1, district = d.id, tier = k, form = form,
-                                apex = k == #tl or nil }
+                                role = d.role, apex = k == #tl or nil }
       end
       lot.tower = { cx, cz, w, w2, M.base_height(form, h), inv = inverted, form = form }
     elseif lot.type == "plaza" then
@@ -767,6 +793,17 @@ function M.generate(seed, kit, civ, origin)
       local bm, bx = world_box({ lot.x0 + 3, lot.y, lot.z0 + 3 }, { 3, rng:int(3, 7), 3 }, kit, origin)
       solids[#solids + 1] = { bm, bx, kind = "monument", room = 1, district = d.id }
     end
+  end
+  -- a landmark spire at the exact city centre (the core plaza)
+  do
+    local fp = M.footprint(kit, origin)
+    local gy = origin[2] + (spec.ground or 0) * kit.cell
+    local h = math.min(280, (ceiling - (spec.ground or 0)) * kit.cell * 0.85)
+    if h < 80 then h = 80 end
+    solids[#solids + 1] = {
+      { fp.x - 10, gy, fp.z - 10 }, { fp.x + 10, gy + h, fp.z + 10 },
+      kind = "crown", room = 1, district = districts[1] and districts[1].id or 1, role = "core",
+    }
   end
   -- 4b. the skyline: an outer ring of lots round and behind the core, towers and blocks only (no rooms, no
   -- doors, no slots): a few hundred cheap collision boxes that make the city run on for kilometres. Its own

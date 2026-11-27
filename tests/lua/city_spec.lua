@@ -10,6 +10,7 @@ local sector = require("sim.sector")
 local civs = require("sim.civs")
 local ruinm = require("sim.ruin")
 local citygen = require("sim.citygen")
+local cityroads = require("view.cityroads")
 local cities = require("sim.cities")
 local sentry = require("sim.sentry")
 local tractor = require("sim.tractor")
@@ -684,5 +685,21 @@ describe("drawing a city", function()
     end
     expect(top_in("core")).to_be_greater(top_in("residential"))
     expect(top_in("core")).to_be_greater(0)
+    -- a landmark spire stands at the centre, and ring roads plus radials are built
+    local crowns = 0
+    for _, s in ipairs(r.solids) do if s.kind == "crown" then crowns = crowns + 1 end end
+    expect(crowns).to_be_greater(0)
+    local kit = ruinm.kit_of("city_planet")
+    local fp, radii = citygen.ring_world_radii(kit, r.origin)
+    expect(#radii).to_be_greater(3)
+    local roads = cityroads.parts(r, kit, r.origin)
+    local rings, spokes = 0, 0
+    for _, p in ipairs(roads) do
+      if p.kind == "ring" then rings = rings + 1 end
+      if p.kind == "box" and p.yaw then spokes = spokes + 1 end
+    end
+    expect(rings).to_be_greater(3)
+    expect(spokes).to_be_greater(7)
+    expect(#roads).to_be_greater(10)
   end)
 end)

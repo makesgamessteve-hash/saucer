@@ -28,7 +28,7 @@ return {
     body = "asteroid", name = "Asteroid city", lots = { 8, 8 }, ring = 7, lifts = true, rails = { rows = { 4, 7 }, height = 6 }, lot = 32, street = 24, margin = 40, approach = 40,
     ground = 40, under = { 0, 1 }, tower = { 12, 22, 12, 24 }, mix = { 10, 55, 20, 15 }, tiers = { 0, 40 },
     shell = 14, drum = { 32, 32, 32 }, gravity = 0, spin = 0.0015,
-    env = { fog = { 0.10, 0.06, 0.04 }, clear = { 0.03, 0.02, 0.02 }, density = 0.5, light = { 1.0, 0.7, 0.5 }, ambient = 0.45 },
+    env = { fog = { 0.10, 0.06, 0.04 }, clear = { 0.03, 0.02, 0.02 }, density = 0.22, light = { 1.0, 0.7, 0.5 }, ambient = 0.45 },
   },
   color = { 0.74, 0.62, 0.52 }, uv = 0.125, solid_color = { 0.32, 0.25, 0.20 }, window_color = { 1.0, 0.7, 0.35 },
   floor_color = { 0.66, 0.56, 0.48 },

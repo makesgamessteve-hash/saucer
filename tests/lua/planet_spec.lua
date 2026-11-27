@@ -116,16 +116,39 @@ describe("generated planet bodies", function()
     local r = gen("city_planet", 333, { 9000, 0, 2000 })
     local pl = planet.of(r)
     local gp, tp, ap = planetv.globe_parts(pl), planetv.terrain_parts(pl), planetv.atmo_parts(pl)
-    expect(#gp).to_be_greater(80)
-    expect(#tp).to_be_greater(40)
+    expect(#gp).to_be(1)
+    expect(#tp).to_be_greater(8)
     expect(#ap).to_be_greater(0)
-    -- the globe and the cap are smooth (patches and high-segment spheres, never faceted boxes)
-    for _, part in ipairs(gp) do expect(part.kind == "patch" or part.kind == "lathe" or part.kind == "sphere").to_be_truthy() end
-    for _, part in ipairs(tp) do expect(part.kind).to_be("patch") end
+    -- the globe is one high-segment sphere (the shader paints land and ocean on it)
+    expect(gp[1].kind).to_be("sphere")
+    expect(gp[1].seg).to_be_greater(32)
+    expect(gp[1].emissive or 0).to_be_less(0.05)
+    -- the cap is a smooth-shaded heightfield, not a quilt of flat tiles
+    for _, part in ipairs(tp) do
+      expect(part.kind).to_be("heightfield")
+      expect(#part.heights).to_be((part.seg + 1) * (part.rings + 1))
+    end
     for _, part in ipairs(ap) do
       expect(part.kind).to_be("sphere")
       expect(part.seg).to_be_greater(32)
     end
+    local cp = planetv.cloud_parts(pl)
+    expect(#cp).to_be_greater(0)
+    -- neighbouring land samples do not jump on a lat/lon or tile grid
+    local jumps, samples = 0, 0
+    for a = 0, 63 do
+      local rr = pl.rim + 12000
+      local x = pl.cx + math.cos(a / 64 * 6.283) * rr
+      local z = pl.cz + math.sin(a / 64 * 6.283) * rr
+      local x2 = pl.cx + math.cos((a + 1) / 64 * 6.283) * rr
+      local z2 = pl.cz + math.sin((a + 1) / 64 * 6.283) * rr
+      if not planet.in_heart(pl, x, z) and not planet.in_heart(pl, x2, z2) then
+        samples = samples + 1
+        if math.abs(planet.land(pl, x, z) - planet.land(pl, x2, z2)) > 0.22 then jumps = jumps + 1 end
+      end
+    end
+    expect(samples).to_be_greater(20)
+    expect(jumps).to_be_less(8)
     local moon = planet.of(gen("city_moon", 333, { 9000, 0, 2000 }))
     expect(#planetv.atmo_parts(moon)).to_be(0)
     -- draw through the live list

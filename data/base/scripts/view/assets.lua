@@ -439,9 +439,19 @@ end
 
 -- exterior solid: plain block plus lit window bands (towers) or tip beacons.
 -- A tower hanging under the city points its mast down (hanging = true).
+M.ROLE_COLOR = {
+  core = { 0.78, 0.72, 0.62 },
+  civic = { 0.50, 0.42, 0.58 },
+  market = { 0.66, 0.42, 0.22 },
+  residential = { 0.38, 0.48, 0.46 },
+  industrial = { 0.32, 0.31, 0.30 },
+  spaceport = { 0.40, 0.44, 0.52 },
+}
+
 function M.solid_parts(s, k, hanging)
   local mn, mx = s[1], s[2]
-  local parts = { { kind = "box", min = mn, max = mx, color = k.solid_color or k.color, uv = 0.25 } }
+  local role_col = s.role and M.ROLE_COLOR[s.role]
+  local parts = { { kind = "box", min = mn, max = mx, color = role_col or k.solid_color or k.color, uv = 0.25 } }
   if s.kind == "pod" then
     -- add-wider-dark: a brood pod swells out of its block, a lit seam round its middle
     local c = { (mn[1] + mx[1]) / 2, (mn[2] + mx[2]) / 2, (mn[3] + mx[3]) / 2 }
@@ -470,7 +480,7 @@ function M.solid_parts(s, k, hanging)
     local win = k.window_color or { 1.0, 0.85, 0.5 }
     local accent = k.accent or win
     local lx, lz, hgt = mx[1] - mn[1], mx[3] - mn[3], mx[2] - mn[2]
-    local base = k.solid_color or k.color
+    local base = role_col or k.solid_color or k.color
     local shade = 0.9 + 0.1 * ((s.tier or 1) % 2)
     parts[1].color = { base[1] * shade, base[2] * shade, base[3] * shade }
     local step = hgt > 120 and 9 or 6
@@ -540,6 +550,48 @@ function M.solid_parts(s, k, hanging)
                             max = { c[1] + 0.8, math.max(c[2] + 9 * d, c[2] + 10.6 * d), c[3] + 0.8 }, color = { 1, 0.3, 0.25 },
                             emissive = 1, light = true }
     end
+    -- add-generated-planets: each ring's buildings have their own roof dress
+    if s.role == "civic" and s.apex then
+      local cx, cz = (mn[1] + mx[1]) / 2, (mn[3] + mx[3]) / 2
+      local rr = math.min(mx[1] - mn[1], mx[3] - mn[3]) * 0.42
+      parts[#parts + 1] = { kind = "hemisphere", c = { cx, mx[2], cz }, r = rr, h = rr * 0.85, seg = 12, rings = 5,
+                            color = { 0.55, 0.46, 0.62 } }
+    elseif s.role == "market" and (s.tier or 1) == 1 then
+      local aw = { 0.85, 0.45, 0.18 }
+      local y0, y1 = mn[2] + 3.2, mn[2] + 5.4
+      parts[#parts + 1] = { kind = "box", min = { mn[1] - 2.2, y0, mn[3] - 2.2 }, max = { mx[1] + 2.2, y1, mn[3] + 0.4 },
+                            color = aw, emissive = 0.15 }
+      parts[#parts + 1] = { kind = "box", min = { mn[1] - 2.2, y0, mx[3] - 0.4 }, max = { mx[1] + 2.2, y1, mx[3] + 2.2 },
+                            color = aw, emissive = 0.15 }
+      parts[#parts + 1] = { kind = "box", min = { mn[1] - 0.15, y1 - 0.2, mn[3] - 0.15 }, max = { mx[1] + 0.15, y1 + 0.15, mx[3] + 0.15 },
+                            color = { 1.0, 0.72, 0.25 }, emissive = 0.8, light = true }
+    elseif s.role == "industrial" and (s.tier or 1) == 1 then
+      local cx, cz = (mn[1] + mx[1]) / 2, (mn[3] + mx[3]) / 2
+      parts[#parts + 1] = { kind = "cylinder", c = { mn[1] + 3, mx[2], mn[3] + 3 }, r = 2.4, h = 9, seg = 10,
+                            color = { 0.38, 0.36, 0.34 } }
+      parts[#parts + 1] = { kind = "cylinder", c = { mx[1] - 5, mx[2], mn[3] + 3 }, r = 1.8, h = 14, seg = 10,
+                            color = { 0.28, 0.28, 0.30 } }
+      -- a simple crane arm
+      parts[#parts + 1] = { kind = "box", min = { cx - 0.4, mx[2], cz - 0.4 }, max = { cx + 0.4, mx[2] + 10, cz + 0.4 },
+                            color = { 0.7, 0.45, 0.15 } }
+      parts[#parts + 1] = { kind = "box", min = { cx - 0.35, mx[2] + 9.2, cz - 0.35 }, max = { cx + 11, mx[2] + 10.2, cz + 0.35 },
+                            color = { 0.7, 0.45, 0.15 } }
+    elseif s.role == "spaceport" and s.apex then
+      local cx, cz = (mn[1] + mx[1]) / 2, (mn[3] + mx[3]) / 2
+      local pr = math.min(mx[1] - mn[1], mx[3] - mn[3]) * 0.35
+      parts[#parts + 1] = { kind = "cylinder", c = { cx, mx[2], cz }, r = pr, h = 0.4, seg = 12,
+                            color = { 0.35, 0.38, 0.44 } }
+    end
+  elseif s.kind == "crown" then
+    local cx, cz = (mn[1] + mx[1]) / 2, (mn[3] + mx[3]) / 2
+    local h = mx[2] - mn[2]
+    local r = math.min(mx[1] - mn[1], mx[3] - mn[3]) / 2
+    parts[1] = { kind = "cylinder", c = { cx, mn[2], cz }, r = r * 0.55, h = h * 0.18, seg = 14,
+                 color = { 0.72, 0.68, 0.58 } }
+    parts[#parts + 1] = { kind = "cone", c = { cx, mn[2] + h * 0.16, cz }, r = r * 0.42, r1 = r * 0.05, h = h * 0.74, seg = 14,
+                          color = { 0.88, 0.80, 0.55 } }
+    parts[#parts + 1] = { kind = "sphere", c = { cx, mn[2] + h * 0.93, cz }, r = r * 0.14, h = r * 0.14, seg = 10, rings = 5,
+                          color = { 1.0, 0.85, 0.3 }, emissive = 0.85, light = true }
   elseif s.kind == "rail" or s.kind == "pylon" or s.kind == "liftpost" then
     -- add-cities-2: transit. The rail deck has lit edges, a pylon a lit collar, a lift post a lit stripe every 24 m.
     local acc = k.accent or { 1, 0.8, 0.4 }

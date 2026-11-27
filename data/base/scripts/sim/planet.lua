@@ -31,6 +31,9 @@ end
 local function hash2(ix, iz, seed)
   return u32(ix * 374761393 + iz * 668265263 + seed * 2654435761)
 end
+local function hash3(ix, iy, iz, seed)
+  return u32(ix * 374761393 + iy * 668265263 + iz * 1274126177 + seed * 2654435761)
+end
 -- value noise in 0..1
 local function vnoise(x, z, seed)
   local x0, z0 = math.floor(x), math.floor(z)
@@ -50,6 +53,46 @@ local function fbm(pl, x, z, scale, octaves)
   return n / s
 end
 M._fbm = fbm
+
+-- 3D value-noise fbm on a direction (the unit-sphere normal). Used for land
+-- masses so coasts are organic, not a planar xz or lat/lon grid.
+local function vnoise3(x, y, z, seed)
+  local x0, y0, z0 = math.floor(x), math.floor(y), math.floor(z)
+  local fx, fy, fz = x - x0, y - y0, z - z0
+  local function g(i, j, k) return (hash3(i, j, k, seed) % 10007) / 10006 end
+  local u, v, w = fx * fx * (3 - 2 * fx), fy * fy * (3 - 2 * fy), fz * fz * (3 - 2 * fz)
+  local n000, n100 = g(x0, y0, z0), g(x0 + 1, y0, z0)
+  local n010, n110 = g(x0, y0 + 1, z0), g(x0 + 1, y0 + 1, z0)
+  local n001, n101 = g(x0, y0, z0 + 1), g(x0 + 1, y0, z0 + 1)
+  local n011, n111 = g(x0, y0 + 1, z0 + 1), g(x0 + 1, y0 + 1, z0 + 1)
+  local x00 = n000 + (n100 - n000) * u
+  local x10 = n010 + (n110 - n010) * u
+  local x01 = n001 + (n101 - n001) * u
+  local x11 = n011 + (n111 - n011) * u
+  local y0v = x00 + (x10 - x00) * v
+  local y1v = x01 + (x11 - x01) * v
+  return y0v + (y1v - y0v) * w
+end
+local function fbm3(pl, dir, freq, octaves)
+  local n, a, s = 0, 1, 0
+  local px, py, pz = dir[1] * freq, dir[2] * freq, dir[3] * freq
+  for i = 1, octaves or 5 do
+    n = n + a * vnoise3(px, py, pz, pl.seeds[i] or pl.seed)
+    s = s + a
+    a = a * 0.5
+    px, py, pz = px * 2.07, py * 2.07, pz * 2.07
+  end
+  return n / s
+end
+M._fbm3 = fbm3
+
+function M.dir_of(pl, x, z)
+  local sy = M.sphere_y(pl, x, z) or pl.gy
+  local dx, dy, dz = x - pl.cx, sy - pl.cy, z - pl.cz
+  local l = sm.sqrt(dx * dx + dy * dy + dz * dz)
+  if l < 1e-9 then return { 0, 1, 0 } end
+  return { dx / l, dy / l, dz / l }
+end
 
 local function lerp(a, b, t) return { a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, a[3] + (b[3] - a[3]) * t } end
 local function shade(c, k) return { math.max(0, math.min(1, c[1] * k)), math.max(0, math.min(1, c[2] * k)), math.max(0, math.min(1, c[3] * k)) } end
@@ -124,7 +167,7 @@ end
 
 -- land-mass 0..1 (city rim is forced to land so the lots always sit on ground)
 function M.land(pl, x, z)
-  local n = fbm(pl, x, z, pl.R * 0.55, 4)
+  local n = fbm3(pl, M.dir_of(pl, x, z), 3.4, 5)
   local hd = sm.sqrt((x - pl.cx) * (x - pl.cx) + (z - pl.cz) * (z - pl.cz))
   if hd < pl.rim + 3000 then
     local t = math.max(0, (hd - pl.rim) / 3000)
@@ -143,15 +186,17 @@ function M.kind(pl, x, z)
     if cy < -0.70 then return "ice" end
     local land = M.land(pl, x, z)
     if land < pl.sea then return (land > pl.sea - 0.06) and "shallow" or "ocean" end
-    local h = fbm(pl, x, z, pl.R * 0.18, 3)
+    local dir = M.dir_of(pl, x, z)
+    local h = fbm3(pl, dir, 9.0, 3)
     if h > 0.72 then return "highland" end
-    if fbm(pl, x + 9000, z, pl.R * 0.28, 2) > 0.68 then return "desert" end
+    if fbm3(pl, { dir[1] + 0.17, dir[2], dir[3] - 0.09 }, 6.0, 2) > 0.68 then return "desert" end
     return "land"
   end
   -- moon / asteroid: maria (lowlands) and craters
-  local n = fbm(pl, x, z, pl.R * 0.4, 3)
+  local dir = M.dir_of(pl, x, z)
+  local n = fbm3(pl, dir, 4.2, 4)
   if n < 0.38 then return "maria" end
-  local c = fbm(pl, x, z, pl.R * 0.07, 2)
+  local c = fbm3(pl, dir, 14.0, 2)
   if c > 0.82 then return "crater" end
   if n > 0.72 then return "highland" end
   return "land"

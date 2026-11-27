@@ -941,13 +941,14 @@ M.GATE_DIST = 420
 M.CITY_NEAR = 340     -- add-cities: a district nearer than this draws its chunks, else one coarse mesh
 M.LOD_DIST = 1100     -- beyond this a site is drawn as its coarse silhouette
 M.CULL_DIST = 2400    -- beyond this (fog) nothing of a site is drawn
+M.CITY_CULL = 18000   -- add-generated-planets: a city stays visible from the air
 M.VIEW_HALF = 1.15    -- radians: half of the widest view angle plus slack
 M.stats = { chunks = 0, culled = 0, lod = 0 }
 
 -- is a sphere (centre c, radius r) possibly visible from camera cam?
-function M.visible(cam, c, r, xr)
+function M.visible(cam, c, r, xr, maxd)
   local dist = vec.len(vec.sub(c, cam.pos))
-  if dist - r > M.CULL_DIST then return false end
+  if dist - r > (maxd or M._cull or M.CULL_DIST) then return false end
   return M.in_view(cam, c, r, xr)
 end
 -- add-alien-cities-2: inside the view cone, at any distance
@@ -1086,6 +1087,7 @@ function M.draw_ruins(v, A, state, cam, xr)
       local set = assets.ruin_chunks(r, site.pos)
       local tex = assets.kit_texture(A, set.kit)
       local ftex = assets.floor_texture(A, set.kit)
+      M._cull = r.city and M.CITY_CULL or nil
       local lod = set.lod
       -- (a city's far skyline is now its megacity: view/citymega.lua)
       if set.horizon and not r.city then v:mesh(set.horizon.mesh, { tex = tex, palette = A.pal.base }) end
@@ -1174,6 +1176,7 @@ function M.draw_ruins(v, A, state, cam, xr)
         if r.city then M.draw_transit(v, A, state, cam, r, st) end
         -- add-alien-cities: swarms over the avenues, machines on the towers, pulses down the sky lanes
         if r.city then st.city_phen = (st.city_phen or 0) + require("view.cityphen").draw(v, A, r, cam, (state.tick + (M.alpha or 0)) / 60) end
+        if r.city then st.roads = (st.roads or 0) + require("view.cityroads").draw(v, A, r, set, cam) end
         -- add-cities: the gates of dark districts, a shutter in each shut door
         if r.city then
           for id, g in pairs(game.gates(i)) do
@@ -1189,6 +1192,7 @@ function M.draw_ruins(v, A, state, cam, xr)
       end
     end
   end
+  M._cull = nil
   -- add-alien-cities-2: the megacity round every city the eye is over (view/citymega.lua)
   for i, site in ipairs(state.sector.sites) do
     local r = site.city and game.ruin(i)

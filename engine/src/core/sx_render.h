@@ -40,7 +40,8 @@ typedef struct sx_camera {
   float view[16], proj[16];
 } sx_camera;
 
-enum { SX_DRAW_SKY = 1, SX_DRAW_GHOST = 2, SX_DRAW_UNLIT = 4, SX_DRAW_NOFOG = 8, SX_DRAW_NOSHADOW = 16 };
+enum { SX_DRAW_SKY = 1, SX_DRAW_GHOST = 2, SX_DRAW_UNLIT = 4, SX_DRAW_NOFOG = 8, SX_DRAW_NOSHADOW = 16,
+       SX_DRAW_PLANET = 32 }; /* add-generated-planets: procedural globe / atmosphere */
 
 typedef struct sx_draw_mesh {
   int mesh, tex, palette;
@@ -48,6 +49,8 @@ typedef struct sx_draw_mesh {
   float tint[4];
   int flags;
   int owner; /* add-realistic-lighting: a light of the same owner does not shadow it */
+  /* add-generated-planets: cx,cy,cz,R,seed,body,heart,mode,cap (1 surface, 2 atmo, 3 clouds) */
+  float planet[9];
 } sx_draw_mesh;
 
 /* replace-bubble-sprites: procedural billboard forms (shader u_form). 0 = unset (a soft
