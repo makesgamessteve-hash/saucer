@@ -323,4 +323,66 @@ describe("relic room shapes", function()
     end
     expect(inner > 0).to_be(true)
   end)
+
+  it("joins the contour into runs and dresses every shaped wall with ribs and bands on the free side", function()
+    for _, k in ipairs(shapes.KINDS) do
+      local s = shapes.make(k, HALL, DOORS, style(), 0, 0, saucer.rng.new(3))
+      local segs, chains = shapes.contour(s), shapes.chains(s)
+      expect(shapes.chains(s)).to_be(chains)   -- cached
+      -- every segment is in exactly one chain, end to start
+      local nseg = 0
+      for _, ch in ipairs(chains) do
+        expect(#ch >= 2).to_be(true)
+        nseg = nseg + #ch - 1
+      end
+      expect(nseg).to_be(#segs)
+    end
+    -- the walls of a shaped hall (a diamond: straight runs, a long run is ribbed along its whole length)
+    local s = shapes.make("diamond", HALL, DOORS, style({ dia = 1.0 }), 0, 0)
+    local rm = { id = 5, kind = "hall", class = 4, cell = HALL.cell, size = HALL.size, shape = s }
+    local cc = { chrome = { 1, 1, 1 }, amethyst = { 1, 0, 1 }, wound = { 1, 0, 0 } }
+    local parts = {}
+    local mn, mx = ruinm.room_box(rm, KIT, O)
+    relicv.dress_walls(parts, rm, KIT, O, cc, mn[2] + KIT.wall, mx[2] - KIT.wall)
+    expect(#parts > 8).to_be(true)
+    local ribs, bands, front, behind = 0, 0, 0, 0
+    local h = (mx[2] - KIT.wall) - (mn[2] + KIT.wall)
+    for _, p in ipairs(parts) do
+      expect(p.shape_wall).to_be(true)
+      -- on the free side (the contour is the marching squares' line, up to a metre off the true edge): the point a few
+      -- metres out from the box towards its proud face is free floor far more often than the point behind it
+      local yaw = p.yaw
+      local lzx, lzz = math.sin(yaw), math.cos(yaw)
+      local sgn = p.max[3] > 0 and 1 or -1
+      if shapes.free_world(rm, KIT, O, p.pos[1] + lzx * sgn * 3, p.pos[3] + lzz * sgn * 3) then front = front + 1 end
+      if shapes.free_world(rm, KIT, O, p.pos[1] - lzx * sgn * 3, p.pos[3] - lzz * sgn * 3) then behind = behind + 1 end
+      if p.max[2] - p.min[2] >= h - 0.01 then ribs = ribs + 1 else bands = bands + 1 end
+    end
+    expect(ribs > 0).to_be(true)
+    expect(bands > 0).to_be(true)
+    expect(front > behind * 3).to_be(true)
+    -- the ribs follow the spacing along the runs: about one a SHAPE_RIB of contour, not one a segment
+    local total = 0
+    for _, g in ipairs(shapes.contour(s)) do
+      total = total + math.sqrt(((g[3] - g[1]) * KIT.cell) ^ 2 + ((g[4] - g[2]) * KIT.cell) ^ 2)
+    end
+    expect(ribs <= total / relicv.SHAPE_RIB + #shapes.chains(s)).to_be(true)
+    expect(ribs >= total / relicv.SHAPE_RIB - #shapes.chains(s) * 2).to_be(true)
+    -- a slab runs only a hair past its segment: no blade ends
+    local slab = {}
+    relicv.shape_walls(slab, rm, KIT, O, cc, 0, 0)
+    local blades = 0
+    for _, p in ipairs(slab) do
+      if math.abs((p.max[3] - p.min[3]) - relicv.SHAPE_WALL) < 1e-6 and p.max[2] - p.min[2] > 3 then
+        local len = (p.max[1] - p.min[1]) - 2 * relicv.SHAPE_JOIN
+        local ok = false
+        for _, g in ipairs(shapes.contour(s)) do
+          local gl = math.sqrt(((g[3] - g[1]) * KIT.cell) ^ 2 + ((g[4] - g[2]) * KIT.cell) ^ 2)
+          if math.abs(gl - len) < 0.01 then ok = true end
+        end
+        if not ok then blades = blades + 1 end
+      end
+    end
+    expect(blades).to_be(0)
+  end)
 end)

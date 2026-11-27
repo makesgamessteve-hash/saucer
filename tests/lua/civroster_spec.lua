@@ -68,7 +68,7 @@ describe("civ roster", function()
     for _ in pairs(scales_seen) do ns = ns + 1 end
     for _ in pairs(massing_seen) do nm = nm + 1 end
     expect(ns).to_be(5)
-    expect(nm).to_be(6)
+    expect(nm).to_be(8)   -- every layout turns up: organism under gestalt, lattice under hive
   end)
 
   it("the deterministic swap fixes a roster rejection sampling cannot", function()

@@ -843,6 +843,10 @@ end
 -- run, on the solid side of the line (so it never stands in the free floor), in the civ's accent so it reads apart
 -- from the box's own skin, with a glowing seam at the floor and one under the ceiling that trace the shape
 M.SHAPE_WALL = 1.2    -- m: a shaped hall's wall slab
+M.SHAPE_JOIN = 0.05   -- m: a slab runs this far past its run's ends (a hair, so neighbours leave no crack)
+M.SHAPE_RIB = 5.0     -- m between the chrome ribs along a shaped wall
+M.SHAPE_RIB_W = 0.9   -- m: a shaped wall's rib is this wide
+M.SHAPE_RIB_OUT = 0.6 -- m: a rib and a band stand this far proud of the slab's face
 local function shape_walls(parts, r, kit, origin, cc, mat, c)
   local shapes = require("sim.relicshape")
   local s = r.shape
@@ -865,7 +869,7 @@ local function shape_walls(parts, r, kit, origin, cc, mat, c)
       -- the slab's local +z after the yaw is (sin yaw, 0, cos yaw): flip z if it points against n
       local lzx, lzz = math.sin(yaw), math.cos(yaw)
       if lzx * nx + lzz * nz < 0 then z0, z1 = -z1, -z0 end
-      local h = len / 2 + 0.3
+      local h = len / 2 + M.SHAPE_JOIN   -- (no blade ends: the run's neighbours meet it at the vertex)
       parts[#parts + 1] = { kind = "box", min = { -h, 0, z0 }, max = { h, y1 - y0, z1 }, pos = pos, yaw = yaw,
                             color = cc.chrome, mat = mat, shape_wall = true }
       local sz0, sz1 = side > 0 and -0.15 or 0, side > 0 and 0 or 0.15
@@ -874,6 +878,58 @@ local function shape_walls(parts, r, kit, origin, cc, mat, c)
                             color = cc.amethyst, emissive = 0.9, shape_wall = true }
       parts[#parts + 1] = { kind = "box", min = { -h, y1 - y0 - 0.5, sz0 }, max = { h, y1 - y0 - 0.15, sz1 }, pos = pos,
                             yaw = yaw, color = cc.wound, emissive = 0.6, shape_wall = true }
+    end
+  end
+  M.dress_walls(parts, r, kit, origin, cc, y0, y1)
+end
+
+-- the shaped wall dressed like the box's own: chrome ribs, floor to ceiling, every SHAPE_RIB metres along each run of
+-- the contour (spaced along the whole run, not per segment), and chrome bands at the rows the box's cushions split
+-- into, so a curved or angled wall reads as the same ribbed skin instead of a flat slab. All stand on the free side
+-- of the line, SHAPE_RIB_OUT proud of the slab's face.
+function M.dress_walls(parts, r, kit, origin, cc, y0, y1)
+  local shapes = require("sim.relicshape")
+  local s = r.shape
+  local cell = kit.cell
+  local h = y1 - y0
+  local rows = math.max(1, math.floor(h / math.max(M.BAND, h / 6) + 0.5))
+  local rib_w, out = M.SHAPE_RIB_W / 2, M.SHAPE_RIB_OUT
+  -- a box standing on the line at (x, z) (cells), running along (ux, uz), `half` long each way, proud of the free side
+  local function stand(x, z, ux, uz, half, ylo, yhi, color, shape_mat)
+    local nx, nz = uz, -ux
+    local fx, fz = nx, nz
+    if not shapes.free(s, x + nx * 0.2, z + nz * 0.2) then fx, fz = -nx, -nz end
+    local yaw = saucer.math.atan2(-uz, ux)
+    local lzx, lzz = math.sin(yaw), math.cos(yaw)
+    local z0, z1 = 0, out
+    if lzx * fx + lzz * fz < 0 then z0, z1 = -out, 0 end
+    parts[#parts + 1] = { kind = "box", min = { -half, ylo, z0 }, max = { half, yhi, z1 },
+                          pos = { origin[1] + x * cell, y0, origin[3] + z * cell }, yaw = yaw, color = color, mat = shape_mat,
+                          shape_wall = true }
+  end
+  for _, ch in ipairs(shapes.chains(s)) do
+    local since = M.SHAPE_RIB * 0.5   -- (the first rib half a spacing in)
+    for k = 1, #ch - 1 do
+      local a, b = ch[k], ch[k + 1]
+      local dx, dz = (b[1] - a[1]) * cell, (b[2] - a[2]) * cell
+      local len = math.sqrt(dx * dx + dz * dz)
+      if len > 1e-3 then
+        local ux, uz = dx / len, dz / len
+        -- the bands: one box along the segment at every row seam
+        for j = 1, rows - 1 do
+          local y = h * j / rows
+          stand((a[1] + b[1]) / 2, (a[2] + b[2]) / 2, ux, uz, len / 2 + M.SHAPE_JOIN, y - 0.4, y + 0.4, cc.chrome, S.accent)
+        end
+        -- the ribs: every SHAPE_RIB metres along the run
+        local d = 0
+        while since + (len - d) >= M.SHAPE_RIB do
+          d = d + (M.SHAPE_RIB - since)
+          since = 0
+          local t = d / len
+          stand(a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, ux, uz, rib_w, 0, h, cc.chrome, S.accent)
+        end
+        since = since + (len - d)
+      end
     end
   end
 end

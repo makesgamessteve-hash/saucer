@@ -65,7 +65,12 @@ function M.civ_slots(civ)
   slots[M.SLOT.accent] = M.slot(rec(m.accent.id))
   slots[M.SLOT.rare] = M.slot(rec(m.rare.id))
   slots[M.SLOT.ring] = M.slot(rec(m.signature and m.signature.ring or "wound"))
-  slots[M.SLOT.decay] = M.slot(rec(m.decay and m.decay[1] or "flesh_necrotic"), { pulse = 0 })
+  -- the decay hall's skin is that material over a whole hall: a crystal there (an ascended civ's quartz) is calmed like
+  -- a dominant crystal, else the hall's walls and ceiling read as grey static (a hall of twinkling cells)
+  local decay = rec(m.decay and m.decay[1] or "flesh_necrotic")
+  local dover = decay.kind == "crystal" and M.calm_crystal(decay) or {}
+  dover.pulse = 0
+  slots[M.SLOT.decay] = M.slot(decay, dover)
   slots[M.SLOT.floor] = M.slot(rec("chitin"))
   return M.fate(slots, civ, lib)
 end

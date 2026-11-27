@@ -249,6 +249,28 @@ describe("pale crystal walls", function()
     expect(math.abs(matv.calm_crystal(lib.quartz).sparkle - lib.quartz.sparkle * matv.DOMINANT_SPARKLE) < 1e-9).to_be(true)
     expect(matv.calm_crystal(lib.amethyst).sparkle).to_be(nil)
   end)
+
+  it("a crystal decay material skins its hall calmed too: grey static no more; an organic one is untouched", function()
+    local matv = require("view.materials")
+    local lib = matv.library()
+    local S = matv.SLOT
+    local civ = civs.universe(42)[3]
+    local function with(decay)
+      local mats = {}
+      for k, v in pairs(civ.materials) do mats[k] = v end
+      mats.decay = decay
+      return setmetatable({ materials = mats }, { __index = civ })
+    end
+    local q = matv.civ_slots(with({ "quartz", "rose_quartz" }))[S.decay]
+    expect(q.kind).to_be("crystal")
+    expect(math.abs(q.sparkle - lib.quartz.sparkle * matv.DOMINANT_SPARKLE) < 1e-9).to_be(true)
+    expect(q.pulse).to_be(0)
+    expect(q.hi[1] < lib.quartz.hi[1]).to_be(true)
+    local n = matv.civ_slots(with({ "flesh_necrotic" }))[S.decay]
+    expect(n.kind).to_be("organic")
+    expect(n.sparkle).to_be(nil)
+    expect(matv.civ_slots(with({ "amethyst" }))[S.decay].sparkle).to_be(nil)
+  end)
 end)
 
 describe("relic decay", function()
