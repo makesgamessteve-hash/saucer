@@ -43,9 +43,15 @@ end
 
 -- first surface under (x, y, z): height, normal y -> nil when nothing is in range
 function M.ground(x, y, z, range)
-  local hit = saucer.physics.raycast({ x, y, z }, { 0, -1, 0 }, range or M.tune().range, 1)
-  if not hit then return nil end
-  return y - hit.t, hit.normal and hit.normal[2] or 1
+  local reach = range or M.tune().range
+  local hit = saucer.physics.raycast({ x, y, z }, { 0, -1, 0 }, reach, 1)
+  -- add-generated-planets: the body's surface when no (or a lower) physics box is under the probe
+  local _, surf = require("sim.planet").support(x, y, z)
+  local gy, nup
+  if hit then gy, nup = y - hit.t, hit.normal and hit.normal[2] or 1 end
+  if surf and y - surf <= reach and (not gy or surf > gy) then return surf, 1 end
+  if gy then return gy, nup end
+  return nil
 end
 
 M.REASONS = {

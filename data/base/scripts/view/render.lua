@@ -17,6 +17,8 @@ local panelm = require("sim.panel")
 local sm = saucer.math
 local ruinm = require("sim.ruin")
 local megav = require("view.citymega") -- add-alien-cities-2
+local planetv = require("view.planet") -- add-generated-planets
+local planet = require("sim.planet")
 local cities = require("sim.cities")
 local M = {}
 
@@ -916,12 +918,15 @@ M.SKY = {
 -- (add-alien-cities-2: drawn with the sky, so a tower however far stands in front of them)
 function M.sky(v, A, eye)
   local n = 0
+  local hide_planet = planet.hide_sky_billboard()
   for _, s in ipairs(M.SKY) do
-    local tex = A.tex[s.tex]
-    if tex then
-      v:billboard(tex, { eye[1] + s.at[1], eye[2] + s.at[2], eye[3] + s.at[3] }, s.size,
-                  { palette = A.pal[s.pal] or A.pal.base, tint = s.tint, sky = true })
-      n = n + 1
+    if not (hide_planet and s.tex == "planet") then
+      local tex = A.tex[s.tex]
+      if tex then
+        v:billboard(tex, { eye[1] + s.at[1], eye[2] + s.at[2], eye[3] + s.at[3] }, s.size,
+                    { palette = A.pal[s.pal] or A.pal.base, tint = s.tint, sky = true })
+        n = n + 1
+      end
     end
   end
   return n
@@ -978,6 +983,11 @@ function M.city_env(state, p)
   if p.site == 0 then
     local _, mr, mp = game.mega_city_at(state, p.ship.pos, 0)
     if mp and require("sim.citymega").in_air(mp, p.ship.pos) then r = mr end
+    -- add-generated-planets: the body's air holds over the whole cap, not just the city footprint
+    if not r then
+      local pl = planet.over(p.ship.pos)
+      if pl and pl.site then r = game.ruin(pl.site) end
+    end
   end
   if not (r and r.city) then return nil end
   local e = ruinm.kit_of(r.kit).city.env
@@ -1221,14 +1231,22 @@ function M.render(v, state, alpha)
   local cam = xrv.adjust(v, require("view.juice").camera(M.camera(p, v.xr), p, state.tick, v.xr))
   -- add-alien-cities-2: over a megacity the far plane reaches its horizon band
   megav.far_plane(cam, function(pos) return game.mega_city_at(state, pos, megav.ZONE) end)
+  -- add-generated-planets: keep the whole body on screen from orbit
+  planetv.far_plane(cam, state)
   v:camera(cam)
   local cenv = M.city_env(state, p)
-  v:fog(cenv or { color = { 0.02, 0.02, 0.06 }, density = M.FOG, clear = { 0.0, 0.0, 0.025 }, light = { 0.35, 0.8, 0.45 },
+  -- add-generated-planets: in a sector with a body, space fog is thin enough to see the globe from orbit
+  -- (the usual density swallows anything 20 km away). City air keeps the old haze.
+  v:fog(cenv or { color = { 0.02, 0.02, 0.06 },
+          density = (#planet.live() > 0 and 0.000003 or M.FOG),
+          clear = { 0.0, 0.0, 0.025 }, light = { 0.35, 0.8, 0.45 },
           ambient = 0.55 })
   -- add-realistic-lighting: the star outside, the lamps of every place near the eye (view/lights.lua)
   local lit = lightsv.begin(v, state, p, cam, cenv)
   if not (cenv and cenv.day > 0.55) then v:mesh(A.stars, { pos = cam.pos, sky = true }) end
   if not (cenv and cenv.day > 0.55) then M.sky(v, A, cam.pos) end
+  -- add-generated-planets: the body sits behind the city and in front of the stars
+  planetv.draw(v, A, state, cam)
   if not lit.inside then lightsv.sky(v, A, cam.pos, lit.star) end
   lightsv.site_lamps(v, A, state, cam.pos)
   lightsv.bays(v, state, cam.pos, state.tick)

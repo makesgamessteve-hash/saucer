@@ -39,6 +39,7 @@ local civs = require("sim.civs")
 local galaxy = require("sim.galaxy")
 local archive = require("sim.archive")
 local megacity = require("sim.citymega") -- add-alien-cities-2
+local planet = require("sim.planet") -- add-generated-planets
 local requests = require("sim.requests")
 local coop = require("sim.coop")
 local adv = require("sim.advsentry")
@@ -143,6 +144,9 @@ function M.rebuild(state)
   -- add-alien-cities-2: the outer districts near a player are solid again (the physics world was just cleared)
   megacity.reset()
   M.mega_sync(state)
+  -- add-generated-planets: the body's surface around the city
+  planet.clear()
+  planet.sync(state)
   -- add-wider-dark: doors a Lockdown node holds sealed right now
   for i, list in pairs(state.sentries or {}) do
     for k, dyn in ipairs(list) do
@@ -539,6 +543,9 @@ local function mover(state, p)
     -- fix-station-hull: the trader stations' spinning layer (halos, helices, shells) pushes the hull out
     local spun, hit = require("sim.stationhull").spin_push(state, np, r)
     if hit > 0 then np, blocked = spun, blocked + 1 end
+    -- add-generated-planets: don't sink through the body
+    local lifted = planet.clamp(np, hh)
+    if lifted[2] ~= np[2] then np, blocked = lifted, blocked + 1 end
     for _, o in ipairs(state.players) do
       if o ~= p then
         local orr, ohh = shipm.dims(o.ship)
@@ -1547,6 +1554,7 @@ function M.step(state, cmds, dt)
   end
   claims.resolve(state, dt, ctx_fns)
   M.mega_sync(state)
+  planet.sync(state)
   for i = 1, #state.players do
     local p = state.players[i]
     if p and cmds[i] then M.step_player(state, p, cmds[i], dt) end
