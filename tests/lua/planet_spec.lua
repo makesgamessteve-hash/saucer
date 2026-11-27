@@ -224,6 +224,30 @@ describe("generated planet bodies", function()
     planet.clear()
   end)
 
+  it("a relic over the cap sits in a keep-out so the crust does not lift the hull", function()
+    local st = new_state()
+    game.enter_sector(st, BODY_SECTOR.planet)
+    planet.activate(st)
+    local pl = planet.live()[1]
+    expect(pl).to_be_truthy()
+    expect(#(pl.keepouts or {})).to_be_greater(0)
+    local relic
+    for _, s in ipairs(st.sector.sites) do
+      if s.relic then relic = s break end
+    end
+    expect(relic).to_be_truthy()
+    expect(planet.in_heart(pl, relic.pos[1], relic.pos[3])).to_be_truthy()
+    expect(planet.support(relic.pos[1], relic.pos[2], relic.pos[3])).to_be(nil)
+    -- a point on the far cap, past the city and clear of the relic, is still supported
+    local dx, dz = pl.cx, pl.cz
+    local l = math.max(1, math.sqrt(dx * dx + dz * dz))
+    local x = pl.cx + dx / l * (pl.rim + 6000)
+    local z = pl.cz + dz / l * (pl.rim + 6000)
+    expect(planet.in_heart(pl, x, z)).to_be_falsy()
+    expect(planet.support(x, planet.height(pl, x, z), z)).to_be_truthy()
+    planet.clear()
+  end)
+
   it("a moon keeps the sky's distant planet; a planet city hides it", function()
     planet.clear()
     expect(planet.hide_sky_billboard()).to_be_falsy()

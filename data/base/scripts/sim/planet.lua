@@ -247,7 +247,48 @@ end
 
 -- the open-space bay toward the sector's heart (other sites, the station, the arrival)
 function M.in_heart(pl, x, z)
-  return sm.sqrt(x * x + z * z) < (pl.heart or 0)
+  if sm.sqrt(x * x + z * z) < (pl.heart or 0) then return true end
+  -- other sites, the trader and the arrival stay in open space even when
+  -- they sit over the cap outside the origin bay
+  for _, h in ipairs(pl.keepouts or {}) do
+    local dx, dz = x - h[1], z - h[2]
+    if dx * dx + dz * dz < h[3] * h[3] then return true end
+  end
+  return false
+end
+
+-- balls of open space around every other site, filled in at activate
+function M.keepouts_of(state, pl)
+  local game = require("sim.game")
+  local keep = {}
+  for i, s in ipairs((state.sector and state.sector.sites) or {}) do
+    if i ~= pl.site then
+      local box = game.site_bounds(i)
+      local cx, cz, rr
+      if box and box[1] and box[2] then
+        local lo, hi = box[1], box[2]
+        cx, cz = (lo[1] + hi[1]) / 2, (lo[3] + hi[3]) / 2
+        local dx, dz = (hi[1] - lo[1]) / 2, (hi[3] - lo[3]) / 2
+        rr = sm.sqrt(dx * dx + dz * dz) + 400
+      else
+        local ext = require("sim.sector").extent(s.kit)
+        cx, cz = s.pos[1] + ext[1] / 2, s.pos[3] + ext[3] / 2
+        rr = 0.5 * sm.sqrt(ext[1] * ext[1] + ext[2] * ext[2] + ext[3] * ext[3]) + 400
+      end
+      -- the kit origin can sit outside the ruin box (a relic grows off it)
+      local od = sm.sqrt((s.pos[1] - cx) * (s.pos[1] - cx) + (s.pos[3] - cz) * (s.pos[3] - cz))
+      if od + 400 > rr then rr = od + 400 end
+      keep[#keep + 1] = { cx, cz, rr }
+    end
+  end
+  local list = (state.sector and (state.sector.traders or (state.sector.trader and { state.sector.trader }))) or {}
+  for _, tr in ipairs(list) do
+    keep[#keep + 1] = { tr.pos[1], tr.pos[3], 1800 }
+  end
+  if state.sector and state.sector.arrival then
+    keep[#keep + 1] = { state.sector.arrival[1], state.sector.arrival[3], 600 }
+  end
+  return keep
 end
 
 -- landing / collision surface under (x, y, z): the upper ground outside the city, or the
@@ -293,6 +334,7 @@ function M.activate(state)
         local pl = M.of(r, game.mega_plan(state, i))
         if pl then
           pl.site = i
+          pl.keepouts = M.keepouts_of(state, pl)
           live[#live + 1] = pl
         end
       end

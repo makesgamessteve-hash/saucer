@@ -104,12 +104,9 @@ local function field_color(pl, x0, z0, x1, z1)
   return planet.color(pl, (x0 + x1) / 2, (z0 + z1) / 2)
 end
 
--- a disk of shared-vertex heightfields around the city. Heights come from the
--- same 3D noise as landing, so the ground you walk on matches what you see.
-function M.terrain_parts(pl)
-  local parts = {}
+-- one heightfield tile, or nil if it is empty or off the cap
+function M.terrain_field(pl, x0, z0, x1, z1, su, sv)
   local cap = M.cap_r(pl)
-  local function add_field(x0, z0, x1, z1, su, sv)
     local xc, zc = (x0 + x1) / 2, (z0 + z1) / 2
     local hd = sm.sqrt((xc - pl.cx) * (xc - pl.cx) + (zc - pl.cz) * (zc - pl.cz))
     if hd > cap then return end
@@ -144,18 +141,37 @@ function M.terrain_parts(pl)
         colors[#colors + 1] = acc[3] / 9
       end
     end
-    if not any then return end
-    parts[#parts + 1] = {
-      kind = "heightfield",
-      c = { x0, 0, z0 },
-      u = { x1 - x0, 0, 0 },
-      v = { 0, 0, z1 - z0 },
-      heights = heights,
-      colors = colors,
-      seg = su, rings = sv,
-      color = field_color(pl, x0, z0, x1, z1),
-      emissive = 0.08,
-    }
+    if not any then return nil end
+  return {
+    kind = "heightfield",
+    c = { x0, 0, z0 },
+    u = { x1 - x0, 0, 0 },
+    v = { 0, 0, z1 - z0 },
+    heights = heights,
+    colors = colors,
+    seg = su, rings = sv,
+    color = field_color(pl, x0, z0, x1, z1),
+    emissive = 0.08,
+  }
+end
+
+function M.terrain_tile_parts(pl, jobs)
+  local parts = {}
+  for _, j in ipairs(jobs) do
+    local part = M.terrain_field(pl, j[1], j[2], j[3], j[4], j[5], j[6])
+    if part then parts[#parts + 1] = part end
+  end
+  return parts
+end
+
+-- a disk of shared-vertex heightfields around the city. Heights come from the
+-- same 3D noise as landing, so the ground you walk on matches what you see.
+function M.terrain_parts(pl)
+  local parts = {}
+  local cap = M.cap_r(pl)
+  local function add_field(x0, z0, x1, z1, su, sv)
+    local part = M.terrain_field(pl, x0, z0, x1, z1, su, sv)
+    if part then parts[#parts + 1] = part end
   end
   local rings = {
     { r0 = 0, r1 = pl.rim + 10000, s = M.TERRAIN_NEAR, sub = 8 },
@@ -187,6 +203,44 @@ function M.terrain_parts(pl)
   return parts
 end
 
+-- How many heightfield tiles one on_render may mesh. Building the whole cap
+-- in one draw overruns the 50M instruction budget, the engine disables the
+-- base mod, and the saucer stops flying (game tests then fail).
+M.TERRAIN_PER_FRAME = 1
+
+-- enumerate tile jobs without sampling noise (cheap enough for one frame)
+function M.terrain_jobs(pl)
+  local jobs, cap = {}, M.cap_r(pl)
+  local rings = {
+    { r0 = 0, r1 = pl.rim + 10000, s = M.TERRAIN_NEAR, sub = 8 },
+    { r0 = pl.rim + 8000, r1 = pl.rim + 30000, s = M.TERRAIN_MID, sub = 8 },
+    { r0 = pl.rim + 26000, r1 = cap, s = M.TERRAIN_FAR, sub = 6 },
+  }
+  local seen = {}
+  for _, rg in ipairs(rings) do
+    local s = rg.s
+    local i0 = math.floor((pl.cx - rg.r1) / s) - 1
+    local i1 = math.floor((pl.cx + rg.r1) / s) + 1
+    local k0 = math.floor((pl.cz - rg.r1) / s) - 1
+    local k1 = math.floor((pl.cz + rg.r1) / s) + 1
+    for iz = k0, k1 do
+      for ix = i0, i1 do
+        local x0, z0, x1, z1 = ix * s, iz * s, (ix + 1) * s, (iz + 1) * s
+        local xc, zc = (x0 + x1) / 2, (z0 + z1) / 2
+        local hd = sm.sqrt((xc - pl.cx) * (xc - pl.cx) + (zc - pl.cz) * (zc - pl.cz))
+        if hd >= rg.r0 and hd < rg.r1 and hd <= cap and not planet.in_heart(pl, xc, zc) then
+          local key = math.floor(xc / 800) .. ":" .. math.floor(zc / 800)
+          if not seen[key] then
+            seen[key] = true
+            jobs[#jobs + 1] = { x0, z0, x1, z1, rg.sub, rg.sub }
+          end
+        end
+      end
+    end
+  end
+  return jobs
+end
+
 -- build at most one expensive step per call so on_render stays under budget
 local function build(pl, all)
   local c = cache(pl)
@@ -196,11 +250,39 @@ local function build(pl, all)
     c.globe_n = #gp
     if not all then return c end
   end
-  if not c.terrain then
-    local tp = M.terrain_parts(pl)
-    c.terrain = #tp > 0 and saucer.mesh.build({ parts = tp }) or false
-    c.terrain_n = #tp
-    if not all then return c end
+  if not c.terrain_done then
+    c.terrain_meshes = c.terrain_meshes or {}
+    if all then
+      local tp = M.terrain_parts(pl)
+      if #tp > 0 then
+        c.terrain_meshes[1] = saucer.mesh.build({ parts = tp })
+        c.terrain = c.terrain_meshes[1]
+        c.terrain_n = #tp
+      else
+        c.terrain = false
+        c.terrain_n = 0
+      end
+      c.terrain_done = true
+    else
+      c.jobs = c.jobs or M.terrain_jobs(pl)
+      c.job_i = c.job_i or 1
+      local n, batch = 0, {}
+      while c.job_i <= #c.jobs and n < M.TERRAIN_PER_FRAME do
+        batch[#batch + 1] = c.jobs[c.job_i]
+        c.job_i = c.job_i + 1
+        n = n + 1
+      end
+      if #batch > 0 then
+        local parts = M.terrain_tile_parts(pl, batch)
+        if #parts > 0 then
+          c.terrain_meshes[#c.terrain_meshes + 1] = saucer.mesh.build({ parts = parts })
+          c.terrain = c.terrain or c.terrain_meshes[#c.terrain_meshes]
+          c.terrain_n = (c.terrain_n or 0) + #parts
+        end
+      end
+      if c.job_i > #c.jobs then c.terrain_done = true end
+      return c
+    end
   end
   if pl.body == "planet" and c.atmo == nil then
     local ap = M.atmo_parts(pl)
@@ -251,11 +333,11 @@ function M.draw(v, A, state, cam)
       st.globes = st.globes + 1
       st.parts = st.parts + (c.globe_n or 0)
     end
-    if c.terrain then
-      v:mesh(c.terrain, { palette = pal, tex = tex, noshadow = true })
+    for _, tm in ipairs(c.terrain_meshes or (c.terrain and { c.terrain } or {})) do
+      v:mesh(tm, { palette = pal, tex = tex, noshadow = true })
       st.terrains = st.terrains + 1
-      st.parts = st.parts + (c.terrain_n or 0)
     end
+    st.parts = st.parts + (c.terrain_n or 0)
     if c.clouds then
       v:mesh(c.clouds, { palette = pal, tex = tex, unlit = true, noshadow = true, planet = M.planet_opts(pl, 3) })
       st.clouds = (st.clouds or 0) + 1
