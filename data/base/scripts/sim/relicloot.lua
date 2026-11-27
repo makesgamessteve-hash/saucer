@@ -13,6 +13,7 @@
 -- The relic slice (site.relic_civ) is left as generated.
 local ruinm = require("sim.ruin")
 local loot = require("sim.loot")
+local shapes = require("sim.relicshape")
 local M = {}
 
 M.HALL_FINDS = 2
@@ -81,7 +82,12 @@ function M.apply(site, ruin)
         local q = quarters[(start + k - 1) % #quarters + 1]
         local x = (mn[1] + mx[1]) / 2 + q[1] * (mx[1] - mn[1]) / 4
         local z = (mn[3] + mx[3]) / 2 + q[2] * (mx[3] - mn[3]) / 4
-        if not used[q] and clear_of(holes, x - 3, x + 3, z - 3, z + 3, M.HOLE_PAD) then
+        -- relic-room-shapes: a shaped hall's finds lie on its free floor
+        local on_floor = true
+        for _, d in ipairs({ { 0, 0 }, { -3, -3 }, { 3, -3 }, { -3, 3 }, { 3, 3 } }) do
+          if not shapes.open_world(h, kit, origin, x + d[1], z + d[2]) then on_floor = false end
+        end
+        if not used[q] and on_floor and clear_of(holes, x - 3, x + 3, z - 3, z + 3, M.HOLE_PAD) then
           used[q] = true
           kept[#kept + 1] = { room = hid, pos = { x, mn[2] + kit.wall + 1.5, z }, max_size = sizes[(hi % #sizes) + 1],
                               tier = 2, hall = h.hall, seed = saucer.seed_child(site.seed, "relic_hall_find", #kept + 1) }

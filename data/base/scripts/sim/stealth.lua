@@ -11,6 +11,7 @@
 -- reset on load like the sentries themselves).
 local vec = require("lib.vec")
 local configs = require("sim.config")
+local shapes = require("sim.relicshape")
 local sm = saucer.math
 local M = {}
 
@@ -258,6 +259,12 @@ function M.decorate(site, ruin, defs)
           bmn[ax], bmx[ax] = a - w / 2, a + w / 2
           bmn[lat], bmx[lat] = l0, l0 + w
           local clear = true
+          -- relic-room-shapes: not inside a shaped hall's solid (only on its free floor)
+          if r.shape then
+            for _, q in ipairs({ { bmn[1], bmn[3] }, { bmx[1], bmn[3] }, { bmn[1], bmx[3] }, { bmx[1], bmx[3] } }) do
+              if not shapes.open_world(r, kit, site.pos, q[1], q[2]) then clear = false end
+            end
+          end
           for _, c in ipairs(hatches) do
             if math.abs(c[ax] - a) < 22 and math.abs(c[lat] - (l0 + w / 2)) < 22 then clear = false end
           end
@@ -275,6 +282,7 @@ function M.decorate(site, ruin, defs)
       local L = math.abs(near - far)
       hd = vec.clamp(hd, 0.2 * L, 0.8 * L)
       local pos = { def.pos[1] + sm.sin(def.yaw) * hd, floor + 1.0, def.pos[3] + sm.cos(def.yaw) * hd }
+      pos = shapes.settle(r, kit, site.pos, pos, 3)
       ruin.slots[#ruin.slots + 1] = { id = #ruin.slots + 1, room = r.id, pos = pos, max_size = 1, tier = S.guard.tier,
         seed = saucer.seed_child(site.seed, "guard", def.id), guarded = def.id, premium = S.guard.premium }
     end

@@ -4,7 +4,10 @@
 -- heart violet -- so a pilot can see the shape of what they explored. A view-side memory (kept per relic for the
 -- session), joined with what the state remembers of a relic in normal play (add-relic-stations, plan phase 8:
 -- state.relic_rooms, so the map survives a save and a reload).
+-- relic-room-shapes: a shaped hall's outline follows its shape (its contour, and its box's sides only where the free
+-- floor reaches them).
 local ruinm = require("sim.ruin")
+local shapes = require("sim.relicshape")
 local M = {}
 
 M.RANGE = 500        -- m: the radar's range inside a relic
@@ -63,18 +66,34 @@ function M.dots(ruin, here, from, extra)
   for _, rm in ipairs(rooms) do
     local color = (rm.id == here and M.HERE) or (rm.id == ruin.relic.core and M.HEART) or M.SEEN
     local y = rm.mn[2] + kit.wall
+    local room = ruin.rooms[rm.id]
+    local function dot(x, z)
+      if shapes.free_world(room, kit, ruin.origin, x, z) then out[#out + 1] = { pos = { x, y, z }, color = color } end
+    end
     local x0, x1, z0, z1 = rm.mn[1] + kit.wall, rm.mx[1] - kit.wall, rm.mn[3] + kit.wall, rm.mx[3] - kit.wall
     local nx = math.max(1, math.floor((x1 - x0) / M.STEP + 0.5))
     local nz = math.max(1, math.floor((z1 - z0) / M.STEP + 0.5))
     for k = 0, nx - 1 do
       local x = x0 + (x1 - x0) * k / nx
-      out[#out + 1] = { pos = { x, y, z0 }, color = color }
-      out[#out + 1] = { pos = { x1 - (x - x0), y, z1 }, color = color }
+      dot(x, z0)
+      dot(x1 - (x - x0), z1)
     end
     for k = 0, nz - 1 do
       local z = z0 + (z1 - z0) * k / nz
-      out[#out + 1] = { pos = { x1, y, z }, color = color }
-      out[#out + 1] = { pos = { x0, y, z1 - (z - z0) }, color = color }
+      dot(x1, z)
+      dot(x0, z1 - (z - z0))
+    end
+    if room.shape then
+      local c, o = kit.cell, ruin.origin
+      for _, g in ipairs(shapes.contour(room.shape)) do
+        local len = math.sqrt(((g[3] - g[1]) * c) ^ 2 + ((g[4] - g[2]) * c) ^ 2)
+        local n = math.max(1, math.floor(len / M.STEP + 0.5))
+        for k = 0, n - 1 do
+          local t = k / n
+          out[#out + 1] = { pos = { o[1] + (g[1] + (g[3] - g[1]) * t) * c, y, o[3] + (g[2] + (g[4] - g[2]) * t) * c },
+                            color = color }
+        end
+      end
     end
     if #out >= M.MAX_DOTS then
       for k = #out, M.MAX_DOTS + 1, -1 do out[k] = nil end

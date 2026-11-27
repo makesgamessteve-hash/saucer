@@ -336,7 +336,20 @@ function M.relic_site(seed, sid, info, sites, obstacles, tp)
                  (saucer.math.cos(turn) * (d0 + 4000) - ext[3] / 2) // 1 }
   local id = #sites + 1
   return { id = id, pos = pos, seed = saucer.seed_child(seed, "relic_site", sid), kit = "relic", civ = ci, relic = true,
-           tutorial = false, danger = info and info.danger or 2 }
+           tutorial = false, danger = info and info.danger or 2, siblings = M.relic_siblings(seed, sid, ci) }
+end
+
+-- relic-room-shapes: the seeds of the relics of civ `ci` in the sectors before `sid` (in sector order), so the relic
+-- generator keeps this one unlike every earlier relic of its species (sim/relicgen.lua generate)
+function M.relic_siblings(seed, sid, ci)
+  local g = require("sim.galaxy").generate(seed)
+  local out = {}
+  for s = M.RELIC_FIRST, sid - 1 do
+    if g.sectors[s] and M.relic_of(seed, s, g.sectors[s]) == ci then
+      out[#out + 1] = saucer.seed_child(seed, "relic_site", s)
+    end
+  end
+  return out
 end
 
 return M
