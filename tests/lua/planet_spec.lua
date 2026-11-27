@@ -115,9 +115,17 @@ describe("generated planet bodies", function()
     planetv.reset()
     local r = gen("city_planet", 333, { 9000, 0, 2000 })
     local pl = planet.of(r)
-    expect(#planetv.globe_parts(pl)).to_be_greater(80)
-    expect(#planetv.terrain_parts(pl)).to_be_greater(40)
-    expect(#planetv.atmo_parts(pl)).to_be_greater(0)
+    local gp, tp, ap = planetv.globe_parts(pl), planetv.terrain_parts(pl), planetv.atmo_parts(pl)
+    expect(#gp).to_be_greater(80)
+    expect(#tp).to_be_greater(40)
+    expect(#ap).to_be_greater(0)
+    -- the globe and the cap are smooth (patches and high-segment spheres, never faceted boxes)
+    for _, part in ipairs(gp) do expect(part.kind == "patch" or part.kind == "lathe" or part.kind == "sphere").to_be_truthy() end
+    for _, part in ipairs(tp) do expect(part.kind).to_be("patch") end
+    for _, part in ipairs(ap) do
+      expect(part.kind).to_be("sphere")
+      expect(part.seg).to_be_greater(32)
+    end
     local moon = planet.of(gen("city_moon", 333, { 9000, 0, 2000 }))
     expect(#planetv.atmo_parts(moon)).to_be(0)
     -- draw through the live list

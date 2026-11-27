@@ -635,4 +635,54 @@ describe("drawing a city", function()
       expect(k.links).to_be(false)
     end
   end)
+  it("a city is concentric: a big core and rings of different districts", function()
+    for _, id in ipairs(KITS) do
+      local r = gen(id)
+      local roles, rings = {}, {}
+      local core
+      for _, d in ipairs(r.city.districts) do
+        expect(d.role ~= nil).to_be_truthy()
+        roles[d.role] = (roles[d.role] or 0) + 1
+        if d.role == "core" then core = d end
+        if d.ring then rings[d.ring] = true end
+      end
+      expect(core ~= nil).to_be_truthy()
+      expect(roles.core).to_be(1)
+      expect((roles.civic or 0)).to_be_greater(0)
+      expect((roles.market or 0)).to_be_greater(0)
+      expect((roles.residential or 0)).to_be_greater(0)
+      expect((roles.industrial or 0)).to_be_greater(0)
+      -- the spaceport sits on an outer ring, the core is the nearest district to the city's centre
+      local port = r.city.districts[r.city.port]
+      expect(port.kind).to_be("spaceport")
+      expect(port.ring).to_be_greater(core.ring)
+      local function dist(d)
+        local dx, dz = d.pos[1] - core.pos[1], d.pos[3] - core.pos[3]
+        return dx * dx + dz * dz
+      end
+      for _, d in ipairs(r.city.districts) do
+        if d.role == "industrial" then expect(dist(d)).to_be_greater(dist(core)) end
+      end
+      -- lots stay inside a disk: a corner of the bounding square is empty
+      local kit = ruinm.kit_of(id)
+      expect(citygen.in_disk(kit.city, 1, 1)).to_be_falsy()
+      expect(citygen.in_disk(kit.city, kit.city.lots[1], kit.city.lots[2])).to_be_falsy()
+      expect(citygen.in_disk(kit.city, (kit.city.lots[1] + 1) // 2, (kit.city.lots[2] + 1) // 2)).to_be_truthy()
+    end
+    -- a planet city still has sixteen districts, and its tallest towers stand at the core
+    local r = gen("city_planet")
+    expect(#r.city.districts).to_be(16)
+    local function top_in(role)
+      local m = 0
+      for _, s in ipairs(r.solids) do
+        if s.kind == "tower" and not s.outer then
+          local d = r.city.districts[s.district or 0]
+          if d and d.role == role then m = math.max(m, s[2][2] - r.origin[2]) end
+        end
+      end
+      return m
+    end
+    expect(top_in("core")).to_be_greater(top_in("residential"))
+    expect(top_in("core")).to_be_greater(0)
+  end)
 end)

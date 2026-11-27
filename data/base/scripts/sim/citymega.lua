@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: MIT
 -- add-alien-cities-2 (plan phase 10 part 2, design civs-and-relics §4.2, §4.4): the megacity round a city's core.
--- The core (sim/citygen.lua) stays the downtown; round it a ring of outer districts fills a 21 km square footprint, each
+-- The core (sim/citygen.lua) stays the downtown; round it a ring of outer districts fills a 21 km annular footprint, each
 -- district a block of civ-shaped megaforms up to 1.5 km tall (one per city up to 2.8 km) between canyon avenues,
 -- joined by strata decks. Nothing here is saved: the plan and every district are pure functions of the city's seed.
 --
@@ -115,7 +115,9 @@ function M.plan(r, sector, i, station_ball)
   local span = M.SPAN[fr.body] or M.SPAN.planet
   local want = rng:int(span[1], span[2])
   local half = math.ceil((want / M.CELL - 1) / 2)
-  local core = { fr.origin[1] - M.PAD, fr.origin[3] - M.PAD, fr.origin[1] + fr.ext[1] + M.PAD, fr.origin[3] + fr.ext[3] + M.PAD }
+  -- keep out of the circular core (the downtown disk plus its skyline), not the old bounding square
+  local fp = citygen.footprint(fr.kit, fr.origin)
+  local core_r = fp.r + M.PAD
   -- the way in: the spaceport is on the core's -z face; keep a corridor in front of it, and keep the whole ring off
   -- the side of the core that faces the sector's heart (where the other sites, the station and the arrival are)
   local lane = { fr.cx - M.CORRIDOR, -1e9, fr.cx + M.CORRIDOR, fr.origin[3] }
@@ -126,13 +128,18 @@ function M.plan(r, sector, i, station_ball)
     for ix = -half, half do
       local x0, z0 = fr.cx + (ix - 0.5) * M.CELL, fr.cz + (iz - 0.5) * M.CELL
       local b = { x0, z0, x0 + M.CELL, z0 + M.CELL }
-      local ok = not rects_meet(b, core, 0) and not rects_meet(b, lane, 0) and rect_dist(b, 0, 0) > heart
+      local ok = rect_dist(b, fp.x, fp.z) >= core_r and not rects_meet(b, lane, 0) and rect_dist(b, 0, 0) > heart
       for _, o in ipairs(obs) do
         if ok and rect_dist(b, o[1], o[2]) < o[3] + M.PAD then ok = false end
       end
       if ok then
-        local mx, mz = x0 + M.CELL / 2 - fr.cx, z0 + M.CELL / 2 - fr.cz
-        cells[#cells + 1] = { ix = ix, iz = iz, box = b, far = mx * mx + mz * mz }
+        local mx, mz = x0 + M.CELL / 2 - fp.x, z0 + M.CELL / 2 - fp.z
+        -- keep the outer city an annulus inside the allocated grid (not the
+        -- tighter rng span, which left too few districts on some seeds)
+        local rad = (2 * half + 1) * M.CELL / 2
+        if mx * mx + mz * mz <= rad * rad then
+          cells[#cells + 1] = { ix = ix, iz = iz, box = b, far = mx * mx + mz * mz }
+        end
       end
     end
   end
@@ -153,6 +160,12 @@ function M.plan(r, sector, i, station_ball)
   local tallest, best = nil, -1
   for k, c in ipairs(cells) do
     local d = M.plan_district(r.seed, k, c, fr, style)
+    -- ring role by distance from the core: inner civic, mid residential, outer industrial
+    local rad = (c.far or 0) ^ 0.5
+    local core_r = max(fr.ext[1], fr.ext[3]) / 2 + M.PAD
+    if rad < core_r + M.CELL * 0.85 then d.role = "civic"
+    elseif rad < core_r + M.CELL * 1.85 then d.role = "residential"
+    else d.role = "industrial" end
     out.districts[k] = d
     -- the megaform stands in the district farthest from the sector's heart
     local mx, mz = (c.box[1] + c.box[3]) / 2, (c.box[2] + c.box[4]) / 2

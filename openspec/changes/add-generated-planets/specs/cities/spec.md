@@ -26,7 +26,7 @@ The sector's other sites, the trader station and the arrival point SHALL stay in
 - **THEN** it passes
 
 ### Requirement: Drawn globe and terrain
-The body SHALL be drawn as a faceted globe and a terrain cap around the city, behind the city and in front of the stars. A planet SHALL have a faint atmosphere. The camera-locked sky planet billboard SHALL be hidden in a sector that already has a planet body.
+The body SHALL be drawn as a smooth spherical globe and a smooth terrain cap around the city, behind the city and in front of the stars. A planet SHALL have a faint atmosphere with a soft limb. The camera-locked sky planet billboard SHALL be hidden in a sector that already has a planet body.
 
 #### Scenario: a globe and a terrain cap are built and drawn for a body city
 - **WHEN** `tests/lua/planet_spec.lua` runs its scenario of this name
@@ -45,4 +45,18 @@ The body's air SHALL hold over the cap. The surface outside the city rim SHALL b
 
 #### Scenario: the hull lands on and will not sink through the body's surface
 - **WHEN** `tests/lua/planet_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+### Requirement: Concentric city layout
+A body city SHALL be planned as a big centre with a plaza and the tallest structures, then ring-districts outward (civic, market, residential, industrial and a spaceport on the outer ring), each ring with its own building mix. The core footprint SHALL be a disk, not a square.
+
+#### Scenario: a city is concentric: a big core and rings of different districts
+- **WHEN** `tests/lua/city_spec.lua` runs its scenario of this name
+- **THEN** it passes
+
+### Requirement: Annular megacity
+The megacity's outer districts SHALL stand in an annulus around the circular core, clear of the core and of the sector heart.
+
+#### Scenario: a city's core is ringed by outer districts, 24 to 48 districts in all
+- **WHEN** `tests/lua/megacity_spec.lua` runs its scenario of this name
 - **THEN** it passes

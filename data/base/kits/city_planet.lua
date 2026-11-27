@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: MIT
 -- Planet city kit (OpenSpec add-cities): a horizon-wide megacity built from the sim/citygen.lua plan: a
--- 12 x 12 grid of lots (3 km square) in 16 districts, spires up to 400 m, three undercity levels linked by
+-- a concentric 12 x 12 disk of lots in 16 districts (a big core and four rings), spires up to 400 m, three undercity levels linked by
 -- tunnels under the streets. Strong gravity: hovering in the open air costs Charge. 
 return {
   id = "city_planet",
