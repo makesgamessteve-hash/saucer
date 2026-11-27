@@ -10,7 +10,7 @@
 ## 3. Cities
 - [x] 3.1 `sim/citygen.lua` and `view/cityroads.lua`: concentric plan, ring roads and radials, central spire, distinct silhouettes and colours per ring
 - [x] 3.2 `sim/citymega.lua`: outer districts in an annulus around the circular core
-- [ ] 3.3 State version 24; seed-42 slice and co-op replays re-recorded
+- [x] 3.3 State version 24; seed-42 slice and co-op replays re-recorded
 
 ## 4. Verification
 - [x] 4.1 `tests/lua/planet_spec.lua`: tangent street, determinism, body kinds, heart bay, smooth globe and terrain, sky billboard, landing and clamp
