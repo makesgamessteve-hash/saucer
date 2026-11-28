@@ -234,7 +234,12 @@ function M.step_visit(state, p, cmd, dt, ctx)
   if homeedit.step(state, p, cmd, ctx) then
     -- pick, place, cancel or undo
   elseif cmd:pressed("use") then
-    -- add-home-layout: guests share home life; the gift table is the fallback
+    -- Use at a display still admires what's on it; then the station opens so
+    -- a guest can also rearrange, cook, harvest, and so on.
+    local st = avatar.station(L, p.vbody)
+    if st and st.kind == "display" then
+      require("sim.decor").admire(state, p, host, st.slot, ctx)
+    end
     local used = require("sim.home").use_station(state, p, ctx)
     if not used then
       require("sim.panel").open(p, "gift_table")

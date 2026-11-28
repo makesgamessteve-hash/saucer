@@ -225,7 +225,9 @@ end
 -- pick a panel row by its text prefix (moves the selection with the stick)
 function M.pick(t, pl, get, prefix)
   local panel = require("sim.panel")
-  for _ = 1, 40 do
+  -- 80 flicks: the trade catalog grew (wall print, hanging lamp, figurine)
+  -- and Refill Charge sits under the shop list.
+  for _ = 1, 80 do
     local p = get()
     if not p.panel then return false end
     local want = panel.find(t.state(), p, prefix)

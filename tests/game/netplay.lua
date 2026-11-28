@@ -16,6 +16,7 @@ local panel = require("sim.panel")
 local decor = require("sim.decor")
 local items = require("sim.items")
 local avatar = require("sim.avatar")
+local homeedit = require("sim.homeedit")
 local NS = saucer.net.status()
 T.assert(NS and NS.max_players == 2, "a two-player network session")
 local D = NS.delay
@@ -42,6 +43,12 @@ end
 local function close(i)
   if P(i)().panel then pick(i, "Close") end
   return not P(i)().panel
+end
+-- Place from the planner enters edit mode; leave it before Use opens a station
+local function leave_edit(i)
+  if not homeedit.on(P(i)()) then return true end
+  press(i, "edit")
+  return not homeedit.on(P(i)())
 end
 local function last(i)
   local m = P(i)().msgs
@@ -79,12 +86,24 @@ T.assert(ap.walk_to(T, 1, host, "planner", 0.3, 2400), "host at the planner")
 T.assert(ap.look(T, 1, host, -1.5708, 0), "host faces the free floor")
 press(1, "use")
 T.assert(host().panel and host().panel.kind == "planner", "the planner is open")
-T.assert(pick(1, "Place Aquarium"), "placed the aquarium")
-T.assert(#host().decor.placed == 1, "one piece placed: " .. last(1))
+T.assert(pick(1, "Place Aquarium"), "started placing the aquarium")
+T.assert(until_(function()
+  if host().decor and #host().decor.placed >= 1 then return true end
+  T.press(1, "use", 1, true)
+  step()
+  return host().decor and #host().decor.placed >= 1
+end, 40), "one piece placed: " .. last(1))
+T.assert(leave_edit(1), "left edit after the aquarium")
 T.assert(ap.look(T, 1, host, 0, 0), "host turns")
 press(1, "use")
-T.assert(pick(1, "Place Floor lamp"), "placed the lamp")
-T.assert(#host().decor.placed == 2, "two pieces placed: " .. last(1))
+T.assert(pick(1, "Place Floor lamp"), "started placing the lamp")
+T.assert(until_(function()
+  if host().decor and #host().decor.placed >= 2 then return true end
+  T.press(1, "use", 1, true)
+  step()
+  return host().decor and #host().decor.placed >= 2
+end, 40), "two pieces placed: " .. last(1))
+T.assert(leave_edit(1), "left edit after the lamp")
 
 -- a find on display slot 1 (an identified Curio from the hold)
 local it = items.stamp(host(), { name = "Lucid Lens of Stillness", type = "lens", value = 40, size = 1 }, 2, nil)
@@ -125,6 +144,7 @@ T.assert(ap.walk_to(T, 2, vg, "display1", 0.25, 3600), "guest reaches the displa
 press(2, "use")
 local ad = guest().admired
 T.assert(ad and ad[1] and ad[1].host == 1 and ad[1].name == items.label(it), "the guest admired the host's lens")
+close(2)
 -- the guest walks into the aquarium: it is solid for guests too
 local aq = host().decor.placed[1]
 T.assert(aq.kind == "aquarium", "aquarium first")
