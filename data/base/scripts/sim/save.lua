@@ -25,7 +25,7 @@ M.SKIP = { msgs = true, fx = true, panel = true, tractor = true, ghost = true, g
            help = true, latched_by = true, jam_flash = true, scan_until = true, docked = true,
            beam_console = true, hatch = true, holo_run = true, tv = true, reading = true, cooking = true,
            lifeline = true, spike = true, visiting = true, vbody = true, shake = true, clamped_by = true,
-           cut = true, beam_queue = true, lights_hold = true }
+           cut = true, beam_queue = true, lights_hold = true, edit = true }
 -- world state saved as diffs (filled by later systems)
 M.WORLD_KEYS = { "traders", "nests", "caches", "vault", "clock", "locks", "grids",
                  -- add-wider-dark: the sector you are in, the ones you left, overrides, decoys, gifts
@@ -88,6 +88,10 @@ local function persistent(p)
 end
 
 function M.record(state)
+  -- add-home-layout: a carry is transient; put the piece back before the diff
+  for _, pl in ipairs(state.players or {}) do
+    require("sim.homeedit").stow_for_save(state, pl)
+  end
   local rec = { format = M.FORMAT, version = state.version, seed = state.seed, mods = M.mods(),
                 world = { tick = state.tick, mystery = mystery.progress(state.mystery), story = story.progress(state.story),
                           diff = diff.diff(baseline_world(state.seed, state.sector, state.sector_id or 1), world_of(state)) or {} },

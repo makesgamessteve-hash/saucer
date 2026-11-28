@@ -37,6 +37,13 @@ return {
       look = "hammock", color = { 0.90, 0.70, 0.40 } },
     { id = "crystal",    name = "Singing crystal",   price = 110, comfort = 5, size = { 0.6, 0.6 }, h = 1.3,
       look = "crystal", color = { 0.70, 0.55, 1.00 } },
+    -- add-home-layout: wall, ceiling and on-top pieces
+    { id = "poster",       name = "Travel poster",   price = 15,  comfort = 1, size = { 0.8, 0.05 }, h = 1.0,
+      look = "poster", color = { 0.90, 0.60, 0.30 }, place = "wall" },
+    { id = "hanging_lamp", name = "Hanging lamp",    price = 35,  comfort = 2, size = { 0.4, 0.4 }, h = 0.8,
+      look = "hang", color = { 0.95, 0.85, 0.55 }, place = "ceiling" },
+    { id = "figurine",     name = "Shelf figurine",  price = 20,  comfort = 1, size = { 0.2, 0.2 }, h = 0.25,
+      look = "figure", color = { 0.80, 0.70, 0.50 }, place = "top" },
   },
   -- garden: a seed grows through `stages` over `minutes` of sim time while it
   -- is watered (each watering lasts `water_minutes`); a ripe plant gives its

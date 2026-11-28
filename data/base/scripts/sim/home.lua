@@ -180,6 +180,10 @@ end
 
 -- sleep until morning: only outside derelicts; refills Charge and saves
 function M.sleep(state, p, ctx)
+  if p.visiting then
+    say(ctx, state, p, "Only the host can sleep here.", "denied")
+    return false
+  end
   if p.site ~= 0 then
     say(ctx, state, p, "Too restless to sleep inside a derelict. Leave the site first.", "denied")
     return false
@@ -222,9 +226,17 @@ end
 
 -- use(state, p, ctx) on foot: a station in reach, else nil (caller handles the helm)
 function M.use_station(state, p, ctx)
-  local L = avatar.layout()
-  local st = avatar.station(L, p.body)
+  local layout = require("sim.layout")
+  local homeedit = require("sim.homeedit")
+  local host = layout.house(state, p)
+  local L = layout.of(host)
+  local body = layout.body(p)
+  local st = avatar.station(L, body)
   if not st then return nil end
+  if p.visiting and not homeedit.guest_may(st.kind) then
+    say(ctx, state, p, "Only the host can use that.", "denied")
+    return st
+  end
   local fn = M.USE[st.kind]
   if fn then fn(state, p, st, ctx) end
   return st
@@ -275,15 +287,20 @@ function M.register_panels(game, ctx)
   })
   panel.register("bed", {
     title = "BED",
-    rows = function(state)
-      local rows = { { text = "Sleep until morning (save)", act = function(st, p) M.sleep(st, p, ctx) end } }
-      -- add-home-among-stars: no loading from the bed in Hardcore
-      if not require("sim.hardcore").on(state) then
-        rows[#rows + 1] = { text = "Load saved game", act = function(st, p) M.load(st, p, ctx, game) end }
+    rows = function(state, p)
+      local rows = {}
+      -- add-home-layout: sleep-and-save stays host-only
+      if not (p and p.visiting) then
+        rows[#rows + 1] = { text = "Sleep until morning (save)", act = function(st, pl) M.sleep(st, pl, ctx) end }
+        if not require("sim.hardcore").on(state) then
+          rows[#rows + 1] = { text = "Load saved game", act = function(st, pl) M.load(st, pl, ctx, game) end }
+        end
+      else
+        rows[#rows + 1] = { text = "This is the host's bunk.", enabled = false }
       end
-      rows[#rows + 1] = { text = "Mod browser", act = function(_, p) panel.open(p, "mods") end }
-      rows[#rows + 1] = { text = "Comfort settings", act = function(_, p) require("sim.comfort").open(p) end }
-      rows[#rows + 1] = { text = "Close", act = function(_, p) panel.close(p) end }
+      rows[#rows + 1] = { text = "Mod browser", act = function(_, pl) panel.open(pl, "mods") end }
+      rows[#rows + 1] = { text = "Comfort settings", act = function(_, pl) require("sim.comfort").open(pl) end }
+      rows[#rows + 1] = { text = "Close", act = function(_, pl) panel.close(pl) end }
       return rows
     end,
   })

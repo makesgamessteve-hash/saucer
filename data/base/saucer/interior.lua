@@ -178,6 +178,7 @@ return {
     { deck = 2, name = "Engine room", box = { -10, -10, 10, 0.9 } },
     { deck = 3, name = "Tractor room", box = { -10, -10, 10, 10 } },
   },
+  -- add-home-layout: a piece with `id` is movable in edit mode; `station` moves that Use spot with it.
   furniture = {
     -- dome deck: helm. A low desk well below the pilot's eye line, with two
     -- angled wing screens to the sides (milestone 2: it no longer fills the view)
@@ -190,16 +191,16 @@ return {
     { deck = 1, kind = "terminal",  box = { 4.6, -7.4, 6.2, -6.6 }, h = 1.3, color = { 0.30, 0.32, 0.40 } },
     -- kitchen (+x side)
     { deck = 1, kind = "counter", box = { 7.0, -3.5, 8.0, 2.5 }, h = 0.95, color = { 0.92, 0.90, 0.86 } },
-    { deck = 1, kind = "counter", box = { 3.6, -1.4, 5.0, 1.4 }, h = 0.95, color = { 0.55, 0.38, 0.25 } },
-    { deck = 1, kind = "fridge",  box = { 6.0, 3.3, 7.4, 4.3 }, h = 2.0, color = { 0.82, 0.86, 0.90 } },
-    { deck = 1, kind = "stool",   box = { 2.7, -0.9, 3.2, -0.4 }, h = 0.7, color = { 0.25, 0.25, 0.3 }, solid = false },
-    { deck = 1, kind = "stool",   box = { 2.7, 0.4, 3.2, 0.9 }, h = 0.7, color = { 0.25, 0.25, 0.3 }, solid = false },
+    { deck = 1, kind = "counter", id = "island", box = { 3.6, -1.4, 5.0, 1.4 }, h = 0.95, color = { 0.55, 0.38, 0.25 } },
+    { deck = 1, kind = "fridge",  id = "fridge", box = { 6.0, 3.3, 7.4, 4.3 }, h = 2.0, color = { 0.82, 0.86, 0.90 } },
+    { deck = 1, kind = "stool",   id = "stool_a", box = { 2.7, -0.9, 3.2, -0.4 }, h = 0.7, color = { 0.25, 0.25, 0.3 }, solid = false },
+    { deck = 1, kind = "stool",   id = "stool_b", box = { 2.7, 0.4, 3.2, 0.9 }, h = 0.7, color = { 0.25, 0.25, 0.3 }, solid = false },
     -- living room (-x side)
-    { deck = 1, kind = "rug",     box = { -7.0, -2.6, -3.4, 2.4 }, h = 0.02, color = { 0.55, 0.25, 0.35 }, solid = false },
-    { deck = 1, kind = "sofa",    box = { -8.0, -3.0, -7.0, 2.5 }, h = 0.85, color = { 0.25, 0.45, 0.70 } },
+    { deck = 1, kind = "rug",     id = "rug_lr", box = { -7.0, -2.6, -3.4, 2.4 }, h = 0.02, color = { 0.55, 0.25, 0.35 }, solid = false },
+    { deck = 1, kind = "sofa",    id = "sofa", box = { -8.0, -3.0, -7.0, 2.5 }, h = 0.85, color = { 0.25, 0.45, 0.70 } },
     { deck = 1, kind = "holotable", box = { -5.6, -1.2, -4.4, 0.8 }, h = 0.75, color = { 0.30, 0.34, 0.42 } },
-    { deck = 1, kind = "armchair",box = { -5.6, 2.7, -4.4, 3.9 }, h = 0.9, color = { 0.25, 0.45, 0.70 } },
-    { deck = 1, kind = "plant",   box = { -7.1, -5.6, -6.3, -4.8 }, h = 1.6, color = { 0.25, 0.65, 0.30 } },
+    { deck = 1, kind = "armchair",id = "armchair", box = { -5.6, 2.7, -4.4, 3.9 }, h = 0.9, color = { 0.25, 0.45, 0.70 } },
+    { deck = 1, kind = "plant",   id = "plant_lr", box = { -7.1, -5.6, -6.3, -4.8 }, h = 1.6, color = { 0.25, 0.65, 0.30 } },
     -- add-home-among-stars: six display plinths and the four garden beds
     { deck = 1, kind = "plinth",  box = { -4.5, 5.9, -3.9, 6.5 }, h = 1.05, color = { 0.86, 0.84, 0.80 } },
     { deck = 1, kind = "plinth",  box = { -6.5, 4.7, -5.9, 5.3 }, h = 1.05, color = { 0.86, 0.84, 0.80 } },
@@ -211,7 +212,7 @@ return {
     { deck = 1, kind = "planter", box = { -1.3, -8.2, 0.0, -7.2 }, h = 0.5, color = { 0.42, 0.30, 0.22 } },
     { deck = 1, kind = "planter", box = { 0.6, -8.2, 1.9, -7.2 }, h = 0.5, color = { 0.42, 0.30, 0.22 } },
     { deck = 1, kind = "planter", box = { 2.2, -8.2, 3.5, -7.2 }, h = 0.5, color = { 0.42, 0.30, 0.22 } },
-    { deck = 1, kind = "plant",   box = { 6.8, -5.8, 7.6, -5.0 }, h = 1.4, color = { 0.25, 0.65, 0.30 } },
+    { deck = 1, kind = "plant",   id = "plant_galley", box = { 6.8, -5.8, 7.6, -5.0 }, h = 1.4, color = { 0.25, 0.65, 0.30 } },
     -- stair rails on the dome deck (sides and the far low end)
     { deck = 1, kind = "rail", box = { -3.0, -6.1, 3.5, -6.0 }, h = 1.0, color = { 0.6, 0.62, 0.7 } },
     { deck = 1, kind = "rail", box = { -3.0, -4.4, 3.5, -4.3 }, h = 1.0, color = { 0.6, 0.62, 0.7 } },
@@ -226,19 +227,19 @@ return {
     { deck = 2, kind = "wall", box = { 3.4, 0.7, 9.0, 0.9 }, h = 3.3, color = { 0.70, 0.68, 0.62 } },
     { deck = 2, kind = "wall", box = { -0.1, 0.9, 0.1, 9.0 }, h = 3.3, color = { 0.70, 0.68, 0.62 } },
     -- bedroom
-    { deck = 2, kind = "bed",      box = { 3.0, 3.0, 6.0, 5.8 }, h = 0.55, color = { 0.90, 0.88, 0.80 } },
-    { deck = 2, kind = "box",      box = { 1.4, 5.0, 2.4, 5.8 }, h = 0.6, color = { 0.45, 0.30, 0.20 } },
-    { deck = 2, kind = "wardrobe", box = { 5.4, 1.2, 7.0, 2.2 }, h = 2.2, color = { 0.50, 0.34, 0.22 } },
-    { deck = 2, kind = "rug",      box = { 1.5, 1.8, 3.4, 6.5 }, h = 0.02, color = { 0.35, 0.30, 0.55 }, solid = false },
+    { deck = 2, kind = "bed",      id = "bed", station = "bed", box = { 3.0, 3.0, 6.0, 5.8 }, h = 0.55, color = { 0.90, 0.88, 0.80 } },
+    { deck = 2, kind = "box",      id = "nightstand", box = { 1.4, 5.0, 2.4, 5.8 }, h = 0.6, color = { 0.45, 0.30, 0.20 } },
+    { deck = 2, kind = "wardrobe", id = "wardrobe", box = { 5.4, 1.2, 7.0, 2.2 }, h = 2.2, color = { 0.50, 0.34, 0.22 } },
+    { deck = 2, kind = "rug",      id = "rug_bed", box = { 1.5, 1.8, 3.4, 6.5 }, h = 0.02, color = { 0.35, 0.30, 0.55 }, solid = false },
     -- bathroom
     { deck = 2, kind = "shower",   box = { -6.4, 2.6, -4.8, 4.2 }, h = 2.2, color = { 0.6, 0.85, 1.0 } },
-    { deck = 2, kind = "box",      box = { -2.7, 5.6, -2.0, 6.3 }, h = 0.45, color = { 0.95, 0.95, 0.95 } },
-    { deck = 2, kind = "counter",  box = { -4.4, 1.0, -3.0, 1.6 }, h = 0.9, color = { 0.95, 0.95, 0.95 } },
-    { deck = 2, kind = "tub",      box = { -5.4, 5.4, -2.6, 6.8 }, h = 0.6, color = { 0.95, 0.95, 0.98 } },
+    { deck = 2, kind = "box",      id = "bath_box", box = { -2.7, 5.6, -2.0, 6.3 }, h = 0.45, color = { 0.95, 0.95, 0.95 } },
+    { deck = 2, kind = "counter",  id = "bath_counter", box = { -4.4, 1.0, -3.0, 1.6 }, h = 0.9, color = { 0.95, 0.95, 0.95 } },
+    { deck = 2, kind = "tub",      id = "tub", box = { -5.4, 5.4, -2.6, 6.8 }, h = 0.6, color = { 0.95, 0.95, 0.98 } },
     -- engine room
     { deck = 2, kind = "engine",   circle = { 0, -1.8, 1.1 }, h = 3.3, color = { 0.3, 0.9, 1.0 } },
     { deck = 2, kind = "console",  box = { -1.0, 0.12, 1.0, 0.68 }, h = 1.2, color = { 0.30, 0.32, 0.40 } },
-    { deck = 2, kind = "box",      box = { -6.2, -5.6, -4.6, -4.4 }, h = 1.6, color = { 0.45, 0.40, 0.30 } },
+    { deck = 2, kind = "box",      id = "engine_crate", box = { -6.2, -5.6, -4.6, -4.4 }, h = 1.6, color = { 0.45, 0.40, 0.30 } },
     -- add-holodeck-home-life: the Holodeck behind its arch (starboard aft): the
     -- partition with the arch opening, the arch frame, the control panel
     { deck = 2, kind = "holo_wall", box = { 3.9, -7.4, 4.1, -2.7 }, h = 3.3, color = { 0.16, 0.16, 0.2 } },
@@ -246,7 +247,7 @@ return {
     { deck = 2, kind = "holo_arch", box = { 3.85, -2.75, 4.15, -1.25 }, h = 2.6, color = { 0.95, 0.75, 0.25 }, solid = false },
     { deck = 2, kind = "holo_panel", box = { 3.62, -3.55, 3.9, -2.8 }, h = 1.5, color = { 0.24, 0.24, 0.3 } },
     -- living room: the TV on its low stand, facing the sofa across the table
-    { deck = 1, kind = "tv",       box = { -3.25, -1.3, -2.8, 0.9 }, h = 0.55, color = { 0.30, 0.22, 0.16 } },
+    { deck = 1, kind = "tv",       id = "tv", station = "tv", box = { -3.25, -1.3, -2.8, 0.9 }, h = 0.55, color = { 0.30, 0.22, 0.16 } },
     -- add-tractor-beam: rails round the belly stairwell (engine room, port side)
     { deck = 2, kind = "rail", box = { -7.3, -3.1, -3.9, -3.0 }, h = 1.0, color = { 0.6, 0.62, 0.7 } },
     { deck = 2, kind = "rail", box = { -7.3, -1.7, -3.9, -1.6 }, h = 1.0, color = { 0.6, 0.62, 0.7 } },

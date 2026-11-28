@@ -873,7 +873,7 @@ local function group(L, gid)
 end
 
 return function(params, rng)
-  local L = data.load("saucer/interior.lua")
+  local L = params.layout or data.load("saucer/interior.lua")
   if params.part == "group" then return group(L, params.group) end
   if params.part == "door" then return door(L, params.door) end
   if params.part == "belly_glass" then

@@ -27,7 +27,7 @@ M.HINTS = HINTS
 -- station); HINTS above stay the helm line for each device
 local MODE_HINTS = {
   walk = {
-    kbm = "WASD walk MOUSE look SHIFT run G use (helm, lab, terminal, beam console) TAB map H help",
+    kbm = "WASD walk MOUSE look SHIFT run G use P edit - undo TAB map H help",
     pad = "LS walk RS look LS-click run X use (helm, lab, terminal, beam console) DPAD-RIGHT map",
     keys2 = "IJKL walk ARROWS look ENTER use \\ map",
     touch = "Stick walk  drag look  USE helm/lab/terminal/console  MAP",
@@ -153,6 +153,7 @@ local HELP = {
   "Scanner V (reveals sentries 10 s), Jammer T (disables 12 s)",
   "Lab bench: identify and decode; trade terminal when docked",
   "Home: holodeck (engine room), stove, bookshelf, TV (sofa)",
+  "Edit: P enters edit mode, Use picks and places, H cancels, Minus undoes",
   "Docked: 3 pockets the saucer; F holds the coin, Shift sprints",
   "Station: G trades/talks/grabs a thief, E or 1-2 in a hangar",
   "Derelict: Seat near a deck, 3 (or Q) steps out; E deploys it",
@@ -180,7 +181,10 @@ end
 M.LAND_READOUT = 90   -- m: the landing readout shows when the ground is this close
 
 function M.status(p, state)
-  local L = avatar.layout()
+  local layout = require("sim.layout")
+  local host = state and layout.house(state, p) or p
+  local L = layout.of(host)
+  local body = layout.body(p)
   if p.mode == "wake" then return "BEDROOM", nil end
   -- add-holodeck-home-life
   if p.holo_run then
@@ -195,10 +199,19 @@ function M.status(p, state)
   if p.reading then return "BOOKSHELF", nil end
   if p.cooking then return "KITCHEN", nil end
   if p.mode == "walk" and p.beam_console then return "TRACTOR ROOM", "F: PULL  STICK: TRIM  USE: GET UP" end
+  if require("sim.homeedit").on(p) then
+    local g = state and require("sim.homeedit").ghost(state, p)
+    local hint = "USE: PICK UP  P: LEAVE  -: UNDO"
+    if g then
+      hint = g.ok and "USE: PLACE  H: CANCEL  SHIFT: 15 DEG" or ("CAN'T PLACE: " .. (g.why or "blocked"):upper())
+    end
+    return "EDIT MODE", hint
+  end
   if p.mode == "walk" then
-    local room = avatar.room(L, p.body):upper()
-    if avatar.near_helm(L, p.body) then return room, "USE: TAKE THE HELM" end
-    local st = avatar.station(L, p.body)
+    local who = body or p.body
+    local room = avatar.room(L, who):upper()
+    if avatar.near_helm(L, who) then return room, "USE: TAKE THE HELM" end
+    local st = avatar.station(L, who)
     if st then return room, st.label end
     return room, nil
   end

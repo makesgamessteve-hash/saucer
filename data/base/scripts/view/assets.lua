@@ -953,4 +953,32 @@ function M.ruin_mesh(ruin, origin)
   return m
 end
 
+-- add-home-layout: rebuilt group meshes when a player has moved furniture.
+-- The default cache is used when there are no overrides, so the common path
+-- is unchanged. One rebuild per revision is enough (the recipe itself is not cached).
+function M.groups_for(p)
+  local layout = require("sim.layout")
+  if not p or not layout.has_moves(p) then return cache.groups, cache.group_mats end
+  cache.layout_groups = cache.layout_groups or {}
+  local key = tostring(p.index or 1) .. ":" .. tostring(layout.rev(p))
+  local hit = cache.layout_groups[key]
+  if hit then return hit.groups, hit.mats end
+  local L = layout.of(p)
+  local fold = require("sim.fold")
+  local kit = require("lib.meshkit")
+  local groups, mats = {}, {}
+  for _, g in ipairs(fold.groups(L)) do
+    groups[g.id], mats[g.id] = M.split_mats(kit.recipe("interior", {
+      part = "group", group = g.id, layout = L, rev = layout.rev(p), owner = p.index }, 1))
+  end
+  -- drop stale revisions for this player
+  for k in pairs(cache.layout_groups) do
+    if k:sub(1, #tostring(p.index or 1) + 1) == tostring(p.index or 1) .. ":" and k ~= key then
+      cache.layout_groups[k] = nil
+    end
+  end
+  cache.layout_groups[key] = { groups = groups, mats = mats }
+  return groups, mats
+end
+
 return M

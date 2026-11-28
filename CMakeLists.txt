@@ -148,6 +148,12 @@ if(SAUCER_BUILD_TESTS)
   add_test(NAME game_home_restore_every_tick COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR}
            --user-dir ${USERDIR}-home-ret --quiet --seed 42 --script tests/game/home.lua --restore-every-tick
            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  # add-home-layout: edit mode, reachability, guest home-life
+  add_test(NAME game_homeedit COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-homeedit --quiet
+           --seed 42 --script tests/game/homeedit.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+  add_test(NAME game_homeedit_restore_every_tick COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR}
+           --user-dir ${USERDIR}-homeedit-ret --quiet --seed 42 --script tests/game/homeedit.lua --restore-every-tick
+           WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   # saves: write a seed-plus-diff save with one player, then load it into a two-player game (own user dir, ordered)
   add_test(NAME game_saves_write COMMAND saucer_headless --root ${CMAKE_SOURCE_DIR} --user-dir ${USERDIR}-saves --quiet
            --seed 42 --script tests/game/saves_write.lua WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})

@@ -201,8 +201,22 @@ end
 -- walk to a named nav node of the interior layout along the nav graph
 function M.walk_to(t, pl, get, node, tol, max_ticks)
   local avatar = require("sim.avatar")
-  local L = avatar.layout()
-  local from = avatar.nav_nearest(L, get().body)
+  local layout = require("sim.layout")
+  local p = get()
+  local L = layout.of(p)
+  if layout.has_moves(p) then
+    local dest = L.nav and L.nav.nodes and L.nav.nodes[node]
+    if not dest then return false end
+    local d0 = avatar.deck_of(L, p.body)
+    local d1 = avatar.deck_of(L, { pos = dest })
+    local extra = require("sim.home").solids(L, p)
+    local pts = require("sim.walkgrid").path(L, extra,
+      { deck = d0, x = p.body.pos[1], z = p.body.pos[3] },
+      { deck = d1, x = dest[1], z = dest[3] })
+    if not pts then return false end
+    return M.walk_path(t, pl, get, pts, tol or 0.3, max_ticks)
+  end
+  local from = avatar.nav_nearest(L, p.body)
   local path = avatar.nav_path(L, from, node)
   if not path then return false end
   return M.walk_path(t, pl, get, path, tol or 0.3, max_ticks)

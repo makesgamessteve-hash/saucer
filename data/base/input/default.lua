@@ -54,11 +54,14 @@ return {
     floods       = { "key:5" },
     cabin_lights = { "key:6" },
     lights       = { "pad:misc1", "pad:touchpad", "pad:rpaddle1", "pad:lpaddle1" },
+    -- add-home-layout: append-only so older command frames stay aligned until replays are re-recorded
+    edit   = { "key:P" },
+    undo   = { "key:Minus", "key2:Minus" },
   },
   -- stable order so action slots (and therefore replays) never depend on table order
   axis_order = { "move_x", "move_z", "lift", "turn", "look" },
   button_order = { "shrink", "grow", "size1", "size2", "tractor", "scan", "boost", "use",
                    "camera", "menu", "jam", "mystery_mode", "size3", "snap_left", "snap_right",
                    "map", "decoy", "shroud", "spike", "grapple", "snap_a", "snap_b", "land", "home", "assist",
-                   "headlights", "floods", "cabin_lights", "lights" },
+                   "headlights", "floods", "cabin_lights", "lights", "edit", "undo" },
 }

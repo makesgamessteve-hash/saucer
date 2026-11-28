@@ -67,53 +67,76 @@ function M.footprint(def, x, z, q)
   return { x - w / 2, z - dd / 2, x + w / 2, z + dd / 2 }
 end
 
+function M.foot_of(def, x, z, q, turn)
+  if turn then return require("sim.layout").footprint(def.size[1], def.size[2], x, z, turn) end
+  return M.footprint(def, x, z, q or 0)
+end
+
 local function overlap(a, b, m)
   m = m or 0
   return a[1] < b[3] + m and a[3] > b[1] - m and a[2] < b[4] + m and a[4] > b[2] - m
 end
 
--- can `def` stand at (x, z) on deck d turned q? -> ok, why. `skip` is a placed
--- piece to ignore (moving it)
-function M.can_place(p, def, d, x, z, q, body)
-  local L = avatar.layout()
-  local fp = M.footprint(def, x, z, q)
+-- can `def` stand at (x, z) on deck d turned q quarters (or opts.turn in 15°
+-- steps)? -> ok, why. opts.layout, opts.skip_id (a built-in), opts.skip_placed
+-- and opts.place are used by edit mode.
+function M.can_place(p, def, d, x, z, q, body, opts)
+  opts = opts or {}
+  local layout = require("sim.layout")
+  local L = opts.layout or layout.of(p)
+  local turn = opts.turn
+  if not turn and type(q) == "number" and q >= 4 then turn = q end
+  local fp = M.foot_of(def, x, z, q, turn)
+  local place = opts.place or def.place or "floor"
   local deck = L.decks[d]
   if not deck or d > 2 then return false, "not on this deck" end
   local R = deck.radius - 0.35
   for _, c in ipairs({ { fp[1], fp[2] }, { fp[1], fp[4] }, { fp[3], fp[2] }, { fp[3], fp[4] } }) do
     if c[1] * c[1] + c[2] * c[2] > R * R then return false, "too close to the hull" end
   end
-  for _, f in ipairs(L.furniture) do
-    if f.deck == d and f.box and (f.solid ~= false or f.kind == "rug") and not (def.walk and f.kind == "rug") then
-      if overlap(fp, f.box, def.walk and -0.01 or 0.05) and not (def.walk and f.solid == false) then
-        return false, "something is in the way"
+  local floorish = place == "floor"
+  if floorish then
+    for _, f in ipairs(L.furniture) do
+      if f.id and opts.skip_id and f.id == opts.skip_id then
+        -- the piece being moved
+      elseif f.deck == d and f.box and (f.solid ~= false or f.kind == "rug") and not (def.walk and f.kind == "rug") then
+        if overlap(fp, f.box, def.walk and -0.01 or 0.05) and not (def.walk and f.solid == false) then
+          return false, "something is in the way"
+        end
+      elseif f.deck == d and f.circle then
+        local c = f.circle
+        local cx, cz = vec.clamp(c[1], fp[1], fp[3]), vec.clamp(c[2], fp[2], fp[4])
+        if (cx - c[1]) ^ 2 + (cz - c[2]) ^ 2 < (c[3] + 0.1) ^ 2 then return false, "something is in the way" end
       end
-    elseif f.deck == d and f.circle then
-      local c = f.circle
-      local cx, cz = vec.clamp(c[1], fp[1], fp[3]), vec.clamp(c[2], fp[2], fp[4])
-      if (cx - c[1]) ^ 2 + (cz - c[2]) ^ 2 < (c[3] + 0.1) ^ 2 then return false, "something is in the way" end
     end
-  end
-  for _, k in ipairs(L.keep_clear or {}) do
-    if k.deck == d and overlap(fp, k.box) then return false, "keep the way clear" end
-  end
-  for _, door in ipairs(L.doors or {}) do
-    if door.deck == d and overlap(fp, door.box, 0.8) then return false, "keep the door clear" end
-  end
-  for _, st in ipairs(L.stations or {}) do
-    if st.deck == d then
-      local cx, cz = vec.clamp(st.pos[1], fp[1], fp[3]), vec.clamp(st.pos[3], fp[2], fp[4])
-      if (cx - st.pos[1]) ^ 2 + (cz - st.pos[3]) ^ 2 < 0.55 ^ 2 then return false, "it would block a station" end
+    for _, k in ipairs(L.keep_clear or {}) do
+      if k.deck == d and overlap(fp, k.box) then return false, "keep the way clear" end
+    end
+    for _, door in ipairs(L.doors or {}) do
+      if door.deck == d and overlap(fp, door.box, 0.8) then return false, "keep the door clear" end
+    end
+    for _, st in ipairs(L.stations or {}) do
+      if st.deck == d then
+        local cx, cz = vec.clamp(st.pos[1], fp[1], fp[3]), vec.clamp(st.pos[3], fp[2], fp[4])
+        if (cx - st.pos[1]) ^ 2 + (cz - st.pos[3]) ^ 2 < 0.55 ^ 2 then return false, "it would block a station" end
+      end
     end
   end
   local D = M.view(p)
   for _, o in ipairs(D.placed) do
-    local od = M.furniture(o.kind)
-    if o.deck == d and od and overlap(fp, M.footprint(od, o.x, o.z, o.q), 0.02) and not (def.walk or od.walk) then
-      return false, "another piece is there"
+    if opts.skip_placed and o.id == opts.skip_placed then
+      -- the piece being moved
+    else
+      local od = M.furniture(o.kind)
+      local ot = o.turn
+      if o.deck == d and od and overlap(fp, M.foot_of(od, o.x, o.z, o.q, ot), 0.02) and not (def.walk or od.walk) then
+        local same = (place == "floor" and (od.place or "floor") == "floor")
+          or (place ~= "floor" and (od.place or "floor") == place)
+        if same then return false, "another piece is there" end
+      end
     end
   end
-  if body and not def.walk then
+  if body and not def.walk and floorish then
     local cx, cz = vec.clamp(body.pos[1], fp[1], fp[3]), vec.clamp(body.pos[3], fp[2], fp[4])
     if (cx - body.pos[1]) ^ 2 + (cz - body.pos[3]) ^ 2 < (L.body_radius + 0.05) ^ 2 then return false, "you are in the way" end
   end
@@ -132,12 +155,14 @@ function M.spot(body, def)
 end
 
 function M.place(state, p, kind, ctx)
-  local D = M.ensure(p)
+  local host = require("sim.layout").house(state, p)
+  local D = M.ensure(host)
   local def = M.furniture(kind)
   if not def or (D.store[kind] or 0) < 1 then return false, "none in storage" end
-  if p.mode ~= "walk" or p.visiting then return false, "walk your own dome" end
-  local d, x, z, q = M.spot(p.body, def)
-  local ok, why = M.can_place(p, def, d, x, z, q, p.body)
+  if p.mode ~= "walk" and not p.visiting then return false, "walk your own dome" end
+  local body = require("sim.layout").body(p)
+  local d, x, z, q = M.spot(body, def)
+  local ok, why = M.can_place(host, def, d, x, z, q, body)
   if not ok then
     if ctx then
       ctx.msg(state, p, "Can't place the " .. def.name:lower() .. " here: " .. why)
@@ -159,12 +184,14 @@ end
 -- the placed piece nearest the body on its deck (within PICK_RANGE)
 function M.nearest(p)
   local D = M.view(p)
-  local L = avatar.layout()
-  local d = avatar.deck_of(L, p.body)
+  local L = require("sim.layout").of(p)
+  local body = require("sim.layout").body(p)
+  if not body then return nil end
+  local d = avatar.deck_of(L, body)
   local best, bd
   for i, o in ipairs(D.placed) do
     if o.deck == d then
-      local dd = (o.x - p.body.pos[1]) ^ 2 + (o.z - p.body.pos[3]) ^ 2
+      local dd = (o.x - body.pos[1]) ^ 2 + (o.z - body.pos[3]) ^ 2
       if dd <= M.PICK_RANGE ^ 2 and (not bd or dd < bd) then best, bd = i, dd end
     end
   end
@@ -208,8 +235,9 @@ function M.displayable(it)
 end
 
 function M.show(state, p, slot, uid, ctx)
-  local D = M.ensure(p)
-  local L = avatar.layout()
+  local host = require("sim.layout").house(state, p)
+  local D = M.ensure(host)
+  local L = require("sim.layout").of(host)
   if not L.display[slot] or D.display[slot] then return false end
   local it = items.find(p, uid)
   if not M.displayable(it) then return false end
@@ -217,22 +245,23 @@ function M.show(state, p, slot, uid, ctx)
   it.hot = false
   D.display[slot] = it
   if ctx then
-    ctx.msg(state, p, string.format("On display: %s. Comfort %d (%s)", items.label(it), M.comfort(state, p), M.level(state, p)))
+    ctx.msg(state, p, string.format("On display: %s. Comfort %d (%s)", items.label(it), M.comfort(state, host), M.level(state, host)))
     ctx.fx(state, p, "bank")
   end
   return true
 end
 
 function M.unshow(state, p, slot, ctx)
-  local D = M.ensure(p)
+  local host = require("sim.layout").house(state, p)
+  local D = M.ensure(host)
   local it = D.display[slot]
   if not it then return false end
-  if #p.hold >= require("sim.upgrades").hold_slots(p) then
-    if ctx then ctx.msg(state, p, "Your hold is full") end
+  if #host.hold >= require("sim.upgrades").hold_slots(host) then
+    if ctx then ctx.msg(state, p, "The hold is full") end
     return false
   end
   D.display[slot] = nil
-  p.hold[#p.hold + 1] = it
+  host.hold[#host.hold + 1] = it
   if ctx then ctx.msg(state, p, "Took " .. items.label(it) .. " back into the hold") end
   return true
 end
@@ -262,8 +291,9 @@ function M.stage(state, bed)
 end
 
 function M.plant(state, p, bed_i, seed, ctx)
-  local D = M.ensure(p)
-  local L = avatar.layout()
+  local host = require("sim.layout").house(state, p)
+  local D = M.ensure(host)
+  local L = require("sim.layout").of(host)
   if not L.garden[bed_i] or D.garden[bed_i] then return false end
   if (D.seeds[seed] or 0) < 1 then return false end
   D.seeds[seed] = D.seeds[seed] - 1
@@ -274,20 +304,22 @@ function M.plant(state, p, bed_i, seed, ctx)
 end
 
 function M.water(state, p, bed_i, ctx)
-  local bed = M.ensure(p).garden[bed_i]
+  local host = require("sim.layout").house(state, p)
+  local bed = M.ensure(host).garden[bed_i]
   if not bed then return false end
-  M.grow(state, p)
+  M.grow(state, host)
   bed.watered = clock.minutes(state)
   if ctx then ctx.msg(state, p, "You water the " .. M.seed(bed.seed).name:lower() .. ".") end
   return true
 end
 
 function M.harvest(state, p, bed_i, ctx)
-  local bed = M.ensure(p).garden[bed_i]
-  M.grow(state, p)
+  local host = require("sim.layout").house(state, p)
+  local bed = M.ensure(host).garden[bed_i]
+  M.grow(state, host)
   if not bed or M.stage(state, bed) < #M.defs().stages then return false end
   local def = M.seed(bed.seed)
-  require("sim.kitchen").stock(p, def.harvest, 1)
+  require("sim.kitchen").stock(host, def.harvest, 1)
   bed.growth = 0
   bed.harvests = (bed.harvests or 0) + 1
   if ctx then
@@ -372,22 +404,42 @@ end
 local function close_row() return { text = "Close", act = function(_, pl) panel.close(pl) end } end
 
 function M.planner_rows(state, p, ctx)
-  local D = M.view(p)
-  local rows = { { text = string.format("Comfort %d - %s (Charge x%.2f)", M.comfort(state, p), M.level(state, p),
-    M.regen_factor(state, p)), enabled = false } }
+  local host = require("sim.layout").house(state, p)
+  local homeedit = require("sim.homeedit")
+  local D = M.view(host)
+  local rows = { { text = string.format("Comfort %d - %s (Charge x%.2f)", M.comfort(state, host), M.level(state, host),
+    M.regen_factor(state, host)), enabled = false } }
+  if homeedit.on(p) then
+    rows[#rows + 1] = { text = "Leave edit mode", act = function(st, pl)
+      homeedit.leave(st, pl, ctx); panel.close(pl)
+    end }
+    if homeedit.holding(p) then
+      rows[#rows + 1] = { text = "Cancel this move", act = function(st, pl) homeedit.cancel(st, pl, ctx) end }
+    end
+  else
+    rows[#rows + 1] = { text = "Enter edit mode", act = function(st, pl)
+      if homeedit.enter(st, pl, ctx) then panel.close(pl) end
+    end }
+  end
+  rows[#rows + 1] = { text = "Undo last change", act = function(st, pl) homeedit.undo(st, pl, ctx) end }
   for _, def in ipairs(M.defs().furniture) do
     local n = D.store[def.id] or 0
     if n > 0 then
       local kind = def.id
       rows[#rows + 1] = { text = string.format("Place %s (%d)", def.name, n), act = function(st, pl)
-        if M.place(st, pl, kind, ctx) then panel.close(pl) end
+        if homeedit.start_store(st, pl, kind, ctx) then panel.close(pl) end
       end }
     end
   end
-  local i = M.nearest(p)
+  local i = M.nearest(host)
   if i then
     rows[#rows + 1] = { text = "Pack away the " .. M.furniture(D.placed[i].kind).name:lower(),
-      act = function(st, pl) M.pick_up(st, pl, ctx) end }
+      act = function(st, pl)
+        -- pack into the host store (never the guest's)
+        local body_p = pl
+        -- nearest is on host; pick_up uses p, so run it as if on the host
+        M.pick_up(st, host, ctx)
+      end }
   end
   rows[#rows + 1] = { text = string.format("Placed: %d pieces, %d on display, %d beds planted", #D.placed,
     M.display_count(p), (function() local n = 0 for _ in pairs(D.garden) do n = n + 1 end return n end)()), enabled = false }
@@ -396,10 +448,12 @@ function M.planner_rows(state, p, ctx)
 end
 
 function M.display_rows(state, p, ctx)
-  local L = avatar.layout()
-  local st = avatar.station(L, p.body)
+  local host = require("sim.layout").house(state, p)
+  local L = require("sim.layout").of(host)
+  local body = require("sim.layout").body(p)
+  local st = body and avatar.station(L, body)
   local slot = (p.panel and p.panel.slot) or (st and st.slot) or 1
-  local D = M.view(p)
+  local D = M.view(host)
   local rows = {}
   if D.display[slot] then
     rows[#rows + 1] = { text = "On display: " .. items.label(D.display[slot]), enabled = false }
@@ -420,8 +474,9 @@ function M.display_rows(state, p, ctx)
 end
 
 function M.garden_rows(state, p, ctx)
-  local D = M.view(p)
-  local L = avatar.layout()
+  local host = require("sim.layout").house(state, p)
+  local D = M.view(host)
+  local L = require("sim.layout").of(host)
   local stages = M.defs().stages
   local rows = {}
   for i = 1, #L.garden do
@@ -456,9 +511,9 @@ function M.garden_rows(state, p, ctx)
 end
 
 function M.register(home, ctx)
-  home.USE.planner = function(_, p) M.ensure(p); panel.open(p, "planner") end
-  home.USE.display = function(_, p, st) M.ensure(p); panel.open(p, "display"); p.panel.slot = st.slot end
-  home.USE.garden = function(_, p) M.ensure(p); panel.open(p, "garden") end
+  home.USE.planner = function(state, p) M.ensure(require("sim.layout").house(state, p)); panel.open(p, "planner") end
+  home.USE.display = function(state, p, st) M.ensure(require("sim.layout").house(state, p)); panel.open(p, "display"); p.panel.slot = st.slot end
+  home.USE.garden = function(state, p) M.ensure(require("sim.layout").house(state, p)); panel.open(p, "garden") end
   panel.register("planner", { title = "HOME PLANNER", rows = function(s, p) return M.planner_rows(s, p, ctx) end })
   panel.register("display", { title = "DISPLAY SLOT", rows = function(s, p) return M.display_rows(s, p, ctx) end })
   panel.register("garden", { title = "GARDEN", rows = function(s, p) return M.garden_rows(s, p, ctx) end })

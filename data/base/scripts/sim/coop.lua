@@ -204,7 +204,7 @@ function M.visit(state, p, q, ctx)
   p.vbody = avatar.new(L, L.spawn.pos, L.spawn.yaw)
   p.mode = "walk"
   p.panel = false
-  ctx.msg(state, p, string.format("You step into P%d's dome. Use: gift table. Map (Tab) to go home.", q.index))
+  ctx.msg(state, p, string.format("You step into P%d's dome. Use: home life, or the gift table. Map (Tab) to go home.", q.index))
   ctx.msg(state, q, string.format("P%d is visiting your dome", p.index))
   return true
 end
@@ -225,14 +225,18 @@ function M.step_visit(state, p, cmd, dt, ctx)
     M.return_home(state, p, ctx)
     return
   end
-  local L = avatar.layout()
+  local layout = require("sim.layout")
+  local homeedit = require("sim.homeedit")
+  local L = layout.of(host)
   avatar.step(p.vbody, { move_x = cmd:axis("move_x"), move_z = cmd:axis("move_z"), turn = cmd:axis("turn"),
                          look = cmd:axis("look"), run = cmd:held("boost"), aim = cmd.aim }, dt, L,
     require("sim.home").solids(L, host, { p.vbody }))
-  if cmd:pressed("use") then
-    -- add-home-among-stars: Use at a display slot admires what is on it
-    local st = avatar.station(L, p.vbody)
-    if not (st and st.kind == "display" and require("sim.decor").admire(state, p, host, st.slot, ctx)) then
+  if homeedit.step(state, p, cmd, ctx) then
+    -- pick, place, cancel or undo
+  elseif cmd:pressed("use") then
+    -- add-home-layout: guests share home life; the gift table is the fallback
+    local used = require("sim.home").use_station(state, p, ctx)
+    if not used then
       require("sim.panel").open(p, "gift_table")
     end
   end
@@ -241,7 +245,7 @@ end
 -- the guest's eyes, in the host's saucer
 function M.viewpoint(state, p)
   local host = state.players[p.visiting]
-  local L = avatar.layout()
+  local L = require("sim.layout").of(host)
   local ship = host.ship
   local e = avatar.rot(ship.yaw, avatar.eye(L, p.vbody))
   return { ship.pos[1] + e[1], ship.pos[2] + e[2], ship.pos[3] + e[3] }, ship.yaw + p.vbody.yaw, p.vbody.pitch

@@ -408,13 +408,18 @@ function M.decor(v, A, o, d, state)
   if not D then return 0 end
   local decor = require("sim.decor")
   local fm = require("lib.data").load("meshes/furniture.lua")
-  local L = avatar.layout()
+  local L = require("sim.layout").of(o)
   local n = 0
   for _, pc in ipairs(D.placed) do
     local def = decor.furniture(pc.kind)
     if def then
       local m = decor_mesh("f:" .. pc.kind, function() return fm.furniture(def) end)
-      v:mesh(m, { pos = at(d, { pc.x, L.decks[pc.deck].floor, pc.z }), yaw = d.yaw + pc.q * math.pi / 2, roll = d.roll,
+      local yaw = pc.turn and (pc.turn * math.pi / 12) or ((pc.q or 0) * math.pi / 2)
+      local y = L.decks[pc.deck].floor
+      if (def.place or pc.place) == "wall" then y = y + 1.2
+      elseif (def.place or pc.place) == "ceiling" then y = (L.decks[pc.deck].ceiling or (y + 2.8)) - 0.2
+      elseif (def.place or pc.place) == "top" then y = y + 0.9 end
+      v:mesh(m, { pos = at(d, { pc.x, y, pc.z }), yaw = d.yaw + yaw, roll = d.roll,
                   scale = d.scale })
       n = n + 1
     end
@@ -444,7 +449,7 @@ end
 
 M.TV_COLORS = { trader_wave = { 0.3, 0.8, 1.0 }, static_noir = { 0.75, 0.75, 0.8 }, sky_garden = { 0.5, 1.0, 0.5 } }
 function M.home_parts(v, A, o, d, tick)
-  local L = avatar.layout()
+  local L = require("sim.layout").of(o)
   local n = 0
   local T = L.tv
   if T then
@@ -765,19 +770,21 @@ M.last_scan = {}
 
 -- the Villa's rooms, each folding on its own (sim/fold.lua) plus the doors
 function M.rooms(v, A, o, d, state)
-  local L = avatar.layout()
+  local layout = require("sim.layout")
+  local L = layout.of(o)
+  local groups, group_mats = require("view.assets").groups_for(o)
   local ship = o.ship
   local amounts = fold.amounts(ship, L)
   local eye = ship.morph and fold.eye_local(ship) or { 0, 0, 0 }
   local drawn = 0
   for _, g in ipairs(fold.groups(L)) do
     local a = amounts[g.id] or 0
-    local m = A.groups[g.id]
+    local m = groups[g.id]
     if a < 1 and m then
       local lp, sc = fold.transform(g, a, { eye[1], g.anchor[2], eye[3] })
       local opts = { pos = at(d, lp), yaw = d.yaw, roll = d.roll, scale = { sc[1] * d.scale, sc[2] * d.scale, sc[3] * d.scale } }
       v:mesh(m, opts)
-      for _, mm in ipairs(A.group_mats and A.group_mats[g.id] or {}) do
+      for _, mm in ipairs(group_mats and group_mats[g.id] or {}) do
         v:mesh(mm.mesh, { pos = opts.pos, yaw = opts.yaw, roll = opts.roll, scale = opts.scale,
                           tex = A.tex["mat_" .. mm.mat], palette = A.pal.interior })
       end
@@ -803,8 +810,35 @@ function M.rooms(v, A, o, d, state)
     if (amounts["2:Engine room"] or 0) == 0 then M.engine_parts(v, A, d, state and state.tick or 0) end
     M.home_parts(v, A, o, d, state and state.tick or 0)
     if state and (amounts["1:Living room"] or 0) == 0 then M.decor(v, A, o, d, state) end
+    if state then M.edit_ghost(v, A, o, d, state, L) end
   end
   return drawn
+end
+
+-- add-home-layout: a green (or red) ghost of the piece being carried
+function M.edit_ghost(v, A, o, d, state, L)
+  local homeedit = require("sim.homeedit")
+  local layout = require("sim.layout")
+  for _, pl in ipairs(state.players or {}) do
+    local host = layout.house(state, pl)
+    if host == o and homeedit.holding(pl) then
+      local g = homeedit.ghost(state, pl)
+      if g and g.def then
+        local deck = L.decks[g.deck]
+        local y = deck and deck.floor or 0
+        if g.place == "wall" then y = y + 1.2
+        elseif g.place == "ceiling" then y = (deck and deck.ceiling or (y + 2.8)) - 0.2
+        elseif g.place == "top" then y = y + 0.9 end
+        local yaw = (g.turn or 0) * (math.pi / 12)
+        local tint = g.ok and { 0.35, 1.0, 0.45, 0.55 } or { 1.0, 0.3, 0.25, 0.55 }
+        local sx = (g.def.size and g.def.size[1] or 0.8) * d.scale
+        local sz = (g.def.size and g.def.size[2] or 0.8) * d.scale
+        local sy = (g.def.h or 0.8) * d.scale
+        v:mesh(A.unit, { pos = at(d, { g.x, y + (g.def.h or 0.8) / 2, g.z }), yaw = d.yaw + yaw, roll = d.roll,
+                         scale = { sx, sy, sz }, ghost = true, tint = tint })
+      end
+    end
+  end
 end
 
 -- add-detail-pass: the engine's moving parts. Two rotor rings spin opposite

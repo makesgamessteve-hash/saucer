@@ -75,6 +75,23 @@ function LOOK.hammock(d)
            props.bar({ -w + 0.05, d.h - 0.1, 0 }, { 0, 0.55, 0 }, 0.8, 0.04, d.color),
            props.bar({ 0, 0.55, 0 }, { w - 0.05, d.h - 0.1, 0 }, 0.8, 0.04, d.color) }
 end
+function LOOK.poster(d)
+  local w, h = d.size[1] / 2, d.h
+  return { box(-w, 0, -0.02, w, h, 0.02, d.color),
+           box(-w + 0.04, 0.08, -0.025, w - 0.04, h - 0.08, -0.01, darker(d.color, 1.2)) }
+end
+function LOOK.hang(d)
+  local r = d.size[1] / 2
+  return { cyl(0, d.h - 0.08, 0, 0.03, 0.08, 8, STEEL),
+           P("cone", { c = { 0, 0.1, 0 }, r = r, r1 = r * 0.4, h = d.h - 0.2, seg = 10, color = d.color, emissive = 0.7 }),
+           P("sphere", { c = { 0, 0.12, 0 }, r = r * 0.35, h = 0.12, seg = 8, rings = 3, color = WARM, emissive = 1 }) }
+end
+function LOOK.figure(d)
+  local r = d.size[1] / 2
+  return { cyl(0, 0, 0, r * 1.1, 0.03, 8, DARK),
+           P("sphere", { c = { 0, 0.1, 0 }, r = r * 0.7, h = 0.08, seg = 8, rings = 3, color = d.color }),
+           P("cone", { c = { 0, 0.16, 0 }, r = r * 0.45, r1 = 0.01, h = d.h - 0.16, seg = 6, color = darker(d.color, 0.85) }) }
+end
 function LOOK.crystal(d)
   return { cyl(0, 0, 0, 0.28, 0.12, 8, DARK),
            P("cone", { c = { 0, 0.12, 0 }, r = 0.18, r1 = 0, h = d.h - 0.12, seg = 6, color = d.color, emissive = 0.9 }),

@@ -37,14 +37,18 @@ function M.ensure(p)
 end
 
 function M.stock(p, id, n)
-  local pan = M.ensure(p)
+  local pan = M.ensure(M.owner(state, p))
   pan[id] = (pan[id] or 0) + n
   if pan[id] <= 0 then pan[id] = nil end
 end
 
 -- can this recipe be cooked from the pantry? -> ok, missing ingredient id
+function M.owner(state, p)
+  return require("sim.layout").house(state, p)
+end
+
 function M.can_cook(p, r)
-  local pan = M.ensure(p)
+  local pan = M.ensure(M.owner(state, p))
   for _, id in ipairs(saucer.util.sorted_keys(r.needs or {})) do
     if (pan[id] or 0) < r.needs[id] then return false, id end
   end
@@ -64,13 +68,14 @@ end
 function M.start(state, p, id, ctx)
   local r = M.recipe(id)
   if not r then return false end
-  local ok, missing = M.can_cook(p, r)
+  local host = M.owner(state, p)
+  local ok, missing = M.can_cook(host, r)
   if not ok then
     ctx.msg(state, p, "Missing " .. M.name(missing) .. " for " .. r.name)
     ctx.fx(state, p, "denied")
     return false
   end
-  for _, k in ipairs(saucer.util.sorted_keys(r.needs or {})) do M.stock(p, k, -r.needs[k]) end
+  for _, k in ipairs(saucer.util.sorted_keys(r.needs or {})) do M.stock(host, k, -r.needs[k]) end
   local s = M.data().cook_seconds or 3
   p.cooking = { recipe = id, left = s, total = s }
   p.panel = false
@@ -86,7 +91,18 @@ function M.step(state, p, dt, ctx)
   if c.left > 1e-9 then return nil end
   p.cooking = false
   local r = M.recipe(c.recipe)
-  for _, b in ipairs(saucer.util.sorted_keys(r.buffs or {})) do buffs.give(state, p, b, r.buffs[b]) end
+  local host = M.owner(state, p)
+  local given = {}
+  local function feed(q)
+    if not q or given[q.index] then return end
+    given[q.index] = true
+    for _, b in ipairs(saucer.util.sorted_keys(r.buffs or {})) do buffs.give(state, q, b, r.buffs[b]) end
+  end
+  feed(p)
+  feed(host)
+  for _, o in ipairs(state.players or {}) do
+    if o.visiting == host.index then feed(o) end
+  end
   p.meals = (p.meals or 0) + 1
   ctx.msg(state, p, r.text or ("You eat " .. r.name .. "."))
   ctx.fx(state, p, "pickup")
@@ -97,12 +113,12 @@ end
 function M.rows(state, p, ctx)
   local rows = {}
   for _, r in ipairs(M.data().recipes) do
-    local ok = M.can_cook(p, r)
+    local ok = M.can_cook(M.owner(state, p), r)
     local id = r.id
     rows[#rows + 1] = { text = string.format("Cook %s (%s)", r.name, M.needs_text(r)), enabled = ok,
       act = function(st, pl) M.start(st, pl, id, ctx) end }
   end
-  local pan = M.ensure(p)
+  local pan = M.ensure(M.owner(state, p))
   local ids = saucer.util.sorted_keys(pan)
   if #ids == 0 then rows[#rows + 1] = { text = "Pantry: empty", enabled = false } end
   for _, id in ipairs(ids) do

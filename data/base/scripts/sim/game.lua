@@ -54,6 +54,8 @@ local claims = require("sim.claims")
 -- add-dock-land-eva
 local landing = require("sim.landing")
 local hulldoor = require("sim.hulldoor")
+local layout = require("sim.layout")
+local homeedit = require("sim.homeedit")
 local stealth = require("sim.stealth")
 local lightsm = require("sim.lights")
 local relic = require("sim.relic")
@@ -327,12 +329,12 @@ function M.new_player(index, pos, yaw)
   return p
 end
 
-M.VERSION = 24 -- state version; saves made by a newer game are refused
+M.VERSION = 25 -- state version; saves made by a newer game are refused
 
 function M.init(state, ctx)
   M.state_ref = state
   local seed = ctx.seed
-  state.version = M.VERSION  -- v24: generated planets under body cities, concentric plans, shader-lit globes (add-generated-planets); v23: relic shape fixes; v21: styled relics use non-rectangular room-plan patterns (vary-relic-room-plans); v20: relics in far sectors, guarded, with their explored rooms and scans remembered (add-relic-stations, plan phase 8); v19: alien stations, bigger, move the trader, the far hangar and grow an alien wing inside (add-alien-stations); v18: realistic lighting (add-realistic-lighting); v17: suspicion meters, site alarms, guarded finds, cover, power cells, Spotters (add-strategic-sentries); v16: the fun fixes (add-fun-fixes); v15: megastructure stations move the trader and the far hangar (add-huge-stations); v14: landing gear, the hull hatch and the suit (add-dock-land-eva); v13: the run story (add-run-story); v12: sliding doors keep a goal and a hold timer (fix-bedroom-door); v11: seed-plus-diff saves (save format 3); v10: playtest recommendations (add-playtest-recs); v9: the wider dark (add-wider-dark); v8: on-foot excursions; v7: station visits
+  state.version = M.VERSION  -- v25: home layout overrides, edit mode, guest home-life (add-home-layout); v24: generated planets under body cities, concentric plans, shader-lit globes (add-generated-planets); v23: relic shape fixes; v21: styled relics use non-rectangular room-plan patterns (vary-relic-room-plans); v20: relics in far sectors, guarded, with their explored rooms and scans remembered (add-relic-stations, plan phase 8); v19: alien stations, bigger, move the trader, the far hangar and grow an alien wing inside (add-alien-stations); v18: realistic lighting (add-realistic-lighting); v17: suspicion meters, site alarms, guarded finds, cover, power cells, Spotters (add-strategic-sentries); v16: the fun fixes (add-fun-fixes); v15: megastructure stations move the trader and the far hangar (add-huge-stations); v14: landing gear, the hull hatch and the suit (add-dock-land-eva); v13: the run story (add-run-story); v12: sliding doors keep a goal and a hold timer (fix-bedroom-door); v11: seed-plus-diff saves (save format 3); v10: playtest recommendations (add-playtest-recs); v9: the wider dark (add-wider-dark); v8: on-foot excursions; v7: station visits
   state.seed = seed
   state.tick = 0
   civs.use(seed)
@@ -463,27 +465,30 @@ function M.viewpoint(p, state)
   end
   local ship = p.ship
   if p.mode == "wake" then
-    local L = avatar.layout()
+    local L = layout.of(p)
     local e = avatar.rot(ship.yaw, L.wake.eye)
     return { ship.pos[1] + e[1], ship.pos[2] + e[2], ship.pos[3] + e[3] }, ship.yaw + L.wake.yaw, L.wake.pitch
   end
   if p.holo_run then return holo.viewpoint(nil, p) end
   if p.mode == "foot" and p.station then return visit.viewpoint(p) end
   if p.mode == "foot" and p.excursion then return excursion.viewpoint(p) end
-  local L0 = avatar.layout()
-  local seat = (p.mode == "walk") and ((p.tv and L0.sofa) or (p.reading and L0.shelf) or (p.cooking and L0.stove))
+  local L0 = layout.of(p)
+  local sofa = layout.seat(p, "sofa") or L0.sofa
+  local shelf = layout.seat(p, "shelf") or L0.shelf
+  local stove = layout.seat(p, "stove") or L0.stove
+  local seat = (p.mode == "walk") and ((p.tv and sofa) or (p.reading and shelf) or (p.cooking and stove))
   if seat then
     local e = avatar.rot(ship.yaw, seat.eye)
     return { ship.pos[1] + e[1], ship.pos[2] + e[2], ship.pos[3] + e[3] }, ship.yaw + seat.yaw, seat.pitch
   end
   if p.mode == "walk" and p.beam_console then
     -- in the Tractor Room's sling seat, out over the floor window
-    local L = avatar.layout()
+    local L = layout.of(p)
     local e = avatar.rot(ship.yaw, L.tractor.eye)
     return { ship.pos[1] + e[1], ship.pos[2] + e[2], ship.pos[3] + e[3] }, ship.yaw + L.tractor.yaw, p.body.pitch
   end
   if p.mode == "walk" then
-    local L = avatar.layout()
+    local L = layout.of(p)
     local e = avatar.rot(ship.yaw, avatar.eye(L, p.body))
     return { ship.pos[1] + e[1], ship.pos[2] + e[2], ship.pos[3] + e[3] }, ship.yaw + p.body.yaw, p.body.pitch
   end
@@ -650,7 +655,7 @@ end
 -- add-tractor-beam: sit down at the beam console in the Tractor Room / get up
 M.HATCH_ARMED = 0.7 -- how far the iris opens while the operator sits at the console
 local function console_enter(state, p)
-  local L = avatar.layout()
+  local L = layout.of(p)
   p.beam_console = true
   p.body.pitch = L.tractor.pitch
   msg(state, p, "Beam console: look down through the glass. Stick trims, F pulls, Use gets up.")
@@ -669,7 +674,7 @@ end
 
 -- the Use button: take the helm, or stand up from it
 local function use(state, p)
-  local L = avatar.layout()
+  local L = layout.of(p)
   local ship = p.ship
   -- add-holodeck-home-life: inside a program, on the sofa, in a book, at the stove
   if p.holo_run then
@@ -1152,7 +1157,7 @@ local function world_step(state, p, dt)
   local hw = p.tractor and 1 or (p.beam_console and M.HATCH_ARMED or 0)
   local hc = p.hatch or 0
   if hw > hc then p.hatch = math.min(hw, hc + 2.5 * dt) else p.hatch = math.max(hw, hc - 1.5 * dt) end
-  home.doors_step(avatar.layout(), p, dt, coop.guests(state, p))
+  home.doors_step(layout.of(p), p, dt, coop.guests(state, p))
   hulldoor.step(state, p, dt, ctx_fns)
   -- add-wider-dark: the Shroud drains Charge while it is up
   if p.shroud then
@@ -1350,7 +1355,7 @@ step_player_inner = function(state, p, cmd, dt)
     end
   end
   if cmd:pressed("camera") then p.cam = p.cam == "first" and "chase" or "first" end
-  if cmd:pressed("menu") then p.help = not p.help end
+  if cmd:pressed("menu") and not homeedit.holding(p) then p.help = not p.help end
   -- add-realistic-lighting: the saucer's headlights, floods and cabin lamps (sim/lights.lua)
   lightsm.step(state, p, cmd, ctx_fns)
   if cmd:pressed("mystery_mode") then
@@ -1399,18 +1404,20 @@ step_player_inner = function(state, p, cmd, dt)
     world_step(state, p, dt)
     return
   end
+  -- add-home-layout: edit / undo / pick / place (also cancels with Menu)
+  local used_edit = homeedit.step(state, p, cmd, ctx_fns)
   -- add-holodeck-home-life: inside a holodeck program the stick moves you
   -- through the simulated space (or flies the simulated Seat); the saucer
   -- holds station meanwhile. On the sofa, in a book or at the stove you sit still.
   if p.holo_run then
-    if cmd:pressed("use") then use(state, p) end
+    if cmd:pressed("use") and not used_edit then use(state, p) end
     if p.holo_run then holo.step(state, p, cmd, dt, ctx_fns) end
     flight.step(ship, STILL, dt, mover(state, p))
     world_step(state, p, dt)
     return
   end
   if p.tv or p.reading or p.cooking then
-    if cmd:pressed("use") then use(state, p) end
+    if cmd:pressed("use") and not used_edit then use(state, p) end
     local moving = math.abs(cmd:axis("move_x")) > 0.5 or math.abs(cmd:axis("move_z")) > 0.5
     if moving and not p.cooking then
       if p.tv then msg(state, p, "You get up from the sofa.") end
@@ -1420,7 +1427,7 @@ step_player_inner = function(state, p, cmd, dt)
     world_step(state, p, dt)
     return
   end
-  if cmd:pressed("use") then use(state, p) end
+  if cmd:pressed("use") and not used_edit then use(state, p) end
   if p.mode == "helm" then relic.lock_step(state, p, cmd, dt, ctx_fns) end
   relic.play_step(state, p, ctx_fns)
   if cmd:pressed("scan") then scan(state, p) end
@@ -1449,7 +1456,7 @@ step_player_inner = function(state, p, cmd, dt)
     flight.step(ship, cmd, dt, mover(state, p))
   elseif p.beam_console then
     -- at the beam console: trim thrusters in the operator's frame, look to aim the view
-    local L = avatar.layout()
+    local L = layout.of(p)
     flight.trim(ship, { move_x = cmd:axis("move_x"), move_z = cmd:axis("move_z"), lift = cmd:axis("lift"),
                         turn = cmd:axis("turn") }, ship.yaw + L.tractor.yaw, dt, mover(state, p))
     ship.yaw = saucer.math.wrap(ship.yaw + comfort.snap(cmd))
@@ -1457,7 +1464,7 @@ step_player_inner = function(state, p, cmd, dt)
   else
     -- nobody at the helm: the saucer brakes to a stop and holds station
     if not berthed then flight.step(ship, STILL, dt, mover(state, p)) end
-    local L = avatar.layout()
+    local L = layout.of(p)
     if p.door and p.door.on then
       -- add-dock-land-eva: on the hull stairs
       if hulldoor.stairs_step(state, p, cmd, dt, ctx_fns) == "out" then excursion.leave_hatch(state, p, ctx_fns) end
@@ -1559,6 +1566,7 @@ function M.step(state, cmds, dt)
     local p = state.players[i]
     if p and cmds[i] then M.step_player(state, p, cmds[i], dt) end
   end
+  homeedit.resolve(state, ctx_fns)
   -- sentries act once per tick for everyone, then their stun bolts fly
   for i = 1, #state.sector.sites do sentry.step(state, i, rt.sentries[i], dt, ctx_fns) end
   sentry.step_bolts(state, dt)
