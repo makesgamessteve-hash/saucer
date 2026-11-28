@@ -5,7 +5,7 @@ context: |
   Targets Windows (MSVC), Linux (GCC/Clang) and Web (emscripten, WebXR); macOS is out of scope.
   The sim is deterministic: fixed 60 Hz ticks, command frames only, saucer.math, sorted_pairs, state hashes.
   Every player owns their own saucer, hold, credits, Charge and loot (co-op ready).
-  Coverage gates: >= 95% lines for C (gcovr) and Lua (luacov). Full conventions: openspec/project.md.
+  Coverage gates: >= 95% lines for C (gcovr) and Lua (luacov, from the unit specs only). Full conventions: openspec/project.md.
 
 rules:
   tasks:
