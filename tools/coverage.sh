@@ -1,21 +1,20 @@
 #!/usr/bin/env bash
 # Coverage gate (C via gcov/gcovr, Lua via luacov). Fails below 95% lines.
 # Usage: tools/coverage.sh [build-dir]   (needs gcc, gcovr, lua5.4 + luacov)
-# The Lua pass runs the specs and every game test under luacov in parallel
-# (one stats file each, merged afterwards); luacov's line hook makes the sim
-# 20-40x slower, so each run gets a hard time limit instead of hanging CI.
+# C coverage comes from the whole ctest run (C unit tests, specs, game tests and
+# replays). Lua coverage comes ONLY from the unit specs (tests/lua): each spec
+# file runs under luacov on its own (one stats file each, merged afterwards), so
+# the shards run in parallel and the slowest single file sets the pace. The game
+# tests and replays still run, but unhooked, in ctest: luacov's line hook makes
+# the sim 20-40x slower, so tracing whole scenarios took about two hours.
 # SPDX-License-Identifier: MIT
 set -euo pipefail
 cd "$(dirname "$0")/.."
 B=${1:-build/cov}
 MIN=${SAUCER_MIN_COVERAGE:-95}
 JOBS=${SAUCER_JOBS:-$(nproc 2>/dev/null || echo 2)}
-LIMIT=${SAUCER_COV_TIMEOUT:-2400}
-# The mystery is the longest run (about 45k ticks, ~1600 s on a CI runner and
-# 30% more on a busy one); it gets a longer leash than the rest, which all end
-# within 1700 s (the specs, ~2400 s, get the same leash). The runs go in parallel, so this does not
-# lengthen the step.
-LIMIT_MYSTERY=${SAUCER_COV_TIMEOUT_MYSTERY:-3600}
+# hard limit for one spec file under luacov, so a hung spec fails instead of hanging CI
+LIMIT=${SAUCER_COV_TIMEOUT:-1800}
 cmake -S . -B "$B" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DSAUCER_COVERAGE=ON -DSAUCER_BUILD_GAME=OFF
 cmake --build "$B"
 find "$B" -name '*.gcda' -delete
@@ -23,22 +22,14 @@ rm -rf build/luacov.stats.out build/luacov.report.out build/luacov-parts
 mkdir -p build/luacov-parts
 (cd "$B" && ctest -j"$JOBS" --output-on-failure)
 
-# Lua: base game scripts exercised by the specs and the game tests.
-lua_run() { # name, then saucer_headless arguments
+# Lua: base game scripts exercised by the unit specs alone (one luacov run per spec file).
+lua_run() { # spec file name (tests/lua/NAME_spec.lua)
   local name=$1
-  shift
   local part=build/luacov-parts/$name
   sed "s#build/luacov.stats.out#$part.stats.out#" .luacov > "$part.luacov"
-  local t0=$SECONDS limit=$LIMIT
-  # the specs ran in 2365 s of the 2400 s budget on main (94b23f3); with add-fun-fixes' specs they
-  # need the same longer leash as the mystery (they run in parallel, so the step is not longer)
-  # add-realistic-lighting: the sentries run (72k ticks, 2335 s on main a29a693) grew past 2400 s with the
-  # per-frame light list (2400+ s on CI), so the long 72k-tick runs get the same leash too
-  # add-alien-stations: the bigger stations' specs ran past 3600 s on CI (the hulls and their meshes are built in
-  # Lua under the line hook); they get 5000 s, still inside the step's 110 minutes since they start first
-  case "$name" in mystery|sentries|strategic) limit=$LIMIT_MYSTERY ;; specs) limit=${SAUCER_COV_TIMEOUT_SPECS:-5000} ;; esac
-  if LUACOV_CONFIG="$part.luacov" timeout "$limit" "$B"/saucer_headless --root . --user-dir "$B/test-user-$name" \
-      --quiet --coverage "$@" > "$part.log" 2>&1; then
+  local t0=$SECONDS
+  if LUACOV_CONFIG="$part.luacov" timeout "$LIMIT" "$B"/saucer_headless --root . --user-dir "$B/test-user-$name" \
+      --quiet --coverage --test-lua tests/lua --filter "$name" > "$part.log" 2>&1; then
     echo "luacov $name: ok in $((SECONDS - t0)) s"
   else
     echo "luacov $name: FAILED (exit $?) after $((SECONDS - t0)) s"
@@ -48,28 +39,14 @@ lua_run() { # name, then saucer_headless arguments
 }
 pids=()
 names=()
-start() { lua_run "$@" & pids+=($!); names+=("$1"); }
 throttle() { while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do sleep 1; done; }
-# the whole spec suite is the longest single run: start it first so it overlaps the game tests
-# (started last it waited for a free slot and ended the gate)
-start specs --test-lua tests/lua
-# longest first so the slow ones overlap the rest. tests/game/widerdark.lua
-# (four views, ~47k ticks) runs in ctest only: under luacov it takes over
-# half an hour; tests/lua/widerdark_spec.lua and coop_replay cover its code.
-for s in sentries strategic mystery station excursion alien hatch dock land_anywhere eva holodeck story slice derelict3d home trade vertical coop interior fold tractor city lighting relic relic_play relic_locks megacity xr xr_hands boot coop_replay; do
-  extra=""
-  [ "$s" = coop ] && extra="--local-players 2 --viewports 2"
-  [ "$s" = coop_replay ] && extra="--coop --viewports 4"
-  [ "$s" = mystery ] && extra="--ticks 60000"
-  [ "$s" = sentries ] && extra="--ticks 72000"
-  [ "$s" = strategic ] && extra="--ticks 72000"
-  [ "$s" = station ] && extra="--ticks 40000"
-  [ "$s" = alien ] && extra="--ticks 40000"
-  [ "$s" = excursion ] && extra="--ticks 40000"
-  [ "$s" = relic ] && extra="--relic-slice"
+# the biggest specs first so the slow ones overlap the rest
+for f in $(ls -S tests/lua/*_spec.lua); do
+  s=$(basename "$f")
+  # --filter is a substring match on the file name: refuse a name another spec file contains
+  [ "$(ls tests/lua | grep -c -F "$s")" = 1 ] || { echo "spec file name $s is a substring of another spec file"; exit 1; }
   throttle
-  # shellcheck disable=SC2086
-  start "$s" --seed 42 $extra --script tests/game/$s.lua
+  lua_run "$s" & pids+=($!); names+=("$s")
 done
 fail=0
 for i in "${!pids[@]}"; do wait "${pids[$i]}" || { echo "luacov run ${names[$i]} failed"; fail=1; }; done
@@ -77,7 +54,7 @@ for i in "${!pids[@]}"; do wait "${pids[$i]}" || { echo "luacov run ${names[$i]}
 lua5.4 tools/luacov_merge.lua build/luacov.stats.out build/luacov-parts/*.stats.out
 luacov
 lua_total=$(awk '/^Total/ {gsub("%","",$4); print $4}' build/luacov.report.out)
-echo "Lua line coverage: ${lua_total}%"
+echo "Lua line coverage (unit specs only): ${lua_total}%"
 gcovr -r . --filter 'engine/src/core/' --print-summary --fail-under-line "$MIN" "$B"
 awk -v t="$lua_total" -v m="$MIN" 'BEGIN { if (t + 0 < m) { print "Lua coverage below " m "%"; exit 1 } }'
 echo "coverage gate passed (>= ${MIN}%)"

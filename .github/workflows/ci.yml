@@ -22,7 +22,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y $SDL_LINUX_DEPS gcovr lua5.4 liblua5.4-dev luarocks xvfb mesa-utils
           sudo luarocks --lua-version 5.4 install luacov
-      - name: Coverage gate (C via gcovr, Lua via luacov, >= 95% lines)
+      - name: Coverage gate (C via gcovr, Lua unit specs via luacov, >= 95% lines)
         timeout-minutes: 110
         run: tools/coverage.sh build/cov
       - name: Upload coverage reports

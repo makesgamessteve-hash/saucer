@@ -764,7 +764,7 @@ saucer.test.wait(ticks) ; .state_hash() ; .snapshot() ; .restore(snap) ; .assert
 - **Sanitizers:** ASan and UBSan in a Linux debug CI job.
 
 ### 15.2 Lua unit tests
-- **Framework:** `busted`-compatible specs, run **inside the engine binary** (`saucer --test-lua tests/lua`) so they get the real sandbox and API, with `saucer.*` mockable through test doubles. Coverage comes from `luacov` via debug hooks, enabled only in test mode.
+- **Framework:** `busted`-compatible specs, run **inside the engine binary** (`saucer --test-lua tests/lua`) so they get the real sandbox and API, with `saucer.*` mockable through test doubles. Coverage comes from `luacov` via debug hooks, enabled only in test mode and only around the specs (game scenarios do not count towards Lua coverage).
 - **Targets:**
   - transition rules (costs, clearance refusals, chaining)
   - cargo, tractor class, and hot/banked rules

@@ -37,7 +37,9 @@ out of scope. Touch controls for mobile web ship in milestone 1.
 ## Testing and gates
 - C unit tests (`tests/c`) and Lua specs (`tests/lua`): **≥ 95 % line
   coverage** each, gcovr over `engine/src/core` and luacov over
-  `data/base/scripts` (`tools/coverage.sh`).
+  `data/base/scripts` (`tools/coverage.sh`). **Lua coverage comes from the
+  unit specs alone**: game scenarios and replays run unhooked in ctest and do
+  not count, so cover new Lua with a spec in `tests/lua`.
 - Game tests (`tests/game/*.lua`) run headless with fixed seeds; replays in
   `tests/replays/*.srep` must reproduce their hashes on every platform.
 - Each spec scenario maps to at least one named test (see each change's
