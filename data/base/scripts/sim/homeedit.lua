@@ -144,7 +144,7 @@ function M.snap_wall(L, d, body, def, x, z, turn)
         if dd < (M.PICK_RANGE + 1) ^ 2 and face >= -0.2 and (not bd or dd < bd) then
           best, bd = { px, pz }, dd
           -- face outward: yaw along the normal
-          bt = M.turn_from_yaw(math.atan2(nx, nz), false)
+          bt = M.turn_from_yaw(saucer.math.atan2(nx, nz), false)
         end
       end
     end
