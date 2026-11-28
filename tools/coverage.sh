@@ -23,13 +23,20 @@ mkdir -p build/luacov-parts
 (cd "$B" && ctest -j"$JOBS" --output-on-failure)
 
 # Lua: base game scripts exercised by the unit specs alone (one luacov run per spec file).
+# Each spec is copied into its own directory with runner.lua. --filter is a substring
+# of the file name, so city_spec.lua would also run megacity_spec.lua and aliencity_spec.lua.
 lua_run() { # spec file name (tests/lua/NAME_spec.lua)
   local name=$1
   local part=build/luacov-parts/$name
+  local stage=$part.d
+  rm -rf "$stage"
+  mkdir -p "$stage"
+  cp tests/lua/runner.lua "$stage/runner.lua"
+  cp "tests/lua/$name" "$stage/$name"
   sed "s#build/luacov.stats.out#$part.stats.out#" .luacov > "$part.luacov"
   local t0=$SECONDS
   if LUACOV_CONFIG="$part.luacov" timeout "$LIMIT" "$B"/saucer_headless --root . --user-dir "$B/test-user-$name" \
-      --quiet --coverage --test-lua tests/lua --filter "$name" > "$part.log" 2>&1; then
+      --quiet --coverage --test-lua "$stage" > "$part.log" 2>&1; then
     echo "luacov $name: ok in $((SECONDS - t0)) s"
   else
     echo "luacov $name: FAILED (exit $?) after $((SECONDS - t0)) s"
@@ -43,8 +50,6 @@ throttle() { while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do sleep 1; done; }
 # the biggest specs first so the slow ones overlap the rest
 for f in $(ls -S tests/lua/*_spec.lua); do
   s=$(basename "$f")
-  # --filter is a substring match on the file name: refuse a name another spec file contains
-  [ "$(ls tests/lua | grep -c -F "$s")" = 1 ] || { echo "spec file name $s is a substring of another spec file"; exit 1; }
   throttle
   lua_run "$s" & pids+=($!); names+=("$s")
 done
